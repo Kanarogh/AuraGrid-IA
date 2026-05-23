@@ -1,0 +1,6 @@
+{
+  "name": "AuraGrid Intelligence",
+  "description": "Organizador e planejador social premium estilo Canva para marcas de moda autoral, com autogeração de legendas inteligentes e simulação de grids.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
