@@ -37,7 +37,9 @@ import {
   CheckCheck,
   ChevronRight,
   ArrowRight,
-  LayoutGrid
+  LayoutGrid,
+  ArrowDown,
+  ArrowUp
 } from "lucide-react";
 import { 
   PRELOADED_CATALOG, 
@@ -246,6 +248,16 @@ export default function App() {
 
   const [selectedCanvaSlotId, setSelectedCanvaSlotId] = useState<string | null>(null);
 
+  const [autoSyncCanva, setAutoSyncCanva] = useState<boolean>(() => {
+    const saved = localStorage.getItem("palak_auto_sync_canva");
+    return saved !== "false";
+  });
+
+  const [canvaGridReversed, setCanvaGridReversed] = useState<boolean>(() => {
+    const saved = localStorage.getItem("palak_canva_reversed");
+    return saved !== "false";
+  });
+
   const [activeTab, setActiveTab] = useState<"posts" | "canva_grid" | "feed_simulator" | "catalog">("posts");
   const [viewMode, setViewMode] = useState<"split" | "editorial">("split");
 
@@ -266,6 +278,150 @@ export default function App() {
   
   // Elements references for scrolling focus
   const dayCardRefs = useRef<{ [postId: string]: HTMLDivElement | null }>({});
+
+  // Synchronize Canva Grid state changes into Roteiros automatically
+  const syncCanvaGridToTimeline = (pagesList: CanvaGridPage[], showAlert: boolean = false) => {
+    // Gather all slots in sequence
+    let allSlots: CanvaGridSlot[] = [];
+    (pagesList || []).forEach(page => {
+      if (page && page.slots) {
+        allSlots.push(...page.slots);
+      }
+    });
+
+    // Gather valid slots
+    const validSlots = allSlots.filter(s => s && s.image !== null);
+    if (validSlots.length === 0) {
+      if (showAlert) {
+        alert("Nenhum look com foto foi encontrado no Canva Grid para sincronizar!");
+      }
+      return;
+    }
+
+    // Sort order based on user option (reverseOrder bottom-up or normal top-down)
+    let orderedSlots = [...validSlots];
+    if (canvaGridReversed) {
+      orderedSlots.reverse();
+    }
+
+    const N = orderedSlots.length;
+
+    // Mathematically distribute N files over exactly 30 days
+    const postsPerDay = Array(30).fill(0);
+    if (N >= 30) {
+      for (let i = 0; i < 30; i++) postsPerDay[i] = 1;
+      let remaining = N - 30;
+      let d = 0;
+      while (remaining > 0 && d < 30) {
+        const currentSpace = 3 - postsPerDay[d];
+        if (currentSpace > 0) {
+          const add = Math.min(currentSpace, remaining);
+          postsPerDay[d] += add;
+          remaining -= add;
+        }
+        d++;
+      }
+      let cycle = 0;
+      while (remaining > 0) {
+        postsPerDay[cycle % 30] += 1;
+        remaining--;
+        cycle++;
+      }
+    } else {
+      for (let i = 0; i < N; i++) postsPerDay[i] = 1;
+      for (let i = N; i < 30; i++) postsPerDay[i] = 0;
+    }
+
+    // Construct the actual PlannedPost[] array
+    let itemIndex = 0;
+
+    // Retrieve existing posts list to compare and preserve captions
+    setPosts(prevPosts => {
+      const existingPosts = [...(prevPosts || [])];
+      const resultPosts: PlannedPost[] = [];
+
+      for (let dIndex = 0; dIndex < 30; dIndex++) {
+        const dayNum = dIndex + 1;
+        const countForDay = postsPerDay[dIndex];
+
+        if (countForDay === 0) {
+          // Look if we have an existing blank post at this exact flat position to preserve
+          const currentFlatIndex = resultPosts.length;
+          const existingAtSlot = existingPosts[currentFlatIndex];
+          
+          if (existingAtSlot && existingAtSlot.image === null) {
+            resultPosts.push({
+              ...existingAtSlot,
+              dayNumber: dayNum,
+              dateLabel: "" // calculated below
+            });
+          } else {
+            resultPosts.push({
+              id: `post_day${dayNum}_blank_${Date.now()}_${dIndex}`,
+              dayNumber: dayNum,
+              dateLabel: "",
+              image: null,
+              matchedCatalogId: null,
+              reasoning: null,
+              caption: "",
+              isGenerating: false,
+              isGenerated: false,
+              isConfirmed: false,
+              error: null
+            });
+          }
+        } else {
+          for (let pIndex = 0; pIndex < countForDay; pIndex++) {
+            const item = orderedSlots[itemIndex];
+            itemIndex++;
+
+            const currentFlatIndex = resultPosts.length;
+            const existingAtSlot = existingPosts[currentFlatIndex];
+
+            if (item && existingAtSlot && existingAtSlot.image === item.image) {
+              // Exact same image in index position! Preserve original edited post & text caption
+              resultPosts.push({
+                ...existingAtSlot,
+                dayNumber: dayNum,
+                dateLabel: "" // calculated below
+              });
+            } else {
+              // Replaced / new image. Set with clean state ready for caption writing
+              resultPosts.push({
+                id: `post_day${dayNum}_p${pIndex}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                dayNumber: dayNum,
+                dateLabel: "",
+                image: item ? item.image : null,
+                matchedCatalogId: item ? (item.matchedCatalogId || null) : null,
+                reasoning: item && item.matchedCatalogId ? `Vínculo automático via distribuidor inteligente de acervo.` : null,
+                caption: "",
+                isGenerating: false,
+                isGenerated: false,
+                isConfirmed: false,
+                error: null
+              });
+            }
+          }
+        }
+      }
+
+      const finalizedList = recalculatePostDates(startDate, resultPosts);
+
+      // Choose active post
+      const firstWithImg = finalizedList.find(p => p && p.image !== null) || finalizedList[0];
+      if (firstWithImg) {
+        setTimeout(() => {
+          setActivePreviewId(firstWithImg.id);
+        }, 50);
+      }
+
+      return finalizedList;
+    });
+
+    if (showAlert) {
+      alert(`Sequência do Canva sincronizada com sucesso no Roteiro de 30 Dias!\n- ${N} looks organizados sequencialmente.\n- Copys e legendas existentes preservadas nas posições de foto mantidas!`);
+    }
+  };
 
   // Check backend server connection on mount
   useEffect(() => {
@@ -318,6 +474,21 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("palak_active_canva_page_id", activeCanvaPageId);
   }, [activeCanvaPageId]);
+
+  useEffect(() => {
+    localStorage.setItem("palak_auto_sync_canva", String(autoSyncCanva));
+  }, [autoSyncCanva]);
+
+  useEffect(() => {
+    localStorage.setItem("palak_canva_reversed", String(canvaGridReversed));
+  }, [canvaGridReversed]);
+
+  // Handle Automatic Synchronization of Canva Grid into Roteiros
+  useEffect(() => {
+    if (autoSyncCanva) {
+      syncCanvaGridToTimeline(canvaPages, false);
+    }
+  }, [canvaPages, autoSyncCanva, canvaGridReversed, startDate]);
 
   // Handle standard clipboard copy
   const handleCopy = (id: string, text: string) => {
@@ -545,9 +716,9 @@ export default function App() {
             id: `post_day${dayNum}_p${pIndex}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             dayNumber: dayNum,
             dateLabel: "",
-            image: item.image,
-            matchedCatalogId: item.id || null, // carry over catalog matching reference
-            reasoning: item.id ? `Vínculo automático via distribuidor inteligente de guarda-roupa.` : null,
+            image: item ? item.image : null,
+            matchedCatalogId: item ? (item.id || null) : null, // carry over catalog matching reference
+            reasoning: item && item.id ? `Vínculo automático via distribuidor inteligente de guarda-roupa.` : null,
             caption: "",
             isGenerating: false,
             isGenerated: false,
@@ -875,18 +1046,20 @@ export default function App() {
     let allSlots: CanvaGridSlot[] = [];
     if (scope === "active") {
       const activePage = canvaPages.find(p => p.id === activeCanvaPageId);
-      if (activePage) {
+      if (activePage && activePage.slots) {
         allSlots = [...activePage.slots];
       }
     } else {
       // Gather from all pages in order (Página 1, Página 2, etc.)
       canvaPages.forEach(page => {
-        allSlots.push(...page.slots);
+        if (page && page.slots) {
+          allSlots.push(...page.slots);
+        }
       });
     }
 
     // Filter slots containing image
-    let validSlots = allSlots.filter(s => s.image !== null);
+    let validSlots = allSlots.filter(s => s && s.image !== null);
     
     if (validSlots.length === 0) {
       alert("A página está sem imagens! Adicione fotos no Canva Grid primeiro para usá-las no agendamento.");
@@ -899,9 +1072,9 @@ export default function App() {
     }
 
     const itemsToSchedule = validSlots.map(slot => ({
-      id: slot.matchedCatalogId || undefined,
-      image: slot.image,
-      label: slot.label || "Visual"
+      id: slot?.matchedCatalogId || undefined,
+      image: slot?.image || null,
+      label: slot?.label || "Visual"
     }));
 
     handleAutoDistribute(itemsToSchedule);
@@ -2749,6 +2922,101 @@ export default function App() {
               </div>
             </div>
 
+            {/* INTEGRATED INTELLIGENT REAL-TIME SYNC BAR */}
+            <div className="bg-sys-surf1 border border-sys-surf3/15 rounded-2xl p-5 flex flex-col md:flex-row gap-5 items-center justify-between shadow-xs transition-colors">
+              <div className="flex gap-3 items-center">
+                <div className={`p-3 rounded-xl flex items-center justify-center shrink-0 text-white ${
+                  autoSyncCanva ? "bg-emerald-600 shadow-[0_0_12px_rgba(16,185,129,0.3)]" : "bg-stone-500/70"
+                }`}>
+                  <RefreshCw className={`h-5 w-5 ${autoSyncCanva ? "animate-spin [animation-duration:4s]" : ""}`} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-serif italic font-bold text-stone-850 dark:text-stone-100 text-sm">
+                      Sincronizador Inteligente de Roteiros
+                    </h4>
+                    {autoSyncCanva ? (
+                      <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold font-mono px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-ping" />
+                        ATIVO (TEMPO REAL)
+                      </span>
+                    ) : (
+                      <span className="bg-stone-500/10 text-stone-500 text-[10px] font-bold font-mono px-2 py-0.5 rounded-full">
+                        DESATIVADO
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-stone-500 mt-0.5 max-w-2xl leading-relaxed">
+                    Sincroniza automaticamente a sequência visual do seu Canva Grid direto no <strong>Roteiro e Editor de 30 Dias</strong> como uma timeline real do feed. Seus textos e legendas existentes são inteligentemente <strong>preservados</strong> quando as imagens correspondentes se mantêm!
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 shrink-0 w-full md:w-auto justify-end">
+                {/* Switch button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextVal = !autoSyncCanva;
+                    setAutoSyncCanva(nextVal);
+                    if (nextVal) {
+                      syncCanvaGridToTimeline(canvaPages, true);
+                    }
+                  }}
+                  className={`text-xs font-bold px-4 py-2 rounded-xl border flex items-center gap-2 cursor-pointer shadow-xs transition-all ${
+                    autoSyncCanva
+                      ? "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600"
+                      : "bg-sys-surf2 hover:bg-sys-surf3 text-stone-700 dark:text-stone-300 border-sys-surf3/20"
+                  }`}
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  <span>{autoSyncCanva ? "Sincronização Ativa" : "Ativar Auto-Sync"}</span>
+                </button>
+
+                {/* Swap Order direction button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextReversed = !canvaGridReversed;
+                    setCanvaGridReversed(nextReversed);
+                    // Standard alerts and forces synchronization
+                    setTimeout(() => {
+                      if (autoSyncCanva) {
+                        syncCanvaGridToTimeline(canvaPages, false);
+                      } else {
+                        alert(`Configuração de ordenação atualizada! Ative a sincronização ou clique em "Sincronizar Agora" para aplicar.`);
+                      }
+                    }, 50);
+                  }}
+                  className="bg-sys-surf2 hover:bg-sys-surf3 border border-sys-surf3/20 text-sys-text font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+                  title="Mudar rotação das imagens da grade no cronograma de agendamento"
+                >
+                  {canvaGridReversed ? (
+                    <>
+                      <ArrowDown className="h-4 w-4 text-amber-500" />
+                      <span>Insta Grid (Debaixo p/ Cima)</span>
+                    </>
+                  ) : (
+                    <>
+                      <ArrowUp className="h-4 w-4 text-emerald-500" />
+                      <span>Leitura Sequencial (Grid L1→L12)</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Force sync trigger */}
+                <button
+                  type="button"
+                  onClick={() => syncCanvaGridToTimeline(canvaPages, true)}
+                  className="bg-stone-900 hover:bg-stone-800 text-white dark:bg-amber-600 dark:hover:bg-amber-700 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+                  title="Distribuir do zero preservando o que for igual"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>Sincronizar Agora</span>
+                </button>
+              </div>
+            </div>
+
             {/* Layout layout frame splits */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               
@@ -2966,7 +3234,7 @@ export default function App() {
                   <div className="flex items-center gap-3 overflow-x-auto pb-4 pt-1 px-1 scrollbar-thin">
                     {canvaPages.map((page, idx) => {
                       const isActive = page.id === activeCanvaPageId;
-                      const filledCount = page.slots.filter(s => s.image !== null).length;
+                      const filledCount = (page?.slots || []).filter(s => s && s.image !== null).length;
                       
                       return (
                         <div
@@ -2983,11 +3251,11 @@ export default function App() {
                         >
                           {/* Miniature visual grid simulator mockup */}
                           <div className="grid grid-cols-3 gap-0.5 bg-stone-200 dark:bg-stone-950 p-1 rounded-lg mb-2 text-center aspect-video items-center">
-                            {page.slots.map((s, sIdx) => (
+                            {(page?.slots || []).map((s, sIdx) => (
                               <div
                                 key={sIdx}
                                 className={`h-1.5 rounded-2xs ${
-                                  s.image ? "bg-amber-600" : "bg-stone-400/35"
+                                  s && s.image ? "bg-amber-600" : "bg-stone-400/35"
                                 }`}
                               />
                             ))}
