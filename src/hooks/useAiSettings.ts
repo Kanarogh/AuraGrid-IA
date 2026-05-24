@@ -9,6 +9,7 @@ import {
   getConnectionStatus,
   getState,
   refreshAiSettings,
+  refreshOpenRouterModels,
   subscribe,
 } from "../lib/aiSettingsStore";
 
@@ -23,6 +24,7 @@ export function useAiSettings() {
     connectionStatus: getConnectionStatus(),
     apiStatusLabel: getApiStatusLabel(),
     refresh: refreshAiSettings,
+    refreshOpenRouterModels,
     setProvider: changeAiProvider,
     setOpenRouterModel: changeOpenRouterModel,
   };

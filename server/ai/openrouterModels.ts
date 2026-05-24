@@ -1,3 +1,11 @@
+import { hasOpenRouterKey } from "./config.ts";
+import {
+  fetchLiveOpenRouterVisionModelIds,
+  listLiveOpenRouterModels,
+  mergeOpenRouterModelsForUi,
+} from "./openrouterModelsLive.ts";
+import { filterOpenRouterCatalogVisionModelIds } from "./openrouterVisionFilter.ts";
+
 /**
  * Curadoria de modelos OpenRouter úteis para o AuraGrid.
  *
@@ -14,6 +22,12 @@ export type OpenRouterModelOption = {
   description: string;
   vision: boolean;
   recommended?: boolean;
+  /** Presente na API OpenRouter agora (free + visão). */
+  availableNow?: boolean;
+  source?: "live" | "curated";
+  visionText?: boolean;
+  visionImage?: boolean;
+  isFree?: boolean;
 };
 
 /** IDs que deixaram de existir no OpenRouter → substituto. */
@@ -29,6 +43,22 @@ export const OPENROUTER_MODELS: OpenRouterModelOption[] = [
     label: "OpenRouter Free (auto)",
     description:
       "Escolhe sozinho um modelo free com visão disponível agora. Melhor quando outros dão “No endpoints found”.",
+    vision: true,
+    recommended: true,
+  },
+  {
+    id: "google/gemma-4-31b-it:free",
+    label: "Gemma 4 31B (free, visão)",
+    description:
+      "Dense multimodal Google (texto + imagem), 256K contexto. Forte em código, raciocínio e documentos — ótimo para catálogo e legendas.",
+    vision: true,
+    recommended: true,
+  },
+  {
+    id: "google/gemma-4-26b-a4b-it:free",
+    label: "Gemma 4 26B A4B (free, visão)",
+    description:
+      "MoE Google (3,8B ativos/token): texto, imagem e vídeo curto. Eficiente e estável no tier free da OpenRouter.",
     vision: true,
     recommended: true,
   },
@@ -101,18 +131,49 @@ export function isKnownOpenRouterModel(id: string): boolean {
   return OPENROUTER_MODELS.some((m) => m.id === resolved);
 }
 
-/** Ordem de tentativa para tarefas com foto quando o modelo escolhido falha. */
+/** Ordem para legendas/match com foto (Gemma 4 free primeiro; roteador por último). */
 export const OPENROUTER_VISION_FALLBACK_CHAIN = [
-  "openrouter/free",
+  "google/gemma-4-31b-it:free",
+  "google/gemma-4-26b-a4b-it:free",
   "qwen/qwen2.5-vl-32b-instruct:free",
   "google/gemini-2.0-flash-exp:free",
   "mistralai/mistral-small-3.2-24b-instruct:free",
+  "openrouter/free",
 ] as const;
 
-export function buildOpenRouterVisionModelChain(primaryModel: string): string[] {
+/** Indexação do catálogo: Gemma 4 → Qwen → resto; openrouter/free só no fim. */
+export const OPENROUTER_CATALOG_ENRICH_CHAIN = [
+  "google/gemma-4-31b-it:free",
+  "google/gemma-4-26b-a4b-it:free",
+  "qwen/qwen2.5-vl-32b-instruct:free",
+  "qwen/qwen2.5-vl-72b-instruct:free",
+  "google/gemini-2.0-flash-exp:free",
+  "mistralai/mistral-small-3.2-24b-instruct:free",
+  "openrouter/free",
+] as const;
+
+export function buildOpenRouterVisionModelChain(
+  primaryModel: string,
+  mode: "default" | "catalog" = "default"
+): string[] {
   const primary = sanitizeOpenRouterModelId(primaryModel) ?? primaryModel;
   const chain: string[] = [];
   const meta = getOpenRouterModelOption(primary);
+
+  if (mode === "catalog") {
+    // Sempre tenta o modelo escolhido no painel primeiro (mesmo se saiu da lista curada).
+    if (primary && primary !== "openrouter/free" && !chain.includes(primary)) {
+      chain.push(primary);
+    }
+    for (const id of OPENROUTER_CATALOG_ENRICH_CHAIN) {
+      if (!chain.includes(id)) chain.push(id);
+    }
+    if (primary === "openrouter/free" && !chain.includes("openrouter/free")) {
+      chain.unshift("openrouter/free");
+    }
+    return chain;
+  }
+
   if (meta?.vision && primary) chain.push(primary);
   for (const id of OPENROUTER_VISION_FALLBACK_CHAIN) {
     if (!chain.includes(id)) chain.push(id);
@@ -120,9 +181,46 @@ export function buildOpenRouterVisionModelChain(primaryModel: string): string[] 
   return chain;
 }
 
+/** Catálogo: modelo do painel → IDs live da API OpenRouter → lista fixa. */
+export async function resolveOpenRouterCatalogVisionChain(
+  primaryModel: string
+): Promise<string[]> {
+  const primary = sanitizeOpenRouterModelId(primaryModel) ?? primaryModel;
+  const chain: string[] = [];
+
+  if (primary && primary !== "openrouter/free") chain.push(primary);
+
+  if (hasOpenRouterKey()) {
+    const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+    if (apiKey) {
+      const live = await fetchLiveOpenRouterVisionModelIds(apiKey).catch(() => [] as string[]);
+      for (const id of filterOpenRouterCatalogVisionModelIds(live)) {
+        if (!chain.includes(id)) chain.push(id);
+      }
+    }
+  }
+
+  for (const id of OPENROUTER_CATALOG_ENRICH_CHAIN) {
+    if (!chain.includes(id)) chain.push(id);
+  }
+
+  if (primary === "openrouter/free" && !chain.includes("openrouter/free")) {
+    chain.unshift("openrouter/free");
+  }
+
+  return chain;
+}
+
 export function isOpenRouterRetryableError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
-  return /no endpoints found|resposta vazia|indisponível no OpenRouter|429|rate.?limit|502|503|timeout|temporarily unavailable/i.test(
+  return /no endpoints found|resposta vazia|indisponível no OpenRouter|perfil json incompleto|incompletecatalogprofile|provider returned error|upstream|bad gateway|overloaded|429|rate.?limit|502|503|504|timeout|temporarily unavailable/i.test(
     msg
   );
+}
+
+/** Na indexação do catálogo, tenta todos os modelos da cadeia exceto falha de autenticação. */
+export function shouldTryNextCatalogVisionModel(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/401|403|invalid.*key|unauthorized|OPENROUTER_API_KEY/i.test(msg)) return false;
+  return true;
 }

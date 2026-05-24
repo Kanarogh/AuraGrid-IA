@@ -1,5 +1,10 @@
-import { Cpu, RefreshCw } from "lucide-react";
-import { providerDisplayName, type AiProviderId } from "../../lib/aiSettings";
+import { useState } from "react";
+import { Cpu, ExternalLink, RefreshCw } from "lucide-react";
+import {
+  providerDisplayName,
+  type AiProviderId,
+  type OpenRouterModelsFilter,
+} from "../../lib/aiSettings";
 import { useAiSettings } from "../../hooks/useAiSettings";
 import { Alert } from "../ui/Alert";
 import { Badge } from "../ui/Badge";
@@ -125,30 +130,131 @@ export function AiProviderPanel() {
   );
 }
 
+const OPENROUTER_FILTER_URLS: Record<OpenRouterModelsFilter, string> = {
+  "vision-text":
+    "https://openrouter.ai/models?output_modalities=text&input_modalities=image",
+  "vision-image":
+    "https://openrouter.ai/models?output_modalities=image&input_modalities=image",
+  "vision-any": "https://openrouter.ai/models?input_modalities=image",
+};
+
 function OpenRouterModelSelect() {
-  const { settings, saving, setOpenRouterModel } = useAiSettings();
+  const { settings, saving, setOpenRouterModel, refreshOpenRouterModels } = useAiSettings();
+  const [filter, setFilter] = useState<OpenRouterModelsFilter>("vision-text");
+  const [listError, setListError] = useState<string | null>(null);
   if (!settings) return null;
 
+  const models = settings.openrouter.models;
+  const live = models.filter((m) => m.availableNow);
+  const curated = models.filter((m) => !m.availableNow);
+  const active = models.find((m) => m.id === settings.openrouter.activeModel);
+  const liveAt = settings.openrouter.liveFetchedAt;
+  const liveCount = settings.openrouter.liveCount;
+
+  const handleRefresh = async () => {
+    setListError(null);
+    try {
+      await refreshOpenRouterModels(filter, true);
+    } catch (err) {
+      setListError(err instanceof Error ? err.message : "Erro ao atualizar lista.");
+    }
+  };
+
   return (
-    <div className="space-y-1.5 rounded-lg border border-ag-border bg-ag-surface-1 px-3 py-2">
-      <FieldLabel>Modelo OpenRouter</FieldLabel>
+    <div className="space-y-2 rounded-lg border border-ag-border bg-ag-surface-1 px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <FieldLabel>Modelo OpenRouter (free + visão)</FieldLabel>
+        <button
+          type="button"
+          onClick={() => void handleRefresh()}
+          disabled={saving}
+          className="inline-flex items-center gap-1 text-[10px] text-ag-accent hover:underline disabled:opacity-50"
+          title="Buscar lista na API OpenRouter (mesmos filtros do site)"
+        >
+          <RefreshCw className={`h-3 w-3 ${saving ? "animate-spin" : ""}`} />
+          Atualizar lista
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-1">
+        {(
+          [
+            ["vision-text", "Imagem → texto"],
+            ["vision-image", "Imagem → imagem"],
+            ["vision-any", "Qualquer visão"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            disabled={saving}
+            onClick={() => {
+              setFilter(id);
+              void refreshOpenRouterModels(id, false).catch((err: unknown) => {
+                setListError(err instanceof Error ? err.message : "Erro ao filtrar.");
+              });
+            }}
+            className={`text-[10px] px-2 py-0.5 rounded-full border ${
+              filter === id
+                ? "border-ag-accent text-ag-accent bg-ag-accent/10"
+                : "border-ag-border text-ag-muted hover:text-ag-text"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+        <a
+          href={OPENROUTER_FILTER_URLS[filter]}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-0.5 text-[10px] text-ag-muted hover:text-ag-accent ml-auto"
+        >
+          Ver no site
+          <ExternalLink className="h-3 w-3" />
+        </a>
+      </div>
+
+      {listError && (
+        <p className="text-[10px] text-ag-danger">{listError}</p>
+      )}
+
       <select
         value={settings.openrouter.activeModel}
         disabled={saving}
         onChange={(e) => void setOpenRouterModel(e.target.value)}
         className="w-full text-xs px-2 py-1.5 rounded-md border border-ag-border bg-ag-surface-2 text-ag-text"
       >
-        {settings.openrouter.models.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.recommended ? "★ " : ""}
-            {m.label}
-            {m.vision ? "" : " — só texto"}
-          </option>
-        ))}
+        {live.length > 0 && (
+          <optgroup label={`Disponíveis agora (${live.length})`}>
+            {live.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.recommended ? "★ " : ""}
+                {m.label}
+              </option>
+            ))}
+          </optgroup>
+        )}
+        {curated.length > 0 && (
+          <optgroup label="Lista fixa (pode estar offline)">
+            {curated.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.recommended ? "★ " : ""}
+                {m.label}
+                {m.vision ? "" : " — só texto"}
+              </option>
+            ))}
+          </optgroup>
+        )}
       </select>
+
       <p className="text-[10px] text-ag-muted">
-        {settings.openrouter.models.find((m) => m.id === settings.openrouter.activeModel)
-          ?.description ?? "Modelo customizado."}
+        {active?.description ?? "Modelo customizado."}
+        {liveAt && (
+          <>
+            {" "}
+            · Lista API: {liveCount} modelo(s) · {new Date(liveAt).toLocaleString("pt-BR")}
+          </>
+        )}
       </p>
     </div>
   );

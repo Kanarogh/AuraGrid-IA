@@ -4,6 +4,7 @@ import {
   buildRefineCaptionPrompt,
   resolveBrandGemFromBody,
 } from "./brandContext.ts";
+import { buildEnrichCatalogPrompt, finalizeCatalogProfile } from "./catalogProfile.ts";
 import { CATALOG_PROFILE_SCHEMA } from "../geminiShared.ts";
 import { getGeminiModel, hasGeminiKey } from "./config.ts";
 import { cleanBase64, withRetry } from "./shared.ts";
@@ -25,16 +26,6 @@ function getClient() {
   });
 }
 
-const ENRICH_PROMPT = (label: string, id: string) => `You are a senior fashion catalog analyst for an Indian/Madrid boutique.
-Analyze this garment reference photo exhaustively. The wholesale reference code is "${label || "unknown"}" (catalog id: ${id || "n/a"}).
-
-Create a structured visual profile that another AI will use LATER to match a social media post image against this catalog WITHOUT seeing this photo again.
-Be extremely specific about: exact colors (primary/secondary), pattern type and scale, neckline shape, sleeve type, dress length, silhouette, fabric appearance, embellishments, and unique details that distinguish this piece from similar dresses.
-
-Set referenceLabel to the provided label. Set version to 1.
-distinguishingFingerprint must be ONE sentence listing the most unique visual identifiers.
-matchKeywords: 8-15 short lowercase tokens for retrieval.`;
-
 export const geminiProvider: AiProvider = {
   id: "gemini",
   getModel: getGeminiModel,
@@ -48,7 +39,10 @@ export const geminiProvider: AiProvider = {
       () =>
         ai.models.generateContent({
           model,
-          contents: [{ text: ENRICH_PROMPT(label, id) }, { inlineData: cleanBase64(image) }],
+          contents: [
+            { text: buildEnrichCatalogPrompt(label, id) },
+            { inlineData: cleanBase64(image) },
+          ],
           config: {
             responseMimeType: "application/json",
             responseSchema: CATALOG_PROFILE_SCHEMA,
@@ -61,9 +55,7 @@ export const geminiProvider: AiProvider = {
     if (!rawText) throw new Error("Gemini retornou resposta vazia.");
 
     const profile = JSON.parse(rawText) as Record<string, unknown>;
-    if (profile.version !== 1) profile.version = 1;
-    if (!profile.referenceLabel) profile.referenceLabel = label || "unknown";
-    return profile;
+    return finalizeCatalogProfile(profile, label);
   },
 
   async matchAndGenerate(input: MatchGenerateInput): Promise<MatchGenerateResult> {

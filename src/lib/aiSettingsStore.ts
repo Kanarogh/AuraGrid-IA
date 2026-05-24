@@ -1,10 +1,12 @@
 import {
   fetchAiSettings,
+  fetchOpenRouterModelsList,
   providerDisplayName,
   setAiProvider,
   setOpenRouterModel,
   type AiProviderId,
   type AiSettingsResponse,
+  type OpenRouterModelsFilter,
 } from "./aiSettings";
 
 export type AiHealthSnapshot = {
@@ -84,16 +86,59 @@ async function fetchHealth(): Promise<AiHealthSnapshot | null> {
   }
 }
 
-export async function refreshAiSettings(): Promise<void> {
+export async function refreshAiSettings(refreshOpenRouter = false): Promise<void> {
   setState({ loading: true, error: null });
   try {
-    const [settings, health] = await Promise.all([fetchAiSettings(), fetchHealth()]);
+    const [settings, health] = await Promise.all([
+      fetchAiSettings(refreshOpenRouter),
+      fetchHealth(),
+    ]);
     setState({ settings, health, loading: false, error: null });
   } catch (err) {
     setState({
       loading: false,
       error: err instanceof Error ? err.message : "Erro ao carregar IA.",
     });
+  }
+}
+
+/** Atualiza só a lista de modelos OpenRouter (API live, cache 30 min). */
+export async function refreshOpenRouterModels(
+  filter: OpenRouterModelsFilter = "vision-text",
+  refresh = true
+): Promise<void> {
+  const prev = getState().settings;
+  setState({ saving: true, error: null });
+  try {
+    const list = await fetchOpenRouterModelsList(filter, refresh);
+    const base = prev ?? (await fetchAiSettings(false));
+    const liveIds = new Set(list.models.map((m) => m.id));
+    const live = list.models.map((m) => ({
+      ...m,
+      availableNow: true,
+      source: "live" as const,
+    }));
+    const curated = base.openrouter.models
+      .filter((m) => !liveIds.has(m.id))
+      .map((m) => ({ ...m, availableNow: false, source: m.source ?? ("curated" as const) }));
+    setState({
+      settings: {
+        ...base,
+        openrouter: {
+          ...base.openrouter,
+          models: [...live, ...curated],
+          liveFetchedAt: list.fetchedAt,
+          liveCount: list.models.length,
+        },
+      },
+      saving: false,
+    });
+  } catch (err) {
+    setState({
+      saving: false,
+      error: err instanceof Error ? err.message : "Falha ao atualizar modelos OpenRouter.",
+    });
+    throw err;
   }
 }
 

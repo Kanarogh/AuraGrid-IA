@@ -19,19 +19,38 @@ import {
   logAiChain,
   logAiSkip,
 } from "./diagnostics.ts";
+import { sanitizeForHttpHeader } from "./httpHeaders.ts";
 import { isQuotaExhausted } from "./shared.ts";
 import type { AiProvider, AiProviderId } from "./types.ts";
 
 export type FallbackOutcome<T> = {
   result: T;
   providerUsed: AiProviderId;
+  /** Modelo real (ex.: roteado pelo openrouter/free). */
+  modelLabel?: string;
   attempts: Array<{ provider: AiProviderId; error?: string; skipped?: string }>;
 };
+
+const AURAGRID_ROUTED_MODEL_KEY = "__auragridRoutedModel";
+
+export function stripAuraGridMeta<T extends Record<string, unknown>>(result: T): {
+  profile: T;
+  routedModel?: string;
+} {
+  if (!(AURAGRID_ROUTED_MODEL_KEY in result)) {
+    return { profile: result };
+  }
+  const { [AURAGRID_ROUTED_MODEL_KEY]: routed, ...profile } = result;
+  return {
+    profile: profile as T,
+    routedModel: typeof routed === "string" ? routed : undefined,
+  };
+}
 
 function isTransientError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   if (isQuotaExhausted(err)) return true;
-  return /429|RESOURCE_EXHAUSTED|rate.?limit|timeout|timed out|ETIMEDOUT|503|502|insufficient_quota|image_url|unknown variant.*text|DeepSeek não analisa|no endpoints found|resposta vazia|indisponível no OpenRouter|todos os modelos de visão falharam/i.test(
+  return /429|RESOURCE_EXHAUSTED|rate.?limit|timeout|timed out|ETIMEDOUT|503|502|insufficient_quota|image_url|unknown variant.*text|DeepSeek não analisa|no endpoints found|resposta vazia|indisponível no OpenRouter|perfil json incompleto|incompletecatalogprofile|todos os modelos de visão falharam/i.test(
     msg
   );
 }
@@ -39,7 +58,12 @@ function isTransientError(err: unknown): boolean {
 /** Cadeia de visão: provedor ativo → pares diretos (Gemini↔Groq) → OpenRouter por último. */
 function visionChain(active: AiProviderId): AiProviderId[] {
   if (active === "openrouter") {
-    return hasOpenRouterKey() ? ["openrouter"] : [];
+    const chain: AiProviderId[] = [];
+    if (hasOpenRouterKey()) chain.push("openrouter");
+    // Quando free do OpenRouter oscila, APIs diretas ainda podem ter cota.
+    if (hasGroqKey() && !chain.includes("groq")) chain.push("groq");
+    if (hasGeminiKey() && !chain.includes("gemini")) chain.push("gemini");
+    return chain;
   }
 
   const chain: AiProviderId[] = [];
@@ -104,10 +128,23 @@ export async function runVisionWithFallback<T>(
     logAiAttemptStart(label, id, model);
 
     try {
-      const result = await call(provider);
+      const raw = await call(provider);
+      let profile: T = raw;
+      let routedModel: string | undefined;
+      if (raw && typeof raw === "object") {
+        const stripped = stripAuraGridMeta(raw as Record<string, unknown>);
+        profile = stripped.profile as T;
+        routedModel = stripped.routedModel;
+      }
+      const modelLabel = routedModel ?? model;
       recordSuccess(id);
-      logAiAttemptOk(label, id, model);
-      return { result, providerUsed: id, attempts: [...attempts, { provider: id }] };
+      logAiAttemptOk(label, id, modelLabel);
+      return {
+        result: profile,
+        providerUsed: id,
+        modelLabel,
+        attempts: [...attempts, { provider: id }],
+      };
     } catch (err) {
       lastError = err;
       recordFailure(id, err);
@@ -115,9 +152,10 @@ export async function runVisionWithFallback<T>(
       const kind = classifyAiFailure(err);
       attempts.push({
         provider: id,
-        error: `[${failureKindLabel(kind)}] ${
-          err instanceof Error ? err.message : String(err)
-        }`,
+        error: sanitizeForHttpHeader(
+          `[${failureKindLabel(kind)}] ${err instanceof Error ? err.message : String(err)}`,
+          240
+        ),
       });
 
       if (!isTransientError(err)) {
@@ -148,7 +186,9 @@ export async function runVisionWithFallback<T>(
   }
   throw new Error(
     `Todos os provedores falharam para ${label}. Resumo: ${summary}. ` +
-      `Veja GET /api/ai/diagnostics ou AI_DEBUG=1 no terminal.`
+      `OpenRouter free está instável (muitos modelos «No endpoints found»). ` +
+      `Tente Groq/Gemini no painel, aguarde o reset diário, ou créditos em openrouter.ai. ` +
+      `Diagnóstico: GET /api/ai/diagnostics | AI_DEBUG=1`
   );
 }
 

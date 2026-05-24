@@ -15,7 +15,13 @@ import {
   setRuntimeOpenRouterModel,
   setRuntimeProvider,
 } from "./runtimeSettings.ts";
-import { OPENROUTER_MODELS } from "./openrouterModels.ts";
+import { OPENROUTER_MODELS, type OpenRouterModelOption } from "./openrouterModels.ts";
+import {
+  listLiveOpenRouterModels,
+  mergeOpenRouterModelsForUi,
+  clearOpenRouterModelsCache,
+  type OpenRouterModelsFilter,
+} from "./openrouterModelsLive.ts";
 import { deepseekProvider } from "./deepseekProvider.ts";
 import { formatAiError } from "./shared.ts";
 import { getVisionDelegateId } from "./visionDelegate.ts";
@@ -39,9 +45,14 @@ export type AiSettingsResponse = {
   openrouter: {
     activeModel: string;
     runtimeOverride: string | null;
-    models: typeof OPENROUTER_MODELS;
+    models: OpenRouterModelOption[];
+    liveFetchedAt: string | null;
+    liveCount: number;
   };
 };
+
+export type { OpenRouterModelsFilter };
+export { listLiveOpenRouterModels, clearOpenRouterModelsCache };
 
 export { formatAiError };
 export type { AiHealthResponse, AiProviderId };
@@ -53,8 +64,37 @@ const PROVIDER_LABELS: Record<AiProviderId, string> = {
   openrouter: "OpenRouter (free vision)",
 };
 
-export function buildAiSettingsResponse(): AiSettingsResponse {
+export async function buildAiSettingsResponse(options?: {
+  refreshOpenRouter?: boolean;
+}): Promise<AiSettingsResponse> {
   const activeProvider = getAiProviderId();
+
+  let openrouterModels: OpenRouterModelOption[] = OPENROUTER_MODELS.map((m) => ({
+    ...m,
+    availableNow: false,
+    source: "curated" as const,
+  }));
+  let liveFetchedAt: string | null = null;
+  let liveCount = 0;
+
+  if (hasOpenRouterKey()) {
+    const apiKey = process.env.OPENROUTER_API_KEY!.trim();
+    try {
+      const { models: live, fetchedAt } = await listLiveOpenRouterModels(apiKey, {
+        refresh: options?.refreshOpenRouter,
+        filter: "vision-text",
+      });
+      liveCount = live.length;
+      liveFetchedAt = fetchedAt;
+      openrouterModels = mergeOpenRouterModelsForUi(live, OPENROUTER_MODELS);
+    } catch (err) {
+      console.warn(
+        "[OpenRouter] Falha ao listar modelos live:",
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+
   return {
     activeProvider,
     envDefaultProvider: getEnvDefaultProviderId(),
@@ -67,7 +107,9 @@ export function buildAiSettingsResponse(): AiSettingsResponse {
     openrouter: {
       activeModel: getOpenRouterModel(),
       runtimeOverride: getRuntimeOpenRouterModel(),
-      models: OPENROUTER_MODELS,
+      models: openrouterModels,
+      liveFetchedAt,
+      liveCount,
     },
   };
 }

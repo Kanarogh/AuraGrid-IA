@@ -12,13 +12,19 @@ import {
   setOpenRouterModelOverride,
 } from "./server/ai/index.ts";
 import { getEnvDefaultProviderId } from "./server/ai/config.ts";
-import { isKnownOpenRouterModel } from "./server/ai/openrouterModels.ts";
+import {
+  clearOpenRouterModelsCache,
+  listLiveOpenRouterModels,
+} from "./server/ai/openrouterModelsLive.ts";
+import type { OpenRouterModelsFilter } from "./server/ai/index.ts";
+import { hasOpenRouterKey } from "./server/ai/config.ts";
 import {
   getRuntimeProviderOverride,
   loadRuntimeAiSettings,
 } from "./server/ai/runtimeSettings.ts";
 import { applyAiHeadersFromRequest } from "./server/ai/requestContext.ts";
 import { runVisionWithFallback } from "./server/ai/fallbackChain.ts";
+import { setAiAttemptsHeader } from "./server/ai/httpHeaders.ts";
 import { getCircuitBreakerSnapshot } from "./server/ai/circuitBreaker.ts";
 import { getAiDiagnosticsSnapshot } from "./server/ai/diagnostics.ts";
 import type { AiProviderId } from "./server/ai/types.ts";
@@ -35,8 +41,49 @@ app.get("/api/health", (_req, res) => {
   res.json(buildHealthResponse());
 });
 
-app.get("/api/ai/settings", (_req, res) => {
-  res.json(buildAiSettingsResponse());
+app.get("/api/ai/settings", async (req, res) => {
+  const refresh = req.query.refresh === "1" || req.query.refresh === "true";
+  res.json(await buildAiSettingsResponse({ refreshOpenRouter: refresh }));
+});
+
+app.get("/api/ai/openrouter-models", async (req, res) => {
+  if (!hasOpenRouterKey()) {
+    return res.json({
+      models: [],
+      filter: "vision-text",
+      fetchedAt: null,
+      fromCache: false,
+      error: "OPENROUTER_API_KEY não configurada no .env",
+    });
+  }
+
+  const filterRaw = String(req.query.filter ?? "vision-text");
+  const filter: OpenRouterModelsFilter =
+    filterRaw === "vision-image" || filterRaw === "vision-any"
+      ? filterRaw
+      : "vision-text";
+  const refresh = req.query.refresh === "1" || req.query.refresh === "true";
+  if (refresh) clearOpenRouterModelsCache();
+
+  try {
+    const result = await listLiveOpenRouterModels(process.env.OPENROUTER_API_KEY!.trim(), {
+      refresh,
+      filter,
+    });
+    return res.json({
+      filter,
+      filterUrls: {
+        visionText:
+          "https://openrouter.ai/models?output_modalities=text&input_modalities=image",
+        visionImage:
+          "https://openrouter.ai/models?output_modalities=image&input_modalities=image",
+      },
+      ...result,
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return res.status(502).json({ error: message, models: [] });
+  }
 });
 
 app.put("/api/ai/openrouter-model", async (req, res) => {
@@ -45,11 +92,11 @@ app.put("/api/ai/openrouter-model", async (req, res) => {
     if (model !== null && (typeof model !== "string" || !model.trim())) {
       return res.status(400).json({ error: "model deve ser string ou null." });
     }
-    if (model && !isKnownOpenRouterModel(model) && !/:free$|:nitro$/.test(model)) {
-      console.warn(`OpenRouter: modelo customizado fora da curadoria — ${model}`);
+    if (model && !model.includes("/")) {
+      return res.status(400).json({ error: "ID de modelo OpenRouter inválido." });
     }
     await setOpenRouterModelOverride(model);
-    res.json(buildAiSettingsResponse());
+    res.json(await buildAiSettingsResponse());
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Falha ao trocar modelo.";
     res.status(400).json({ error: message });
@@ -70,7 +117,7 @@ app.put("/api/ai/settings", async (req, res) => {
         .json({ error: "Provedor inválido. Use: gemini, groq, deepseek ou openrouter." });
     }
     await setActiveAiProvider(provider as AiProviderId);
-    res.json(buildAiSettingsResponse());
+    res.json(await buildAiSettingsResponse());
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Falha ao trocar provedor.";
     res.status(400).json({ error: message });
@@ -93,8 +140,13 @@ app.post("/api/enrich-catalog-item", async (req, res) => {
 
     providerId = outcome.providerUsed;
     res.setHeader("X-AI-Provider-Used", outcome.providerUsed);
-    res.setHeader("X-AI-Attempts", JSON.stringify(outcome.attempts));
-    return res.json({ profile: outcome.result, providerUsed: outcome.providerUsed });
+    if (outcome.modelLabel) res.setHeader("X-AI-Model-Used", outcome.modelLabel);
+    setAiAttemptsHeader(res, outcome.attempts);
+    return res.json({
+      profile: outcome.result,
+      providerUsed: outcome.providerUsed,
+      modelUsed: outcome.modelLabel,
+    });
   } catch (error: unknown) {
     console.error("Error enriching catalog item:", error);
     const status = /429|quota|RESOURCE_EXHAUSTED|rate.?limit/i.test(String(error)) ? 429 : 500;
@@ -127,7 +179,7 @@ app.post("/api/match-and-generate", async (req, res) => {
     providerId = outcome.providerUsed;
     res.setHeader("X-AI-Provider-Used", outcome.providerUsed);
     res.setHeader("X-AI-Match-Mode", outcome.result.matchMode);
-    res.setHeader("X-AI-Attempts", JSON.stringify(outcome.attempts));
+    setAiAttemptsHeader(res, outcome.attempts);
     return res.json({ ...outcome.result, providerUsed: outcome.providerUsed });
   } catch (error: unknown) {
     console.error("Error matching post & generating caption:", error);

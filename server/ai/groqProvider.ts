@@ -4,6 +4,7 @@ import {
   resolveBrandGemFromBody,
 } from "./brandContext.ts";
 import { getGroqModel, hasGroqKey } from "./config.ts";
+import { buildEnrichCatalogPrompt, finalizeCatalogProfile } from "./catalogProfile.ts";
 import { CATALOG_PROFILE_JSON_SCHEMA, MATCH_RESULT_JSON_SCHEMA } from "./schemas.ts";
 import { annotateErrorWithRetryAfter, toDataUrl, withRetry } from "./shared.ts";
 import type {
@@ -84,16 +85,6 @@ async function groqChat(
   return content;
 }
 
-const ENRICH_PROMPT = (label: string, id: string) => `You are a senior fashion catalog analyst for an Indian/Madrid boutique.
-Analyze this garment reference photo exhaustively. The wholesale reference code is "${label || "unknown"}" (catalog id: ${id || "n/a"}).
-
-Create a structured visual profile JSON that another AI will use LATER to match a social media post image against this catalog WITHOUT seeing this photo again.
-Be extremely specific about colors, pattern, neckline, sleeves, dress length, silhouette, fabric, embellishments, and unique details.
-
-Set referenceLabel to the provided label. Set version to 1.
-distinguishingFingerprint: ONE sentence with the most unique visual identifiers.
-matchKeywords: 8-15 short lowercase tokens.`;
-
 export const groqProvider: AiProvider = {
   id: "groq",
   getModel: getGroqModel,
@@ -107,7 +98,7 @@ export const groqProvider: AiProvider = {
             {
               role: "user",
               content: [
-                { type: "text", text: ENRICH_PROMPT(label, id) },
+                { type: "text", text: buildEnrichCatalogPrompt(label, id) },
                 { type: "image_url", image_url: { url: toDataUrl(image) } },
               ],
             },
@@ -123,9 +114,7 @@ export const groqProvider: AiProvider = {
     );
 
     const profile = JSON.parse(content) as Record<string, unknown>;
-    if (profile.version !== 1) profile.version = 1;
-    if (!profile.referenceLabel) profile.referenceLabel = label || "unknown";
-    return profile;
+    return finalizeCatalogProfile(profile, label);
   },
 
   async matchAndGenerate(input: MatchGenerateInput): Promise<MatchGenerateResult> {

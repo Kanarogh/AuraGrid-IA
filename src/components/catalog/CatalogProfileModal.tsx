@@ -1,6 +1,7 @@
 import { Copy, Check } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { CatalogItem } from "../../types";
+import { normalizeVisualProfile } from "../../lib/catalog";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 
@@ -13,10 +14,23 @@ export function CatalogProfileModal({
 }) {
   const [copied, setCopied] = useState(false);
 
-  if (!item?.visualProfile) return null;
+  const profile = useMemo(
+    () =>
+      item?.visualProfile
+        ? normalizeVisualProfile(item.visualProfile, item.label)
+        : null,
+    [item?.visualProfile, item?.label]
+  );
 
-  const jsonText = JSON.stringify(item.visualProfile, null, 2);
-  const profile = item.visualProfile;
+  if (!item || !profile) return null;
+
+  const jsonText = JSON.stringify(profile, null, 2);
+  const colors =
+    profile.primaryColors.length > 0
+      ? profile.primaryColors.join(", ")
+      : profile.secondaryColors.length > 0
+        ? profile.secondaryColors.join(", ")
+        : "—";
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(jsonText);
@@ -41,8 +55,11 @@ export function CatalogProfileModal({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
           <SummaryRow label="Tipo" value={profile.garmentType} />
           <SummaryRow label="Categoria" value={profile.category} />
-          <SummaryRow label="Cores" value={profile.primaryColors.join(", ")} />
-          <SummaryRow label="Estampa" value={`${profile.pattern.type} — ${profile.pattern.description}`} />
+          <SummaryRow label="Cores" value={colors} />
+          <SummaryRow
+            label="Estampa"
+            value={`${profile.pattern.type} — ${profile.pattern.description}`}
+          />
           <SummaryRow label="Decote" value={profile.neckline} />
           <SummaryRow label="Mangas" value={profile.sleeves} />
           <SummaryRow label="Comprimento" value={profile.dressLength} />
@@ -69,6 +86,22 @@ export function CatalogProfileModal({
                 {d}
               </span>
             ))}
+          </div>
+        )}
+
+        {profile.matchKeywords.length > 0 && (
+          <div>
+            <p className="text-[10px] font-mono uppercase text-ag-muted mb-1.5">Palavras-chave</p>
+            <div className="flex flex-wrap gap-1.5">
+              {profile.matchKeywords.map((k) => (
+                <span
+                  key={k}
+                  className="text-[10px] px-2 py-0.5 rounded-md bg-ag-surface-2 border border-ag-border text-ag-muted"
+                >
+                  {k}
+                </span>
+              ))}
+            </div>
           </div>
         )}
 

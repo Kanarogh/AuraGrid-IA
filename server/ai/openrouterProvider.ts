@@ -7,7 +7,10 @@ import { getOpenRouterModel, hasOpenRouterKey } from "./config.ts";
 import {
   buildOpenRouterVisionModelChain,
   isOpenRouterRetryableError,
+  resolveOpenRouterCatalogVisionChain,
+  shouldTryNextCatalogVisionModel,
 } from "./openrouterModels.ts";
+import { buildEnrichCatalogPrompt, finalizeCatalogProfile } from "./catalogProfile.ts";
 import { CATALOG_PROFILE_JSON_SCHEMA, MATCH_RESULT_JSON_SCHEMA } from "./schemas.ts";
 import { logAiAttemptFail, logAiAttemptOk } from "./diagnostics.ts";
 import { annotateErrorWithRetryAfter, toDataUrl, withRetry } from "./shared.ts";
@@ -85,8 +88,10 @@ function describeMessageShape(message: Record<string, unknown> | undefined): str
  */
 function modelSupportsJsonSchema(model: string): boolean {
   if (model === "openrouter/free") return false;
+  if (/gemma/i.test(model)) return false;
   if (/llama-3\.2.*vision/i.test(model)) return false;
   if (/qwen.*vl/i.test(model)) return false;
+  if (/mistral.*small/i.test(model)) return false;
   return true;
 }
 
@@ -165,12 +170,16 @@ async function openrouterChat(
       });
       throw err;
     }
-    const err = annotateErrorWithRetryAfter(new Error(msg), res);
+    const detail = msg.length > 20 ? msg : raw.slice(0, 500);
+    const err = annotateErrorWithRetryAfter(
+      new Error(msg === "Provider returned error" ? `OpenRouter (${model}): ${detail}` : msg),
+      res
+    );
     logAiAttemptFail("openrouter-chat", "openrouter", err, {
       model,
       httpStatus: res.status,
       routedModel,
-      detail: msg,
+      detail,
     });
     throw err;
   }
@@ -205,9 +214,13 @@ async function openrouterChatVision(
   options: {
     jsonSchema?: { name: string; schema: Record<string, unknown> };
     maxTokens?: number;
+    catalogEnrich?: boolean;
+    catalogLabel?: string;
   } = {}
 ): Promise<{ content: string; modelUsed: string }> {
-  const models = buildOpenRouterVisionModelChain(getOpenRouterModel());
+  const models = options.catalogEnrich
+    ? await resolveOpenRouterCatalogVisionChain(getOpenRouterModel())
+    : buildOpenRouterVisionModelChain(getOpenRouterModel(), "default");
   const errors: string[] = [];
 
   console.info(`[OpenRouter] cadeia visão: ${models.join(" → ")}`);
@@ -215,6 +228,10 @@ async function openrouterChatVision(
   for (const model of models) {
     try {
       const content = await openrouterChat(messages, options, model);
+      if (options.catalogEnrich) {
+        const raw = JSON.parse(extractJson(content)) as Record<string, unknown>;
+        finalizeCatalogProfile(raw, options.catalogLabel);
+      }
       logAiAttemptOk("openrouter-vision", "openrouter", model, `modelo usado: ${model}`);
       if (model !== getOpenRouterModel()) {
         console.info(`[OpenRouter] visão OK com fallback: ${model}`);
@@ -223,13 +240,18 @@ async function openrouterChatVision(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`${model}: ${msg}`);
-      if (!isOpenRouterRetryableError(err)) throw err;
+      const tryNext = options.catalogEnrich
+        ? shouldTryNextCatalogVisionModel(err)
+        : isOpenRouterRetryableError(err);
+      if (!tryNext) throw err;
+      console.warn(`[OpenRouter] ${model} falhou, tentando próximo… (${msg.slice(0, 120)})`);
     }
   }
 
   throw new Error(
-    `OpenRouter: todos os modelos de visão falharam.\n${errors.join("\n")}\n` +
-      `Tente mais tarde ou configure créditos em openrouter.ai.`
+    `OpenRouter: todos os modelos de visão falharam. ${errors.join(" | ")} ` +
+      `Os modelos free mudam com frequência — veja https://openrouter.ai/models?output_modalities=text&input_modalities=image ` +
+      `ou use créditos em openrouter.ai (cota diária free esgotada?).`
   );
 }
 
@@ -247,35 +269,6 @@ function extractJson(content: string): string {
   return trimmed;
 }
 
-const ENRICH_PROMPT = (label: string, id: string) => `You are a senior fashion catalog analyst for an Indian/Madrid boutique.
-Analyze this garment reference photo exhaustively. The wholesale reference code is "${label || "unknown"}" (catalog id: ${id || "n/a"}).
-
-Create a structured visual profile JSON that another AI will use LATER to match a social media post image against this catalog WITHOUT seeing this photo again.
-Be extremely specific about colors, pattern, neckline, sleeves, dress length, silhouette, fabric, embellishments, and unique details.
-
-Set referenceLabel to the provided label. Set version to 1.
-distinguishingFingerprint: ONE sentence with the most unique visual identifiers.
-matchKeywords: 8-15 short lowercase tokens.
-
-RESPOND WITH PURE JSON ONLY (no prose, no markdown fences). The JSON must follow this shape:
-{
-  "version": 1,
-  "referenceLabel": "${label || "unknown"}",
-  "category": "...",
-  "primaryColor": "...",
-  "secondaryColors": ["..."],
-  "pattern": "...",
-  "neckline": "...",
-  "sleeves": "...",
-  "length": "...",
-  "silhouette": "...",
-  "fabric": "...",
-  "embellishments": ["..."],
-  "uniqueDetails": ["..."],
-  "distinguishingFingerprint": "...",
-  "matchKeywords": ["..."]
-}`;
-
 const MATCH_RESPONSE_HINT = `RESPOND WITH PURE JSON ONLY (no prose, no markdown fences). The JSON must follow:
 {
   "matchedId": "string-or-null",
@@ -289,32 +282,31 @@ export const openrouterProvider: AiProvider = {
   isConfigured: hasOpenRouterKey,
 
   async enrichCatalogItem({ image, label, id }: CatalogEnrichInput) {
-    const { content } = await withRetry(
-      () =>
-        openrouterChatVision(
-          [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: ENRICH_PROMPT(label, id) },
-                { type: "image_url", image_url: { url: toDataUrl(image) } },
-              ],
-            },
+    const prompt = buildEnrichCatalogPrompt(label, id);
+
+    const { content, modelUsed } = await openrouterChatVision(
+      [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: toDataUrl(image) } },
           ],
-          {
-            jsonSchema: {
-              name: "catalog_visual_profile",
-              schema: CATALOG_PROFILE_JSON_SCHEMA as unknown as Record<string, unknown>,
-            },
-          }
-        ),
-      "OpenRouter"
+        },
+      ],
+      {
+        jsonSchema: {
+          name: "catalog_visual_profile",
+          schema: CATALOG_PROFILE_JSON_SCHEMA as unknown as Record<string, unknown>,
+        },
+        catalogEnrich: true,
+        catalogLabel: label,
+      }
     );
 
-    const profile = JSON.parse(extractJson(content)) as Record<string, unknown>;
-    if (profile.version !== 1) profile.version = 1;
-    if (!profile.referenceLabel) profile.referenceLabel = label || "unknown";
-    return profile;
+    const raw = JSON.parse(extractJson(content)) as Record<string, unknown>;
+    const profile = finalizeCatalogProfile(raw, label);
+    return { ...profile, __auragridRoutedModel: modelUsed };
   },
 
   async matchAndGenerate(input: MatchGenerateInput): Promise<MatchGenerateResult> {

@@ -10,9 +10,14 @@ import type { AiProviderId } from "./types.ts";
  * Cada sucesso reseta o contador. Não persiste — reinicia com o servidor.
  */
 
-const THRESHOLD = 3;
-const WINDOW_MS = 60_000;
-const COOLDOWN_MS = 5 * 60_000;
+const DEFAULT_THRESHOLD = 3;
+const WINDOW_MS = 90_000;
+const COOLDOWN_MS = 2 * 60_000;
+
+/** OpenRouter falha muito em lote (vários modelos free offline) — cooldown menos agressivo. */
+const THRESHOLD_BY_PROVIDER: Partial<Record<AiProviderId, number>> = {
+  openrouter: 12,
+};
 
 type State = {
   failures: number[];
@@ -42,7 +47,8 @@ export function recordFailure(provider: AiProviderId, error: unknown): boolean {
   s.failures.push(now);
   s.lastError = error instanceof Error ? error.message : String(error);
 
-  if (s.failures.length >= THRESHOLD) {
+  const threshold = THRESHOLD_BY_PROVIDER[provider] ?? DEFAULT_THRESHOLD;
+  if (s.failures.length >= threshold) {
     s.cooldownUntil = now + COOLDOWN_MS;
     s.failures = [];
     return true;

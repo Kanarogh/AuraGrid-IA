@@ -1,10 +1,13 @@
+import { normalizeVisualProfile } from "./catalog";
 import type { CatalogItem, CatalogVisualProfile } from "../types";
 import { readJsonResponse } from "./apiResponse";
 import { aiFetch } from "./aiFetch";
+import { getState as getAiSettingsState } from "./aiSettingsStore";
 import { aiQueue } from "./aiQueue";
 import { resizeForAi, convertSvgToDataUrl } from "./images";
 
 const ENRICH_DELAY_MS = 2500;
+const ENRICH_DELAY_OPENROUTER_MS = 8000;
 /** Evita ficar minutos esperando retry do servidor quando a cota já estourou */
 const ENRICH_FETCH_TIMEOUT_MS = 45_000;
 
@@ -92,7 +95,7 @@ export async function enrichCatalogItemOnServer(
     if (!data.profile) {
       throw new Error("Servidor não retornou o perfil JSON. Tente reiniciar com npm run dev.");
     }
-    return data.profile;
+    return normalizeVisualProfile(data.profile, item.label);
   } catch (err) {
     if (timeoutController.signal.aborted && !signal?.aborted) {
       throw new Error(
@@ -108,6 +111,11 @@ export async function enrichCatalogItemOnServer(
 export type EnrichQueueResult = { cancelled: boolean; quotaExceeded: boolean };
 
 /** Indexa referências em fila (evita estourar cota por minuto) */
+function enrichDelayMs(): number {
+  const provider = getAiSettingsState().settings?.activeProvider;
+  return provider === "openrouter" ? ENRICH_DELAY_OPENROUTER_MS : ENRICH_DELAY_MS;
+}
+
 export async function enrichCatalogItemsInQueue(
   items: CatalogItem[],
   onItemStart?: (id: string) => void,
@@ -144,7 +152,7 @@ export async function enrichCatalogItemsInQueue(
     if (signal?.aborted) return { cancelled: true, quotaExceeded };
 
     if (i < items.length - 1) {
-      await sleep(ENRICH_DELAY_MS, signal);
+      await sleep(enrichDelayMs(), signal);
       if (signal?.aborted) return { cancelled: true, quotaExceeded };
     }
   }

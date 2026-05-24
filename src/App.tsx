@@ -30,6 +30,7 @@ import {
   X,
   RotateCcw,
   Square,
+  Eraser,
 } from "lucide-react";
 import { PRELOADED_CATALOG } from "./data/preloaded";
 import {
@@ -84,7 +85,10 @@ import {
   CanvaGridOrderHint,
 } from "./components/canva/CanvaTimelineSyncPanel";
 import {
+  clearCatalogEnrichmentPatch,
   getReferenceCatalog,
+  hasCatalogEnrichmentData,
+  isCatalogItemIndexed,
   isReferenceCatalogItem,
   normalizeCatalogItem,
 } from "./lib/catalog";
@@ -129,6 +133,19 @@ export default function App() {
       return cleaned.length === prev.length ? prev : cleaned;
     });
   }, [setCatalog]);
+
+  // Indexação interrompida (ex.: erro 500 no servidor) pode deixar itens em "processing" sem botão
+  useEffect(() => {
+    setCatalog((prev) => {
+      const hasStuck = prev.some((c) => c.enrichmentStatus === "processing");
+      if (!hasStuck) return prev;
+      return prev.map((c) =>
+        c.enrichmentStatus === "processing"
+          ? { ...c, enrichmentStatus: "pending" as const, enrichmentError: undefined }
+          : c
+      );
+    });
+  }, [activeClientId, setCatalog]);
 
   const captionBatchStats = useMemo(
     () => getCaptionBatchStats(posts, catalog),
@@ -1666,6 +1683,43 @@ export default function App() {
     );
   };
 
+  const indexedCatalogCount = useMemo(
+    () => referenceCatalog.filter(isCatalogItemIndexed).length,
+    [referenceCatalog]
+  );
+
+  const clearableEnrichmentCount = useMemo(
+    () => referenceCatalog.filter(hasCatalogEnrichmentData).length,
+    [referenceCatalog]
+  );
+
+  const clearCatalogEnrichments = useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) return;
+      const message =
+        ids.length === 1
+          ? "Remover a indexação desta referência?\n\nA foto permanece no acervo; só o JSON de visão será apagado."
+          : `Remover a indexação de ${ids.length} referências?\n\nAs fotos permanecem; você poderá indexar de novo depois.`;
+      if (!confirm(message)) return;
+
+      const idSet = new Set(ids);
+      setCatalog((prev) => {
+        const next = prev.map((c) =>
+          idSet.has(c.id) ? { ...c, ...clearCatalogEnrichmentPatch() } : c
+        );
+        catalogRef.current = next;
+        return next;
+      });
+      setProfileViewItem((current) => (current && idSet.has(current.id) ? null : current));
+    },
+    [setCatalog]
+  );
+
+  const clearAllCatalogEnrichments = useCallback(() => {
+    const ids = referenceCatalog.filter(hasCatalogEnrichmentData).map((c) => c.id);
+    clearCatalogEnrichments(ids);
+  }, [referenceCatalog, clearCatalogEnrichments]);
+
   const apiStatusTone =
     connectionStatus === "connected"
       ? "success"
@@ -2503,6 +2557,33 @@ export default function App() {
                     Indexar pendentes
                   </button>
                 )}
+                {clearableEnrichmentCount > 0 && (
+                  <button
+                    type="button"
+                    disabled={isEnrichingCatalog}
+                    onClick={() => clearAllCatalogEnrichments()}
+                    className="text-[10px] font-bold px-3 py-1.5 rounded-lg border border-ag-border bg-ag-surface-2 text-ag-muted hover:text-ag-danger hover:border-ag-danger/30 disabled:opacity-50 cursor-pointer flex items-center gap-1"
+                    title="Apaga o JSON de visão; as fotos do acervo permanecem"
+                  >
+                    <Eraser className="h-3 w-3" />
+                    Limpar indexações ({clearableEnrichmentCount})
+                  </button>
+                )}
+                {indexedCatalogCount > 0 && indexedCatalogCount < clearableEnrichmentCount && (
+                  <button
+                    type="button"
+                    disabled={isEnrichingCatalog}
+                    onClick={() =>
+                      clearCatalogEnrichments(
+                        referenceCatalog.filter(isCatalogItemIndexed).map((c) => c.id)
+                      )
+                    }
+                    className="text-[10px] font-bold px-3 py-1.5 rounded-lg border border-ag-border/80 bg-transparent text-ag-muted hover:text-ag-danger disabled:opacity-50 cursor-pointer"
+                    title="Só referências com JSON ✓"
+                  >
+                    Só indexados ({indexedCatalogCount})
+                  </button>
+                )}
               </div>
             </div>
 
@@ -2516,7 +2597,14 @@ export default function App() {
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                {referenceCatalog.map((item) => (
+                {referenceCatalog.map((item) => {
+                  const catalogIndexed = isCatalogItemIndexed(item);
+                  const showIndexButton = !catalogIndexed;
+                  const canClearEnrichment = hasCatalogEnrichmentData(item);
+                  const isIndexingThis =
+                    item.enrichmentStatus === "processing" && isEnrichingCatalog;
+
+                  return (
                   <div 
                     key={item.id}
                     className="border rounded-2xl p-3 flex flex-col gap-2.5 relative group transition-all shadow-xs bg-ag-surface-2 border-ag-border hover:border-ag-border"
@@ -2534,7 +2622,7 @@ export default function App() {
                       {/* Delete look trigger */}
                       <span
                         className={`absolute top-1.5 left-1.5 text-[8px] font-mono font-bold px-1.5 py-0.5 rounded-md border ${
-                          item.enrichmentStatus === "ready"
+                          catalogIndexed
                             ? "bg-ag-success/15 text-ag-success border-ag-success/30"
                             : item.enrichmentStatus === "processing"
                               ? "bg-ag-warning/15 text-ag-warning border-ag-warning/30"
@@ -2543,7 +2631,7 @@ export default function App() {
                                 : "bg-ag-surface-3 text-ag-muted border-ag-border"
                         }`}
                       >
-                        {item.enrichmentStatus === "ready"
+                        {catalogIndexed
                           ? "JSON ✓"
                           : item.enrichmentStatus === "processing"
                             ? "…"
@@ -2577,7 +2665,7 @@ export default function App() {
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      {item.enrichmentStatus === "ready" && item.visualProfile && (
+                      {catalogIndexed && (
                         <button
                           type="button"
                           onClick={() => setProfileViewItem(item)}
@@ -2587,12 +2675,22 @@ export default function App() {
                           Ver perfil
                         </button>
                       )}
-                      {(item.enrichmentStatus === "failed" ||
-                        item.enrichmentStatus === "pending" ||
-                        !item.enrichmentStatus) && (
+                      {canClearEnrichment && !isIndexingThis && (
                         <button
                           type="button"
-                          disabled={isEnrichingCatalog || item.enrichmentStatus === "processing"}
+                          disabled={isEnrichingCatalog}
+                          onClick={() => clearCatalogEnrichments([item.id])}
+                          className="w-full text-[10px] font-medium py-1 rounded-lg border border-transparent text-ag-muted hover:text-ag-danger hover:border-ag-danger/20 hover:bg-ag-danger/5 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1"
+                          title="Apagar só o JSON de visão; a foto permanece"
+                        >
+                          <Eraser className="h-3 w-3" />
+                          Limpar indexação
+                        </button>
+                      )}
+                      {showIndexButton && (
+                        <button
+                          type="button"
+                          disabled={isIndexingThis}
                           onClick={() =>
                             void runCatalogEnrichment([
                               { ...item, enrichmentStatus: "pending" },
@@ -2601,15 +2699,20 @@ export default function App() {
                           className="w-full text-[10px] font-bold py-1.5 rounded-lg border border-ag-border bg-ag-surface-1 text-ag-muted hover:text-ag-text disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1"
                         >
                           <RefreshCw
-                            className={`h-3 w-3 ${item.enrichmentStatus === "processing" ? "animate-spin" : ""}`}
+                            className={`h-3 w-3 ${isIndexingThis ? "animate-spin" : ""}`}
                           />
-                          {item.enrichmentStatus === "processing" ? "Indexando…" : "Indexar"}
+                          {isIndexingThis
+                            ? "Indexando…"
+                            : item.enrichmentStatus === "failed"
+                              ? "Tentar de novo"
+                              : "Indexar"}
                         </button>
                       )}
                     </div>
 
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
