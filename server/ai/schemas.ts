@@ -1,0 +1,65 @@
+/** JSON Schema (OpenAPI-style) usado por Groq e referência para prompts */
+export const CATALOG_PROFILE_JSON_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    version: { type: "number", description: "Always 1" },
+    referenceLabel: { type: "string" },
+    garmentType: { type: "string" },
+    category: { type: "string" },
+    primaryColors: { type: "array", items: { type: "string" } },
+    secondaryColors: { type: "array", items: { type: "string" } },
+    pattern: {
+      type: "object",
+      properties: {
+        type: { type: "string" },
+        description: { type: "string" },
+      },
+      required: ["type", "description"],
+      additionalProperties: false,
+    },
+    neckline: { type: "string" },
+    sleeves: { type: "string" },
+    dressLength: { type: "string" },
+    silhouette: { type: "string" },
+    fabricTexture: { type: "string" },
+    embellishments: { type: "array", items: { type: "string" } },
+    distinctiveDetails: { type: "array", items: { type: "string" } },
+    matchKeywords: { type: "array", items: { type: "string" } },
+    visualSummary: { type: "string" },
+    distinguishingFingerprint: { type: "string" },
+  },
+  required: [
+    "version",
+    "referenceLabel",
+    "garmentType",
+    "category",
+    "primaryColors",
+    "secondaryColors",
+    "pattern",
+    "neckline",
+    "sleeves",
+    "dressLength",
+    "silhouette",
+    "fabricTexture",
+    "embellishments",
+    "distinctiveDetails",
+    "matchKeywords",
+    "visualSummary",
+    "distinguishingFingerprint",
+  ],
+} as const;
+
+export const MATCH_RESULT_JSON_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    matchedId: {
+      type: "string",
+      description: "Exact catalog id, or empty string if no confident match",
+    },
+    reasoning: { type: "string" },
+    caption: { type: "string" },
+  },
+  required: ["matchedId", "reasoning", "caption"],
+} as const;

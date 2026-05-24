@@ -1,69 +1,164 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Playfair Display", ui-serif, Georgia, serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Cormorant Garamond", ui-serif, Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
-  /* Custom Color System mapped from user design requirements */
-  --color-sys-bg: var(--sys-bg);
-  --color-sys-surf1: var(--sys-surf1);
-  --color-sys-surf2: var(--sys-surf2);
-  --color-sys-surf3: var(--sys-surf3);
-  --color-sys-cta: var(--sys-cta);
-  --color-sys-accent: var(--sys-accent);
-  --color-sys-text: var(--sys-text);
+  --color-ag-bg: var(--ag-bg);
+  --color-ag-surface-1: var(--ag-surface-1);
+  --color-ag-surface-2: var(--ag-surface-2);
+  --color-ag-surface-3: var(--ag-surface-3);
+  --color-ag-border: var(--ag-border);
+  --color-ag-text: var(--ag-text);
+  --color-ag-muted: var(--ag-muted);
+  --color-ag-accent: var(--ag-accent);
+  --color-ag-accent-soft: var(--ag-accent-soft);
+  --color-ag-cta: var(--ag-cta);
+  --color-ag-cta-fg: var(--ag-cta-fg);
+  --color-ag-success: var(--ag-success);
+  --color-ag-warning: var(--ag-warning);
+  --color-ag-danger: var(--ag-danger);
 
-  /* Customize the Tailwind amber colors dynamically to be majestic Vine/Burgundy Wine tones */
-  --color-amber-50: #FDF2F4;
-  --color-amber-100: #FCE4E8;
-  --color-amber-200: #F9C0C9;
-  --color-amber-300: #F393A5;
-  --color-amber-400: #E85F7B;
-  --color-amber-500: #D22648;
-  --color-amber-600: #BE183A;
-  --color-amber-650: #A81232;
-  --color-amber-700: #9C102D;
-  --color-amber-800: #7E0A21;
-  --color-amber-805: #6A091A;
-  --color-amber-850: #540613;
-  --color-amber-900: #4C0511;
-  --color-amber-950: #2B0208;
+  --radius-ag-sm: 0.5rem;
+  --radius-ag-md: 0.75rem;
+  --radius-ag-lg: 1rem;
+  --radius-ag-xl: 1.25rem;
 }
 
-:root {
-  --sys-bg: #F0F8FA;
-  --sys-surf1: #D8EEF2;
-  --sys-surf2: #B4D8E0;
-  --sys-surf3: #70B8C8;
-  --sys-cta: #9C102D; /* Elegant deep wine red */
-  --sys-accent: #0A5A6A;
-  --sys-text: #06262E;
+:root,
+.light {
+  color-scheme: light;
+  --ag-bg: #f6f6f4;
+  --ag-surface-1: #ffffff;
+  --ag-surface-2: #f0f0ed;
+  --ag-surface-3: #e4e4df;
+  --ag-border: #d8d8d2;
+  --ag-text: #141416;
+  --ag-muted: #6b6b76;
+  --ag-accent: #5c5ce0;
+  --ag-accent-soft: #ededfc;
+  --ag-cta: #1a1a1f;
+  --ag-cta-fg: #fafafa;
+  --ag-success: #0d9488;
+  --ag-warning: #d97706;
+  --ag-danger: #dc2626;
+  --ag-shadow: 0 1px 2px rgba(20, 20, 22, 0.04), 0 8px 24px rgba(20, 20, 22, 0.06);
+  --ag-shadow-lg: 0 4px 6px rgba(20, 20, 22, 0.04), 0 24px 48px rgba(20, 20, 22, 0.1);
 }
 
 .dark {
-  --sys-bg: #080F14;
-  --sys-surf1: #0F1C22;
-  --sys-surf2: #172A34;
-  --sys-surf3: #223A46;
-  --sys-cta: #D22648; /* Luxurious vibrant wine block highlight */
-  --sys-accent: #22C5C5;
-  --sys-text: #E8FAFA;
+  color-scheme: dark;
+  --ag-bg: #0a0a0c;
+  --ag-surface-1: #121216;
+  --ag-surface-2: #1a1a20;
+  --ag-surface-3: #26262e;
+  --ag-border: #32323c;
+  --ag-text: #f4f4f5;
+  --ag-muted: #9b9ba8;
+  --ag-accent: #8b8bf5;
+  --ag-accent-soft: #1e1e3a;
+  --ag-cta: #f4f4f5;
+  --ag-cta-fg: #0a0a0c;
+  --ag-success: #2dd4bf;
+  --ag-warning: #fbbf24;
+  --ag-danger: #f87171;
+  --ag-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --ag-shadow-lg: 0 4px 6px rgba(0, 0, 0, 0.25), 0 24px 48px rgba(0, 0, 0, 0.45);
 }
 
-/* Custom Scrollbars */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--ag-bg);
+  color: var(--ag-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--ag-accent) 25%, transparent);
+}
+
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
 }
 ::-webkit-scrollbar-track {
-  background: #1c1917;
+  background: var(--ag-surface-2);
 }
 ::-webkit-scrollbar-thumb {
-  background: #44403c;
-  border-radius: 3px;
+  background: var(--ag-border);
+  border-radius: 99px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #78716c;
+  background: var(--ag-muted);
+}
+
+@layer utilities {
+  .ag-card {
+    background: var(--ag-surface-1);
+    border: 1px solid var(--ag-border);
+    border-radius: var(--radius-ag-xl);
+    box-shadow: var(--ag-shadow);
+  }
+
+  .ag-glass {
+    background: color-mix(in srgb, var(--ag-surface-1) 88%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .ag-focus-ring:focus-visible {
+    outline: 2px solid var(--ag-accent);
+    outline-offset: 2px;
+  }
+
+  .ag-scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--ag-border) transparent;
+  }
+
+  .ag-studio {
+    background: var(--ag-surface-1);
+  }
+
+  .ag-studio-mesh {
+    background:
+      radial-gradient(ellipse 90% 60% at 0% -10%, color-mix(in srgb, var(--ag-accent) 16%, transparent), transparent 55%),
+      radial-gradient(ellipse 70% 50% at 100% 110%, color-mix(in srgb, var(--ag-accent) 10%, transparent), transparent 50%);
+  }
+
+  .ag-page-mesh {
+    background:
+      radial-gradient(ellipse 100% 80% at 50% -30%, color-mix(in srgb, var(--ag-accent) 8%, transparent), transparent 60%);
+  }
+}
+
+@keyframes ag-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ag-scale-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-ag-fade-in {
+  animation: ag-fade-in 0.35s ease-out forwards;
+}
+
+.animate-ag-scale-in {
+  animation: ag-scale-in 0.25s ease-out forwards;
 }

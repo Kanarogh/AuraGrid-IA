@@ -1,10 +1,21 @@
-import {StrictMode} from 'react';
-import {createRoot} from 'react-dom/client';
-import App from './App.tsx';
-import './index.css';
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import App from "./App.tsx";
+import { AppErrorBoundary } from "./components/shared/AppErrorBoundary.tsx";
+import { ClientWorkspaceProvider } from "./context/ClientWorkspaceContext.tsx";
+import { runClientsZeroWipe } from "./lib/clientWorkspace/clearStorage.ts";
+import { initTheme } from "./hooks/useTheme.ts";
+import "./index.css";
 
-createRoot(document.getElementById('root')!).render(
+runClientsZeroWipe();
+initTheme();
+
+createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
-  </StrictMode>,
+    <AppErrorBoundary>
+      <ClientWorkspaceProvider>
+        <App />
+      </ClientWorkspaceProvider>
+    </AppErrorBoundary>
+  </StrictMode>
 );

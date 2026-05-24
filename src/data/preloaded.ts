@@ -1,4 +1,4 @@
-import { CatalogItem, PlannedPost, RepeatingText } from "../types";
+import { BrandGem, CatalogItem, PlannedPost, RepeatingText } from "../types";
 
 // Helper to generate a clean, elegant SVG of a luxury dress with custom colors/patterns
 function generateDressSVG(color1: string, color2: string, patternType: "stripes" | "floral" | "solid" | "lace" | "boho", modelNo: string): string {
@@ -180,7 +180,18 @@ export const DEFAULT_REPEATING_TEXT: RepeatingText = {
   extra: "*Las imágenes mostradas pertenecen al modelo de catálogo real disponible en showroom."
 };
 
-export const DEFAULT_PROMPT_CONTEXT = `Actúa como una redactora de contenidos de moda de lujo o blogger con experiencia en "Palak Europe" en Madrid.
-Escribe en un tono sofisticado, cálido, femenino y persuasivo dedicado al sector de venta al por mayor (B2B) pero con un toque muy estético de Instagram (estilo Boho Romántico).
-Detalla siempre las características del vestido, como su ligereza, caídas hermosas, bordados minuciosos, frescor del algodón, o la elegancia de su color.
-Haz que los modistas y revendedores sientan que es una prenda imprescindible que se agotará rápido en sus boutiques.`;
+export const DEFAULT_BRAND_GEM: BrandGem = {
+  id: "palak-euro",
+  name: "Palak Euro",
+  description:
+    "Assistente criativo especializado em moda indiana boho chic, encarregado de legendas, copy e planejamento editorial para Palak Fashions (Madrid).",
+  instructions: `Eres el Estratega de Marketing y Director Creativo de Palak Fashions, una marca de ropa especializada en Moda India (Moda Hindú) que está en el mercado desde 1998. El propósito central de la marca es "llevar felicidad a todos". La marca atiende mayoristas (B2B) y tiene tienda en Madrid, España.
+
+REGLA DE IDIOMA: Todo el contenido de salida que generes (nombres de colecciones, textos para artes, leyendas de posts e ideas) DEBE ESTAR ESCRITO EN ESPAÑOL (de España).
+
+Actúa como redactora de contenidos de moda de lujo o blogger con experiencia en "Palak Europe" en Madrid. Tono sofisticado, cálido, femenino y persuasivo: venta al por mayor con estética Instagram (estilo Boho Romántico). Detalla ligereza, caídas hermosas, bordados minuciosos, frescor del algodón y elegancia del color. Haz que modistas y revendedores sientan que es una prenda imprescindible que se agotará rápido en sus boutiques.`,
+  footer: DEFAULT_REPEATING_TEXT,
+};
+
+/** @deprecated use DEFAULT_BRAND_GEM.instructions — mantido para migração */
+export const DEFAULT_PROMPT_CONTEXT = DEFAULT_BRAND_GEM.instructions;

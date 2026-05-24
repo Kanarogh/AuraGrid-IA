@@ -1,0 +1,43 @@
+import type { ReactNode } from "react";
+import { cn } from "../../lib/cn";
+
+export function StudioSection({
+  title,
+  subtitle,
+  actions,
+  children,
+  className,
+  noPadding,
+}: {
+  title: string;
+  subtitle?: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  noPadding?: boolean;
+}) {
+  return (
+    <section
+      className={cn(
+        "ag-studio relative w-full overflow-hidden rounded-2xl border border-ag-border/70 shadow-[var(--ag-shadow-lg)] animate-ag-fade-in",
+        className
+      )}
+    >
+      <div className="ag-studio-mesh absolute inset-0 pointer-events-none" aria-hidden />
+
+      <header className="relative z-10 flex flex-col sm:flex-row sm:items-start justify-between gap-4 px-5 py-4 sm:px-6 border-b border-ag-border/50 bg-ag-surface-1/85 backdrop-blur-sm">
+        <div className="min-w-0">
+          <h2 className="font-display text-2xl sm:text-3xl font-semibold text-ag-text tracking-tight">
+            {title}
+          </h2>
+          {subtitle && (
+            <div className="text-sm text-ag-muted mt-1.5 leading-relaxed max-w-3xl">{subtitle}</div>
+          )}
+        </div>
+        {actions && <div className="flex flex-wrap gap-2 shrink-0">{actions}</div>}
+      </header>
+
+      <div className={cn("relative z-10", noPadding ? "" : "p-5 sm:p-6")}>{children}</div>
+    </section>
+  );
+}

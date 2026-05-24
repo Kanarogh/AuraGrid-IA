@@ -1,26 +1,17 @@
-import React, { useState, useEffect, useRef } from "react";
-import { 
-  Sparkles, 
-  Copy, 
-  Trash2, 
-  Upload, 
-  Settings, 
-  RefreshCw, 
-  FileText, 
-  Check, 
-  Calendar, 
-  Plus, 
-  RotateCcw, 
-  Info, 
-  X,
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import {
+  Sparkles,
+  Copy,
+  Trash2,
+  Upload,
+  RefreshCw,
+  FileText,
+  Check,
+  Plus,
   Eye,
-  Building,
-  PhoneCall,
-  Hash,
   ShoppingBag,
   Sliders,
   CheckCircle,
-  HelpCircle,
   Grid,
   CheckCircle2,
   CalendarDays,
@@ -30,243 +21,196 @@ import {
   MessageCircle,
   Send,
   Bookmark,
-  Sun,
-  Moon,
   FolderOpen,
   Image as ImageIcon,
   CheckCheck,
   ChevronRight,
   ArrowRight,
   LayoutGrid,
-  ArrowDown,
-  ArrowUp
+  X,
+  RotateCcw,
+  Square,
 } from "lucide-react";
-import { 
-  PRELOADED_CATALOG, 
-  PRELOADED_POSTS, 
-  DEFAULT_REPEATING_TEXT, 
-  DEFAULT_PROMPT_CONTEXT 
-} from "./data/preloaded";
-import { CatalogItem, PlannedPost, RepeatingText, CanvaGridPage, CanvaGridSlot } from "./types";
+import { PRELOADED_CATALOG } from "./data/preloaded";
+import {
+  CatalogItem,
+  CatalogVisualProfile,
+  PlannedPost,
+  CanvaGridPage,
+  CanvaGridSlot,
+} from "./types";
+import { enrichCatalogItemsInQueue, isAbortError } from "./lib/catalogEnrichment";
+import { useClientWorkspace } from "./context/ClientWorkspaceContext";
+import { aiFetch } from "./lib/aiFetch";
+import {
+  initAiSettingsStore,
+  noteLastProviderUsed,
+  refreshAiSettings,
+} from "./lib/aiSettingsStore";
+import { useAiSettings } from "./hooks/useAiSettings";
+import { resizeImage, convertSvgToDataUrl, resizeForAi } from "./lib/images";
+import { aiQueue } from "./lib/aiQueue";
+import {
+  buildCaptionCacheKey,
+  getCachedCaption,
+  setCachedCaption,
+} from "./lib/captionCache";
+import { recalculatePostDates } from "./lib/dates";
+import { createEmptyCanvaPage } from "./lib/canva";
+import { getPostStatus } from "./lib/postStatus";
+import { useTheme } from "./hooks/useTheme";
+import { AppShell } from "./components/layout/AppShell";
+import type { AppSection } from "./components/layout/AppSidebar";
+import { Footer } from "./components/layout/Footer";
+import { ApiAlert } from "./components/shared/ApiAlert";
+import { ConfigPanel } from "./components/shared/ConfigPanel";
+import { SchedulerPanel } from "./components/shared/SchedulerPanel";
+import { TimelineStrip } from "./components/shared/TimelineStrip";
+import {
+  CaptionBatchPanel,
+  type CaptionBatchProgress,
+} from "./components/posts/CaptionBatchPanel";
+import { PostDayStudio } from "./components/posts/PostDayStudio";
+import { EditorialGridView } from "./components/posts/EditorialGridView";
+import { PostsWorkspaceToolbar } from "./components/posts/PostsWorkspaceToolbar";
+import { StudioSection } from "./components/ui/StudioSection";
+import { FeedInstagramPreview } from "./components/feed/FeedInstagramPreview";
+import { getCaptionBatchStats, getPendingCaptionPosts } from "./lib/captionBatch";
+import { readJsonResponse } from "./lib/apiResponse";
+import { CatalogModal } from "./components/catalog/CatalogModal";
+import { CatalogProfileModal } from "./components/catalog/CatalogProfileModal";
+import {
+  CanvaTimelineSyncPanel,
+  CanvaGridOrderHint,
+} from "./components/canva/CanvaTimelineSyncPanel";
+import {
+  getReferenceCatalog,
+  isReferenceCatalogItem,
+  normalizeCatalogItem,
+} from "./lib/catalog";
 
-// Helper to resize base64 files to keep payloads lightweight and performant
-function resizeImage(base64Str: string, maxWidth = 500, maxHeight = 500): Promise<string> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.src = base64Str;
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      let width = img.width || 500;
-      let height = img.height || 500;
-
-      if (width > height) {
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width);
-          width = maxWidth;
-        }
-      } else {
-        if (height > maxHeight) {
-          width = Math.round((width * maxHeight) / height);
-          height = maxHeight;
-        }
-      }
-
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = "high";
-        // Fill canvas with white background to handle transparent SVGs nicely on jpeg exports
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, width, height);
-        ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", 0.85));
-      } else {
-        resolve(base64Str);
-      }
-    };
-    img.onerror = () => {
-      resolve(base64Str);
-    };
-  });
-}
-
-// Inline helper to convert SVG base64 strings to transparent/white solid JPEG for Gemini API compatibility
-function convertSvgToDataUrl(svgDataUrl: string): Promise<string> {
-  return new Promise((resolve) => {
-    if (!svgDataUrl || !svgDataUrl.startsWith("data:image/svg+xml")) {
-      resolve(svgDataUrl);
-      return;
-    }
-    const img = new Image();
-    img.src = svgDataUrl;
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = 500;
-      canvas.height = 500;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = "high";
-        ctx.fillStyle = "#F5F5F4"; // Elegant cream/boutique stone background
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", 0.85));
-      } else {
-        resolve(svgDataUrl);
-      }
-    };
-    img.onerror = () => {
-      resolve(svgDataUrl);
-    };
-  });
-}
-
-// Helper to recalculate post date labels based on a selected Start Date
-const recalculatePostDates = (startDateStr: string, currentPosts: PlannedPost[]): PlannedPost[] => {
-  if (!startDateStr) return currentPosts;
-  try {
-    const [year, month, day] = startDateStr.split("-").map(Number);
-    return currentPosts.map(post => {
-      const dayOffset = post.dayNumber - 1;
-      const date = new Date(year, month - 1, day);
-      date.setDate(date.getDate() + dayOffset);
-      
-      const weekdayStr = date.toLocaleDateString("pt-BR", { weekday: "short" }); // e.g. "dom." or "seg."
-      const capitalizedWeekday = weekdayStr.charAt(0).toUpperCase() + weekdayStr.slice(1).replace(".", "");
-      const dayMonthStr = date.toLocaleDateString("pt-BR", { day: "numeric", month: "numeric" }); // "24/05"
-      
-      return {
-        ...post,
-        dateLabel: `${capitalizedWeekday} (${dayMonthStr})`
-      };
-    });
-  } catch (err) {
-    console.error("Erro recomeçando datas:", err);
-    return currentPosts;
-  }
-};
-
-// Helper to create an empty Canva page layout representation of exactly 12 slots each
-const createEmptyCanvaPage = (pageName: string, id: string): CanvaGridPage => {
-  const slots: CanvaGridSlot[] = [];
-  for (let i = 0; i < 12; i++) {
-    slots.push({
-      id: `slot_${id}_${i}`,
-      image: null,
-      label: `Look ${i + 1}`,
-      matchedCatalogId: null
-    });
-  }
-  return {
-    id,
-    name: pageName,
-    slots
-  };
-};
 
 export default function App() {
-  // Theme toggle: Light (default) or Dark
-  const [theme, setTheme] = useState<"light" | "dark">(() => {
-    const saved = localStorage.getItem("palak_theme");
-    return saved === "dark" ? "dark" : "light";
-  });
+  const { isDark, toggleTheme } = useTheme();
 
-  const [startDate, setStartDate] = useState<string>(() => {
-    return localStorage.getItem("palak_start_date") || "2026-05-24";
-  });
+  const {
+    hasActiveClient,
+    activeClientId,
+    activeClient,
+    workspace,
+    setCatalog,
+    setPosts,
+    setStartDate,
+    setBrandGem,
+    setCanvaPages,
+    setActiveCanvaPageId,
+    setAutoSyncCanva,
+    setCanvaGridReversed,
+    setUiPrefs,
+    resetActiveClient,
+  } = useClientWorkspace();
 
-  // State persistence
-  const [catalog, setCatalog] = useState<CatalogItem[]>(() => {
-    const saved = localStorage.getItem("palak_catalog");
-    return saved ? JSON.parse(saved) : PRELOADED_CATALOG;
-  });
+  const catalog = workspace.catalog;
+  const posts = workspace.posts;
+  const startDate = workspace.startDate;
+  const brandGem = workspace.brandGem;
+  const canvaPages = workspace.canva.pages;
+  const activeCanvaPageId = workspace.canva.activePageId;
+  const autoSyncCanva = workspace.canva.autoSync;
+  const canvaGridReversed = workspace.canva.reversed;
 
-  const [posts, setPosts] = useState<PlannedPost[]>(() => {
-    const saved = localStorage.getItem("palak_posts");
-    const initialPosts = saved ? JSON.parse(saved) : PRELOADED_POSTS;
-    const activeStartDate = localStorage.getItem("palak_start_date") || "2026-05-24";
-    return recalculatePostDates(activeStartDate, initialPosts);
-  });
+  /** Guarda-roupa: só referências enviadas na aba Catálogo (pasta/arquivo único) */
+  const referenceCatalog = useMemo(() => getReferenceCatalog(catalog), [catalog]);
 
-  const [repeatingText, setRepeatingText] = useState<RepeatingText>(() => {
-    const saved = localStorage.getItem("palak_repeating");
-    return saved ? JSON.parse(saved) : DEFAULT_REPEATING_TEXT;
-  });
+  // Remove do armazenamento itens antigos que foram parar no catálogo via Canva/calendário
+  useEffect(() => {
+    setCatalog((prev) => {
+      const cleaned = prev.filter(isReferenceCatalogItem);
+      return cleaned.length === prev.length ? prev : cleaned;
+    });
+  }, [setCatalog]);
 
-  const [promptContext, setPromptContext] = useState(() => {
-    const saved = localStorage.getItem("palak_context");
-    return saved ? saved : DEFAULT_PROMPT_CONTEXT;
-  });
+  const captionBatchStats = useMemo(
+    () => getCaptionBatchStats(posts, catalog),
+    [posts, catalog]
+  );
 
-  // Active highlighted preview day (defaults to post_day1)
-  const [activePreviewId, setActivePreviewId] = useState<string>("post_day1");
+  const [activePreviewId, setActivePreviewId] = useState<string>(
+    () => workspace.ui?.activePreviewId ?? "post_day1"
+  );
 
   // UI state
-  const [showConfig, setShowConfig] = useState(false);
   const [showCatalogModal, setShowCatalogModal] = useState(false);
+  const [profileViewItem, setProfileViewItem] = useState<CatalogItem | null>(null);
   const [newCatalogLabel, setNewCatalogLabel] = useState("");
   const [newCatalogImage, setNewCatalogImage] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isProcessingAll, setIsProcessingAll] = useState(false);
-  const [testApiStatus, setTestApiStatus] = useState<"checking" | "connected" | "disconnected">("checking");
+  const [captionBatchProgress, setCaptionBatchProgress] = useState<CaptionBatchProgress | null>(
+    null
+  );
+  const captionBatchAbortRef = useRef<AbortController | null>(null);
+  const captionGenerateAbortRef = useRef<AbortController | null>(null);
+  const captionGeneratePostIdRef = useRef<string | null>(null);
+  const [isEnrichingCatalog, setIsEnrichingCatalog] = useState(false);
+  const { connectionStatus, apiStatusLabel, health } = useAiSettings();
   
-  // Canva multi-page grid state
-  const [canvaPages, setCanvaPages] = useState<CanvaGridPage[]>(() => {
-    const saved = localStorage.getItem("palak_canva_pages");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (err) {
-        console.error("Erro interpretando canva pages cache:", err);
-      }
-    }
-    // Pre-create 4 default empty pages of 12 slots each
-    const page1 = createEmptyCanvaPage("Página 1", "page_1");
-    const page2 = createEmptyCanvaPage("Página 2", "page_2");
-    const page3 = createEmptyCanvaPage("Página 3", "page_3");
-    const page4 = createEmptyCanvaPage("Página 4", "page_4");
-    
-    // Attempt to pre-populate Page 1 with matching images from the preloaded catalog
-    const defaultCatalog = PRELOADED_CATALOG;
-    if (defaultCatalog && defaultCatalog.length > 0) {
-      for (let i = 0; i < Math.min(12, defaultCatalog.length); i++) {
-        const slotIdx = 11 - i;
-        page1.slots[slotIdx].image = defaultCatalog[i].image;
-        page1.slots[slotIdx].label = defaultCatalog[i].label;
-        page1.slots[slotIdx].matchedCatalogId = defaultCatalog[i].id;
-      }
-    }
-    
-    return [page1, page2, page3, page4];
-  });
-
-  const [activeCanvaPageId, setActiveCanvaPageId] = useState<string>(() => {
-    return localStorage.getItem("palak_active_canva_page_id") || "page_1";
-  });
-
   const [selectedCanvaSlotId, setSelectedCanvaSlotId] = useState<string | null>(null);
 
-  const [autoSyncCanva, setAutoSyncCanva] = useState<boolean>(() => {
-    const saved = localStorage.getItem("palak_auto_sync_canva");
-    return saved !== "false";
-  });
+  const canvaImageCount = useMemo(
+    () => canvaPages.flatMap((p) => p.slots).filter((s) => s?.image).length,
+    [canvaPages]
+  );
 
-  const [canvaGridReversed, setCanvaGridReversed] = useState<boolean>(() => {
-    const saved = localStorage.getItem("palak_canva_reversed");
-    return saved !== "false";
-  });
+  const [activeSection, setActiveSection] = useState<AppSection>(
+    () => workspace.ui?.activeSection ?? "posts"
+  );
+  const [viewMode, setViewMode] = useState<"split" | "editorial">(
+    () => workspace.ui?.viewMode ?? "split"
+  );
 
-  const [activeTab, setActiveTab] = useState<"posts" | "canva_grid" | "feed_simulator" | "catalog">("posts");
-  const [viewMode, setViewMode] = useState<"split" | "editorial">("split");
-
-  // Ref Re-ordering swaps
   const [swapSourceId, setSwapSourceId] = useState<string>("");
-
-  // Prompt adjustments and refinement instructions per day
   const [refineInstructions, setRefineInstructions] = useState<{ [postId: string]: string }>({});
   const [isRefining, setIsRefining] = useState<{ [postId: string]: boolean }>({});
+
+  const prevClientIdRef = useRef(activeClientId);
+
+  // Ao trocar de cliente: mantém aba e modo de visualização; restaura só o dia/post desse cliente.
+  useEffect(() => {
+    if (!hasActiveClient || workspace.brandGem.id !== activeClientId) return;
+
+    const clientChanged = prevClientIdRef.current !== activeClientId;
+    prevClientIdRef.current = activeClientId;
+    if (!clientChanged) return;
+
+    setActivePreviewId(workspace.ui?.activePreviewId ?? "post_day1");
+    setShowCatalogModal(false);
+    setProfileViewItem(null);
+    setRefineInstructions({});
+    setSwapSourceId("");
+    setSelectedCanvaSlotId(null);
+    setUiPrefs({ activeSection, viewMode });
+  }, [
+    activeClientId,
+    workspace.brandGem.id,
+    workspace.ui?.activePreviewId,
+    hasActiveClient,
+    setUiPrefs,
+    activeSection,
+    viewMode,
+  ]);
+
+  useEffect(() => {
+    setUiPrefs({ activeSection });
+  }, [activeSection, setUiPrefs]);
+
+  useEffect(() => {
+    setUiPrefs({ activePreviewId });
+  }, [activePreviewId, setUiPrefs]);
+
+  useEffect(() => {
+    setUiPrefs({ viewMode });
+  }, [viewMode, setUiPrefs]);
 
   // Drag and drop states 
   const [catalogDragOver, setCatalogDragOver] = useState(false);
@@ -275,6 +219,8 @@ export default function App() {
   const catalogFileInputRef = useRef<HTMLInputElement>(null);
   const folderUploadInputRef = useRef<HTMLInputElement>(null);
   const filesUploadInputRef = useRef<HTMLInputElement>(null);
+  const catalogRef = useRef<CatalogItem[]>(catalog);
+  const catalogEnrichAbortRef = useRef<AbortController | null>(null);
   
   // Elements references for scrolling focus
   const dayCardRefs = useRef<{ [postId: string]: HTMLDivElement | null }>({});
@@ -423,65 +369,13 @@ export default function App() {
     }
   };
 
-  // Check backend server connection on mount
   useEffect(() => {
-    fetch("/api/health")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.keyConfigured) {
-          setTestApiStatus("connected");
-        } else {
-          setTestApiStatus("disconnected");
-        }
-      })
-      .catch(() => setTestApiStatus("disconnected"));
+    initAiSettingsStore();
   }, []);
 
-  // Sync state with standard browser localStorage and document root
   useEffect(() => {
-    localStorage.setItem("palak_theme", theme);
-    if (theme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, [theme]);
-
-  useEffect(() => {
-    localStorage.setItem("palak_catalog", JSON.stringify(catalog));
+    catalogRef.current = catalog;
   }, [catalog]);
-
-  useEffect(() => {
-    localStorage.setItem("palak_posts", JSON.stringify(posts));
-  }, [posts]);
-
-  useEffect(() => {
-    localStorage.setItem("palak_repeating", JSON.stringify(repeatingText));
-  }, [repeatingText]);
-
-  useEffect(() => {
-    localStorage.setItem("palak_context", promptContext);
-  }, [promptContext]);
-
-  useEffect(() => {
-    localStorage.setItem("palak_start_date", startDate);
-  }, [startDate]);
-
-  useEffect(() => {
-    localStorage.setItem("palak_canva_pages", JSON.stringify(canvaPages));
-  }, [canvaPages]);
-
-  useEffect(() => {
-    localStorage.setItem("palak_active_canva_page_id", activeCanvaPageId);
-  }, [activeCanvaPageId]);
-
-  useEffect(() => {
-    localStorage.setItem("palak_auto_sync_canva", String(autoSyncCanva));
-  }, [autoSyncCanva]);
-
-  useEffect(() => {
-    localStorage.setItem("palak_canva_reversed", String(canvaGridReversed));
-  }, [canvaGridReversed]);
 
   // Handle Automatic Synchronization of Canva Grid into Roteiros
   useEffect(() => {
@@ -499,20 +393,16 @@ export default function App() {
 
   // Reset demo showroom variables
   const handleResetPresets = () => {
-    if (confirm("Deseja mesmo limpar todos os dados do catálogo, do calendário de planejamento e redefinir o sistema totalmente do zero? Isso apagará todas as imagens e legendas.")) {
-      // Clear localStorage cache keys synchronously
-      localStorage.removeItem("palak_catalog");
-      localStorage.removeItem("palak_posts");
-      localStorage.removeItem("palak_repeating");
-      localStorage.removeItem("palak_context");
-      localStorage.removeItem("palak_theme");
-      localStorage.removeItem("palak_start_date");
-      localStorage.removeItem("palak_canva_pages");
-      localStorage.removeItem("palak_active_canva_page_id");
-      
-      alert("Prontinho! Todos os dados e rascunhos foram removidos do seu navegador. O sistema foi totalmente zerado com sucesso!");
-      // Force page reload synchronously to boot with fresh empty configurations
-      window.location.reload();
+    if (!hasActiveClient) return;
+    if (
+      confirm(
+        `Resetar o cliente «${activeClient.name}»? Catálogo, roteiro, Canva e Gem voltam ao estado vazio. Outros clientes não são afetados.`
+      )
+    ) {
+      resetActiveClient();
+      setActiveSection("posts");
+      setActivePreviewId("post_day1");
+      alert(`Cliente «${activeClient.name}» foi resetado.`);
     }
   };
 
@@ -777,18 +667,14 @@ export default function App() {
     }
 
     if (imagesProcessed.length > 0) {
-      // First, put these items in the wardrobe as catalog items so they can be referenced!
-      const newCatalogItems: CatalogItem[] = imagesProcessed.map(img => ({
-        id: "cat_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9),
-        label: img.label,
+      const scheduleItems = imagesProcessed.map((img) => ({
         image: img.image,
-        description: `Importado diretamente via gerador de calendário de 30 dias em ${new Date().toLocaleDateString("pt-BR")}`
+        label: img.label,
+        id: "sched_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9),
       }));
-      
-      setCatalog(prev => [...newCatalogItems, ...prev]);
-      
-      // Schedule them
-      await handleAutoDistribute(newCatalogItems);
+
+      // Agenda nos roteiros sem poluir o guarda-roupa de referências
+      await handleAutoDistribute(scheduleItems);
     } else {
       alert("Nenhuma imagem válida encontrada no lote selecionado.");
     }
@@ -870,16 +756,7 @@ export default function App() {
       let label = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").trim();
       label = label.replace(/\b\w/g, c => c.toUpperCase());
       
-      const newCatalogItem: CatalogItem = {
-        id: "cat_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9),
-        label: label,
-        image: base64Str,
-        description: `Adicionado através do Canva Grid em ${new Date().toLocaleDateString("pt-BR")}`
-      };
-      
-      setCatalog(prev => [newCatalogItem, ...prev]);
-      
-      // Update the slot with newly uploaded item
+      // Update the slot with newly uploaded item (não entra no guarda-roupa de referências)
       setCanvaPages(prev => {
         return prev.map(page => {
           if (page.id !== pageId) return page;
@@ -889,7 +766,7 @@ export default function App() {
               ...slot,
               image: base64Str,
               label: label,
-              matchedCatalogId: newCatalogItem.id,
+              matchedCatalogId: null,
             };
           });
           return { ...page, slots };
@@ -986,11 +863,11 @@ export default function App() {
         let label = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").trim();
         label = label.replace(/\b\w/g, c => c.toUpperCase());
         
-        const newId = "cat_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9) + "_" + i;
+        const slotRefId = `canva_${Date.now()}_${i}`;
         base64List.push({
           image: base64Str,
           label: label,
-          catId: newId
+          catId: slotRefId,
         });
       } catch (err) {
         console.error(err);
@@ -1002,16 +879,7 @@ export default function App() {
       return;
     }
 
-    // Register all in Wardrobe Catalog
-    const newCatalogItems: CatalogItem[] = base64List.map(item => ({
-      id: item.catId,
-      label: item.label,
-      image: item.image,
-      description: `Enviado do Canva Grid Editor em ${new Date().toLocaleDateString("pt-BR")}`
-    }));
-    setCatalog(prev => [...newCatalogItems, ...prev]);
-
-    // Fill the slots starting from active page (Instagram logic: bottom slot 12 triggers first, so we fill from index 11 down to 0)
+    // Fill the slots starting from active page (sem registrar no guarda-roupa) (Instagram logic: bottom slot 12 triggers first, so we fill from index 11 down to 0)
     setCanvaPages(prev => {
       let listIndex = 0;
       const activePageIndex = prev.findIndex(p => p.id === activeCanvaPageId);
@@ -1151,8 +1019,85 @@ export default function App() {
     });
   };
 
-  // Handle batch file imports (Folders or Multiple Selection)
-  const handleBatchImages = async (files: FileList) => {
+  const patchCatalogItem = (
+    id: string,
+    patch: Partial<CatalogItem>
+  ) => {
+    setCatalog((prev) => {
+      const next = prev.map((c) => (c.id === id ? { ...c, ...patch } : c));
+      catalogRef.current = next;
+      return next;
+    });
+  };
+
+  const resetCatalogProcessingState = () => {
+    setCatalog((prev) => {
+      const next = prev.map((c) =>
+        c.enrichmentStatus === "processing"
+          ? { ...c, enrichmentStatus: "pending" as const, enrichmentError: undefined }
+          : c
+      );
+      catalogRef.current = next;
+      return next;
+    });
+  };
+
+  const stopCatalogEnrichment = () => {
+    catalogEnrichAbortRef.current?.abort();
+    catalogEnrichAbortRef.current = null;
+    resetCatalogProcessingState();
+    setIsEnrichingCatalog(false);
+  };
+
+  const runCatalogEnrichment = async (items: CatalogItem[]) => {
+    const toIndex = items.filter(
+      (c) => c.isReference !== false && c.enrichmentStatus !== "ready"
+    );
+    if (toIndex.length === 0) return;
+
+    catalogEnrichAbortRef.current?.abort();
+    const controller = new AbortController();
+    catalogEnrichAbortRef.current = controller;
+
+    setIsEnrichingCatalog(true);
+    try {
+      await refreshAiSettings();
+      const { cancelled, quotaExceeded } = await enrichCatalogItemsInQueue(
+        toIndex,
+        (id) => patchCatalogItem(id, { enrichmentStatus: "processing", enrichmentError: undefined }),
+        (id, profile: CatalogVisualProfile) =>
+          patchCatalogItem(id, {
+            visualProfile: profile,
+            enrichmentStatus: "ready",
+            enrichedAt: new Date().toISOString(),
+            enrichmentError: undefined,
+          }),
+        (id, error) =>
+          patchCatalogItem(id, { enrichmentStatus: "failed", enrichmentError: error }),
+        { signal: controller.signal }
+      );
+      if (cancelled) resetCatalogProcessingState();
+      if (quotaExceeded) {
+        resetCatalogProcessingState();
+        alert(
+          "Cota de visão esgotada — a indexação parou para não gastar mais chamadas.\n\n" +
+            "• Groq free: ~500k tokens/dia (no log: TPD). Volta amanhã ou use outra chave.\n" +
+            "• Gemini free: cota diária também pode zerar.\n" +
+            "• Com DeepSeek ativo, o app tenta Gemini → Groq → OpenRouter.\n\n" +
+            "No painel IA (✨), escolha OpenRouter e o modelo «Qwen 2.5 VL 32B» se o free automático falhar."
+        );
+      }
+    } finally {
+      if (catalogEnrichAbortRef.current === controller) {
+        catalogEnrichAbortRef.current = null;
+      }
+      setIsEnrichingCatalog(false);
+    }
+  };
+
+  // Importa imagens para o guarda-roupa de referências (aba Catálogo)
+  const handleBatchImages = async (files: FileList, options?: { asReference?: boolean }) => {
+    const asReference = options?.asReference ?? true;
     const newItems: CatalogItem[] = [];
     let imageCount = 0;
     
@@ -1192,7 +1137,9 @@ export default function App() {
           id: "cat_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9),
           label: label,
           image: base64Str,
-          description: `Importado em ${new Date().toLocaleDateString("pt-BR")} do arquivo original '${file.name}'`
+          description: `Importado em ${new Date().toLocaleDateString("pt-BR")} do arquivo original '${file.name}'`,
+          isReference: asReference,
+          enrichmentStatus: asReference ? "pending" : undefined,
         });
       } catch (err) {
         console.error("Erro ao converter arquivo de lote:", file.name, err);
@@ -1200,8 +1147,17 @@ export default function App() {
     }
 
     if (newItems.length > 0) {
-      setCatalog(prev => [...newItems, ...prev]);
-      alert(`Sucesso! ${newItems.length} roupas adicionadas ao acervo de referências. Os nomes dos códigos foram identificados automaticamente a partir dos arquivos!`);
+      if (asReference) {
+        setCatalog((prev) => {
+          const next = [...newItems, ...prev];
+          catalogRef.current = next;
+          return next;
+        });
+        alert(
+          `Sucesso! ${newItems.length} referência(s) adicionada(s). Indexando perfis visuais (JSON) para match rápido nos roteiros — aguarde na aba Catálogo.`
+        );
+        void runCatalogEnrichment(newItems);
+      }
     } else if (imageCount > 0) {
       alert("Não foi possível processar imagens do lote selecionado.");
     } else {
@@ -1211,13 +1167,13 @@ export default function App() {
 
   const handleFolderUploadChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      handleBatchImages(e.target.files);
+      handleBatchImages(e.target.files, { asReference: true });
     }
   };
 
   const handleFilesUploadChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      handleBatchImages(e.target.files);
+      handleBatchImages(e.target.files, { asReference: true });
     }
   };
 
@@ -1235,82 +1191,321 @@ export default function App() {
     } : p));
   };
 
-  // Trigger Gemini vision matchmaking and creative caption generation
-  const matchAndGenerateForPost = async (postId: string) => {
-    const post = posts.find(p => p.id === postId);
-    if (!post) return;
+  const isQuotaErrorMessage = (message: string) =>
+    /429|cota|quota|RESOURCE_EXHAUSTED|rate.?limit|Groq|Gemini/i.test(message);
+
+  const ensureCatalogIndexedForMatch = async (): Promise<boolean> => {
+    const refs = getReferenceCatalog(catalogRef.current);
+    const notReady = refs.filter((c) => c.enrichmentStatus !== "ready" || !c.visualProfile);
+    if (notReady.length === 0) return true;
+
+    const indexNow = confirm(
+      `${notReady.length} referência(s) do catálogo ainda não estão indexadas (JSON).\n\n` +
+        `Indexar agora? Recomendado — 1 chamada por foto, com pausa automática.\n\n` +
+        `Cancelar = perguntar se deseja continuar sem índice (envia todas as fotos do acervo, mais lento e caro).`
+    );
+    if (indexNow) {
+      await runCatalogEnrichment(notReady);
+      return true;
+    }
+    return confirm(
+      "Continuar sem índice JSON? A IA pode enviar todas as imagens do catálogo em cada legenda."
+    );
+  };
+
+  const stopCaptionGeneration = useCallback((postId?: string) => {
+    captionGenerateAbortRef.current?.abort();
+    captionGenerateAbortRef.current = null;
+    captionGeneratePostIdRef.current = null;
+    aiQueue.cancelPending((label) => label.startsWith("Legenda "));
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (postId ? p.id === postId : p.isGenerating) {
+          return { ...p, isGenerating: false, error: undefined };
+        }
+        return p;
+      })
+    );
+  }, []);
+
+  // Match visual + legenda em espanhol (um post)
+  const matchAndGenerateForPost = async (
+    postId: string,
+    options?: { skipCatalogPrompt?: boolean; force?: boolean; signal?: AbortSignal }
+  ): Promise<{ quotaExceeded?: boolean }> => {
+    const post = posts.find((p) => p.id === postId);
+    if (!post) return {};
     if (!post.image) {
-      alert("Por favor, envie primeiro a imagem correspondente a este dia do feed.");
-      return;
+      alert("Carregue a foto do post antes de gerar a legenda.");
+      return {};
     }
 
-    setPosts(prev => prev.map(p => p.id === postId ? { 
-      ...p, 
-      isGenerating: true, 
-      error: null 
-    } : p));
+    if (post.isGenerating) return {};
+
+    captionGenerateAbortRef.current?.abort();
+    const controller = new AbortController();
+    captionGenerateAbortRef.current = controller;
+    captionGeneratePostIdRef.current = postId;
+    const parentSignal = options?.signal;
+    if (parentSignal?.aborted) {
+      controller.abort();
+    } else {
+      parentSignal?.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === postId
+          ? {
+              ...p,
+              isGenerating: true,
+              error: null,
+              ...(options?.force
+                ? { isGenerated: false, isConfirmed: false }
+                : {}),
+            }
+          : p
+      )
+    );
 
     try {
-      // Convert active post picture and any catalog items if they are currently in SVG format
-      const processedPostImage = await convertSvgToDataUrl(post.image);
-      const processedCatalog = await Promise.all(
-        catalog.map(async (item) => {
-          const convertedImg = await convertSvgToDataUrl(item.image);
-          return { ...item, image: convertedImg };
-        })
-      );
+      const rawPostImage = await convertSvgToDataUrl(post.image);
+      const processedPostImage = await resizeForAi(rawPostImage);
 
-      const response = await fetch("/api/match-and-generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          postImage: processedPostImage,
-          catalogItems: processedCatalog,
-          promptContext: promptContext,
-          repeatingText: repeatingText
-        })
-      });
+      if (controller.signal.aborted) return {};
 
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || "O servidor Gemini recusou a solicitação ou está sem chave configurada.");
+      if (!options?.skipCatalogPrompt) {
+        const ok = await ensureCatalogIndexedForMatch();
+        if (!ok || controller.signal.aborted) {
+          setPosts((prev) =>
+            prev.map((p) => (p.id === postId ? { ...p, isGenerating: false } : p))
+          );
+          return {};
+        }
       }
 
-      const result = await response.json();
+      if (controller.signal.aborted) return {};
 
-      setPosts(prev => prev.map(p => p.id === postId ? {
-        ...p,
-        matchedCatalogId: result.matchedId,
-        reasoning: result.reasoning,
-        caption: result.caption,
-        isGenerating: false,
-        isGenerated: true,
-        error: null
-      } : p));
+      const refs = getReferenceCatalog(catalogRef.current);
+      const ready = refs.filter((c) => c.enrichmentStatus === "ready" && c.visualProfile);
+      const useJsonMatch = ready.length > 0 && ready.length === refs.length;
 
-    } catch (error: any) {
+      const body: Record<string, unknown> = {
+        postImage: processedPostImage,
+        brandGem,
+      };
+
+      let catalogIdsForCache: string[] = [];
+
+      if (useJsonMatch) {
+        const profiles = ready.map((c) => ({
+          id: c.id,
+          label: c.label,
+          profile: c.visualProfile,
+        }));
+        body.catalogProfiles = profiles;
+        catalogIdsForCache = ready.map((c) => c.id);
+      } else if (refs.length > 0) {
+        const processedCatalog = await Promise.all(
+          refs.map(async (item) => {
+            const converted = await convertSvgToDataUrl(item.image);
+            const compressed = await resizeForAi(converted, { maxSide: 768 });
+            return { id: item.id, label: item.label, image: compressed };
+          })
+        );
+        body.catalogItems = processedCatalog;
+        catalogIdsForCache = refs.map((c) => c.id);
+      }
+
+      const cacheKey = buildCaptionCacheKey({
+        imageDataUrl: processedPostImage,
+        brandGem,
+        catalogIds: catalogIdsForCache,
+      });
+
+      if (!options?.force) {
+        const cached = getCachedCaption(cacheKey);
+        if (cached) {
+          setPosts((prev) =>
+            prev.map((p) =>
+              p.id === postId
+                ? {
+                    ...p,
+                    matchedCatalogId: cached.matchedId,
+                    reasoning: cached.reasoning,
+                    caption: cached.caption,
+                    isGenerating: false,
+                    isGenerated: true,
+                    error: null,
+                  }
+                : p
+            )
+          );
+          return { quotaExceeded: false };
+        }
+      }
+
+      const response = await aiQueue.enqueue(
+        `Legenda Dia ${post.dayNumber}`,
+        () =>
+          aiFetch("/api/match-and-generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+          })
+      );
+
+      if (controller.signal.aborted) return {};
+
+      const result = await readJsonResponse<{
+        matchedId?: string | null;
+        reasoning?: string;
+        caption?: string;
+        error?: string;
+      }>(response);
+
+      if (!response.ok) {
+        throw new Error(result.error || "Falha ao gerar legenda no servidor.");
+      }
+
+      const providerUsed = response.headers.get("X-AI-Provider-Used") ?? undefined;
+      noteLastProviderUsed(providerUsed);
+      const matchMode = response.headers.get("X-AI-Match-Mode") ?? undefined;
+
+      setCachedCaption(cacheKey, {
+        caption: result.caption ?? "",
+        matchedId: result.matchedId ?? null,
+        reasoning: result.reasoning ?? null,
+        providerUsed,
+        matchMode,
+        cachedAt: Date.now(),
+      });
+
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === postId
+            ? {
+                ...p,
+                matchedCatalogId: result.matchedId ?? null,
+                reasoning: result.reasoning ?? null,
+                caption: result.caption ?? "",
+                isGenerating: false,
+                isGenerated: true,
+                error: null,
+              }
+            : p
+        )
+      );
+      return { quotaExceeded: false };
+    } catch (error: unknown) {
+      if (isAbortError(error) || controller.signal.aborted) {
+        setPosts((prev) =>
+          prev.map((p) => (p.id === postId ? { ...p, isGenerating: false } : p))
+        );
+        return {};
+      }
       console.error(error);
-      setPosts(prev => prev.map(p => p.id === postId ? { 
-        ...p, 
-        isGenerating: false, 
-        error: error.message || "Falha na conexão com o Gemini AI." 
-      } : p));
+      const message =
+        error instanceof Error ? error.message : "Falha na conexão com a API de IA.";
+      const quotaExceeded = isQuotaErrorMessage(message);
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === postId ? { ...p, isGenerating: false, error: message } : p
+        )
+      );
+      return { quotaExceeded };
+    } finally {
+      if (captionGeneratePostIdRef.current === postId) {
+        captionGenerateAbortRef.current = null;
+        captionGeneratePostIdRef.current = null;
+      }
     }
   };
 
-  // Trigger matches for all pending days that have a look populated
-  const handleRunAllMatching = async () => {
-    const pending = posts.filter(p => p.image && !p.isGenerated && !p.isGenerating);
+  const stopCaptionBatch = () => {
+    captionBatchAbortRef.current?.abort();
+    captionBatchAbortRef.current = null;
+    stopCaptionGeneration();
+    setIsProcessingAll(false);
+    setCaptionBatchProgress(null);
+  };
+
+  const runCaptionBatch = async (targets: PlannedPost[]) => {
+    if (targets.length === 0) return;
+
+    const ok = await ensureCatalogIndexedForMatch();
+    if (!ok) return;
+
+    captionBatchAbortRef.current?.abort();
+    const controller = new AbortController();
+    captionBatchAbortRef.current = controller;
+
+    setIsProcessingAll(true);
+    setCaptionBatchProgress({ current: 0, total: targets.length, label: "" });
+
+    try {
+      for (let i = 0; i < targets.length; i++) {
+        if (controller.signal.aborted) break;
+
+        const p = targets[i];
+        setCaptionBatchProgress({
+          current: i + 1,
+          total: targets.length,
+          label: `Dia ${p.dayNumber}`,
+        });
+
+        const { quotaExceeded } = await matchAndGenerateForPost(p.id, {
+          skipCatalogPrompt: true,
+          signal: controller.signal,
+        });
+
+        if (controller.signal.aborted) break;
+
+        if (quotaExceeded) {
+          alert(
+            "Cota da API esgotada. A geração em lote foi interrompida. Tente mais tarde ou troque o provedor no painel IA (ícone ✨ no topo)."
+          );
+          break;
+        }
+
+        if (controller.signal.aborted) break;
+      }
+    } finally {
+      if (captionBatchAbortRef.current === controller) {
+        captionBatchAbortRef.current = null;
+      }
+      setIsProcessingAll(false);
+      setCaptionBatchProgress(null);
+    }
+  };
+
+  const handleRunAllMatching = () => {
+    const pending = getPendingCaptionPosts(posts);
     if (pending.length === 0) {
-      alert("Nenhum dia possui fotos pendentes sem legenda gerada ainda!");
+      alert("Não há posts com foto aguardando legenda. Carregue as imagens ou use “Tentar novamente” nos erros.");
       return;
     }
 
-    setIsProcessingAll(true);
-    for (const p of pending) {
-      await matchAndGenerateForPost(p.id);
+    if (pending.length >= 5) {
+      const minutes = Math.max(1, Math.ceil((pending.length * 4) / 60));
+      const ok = window.confirm(
+        `Gerar ${pending.length} legendas em lote.\n\n` +
+          `• Tempo estimado: ~${minutes} min (1 chamada por vez, gap de 1,5s)\n` +
+          `• Cache local evita repetir fotos já processadas\n` +
+          `• Se um provedor estourar a cota, a fila tenta o próximo automaticamente\n\n` +
+          `Continuar?`
+      );
+      if (!ok) return;
     }
-    setIsProcessingAll(false);
+
+    void runCaptionBatch(pending);
+  };
+
+  const handleRegenerateCaptionErrors = () => {
+    const failed = posts.filter((p) => p.image && p.error && !p.isGenerating);
+    if (failed.length === 0) return;
+    void runCaptionBatch(failed);
   };
 
   // Direct manual modification of part of the caption live
@@ -1328,7 +1523,7 @@ export default function App() {
     setPosts(prev => prev.map(p => {
       if (p.id === postId) {
         // Automatically inject or strip reference sentence from the caption body as requested
-        const targetRefLabel = catalog.find(c => c.id === catalogId)?.label;
+        const targetRefLabel = referenceCatalog.find((c) => c.id === catalogId)?.label;
         let revisedCaption = p.caption;
         
         // Remove old reference pattern
@@ -1359,16 +1554,22 @@ export default function App() {
     setIsRefining(prev => ({ ...prev, [postId]: true }));
 
     try {
-      const response = await fetch("/api/refine-caption", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          currentCaption: post.caption,
-          instructions: instructions
-        })
-      });
+      const response = await aiQueue.enqueue(
+        `Refinar Dia ${post.dayNumber}`,
+        () =>
+          aiFetch("/api/refine-caption", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              currentCaption: post.caption,
+              instructions,
+              brandGem,
+            }),
+          })
+      );
 
       if (!response.ok) throw new Error("Não foi possível refinar no servidor.");
+      noteLastProviderUsed(response.headers.get("X-AI-Provider-Used"));
       const result = await response.json();
 
       setPosts(prev => prev.map(p => p.id === postId ? { 
@@ -1428,13 +1629,20 @@ export default function App() {
       id: "cat_" + Date.now(),
       label: newCatalogLabel.trim(),
       image: newCatalogImage,
-      description: `Inserido em ${new Date().toLocaleDateString("pt-BR")} manualmente.`
+      description: `Inserido em ${new Date().toLocaleDateString("pt-BR")} manualmente.`,
+      isReference: true,
+      enrichmentStatus: "pending",
     };
 
-    setCatalog([newItem, ...catalog]);
+    setCatalog((prev) => {
+      const next = [newItem, ...prev];
+      catalogRef.current = next;
+      return next;
+    });
     setNewCatalogLabel("");
     setNewCatalogImage(null);
     setShowCatalogModal(false);
+    void runCatalogEnrichment([newItem]);
   };
 
   const removeCatalogItem = (id: string) => {
@@ -1443,14 +1651,29 @@ export default function App() {
     }
   };
 
-  // Status colors helper
-  const getPostStatus = (post: PlannedPost) => {
-    if (!post.image) return { label: "Sem Imagem", bg: "bg-stone-100 text-stone-500 border-stone-200 dark:bg-stone-900 dark:text-stone-500 dark:border-stone-800", dot: "bg-stone-300" };
-    if (post.isGenerating) return { label: "Mapeando IA...", bg: "bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-950", dot: "bg-amber-500 animate-pulse" };
-    if (post.isConfirmed) return { label: "Aprovado ✓", bg: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-950", dot: "bg-emerald-500" };
-    if (post.isGenerated) return { label: "Pendente Revisão", bg: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-950", dot: "bg-purple-500" };
-    return { label: "Sem Rascunho", bg: "bg-zinc-150 text-stone-600 border-stone-200 dark:bg-neutral-800 dark:text-stone-300 dark:border-neutral-700", dot: "bg-stone-400" };
+  const handleReindexCatalog = async (filter: "failed" | "pending" | "all-incomplete") => {
+    const items = referenceCatalog.filter((c) => {
+      if (filter === "failed") return c.enrichmentStatus === "failed";
+      if (filter === "pending") return c.enrichmentStatus === "pending" || !c.enrichmentStatus;
+      return c.enrichmentStatus !== "ready" || !c.visualProfile;
+    });
+    if (items.length === 0) {
+      alert("Nenhuma referência para reindexar.");
+      return;
+    }
+    await runCatalogEnrichment(
+      items.map((c) => ({ ...c, enrichmentStatus: "pending" as const }))
+    );
   };
+
+  const apiStatusTone =
+    connectionStatus === "connected"
+      ? "success"
+      : connectionStatus === "checking"
+        ? "warning"
+        : "danger";
+
+  const serverEnrichReady = health?.catalogEnrich !== false;
 
   // Export 7-day plan as formatted TXT file response
   const handleExportTxt = () => {
@@ -1460,7 +1683,7 @@ export default function App() {
     output += `==================================================================\n\n`;
 
     posts.forEach((post) => {
-      const refItem = catalog.find(c => c.id === post.matchedCatalogId);
+      const refItem = referenceCatalog.find((c) => c.id === post.matchedCatalogId);
       const isOk = post.isConfirmed ? "CONCLUÍDO E REVISADO" : "PLANEJAMENTO ANTECIPADO (RASCUNHO)";
       
       const sameDayPosts = posts.filter(p => p.dayNumber === post.dayNumber);
@@ -1492,1548 +1715,257 @@ export default function App() {
 
   const activePost = posts.find(p => p.id === activePreviewId) || posts[0];
 
+  const orderedEditorialPosts = useMemo(
+    () =>
+      [...posts].sort((a, b) =>
+        a.dayNumber !== b.dayNumber ? a.dayNumber - b.dayNumber : a.id.localeCompare(b.id)
+      ),
+    [posts]
+  );
+
+  const activeEditorialIndex = useMemo(() => {
+    const idx = orderedEditorialPosts.findIndex((p) => p.id === activePreviewId);
+    return idx >= 0 ? idx : 0;
+  }, [orderedEditorialPosts, activePreviewId]);
+
+  const navigateEditorialPost = useCallback(
+    (delta: -1 | 1) => {
+      const nextIdx = activeEditorialIndex + delta;
+      if (nextIdx >= 0 && nextIdx < orderedEditorialPosts.length) {
+        setActivePreviewId(orderedEditorialPosts[nextIdx].id);
+      }
+    },
+    [activeEditorialIndex, orderedEditorialPosts]
+  );
+
   return (
-    <div className="min-h-screen transition-colors duration-300 font-sans pb-32 selection:bg-sys-cta/20 bg-sys-bg text-sys-text">
-      
-      {/* PROFESSIONAL BOUTIQUE HEADER */}
-      <header className="border-b sticky top-0 backdrop-blur-md z-40 transition-colors duration-300 bg-sys-surf1/90 border-sys-surf3/30 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4">
-          
-          <div className="flex items-center gap-3.5">
-            <div className="p-2.5 bg-gradient-to-tr from-amber-600 via-amber-500 to-amber-700 text-white rounded-xl shadow-md">
-              <Sparkles className="h-5.5 w-5.5 animate-pulse text-stone-950" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-serif italic font-bold text-2xl tracking-wide text-amber-700 dark:text-amber-300">
-                  AuraGrid Intelligence
-                </span>
-                <span className="text-[10px] uppercase font-mono tracking-widest bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 px-2.5 py-0.5 rounded-full font-bold">
-                  B2B Planner Studio
-                </span>
-              </div>
-              <p className="text-xs text-stone-500 dark:text-stone-400 font-sans mt-0.5">
-                Mapeamento visual automatizado de vestuários e redator criativo integrado de marcas de luxo.
-              </p>
-            </div>
-          </div>
+    <>
+      <AppShell
+        activeSection={activeSection}
+        onNavigate={setActiveSection}
+        clientName={hasActiveClient ? activeClient.name : "—"}
+        catalogCount={referenceCatalog.length}
+        apiStatusLabel={apiStatusLabel}
+        apiStatusTone={apiStatusTone}
+        isDark={isDark}
+        onToggleTheme={toggleTheme}
+        onReset={handleResetPresets}
+        onClientCreated={() => setActiveSection("settings")}
+        footer={<Footer />}
+      >
+        {connectionStatus === "disconnected" && <ApiAlert />}
 
-          <div className="flex items-center flex-wrap gap-2.5">
-            
-            {/* Gemini Setup indicator */}
-            <div className={`text-xs font-mono flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${
-              testApiStatus === "connected" 
-                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400" 
-                : testApiStatus === "checking"
-                ? "bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400"
-                : "bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400"
-            }`}>
-              <span className={`block h-2 w-2 rounded-full ${
-                testApiStatus === "connected" ? "bg-emerald-500" : testApiStatus === "checking" ? "bg-amber-500 animate-pulse" : "bg-rose-500"
-              }`} />
-              <span className="font-semibold">{testApiStatus === "connected" ? "IA Pronta" : testApiStatus === "checking" ? "Checando..." : "Sem API Key em Secrets"}</span>
-            </div>
-
-            {/* LIGHT / DARK THEME TOGGLE SWITCH */}
-            <button
-              onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-              className="p-2 rounded-xl border transition-all cursor-pointer bg-sys-surf2 hover:bg-sys-surf3 border-sys-surf3/50 text-sys-text"
-              title="Alternar entre Tema Claro e Tema Escuro"
-            >
-              {theme === "light" ? (
-                <div className="flex items-center gap-1.5 px-1.5 py-0.5">
-                  <Moon className="h-4 w-4" />
-                  <span className="text-xs font-medium">Modo Escuro</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5 px-1.5 py-0.5">
-                  <Sun className="h-4 w-4 text-sys-cta" />
-                  <span className="text-xs font-medium">Modo Claro</span>
-                </div>
-              )}
-            </button>
-
-            {/* Config metadata drawer toggle */}
-            <button
-              id="btn-toggle-config"
-              onClick={() => setShowConfig(!showConfig)}
-              className={`text-xs font-semibold flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border transition-all cursor-pointer ${
-                showConfig 
-                  ? "bg-sys-cta text-white border-sys-cta shadow-md" 
-                  : "bg-sys-surf2 border-sys-surf3/50 hover:bg-sys-surf3 text-sys-text"
-              }`}
-            >
-              <Settings className="h-3.5 w-3.5" />
-              <span>Instruções Tom e Copys</span>
-            </button>
-
-            {/* Reset presets tool */}
-            <button
-              id="btn-reset-presets"
-              onClick={handleResetPresets}
-              title="Limpar todos os dados e começar do zero"
-              className={`text-xs font-semibold flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border transition-all cursor-pointer ${
-                theme === "light" 
-                  ? "bg-rose-50 hover:bg-rose-100 border-rose-200 text-rose-700" 
-                  : "bg-rose-950/20 hover:bg-rose-950/40 border-rose-900/30 text-rose-300"
-              }`}
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              <span>Zerar Sistema (Reiniciar)</span>
-            </button>
-
-          </div>
-        </div>
-      </header>
-
-      {/* WORKSPACE CONTENT BOUNDS */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
-        
-        {/* API Key Connection Alert fallback */}
-        {testApiStatus === "disconnected" && (
-          <div className="bg-amber-500/10 border border-amber-500/30 text-amber-805 p-4 rounded-2xl mb-6 text-sm flex gap-3.5 items-start">
-            <Info className="h-5 w-5 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
-            <div className="text-stone-700 dark:text-stone-300">
-              <p className="font-bold text-amber-805 dark:text-amber-300 font-serif">Modo de Planejamento Estático Ativo (Sem Chave do Gemini)</p>
-              <p className="text-xs leading-relaxed mt-1">
-                Você pode carregar todas as mídias, arrumar sua pasta de referências e editar os roteiros manualmente para exportação. 
-                Para que a IA relacione automaticamente as fotos de catálogo ao do calendário de 7 dias e preencha o código/escreva as legendas por conta própria, adicione sua <code>GEMINI_API_KEY</code> na aba de Secrets (Settings &gt; Secrets do AI Studio).
-              </p>
-            </div>
+        {!hasActiveClient && (
+          <div className="flex flex-col items-center justify-center min-h-[45vh] gap-3 px-4 text-center">
+            <h2 className="font-display text-2xl font-semibold text-ag-text">
+              Crie seu primeiro cliente
+            </h2>
+            <p className="text-sm text-ag-muted max-w-md">
+              Use <strong className="font-medium text-ag-text">+ Novo</strong> na barra lateral
+              para cadastrar uma marca. Catálogo, roteiro e configurações ficam isolados por
+              cliente.
+            </p>
           </div>
         )}
 
-        {/* SETUP EXPANDABLE DRAWER */}
-        {showConfig && (
-          <div className="p-6 rounded-2xl border mb-8 relative animate-fadeIn transition-colors bg-sys-surf1 border-sys-surf3/30 shadow-lg text-sys-text">
-            <button 
-              onClick={() => setShowConfig(false)}
-              className="absolute top-4 right-4 text-stone-400 hover:text-stone-200 p-1 cursor-pointer"
-            >
-              <X className="h-4 w-4" />
-            </button>
+        {hasActiveClient && activeSection === "settings" && (
+          <ConfigPanel
+            variant="page"
+            brandGem={brandGem}
+            onBrandGemChange={setBrandGem}
+          />
+        )}
 
-            <div className="mb-4">
-              <span className="font-serif italic text-sys-cta text-xl flex items-center gap-2">
-                <Sliders className="h-5 w-5 text-sys-cta" />
-                Diretrizes de Tom da IA & Dados Fixos de Vendas
-              </span>
-              <p className="text-xs mt-0.5 opacity-80">
-                Estas informações serão aplicadas consistentemente nas redações geradas pelo Gemini.
-              </p>
-            </div>
+        {hasActiveClient && activeSection === "posts" && (
+          <>
+            <PostsWorkspaceToolbar
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              onExportTxt={handleExportTxt}
+            />
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
-              
-              {/* Prompt customization */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] uppercase font-mono tracking-widest text-stone-400 font-bold block">
-                  🎨 Personalidade & Estilo Retórico (Gema)
-                </label>
-                <textarea
-                  value={promptContext}
-                  onChange={(e) => setPromptContext(e.target.value)}
-                  rows={8}
-                  className="w-full text-xs rounded-xl p-3.5 outline-none leading-relaxed transition-colors border bg-sys-surf2 border-sys-surf3/40 text-sys-text focus:border-sys-cta"
-                  placeholder="Instruções para a escrita das legendas..."
+            {viewMode === "editorial" && (
+              <>
+                <SchedulerPanel
+                  startDate={startDate}
+                  onStartDateChange={handleStartDateChange}
+                  postsCount={posts.length}
+                  catalogCount={referenceCatalog.length}
+                  onAddDay={handleAddDay}
+                  onDistributeCatalog={() => handleAutoDistribute(referenceCatalog)}
+                  onBatchUpload={(files) => handleBatchScheduleUpload(files)}
                 />
-              </div>
 
-              {/* Recurring Metadata address etc */}
-              <div className="flex flex-col gap-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-[10px] uppercase font-mono tracking-widest text-stone-400 font-bold flex items-center gap-1">
-                      <Building className="h-3 w-3 text-sys-cta" />
-                      Espaço Showroom (Direção)
-                    </span>
-                    <input
-                      type="text"
-                      value={repeatingText.address}
-                      onChange={(e) => setRepeatingText({ ...repeatingText, address: e.target.value })}
-                      className="w-full text-xs rounded-lg px-3 py-2 outline-none border bg-sys-surf2 border-sys-surf3/40 text-sys-text focus:border-sys-cta"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-[10px] uppercase font-mono tracking-widest text-stone-400 font-bold flex items-center gap-1">
-                      <PhoneCall className="h-3 w-3 text-sys-accent" />
-                      Link de Atendimento WhatsApp
-                    </span>
-                    <input
-                      type="text"
-                      value={repeatingText.contact}
-                      onChange={(e) => setRepeatingText({ ...repeatingText, contact: e.target.value })}
-                      className="w-full text-xs rounded-lg px-3 py-2 outline-none border bg-sys-surf2 border-sys-surf3/40 text-sys-text focus:border-sys-cta"
-                    />
-                  </div>
-
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-[10px] uppercase font-mono tracking-widest text-stone-400 font-bold flex items-center gap-1">
-                    <Hash className="h-3 w-3 text-sys-accent" />
-                    Hashtags Associadas
-                  </span>
-                  <input
-                    type="text"
-                    value={repeatingText.hashtags}
-                    onChange={(e) => setRepeatingText({ ...repeatingText, hashtags: e.target.value })}
-                    className="w-full text-xs rounded-lg px-3 py-2 outline-none border bg-sys-surf2 border-sys-surf3/40 text-sys-text focus:border-sys-cta"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-[10px] uppercase font-mono tracking-widest text-stone-400 font-bold flex items-center gap-1">
-                    <Info className="h-3 w-3 text-rose-500" />
-                    Nota Legal Extra
-                  </span>
-                  <input
-                    type="text"
-                    value={repeatingText.extra}
-                    onChange={(e) => setRepeatingText({ ...repeatingText, extra: e.target.value })}
-                    className="w-full text-xs rounded-lg px-3 py-2 outline-none border bg-sys-surf2 border-sys-surf3/40 text-sys-text focus:border-sys-cta"
-                  />
-                </div>
-
-              </div>
-
-            </div>
-
-            <div className="flex justify-end pt-4 border-t border-sys-surf3/20 mt-4">
-              <button
-                onClick={() => {
-                  setShowConfig(false);
-                }}
-                className="bg-sys-cta hover:bg-sys-cta/90 text-white text-xs font-bold px-5 py-2.5 rounded-xl cursor-pointer transition-colors shadow-sm"
-              >
-                Salvar Definições
-              </button>
-            </div>
-          </div>
-        )}
-                    {/* AGENDADOR E DISTRIBUIDOR INTELIGENTE DE 30 DIAS */}
-        <div className="p-5 sm:p-6 rounded-2xl border mb-8 transition-colors bg-sys-surf1 border-sys-surf3/30 shadow-xs text-sys-text">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4 pb-4 border-b border-sys-surf3/20">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-sys-accent" />
-              <div>
-                <h3 className="text-base font-serif italic font-bold">
-                  Configuração e Distribuição Automática (30 Dias)
-                </h3>
-                <span className="text-xs opacity-75 block">Escolha a data de início e o distribuidor organizará as imagens do feed sem esforço</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 bg-sys-accent/10 text-sys-accent border border-sys-accent/20 px-3 py-1 rounded-full text-xs font-semibold">
-              <Sparkles className="h-4.5 w-4.5 animate-pulse" />
-              <span>{posts.length} Posts Planejados</span>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-            
-            {/* Col 1: Start Date Setup */}
-            <div className="lg:col-span-5 flex flex-col justify-between p-4 px-5 rounded-xl bg-sys-surf2 border border-sys-surf3/20">
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-sys-accent block mb-1.5 font-sans">
-                  📅 Data de Início do Planejamento
-                </label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => handleStartDateChange(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold border transition-all focus:outline-none focus:ring-2 focus:ring-sys-cta/30 bg-sys-surf1 border-sys-surf3/40 text-sys-text"
-                />
-                <p className="text-[11px] opacity-75 mt-2 leading-relaxed">
-                  Todos os dias seguintes calcularão automaticamente suas datas no calendário com base nessa data de início.
-                </p>
-              </div>
-              
-              <div className="pt-3.5 border-t border-sys-surf3/20 mt-4 flex flex-wrap gap-2.5">
-                <button
-                  onClick={handleAddDay}
-                  className="bg-sys-cta hover:bg-sys-cta/90 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
-                >
-                  <Plus className="h-4 w-4 stroke-[3]" />
-                  <span>Adicionar Dia</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Col 2: Smart Distribution Engine */}
-            <div className="lg:col-span-7 flex flex-col justify-between p-4 px-5 rounded-xl bg-sys-surf2 border border-sys-surf3/20">
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-sys-cta block mb-1">
-                  ⚡ Distribuidor Inteligente (Auto-Planejar 30 Dias)
-                </span>
-                <p className="text-xs opacity-85 leading-relaxed">
-                  O sistema distribui qualquer quantidade de fotos em exatamente <strong>30 dias</strong> de calendário. 
-                  Se você tiver mais fotos (ex: 34 images), ele colocará múltiplos posts nos primeiros dias (ex: até 3 posts/dia) e 1 por dia nos restantes.
-                </p>
-              </div>
-
-              {/* Action options */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-sys-surf3/20">
-                
-                {/* Option A: Use Wardrobe Catalog */}
-                <div className="flex flex-col justify-between gap-2 border-r border-sys-surf3/20 pr-2">
-                  <div>
-                    <span className="text-[10px] font-bold uppercase text-[color-mix(in_srgb,var(--sys-text)_70%,transparent)] font-mono">Opção 1 — Do Guarda-Roupa</span>
-                    <p className="text-[11px] opacity-75 mt-0.5 font-sans leading-snug">
-                      Agendar as <strong className="opacity-100">{catalog.length} fotos</strong> já existentes no seu guarda-roupas.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleAutoDistribute(catalog)}
-                    disabled={catalog.length === 0}
-                    className="bg-sys-cta/10 hover:bg-sys-cta/20 disabled:opacity-40 text-sys-cta border border-sys-cta/20 text-xs font-bold py-2 px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 h-9 mt-1.5"
-                  >
-                    <ShoppingBag className="h-3.5 w-3.5" />
-                    <span>Distribuir guarda-roupa</span>
-                  </button>
-                </div>
-
-                {/* Option B: Match & Schedule New Files Directly */}
-                <div className="flex flex-col justify-between gap-2 pl-1">
-                  <div>
-                    <span className="text-[10px] font-bold uppercase text-[color-mix(in_srgb,var(--sys-text)_70%,transparent)] font-mono">Opção 2 — Upload de Fotos</span>
-                    <p className="text-[11px] opacity-75 mt-0.5 font-sans leading-snug">
-                      Carregar novas imagens do Canva e disparar distribuição nos 30 dias.
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <input
-                      type="file"
-                      id="smart-scheduler-file-picker"
-                      multiple
-                      accept="image/*"
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files.length > 0) {
-                          handleBatchScheduleUpload(e.target.files);
-                        }
-                      }}
-                      className="hidden"
-                    />
-                    <button
-                      onClick={() => document.getElementById("smart-scheduler-file-picker")?.click()}
-                      className="w-full bg-sys-surf1 hover:bg-sys-surf3 border border-sys-surf3/40 text-sys-text text-xs font-bold py-2 px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 h-9"
-                    >
-                      <Upload className="h-3.5 w-3.5 text-sys-cta" />
-                      <span>Upload & Agendar Lote</span>
-                    </button>
-                  </div>
-
-                </div>
-
-              </div>
-            </div>
-
-          </div>
-        </div>
-                 {/* VISUAL PLANNING TIMELINE CARD */}
-        <div className="p-4 sm:p-5 rounded-2xl border mb-8 transition-colors bg-sys-surf1 border-sys-surf3/30 shadow-xs text-sys-text animate-fadeIn">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-            
-            <div className="flex items-center gap-2">
-              <div className="h-7 w-1.5 bg-sys-cta rounded-full" />
-              <div>
-                <h2 className="text-sm font-bold uppercase tracking-wider text-sys-accent font-sans">
-                  Linha de Planejamento Editorial (Visual Completo 30 Dias)
-                </h2>
-                <span className="text-[11px] opacity-75 block">Arraste a linha para rolar. Selecione qualquer publicação para editar o conteúdo e legenda correspondente</span>
-              </div>
-            </div>
-
-            {/* Micro visual color tags indicator */}
-            <div className="flex items-center flex-wrap gap-3.5 text-[10px] font-mono font-semibold opacity-90">
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-sys-surf3 block"/> Sem foto</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-sys-accent block"/> Sem legenda</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-purple-500 block"/> Pronto para revisão</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500 block"/> Confirmado ✓</span>
-            </div>
-            
-          </div>
-
-          {/* Horizontally scrollable visual storyboard track */}
-          <div className="flex items-stretch gap-3.5 overflow-x-auto pb-4.5 pt-1 scrollbar-thin scrollbar-thumb-sys-accent/30 scrollbar-track-transparent snap-x">
-            {posts.map((post) => {
-              const status = getPostStatus(post);
-              const isActive = post.id === activePreviewId;
-              
-              return (
-                <div
-                  key={post.id}
-                  onClick={() => handleScrollToDay(post.id)}
-                  className={`rounded-2xl p-3 border text-center cursor-pointer transition-all duration-300 relative group flex flex-col justify-between min-w-[170px] sm:min-w-[190px] shrink-0 snap-start ${
-                    isActive 
-                      ? "border-sys-cta ring-2 ring-sys-cta/20 bg-sys-surf3/40 shadow-md scale-99" 
-                      : post.isConfirmed
-                      ? "border-emerald-500/35 hover:border-emerald-500 bg-emerald-500/5"
-                      : "border-sys-surf3/40 hover:border-sys-cta/50 bg-sys-surf2 hover:bg-sys-surf3"
-                  }`}
-                >
-                  
-                  {/* Top Day Header */}
-                  <div className="leading-tight mb-2 flex items-center justify-between px-1">
-                    <div className="text-left">
-                      <span className={`text-xs block font-bold font-serif ${isActive ? "text-sys-cta" : "text-sys-text"}`}>
-                        Dia {post.dayNumber}
-                      </span>
-                      <span className="text-[9.5px] opacity-75 block font-sans">
-                        {post.dateLabel}
-                      </span>
-                    </div>
-
-                    {/* Quick validation badge overlay */}
-                    {post.isConfirmed ? (
-                      <span className="bg-emerald-500 text-stone-950 p-0.5 rounded-full">
-                        <Check className="h-3 w-3" strokeWidth={3} />
-                      </span>
-                    ) : post.caption ? (
-                      <span className="h-2 w-2 rounded-full bg-purple-500 block" />
-                    ) : null}
-                  </div>
-
-                  {/* SVG / Image clothes thumbnail */}
-                  <div className="h-28 w-full rounded-xl border flex items-center justify-center relative overflow-hidden transition-colors bg-sys-bg border-sys-surf3/20">
-                    {post.image ? (
-                      <img
-                        src={post.image}
-                        alt={`Look Dia ${post.dayNumber}`}
-                        referrerPolicy="no-referrer"
-                        className="h-full w-full object-contain p-2"
-                      />
-                    ) : (
-                      <div className="text-stone-400 dark:text-stone-600 flex flex-col items-center justify-center">
-                        <Upload className="h-4.5 w-4.5 mb-1" />
-                        <span className="text-[8px] tracking-wider uppercase font-mono font-bold">Vazio</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Visual Match indicator bottom */}
-                  <div className="mt-2 flex flex-col items-center justify-center gap-1">
-                    <span className={`text-[8.5px] font-mono px-2 py-0.5 rounded-full font-bold border ${status.bg}`}>
-                      {status.label}
-                    </span>
-
-                    {post.matchedCatalogId ? (
-                      <div className="bg-sys-accent/10 text-sys-accent border border-sys-accent/20 text-[9.5px] font-mono px-2 py-0.5 rounded-md font-bold text-center truncate w-full">
-                        🧩 {catalog.find(c => c.id === post.matchedCatalogId)?.label || post.matchedCatalogId}
-                      </div>
-                    ) : (
-                      <span className="text-[9px] opacity-60 italic">Sem ref. vinculada</span>
-                    )}
-                  </div>
-
-                  {/* Actions overlay helper box */}
-                  <div className="absolute inset-0 bg-sys-surf1/95 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center p-2 rounded-2xl border border-sys-cta/30">
-                    <span className="text-[10px] font-bold text-sys-cta font-serif block mb-2 uppercase">Ações Rápidas</span>
-                    <div className="flex flex-col gap-1 w-full">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleScrollToDay(post.id);
-                        }}
-                        className="bg-sys-cta hover:bg-sys-cta/90 text-white text-[10px] font-bold py-1.5 rounded-lg transition-colors cursor-pointer"
-                      >
-                        Editar Legenda
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (swapSourceId) {
-                            handleSwapDays(swapSourceId, post.id);
-                          } else {
-                            setSwapSourceId(post.id);
-                            alert(`Origem selecionada! Agora escolha qualquer outro post do calendário para inverter os conteúdos.`);
-                          }
-                        }}
-                        className={`text-[9.5px] font-semibold py-1.5 rounded-lg transition-colors cursor-pointer ${
-                          swapSourceId === post.id 
-                            ? "bg-rose-600 text-white animate-pulse" 
-                            : swapSourceId 
-                            ? "bg-sys-accent/20 text-sys-accent border border-sys-accent/30 hover:bg-sys-accent/40" 
-                            : "bg-sys-bg hover:bg-sys-surf2 text-sys-text border border-sys-surf3/20"
-                        }`}
-                      >
-                        {swapSourceId === post.id ? "Cancelar" : swapSourceId ? "Trocar sequência" : "Mudar Ordem"}
-                      </button>
-                    </div>
-                  </div>
-
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* WORKSPACE MODE TAB BUTTONS */}
-        <div className="flex flex-col md:flex-row border-b border-sys-surf3/40 mb-8 justify-between items-stretch md:items-end gap-4 font-sans">
-          
-          <div className="flex flex-wrap">
-            <button
-              onClick={() => setActiveTab("posts")}
-              className={`px-5 py-4 text-xs sm:text-sm font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
-                activeTab === "posts" 
-                  ? "border-sys-cta text-sys-cta bg-sys-cta/5 font-serif italic text-base" 
-                  : "border-transparent text-sys-text opacity-70 hover:opacity-100"
-              }`}
-            >
-              <Sliders className="h-4.5 w-4.5" />
-              Roteiros e Editor Integrado
-            </button>
-
-            <button
-              onClick={() => setActiveTab("canva_grid")}
-              className={`px-5 py-4 text-xs sm:text-sm font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
-                activeTab === "canva_grid" 
-                  ? "border-sys-cta text-sys-cta bg-sys-cta/5 font-serif italic text-base" 
-                  : "border-transparent text-sys-text opacity-70 hover:opacity-100"
-              }`}
-              title="Organizador estilo Canva para sequenciar e simular feeds em blocos de 12 imagens"
-            >
-              <LayoutGrid className="h-4.5 w-4.5 text-sys-accent" />
-              Organizadora Canva (Grid 12 de Fotos)
-            </button>
-
-            <button
-              onClick={() => setActiveTab("feed_simulator")}
-              className={`px-5 py-4 text-xs sm:text-sm font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
-                activeTab === "feed_simulator" 
-                  ? "border-sys-cta text-sys-cta bg-sys-cta/5 font-serif italic text-base" 
-                  : "border-transparent text-sys-text opacity-70 hover:opacity-100"
-              }`}
-            >
-              <Grid className="h-4.5 w-4.5" />
-              Harmonia Visual (3x3)
-            </button>
-
-            <button
-              onClick={() => setActiveTab("catalog")}
-              className={`px-5 py-4 text-xs sm:text-sm font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
-                activeTab === "catalog" 
-                  ? "border-sys-cta text-sys-cta bg-sys-cta/5 font-serif italic text-base" 
-                  : "border-transparent text-sys-text opacity-70 hover:opacity-100"
-              }`}
-            >
-              <ShoppingBag className="h-4.5 w-4.5" />
-              Guarda-roupa ({catalog.length})
-            </button>
-          </div>
-
-        </div>
-
-        {/* WORKSPACE VIEW 1: EDITOR WITH MULTIPLE VIEWMODES (Split Day Focus or Complete Editorial List) */}
-        {activeTab === "posts" && (
-          <div className="flex flex-col gap-6">
-
-            {/* Sub-view mode toggle bar with integrated global captioning/export controls */}
-            <div className={`p-1.5 rounded-2xl border flex flex-col lg:flex-row items-center justify-between gap-4 transition-colors ${
-              theme === "light" ? "bg-stone-50 border-stone-200" : "bg-stone-900 border-stone-850"
-            }`}>
-              <div className="flex items-center gap-2 bg-stone-200/50 dark:bg-stone-950 p-1 rounded-xl">
-                <button
-                  onClick={() => setViewMode("split")}
-                  className={`px-4.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    viewMode === "split"
-                      ? "bg-white dark:bg-stone-800 text-amber-700 dark:text-amber-300 shadow-sm font-serif italic"
-                      : "text-stone-500 hover:text-stone-800 dark:hover:text-stone-305"
-                  }`}
-                >
-                  <Sliders className="h-4 w-4" />
-                  <span>Editor Individual (Foco no Dia)</span>
-                </button>
-                <button
-                  id="btn-view-mode-editorial"
-                  onClick={() => setViewMode("editorial")}
-                  className={`px-4.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    viewMode === "editorial"
-                      ? "bg-white dark:bg-stone-800 text-amber-700 dark:text-amber-300 shadow-sm font-serif italic"
-                      : "text-stone-500 hover:text-stone-800 dark:hover:text-stone-305"
-                  }`}
-                >
-                  <CalendarDays className="h-4 w-4" />
-                  <span>Quadro Geral e Legendas (Semanal)</span>
-                </button>
-              </div>
-              
-              {/* Integrated Writing and Export Controllers inside the script tab */}
-              <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2.5 px-2">
-                {posts.some(p => p.image && !p.isGenerated) && (
-                  <button
-                    id="btn-process-all"
-                    onClick={handleRunAllMatching}
-                    disabled={isProcessingAll}
-                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider flex items-center gap-2 disabled:opacity-50 cursor-pointer shadow-xs transition-colors"
-                  >
-                    {isProcessingAll ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                    <span>Escrever Todas as Legendas</span>
-                  </button>
-                )}
-
-                <button
-                  onClick={handleExportTxt}
-                  className={`font-semibold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 transition-colors cursor-pointer shadow-xs ${
-                    theme === "light" 
-                      ? "bg-white border border-stone-200 hover:bg-stone-50 text-stone-700" 
-                      : "bg-stone-950 border border-stone-805 hover:bg-stone-800 text-amber-400"
-                  }`}
-                >
-                  <FileText className="h-4 w-4 text-amber-600" />
-                  <span>Exportar Planejamento (TXT)</span>
-                </button>
-              </div>
-            </div>
-
-            {/* MODE A: SPLIT FOCUS EDITOR WITH INTEGRATED SMARTPHONE PREVIEW */}
-            {viewMode === "split" ? (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                
-                {/* Left Col: Day Planner Card */}
-                <div className="lg:col-span-12 xl:col-span-8 flex flex-col gap-6">
-                  
-                  <div 
-                    ref={(el) => (dayCardRefs.current[activePost.id] = el)}
-                    className={`p-6 rounded-2xl border transition-all duration-350 relative ${
-                      theme === "light"
-                        ? "bg-white border-stone-200 shadow-sm"
-                        : "bg-stone-900 border-stone-800 shadow-xl"
-                    } ${activePost.isConfirmed ? "ring-2 ring-emerald-500/20" : ""}`}
-                  >
-                    
-                    {/* Day Header details */}
-                    <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 pb-4 border-b border-stone-800/10 dark:border-stone-800/80 mb-6">
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-serif italic font-semibold text-2xl text-stone-900 dark:text-stone-100">
-                            Dia {activePost.dayNumber} — {activePost.dateLabel}
-                          </span>
-                          {activePost.isConfirmed && (
-                            <span className="text-[10px] font-mono font-bold uppercase tracking-widest bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 px-2 py-0.5 rounded-md border border-emerald-200">
-                              Aprovado & Revisado
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-xs text-stone-400 block mt-1">
-                          Configure a imagem real do Canva, compatibilize referências e finalize as partes da legenda abaixo.
-                        </span>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2.5">
-                        <button
-                          onClick={() => handleAddNewPostToDay(activePost.dayNumber)}
-                          className="bg-amber-600/10 hover:bg-amber-600/20 text-amber-700 dark:text-amber-400 border border-amber-600/20 text-xs font-bold px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
-                          title="Permite planejar múltiplos posts para o mesmo dia cronológico"
-                        >
-                          <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
-                          <span>+ Post neste dia</span>
-                        </button>
-                        
-                        <button
-                          onClick={() => handleRemovePost(activePost.id)}
-                          className="bg-rose-600/10 hover:bg-rose-600/20 text-rose-700 dark:text-rose-450 border border-rose-550/20 text-xs font-bold px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
-                          title="Remove esta postagem do calendário de planejamento"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          <span>Remover</span>
-                        </button>
-
-                        {activePost.caption && (
-                          <button
-                            onClick={() => handleToggleConfirm(activePost.id)}
-                            className={`text-xs font-bold px-4 py-2.5 rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer ${
-                              activePost.isConfirmed 
-                                ? "bg-emerald-600 border-emerald-600 text-white" 
-                                : "bg-transparent border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800"
-                            }`}
-                          >
-                            <CheckCheck className="h-4 w-4" />
-                            <span>{activePost.isConfirmed ? "Legenda Aprovada ✓" : "Aprovar Roteiro"}</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Grid Inputs Zone */}
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6 pb-6">
-                      
-                      {/* Left inner: Look Drag & Drop */}
-                      <div className="md:col-span-4 flex flex-col gap-2">
-                        <span className="text-[10px] uppercase font-mono tracking-widest text-stone-400 font-bold block">
-                          Imagem Final do Feed (Canva)
-                        </span>
-
-                        <div
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            setPostDragOver(prev => ({ ...prev, [activePost.id]: true }));
-                          }}
-                          onDragLeave={() => {
-                            setPostDragOver(prev => ({ ...prev, [activePost.id]: false }));
-                          }}
-                          onDrop={async (e) => {
-                            e.preventDefault();
-                            setPostDragOver(prev => ({ ...prev, [activePost.id]: false }));
-                            const files = e.dataTransfer.files;
-                            if (files && files.length > 0) {
-                              await handlePostPhotoUpload(activePost.id, files[0]);
-                            }
-                          }}
-                          onClick={() => {
-                            const picker = document.getElementById(`feed-image-input-${activePost.id}`);
-                            picker?.click();
-                          }}
-                          className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-all aspect-[4/5] relative group overflow-hidden ${
-                            activePost.image 
-                              ? "border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950" 
-                              : "border-stone-300 hover:border-amber-500 bg-stone-50/50 dark:bg-stone-950/40"
-                          } ${postDragOver[activePost.id] ? "border-amber-600 bg-amber-500/5" : ""}`}
-                        >
-                          {activePost.image ? (
-                            <>
-                              <img 
-                                src={activePost.image} 
-                                alt="Visual look Canva" 
-                                referrerPolicy="no-referrer"
-                                className="w-full h-full object-contain max-h-60 group-hover:scale-102 transition-transform duration-300" 
-                              />
-                              <div className="absolute inset-0 bg-stone-950/85 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center p-3">
-                                <Upload className="h-6 w-6 text-amber-400 mb-1" />
-                                <span className="text-[11px] font-bold text-stone-100">Atualizar Imagem</span>
-                                <span className="text-[9px] text-stone-500 mt-1 max-w-[80%] text-center">Arraste nova foto ou clique</span>
-                                
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleClearPostImage(activePost.id);
-                                  }}
-                                  className="mt-6 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold uppercase py-1.5 px-3 rounded-lg transition-all cursor-pointer"
-                                >
-                                  Remover Imagem
-                                </button>
-                              </div>
-                            </>
-                          ) : (
-                            <div className="flex flex-col items-center justify-center p-4">
-                              <div className="p-3 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-full mb-2 shadow-xs group-hover:bg-amber-100/50 transition-colors">
-                                <Upload className="h-5 w-5 text-stone-500 group-hover:text-amber-600" />
-                              </div>
-                              <span className="text-xs font-bold text-stone-700 dark:text-stone-300">Carregar Imagem</span>
-                              <span className="text-[10px] text-stone-400 mt-1 block">Arraste a arte do Canva ou clique para selecionar</span>
-                            </div>
-                          )}
-
-                          <input
-                            type="file"
-                            accept="image/*"
-                            id={`feed-image-input-${activePost.id}`}
-                            className="hidden"
-                            onChange={async (e) => {
-                              const files = e.target.files;
-                              if (files && files.length > 0) {
-                                  await handlePostPhotoUpload(activePost.id, files[0]);
-                              }
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Right inner: Fields & Roteirizador */}
-                      <div className="md:col-span-8 flex flex-col gap-4">
-                        
-                        {/* Visual correlation dropdown line & Matcher Status */}
-                        <div className={`p-4 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-4 ${
-                          theme === "light" ? "bg-stone-50 border-stone-200" : "bg-stone-950/45 border-stone-800"
-                        }`}>
-                          
-                          {/* Correlated reference info */}
-                          <div className="flex-1 min-w-0">
-                            <span className="text-[9px] uppercase font-mono tracking-widest text-amber-700 dark:text-amber-400 font-bold block mb-1">
-                              Correspondência com o Guarda-Roupa (Canva &lt;-&gt; Referência)
-                            </span>
-
-                            <div className="flex items-center gap-3">
-                              <select
-                                value={activePost.matchedCatalogId || ""}
-                                onChange={(e) => handleSelectReferenceManual(activePost.id, e.target.value || null)}
-                                className={`text-xs font-semibold rounded-lg px-3 py-2 outline-none border focus:border-amber-500 select-wrapper ${
-                                  theme === "light" 
-                                    ? "bg-white border-stone-200 text-stone-800" 
-                                    : "bg-stone-900 border-stone-800 text-stone-200"
-                                }`}
-                              >
-                                <option value="">-- Vincular Código Manualmente --</option>
-                                {catalog.map(cat => (
-                                  <option key={cat.id} value={cat.id}>
-                                    Ref: {cat.label}
-                                  </option>
-                                ))}
-                              </select>
-
-                              {activePost.matchedCatalogId && (
-                                <span className="text-xs text-stone-500 font-medium font-mono">
-                                  Vínculo Ativo ✓
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Match and generate AI action */}
-                          <div className="shrink-0">
-                            <button
-                              onClick={() => matchAndGenerateForPost(activePost.id)}
-                              disabled={activePost.isGenerating || !activePost.image}
-                              className="w-full bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-805 text-white font-bold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all cursor-pointer shadow-xs"
-                            >
-                              {activePost.isGenerating ? (
-                                <>
-                                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                                  <span>IA Processando...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Sparkles className="h-3.5 w-3.5" />
-                                  <span>Pedir IA Mapear & Criar</span>
-                                </>
-                              )}
-                            </button>
-                          </div>
-
-                        </div>
-
-                        {/* AI explanation and Reasoning visual correlation feedback */}
-                        {activePost.reasoning && (
-                          <div className={`p-3.5 rounded-xl border text-xs leading-relaxed flex gap-2.5 ${
-                            theme === "light" ? "bg-amber-500/5 border-amber-200 text-stone-700" : "bg-amber-950/10 border-amber-900/30 text-stone-300"
-                          }`}>
-                            <div className="p-1 bg-amber-500/10 rounded shrink-0">
-                              <Sparkles className="h-3.5 w-3.5 text-amber-600" />
-                            </div>
-                            <div>
-                              <strong className="text-amber-850 dark:text-amber-400">Visão da IA:</strong> {activePost.reasoning}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* error message block */}
-                        {activePost.error && (
-                          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg">
-                            ⚠️ <strong>Erro do Servidor:</strong> {activePost.error}
-                          </div>
-                        )}
-
-                        {/* Caption Blocks splitting design */}
-                        <div className="flex flex-col gap-3">
-                          
-                          <div className="flex justify-between items-center px-1">
-                            <span className="text-[10px] uppercase font-mono tracking-widest text-stone-400 font-bold block">
-                              📝 Conteúdo do Post (Corpo + Variáveis de Showroom)
-                            </span>
-                            
-                            {activePost.caption && (
-                              <button
-                                onClick={() => handleCopy(activePost.id, activePost.caption)}
-                                className="text-xs text-amber-700 dark:text-amber-400 flex items-center gap-1 font-semibold"
-                              >
-                                {copiedId === activePost.id ? (
-                                  <>
-                                    <Check className="h-3.5 w-3.5 text-emerald-500" />
-                                    <span>Copiado!</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Copy className="h-3.5 w-3.5" />
-                                    <span>Copiar Legenda</span>
-                                  </>
-                                )}
-                              </button>
-                            )}
-                          </div>
-
-                          <div className="relative">
-                            <textarea
-                              value={activePost.caption}
-                              onChange={(e) => updateCaptionBodyManual(activePost.id, e.target.value)}
-                              rows={10}
-                              className={`w-full text-xs rounded-xl p-4 outline-none font-mono leading-relaxed transition-colors border ${
-                                theme === "light" 
-                                  ? "bg-stone-50 border-stone-200 text-stone-800 focus:border-amber-500" 
-                                  : "bg-stone-950 border-stone-800 text-stone-200 focus:border-amber-500"
-                              }`}
-                              placeholder="Carregue o look do Canva e clique em 'Mapear & Criar com IA' para produzir as partes fixas da legenda, as referências de catálogo e o copywriting emocional em espanhol de forma automática!"
-                            />
-                          </div>
-
-                        </div>
-
-                      </div>
-
-                    </div>
-
-                    {/* Sub-block interactive: Conversational Refinement panel */}
-                    {activePost.caption && (
-                      <div className={`mt-6 pt-5 border-t flex flex-col gap-3 ${
-                        theme === "light" ? "border-stone-100" : "border-stone-800"
-                      }`}>
-                        
-                        <div>
-                          <span className="text-xs font-bold text-stone-700 dark:text-stone-300 font-serif italic flex items-center gap-1.5">
-                            <Sliders className="h-3.5 w-3.5 text-amber-600" />
-                            Ajuste Fino Conversacional (Refinar Legenda com IA)
-                          </span>
-                          <p className="text-[10px] text-stone-500 mt-0.5">
-                            Diga à inteligência como gostaria de mudar esta legenda (ex: \"escreva mais curto\", \"use mais hashtags\", \"fale para focar na estampa floral\").
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={refineInstructions[activePost.id] || ""}
-                            onChange={(e) => setRefineInstructions({ ...refineInstructions, [activePost.id]: e.target.value })}
-                            placeholder="Ex: Deixe o texto mais poético em espanhol..."
-                            className={`text-xs rounded-xl px-4 py-2.5 outline-none flex-1 border transition-colors ${
-                              theme === "light" 
-                                ? "bg-stone-100 border-stone-200 text-stone-850 focus:border-amber-500" 
-                                : "bg-stone-950 border-stone-850 text-stone-100 focus:border-amber-500"
-                            }`}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") handleRefineCaption(activePost.id);
-                            }}
-                          />
-                          <button
-                            onClick={() => handleRefineCaption(activePost.id)}
-                            disabled={isRefining[activePost.id] || !refineInstructions[activePost.id]}
-                            className="bg-stone-900 border border-stone-800 text-amber-400 hover:bg-stone-800 text-xs font-bold px-4 py-2.5 rounded-xl uppercase tracking-wider flex items-center gap-1.5 disabled:opacity-50 transition-colors cursor-pointer"
-                          >
-                            {isRefining[activePost.id] ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
-                            <span>Refinar</span>
-                          </button>
-                        </div>
-
-                      </div>
-                    )}
-
-                  </div>
-
-                </div>
-
-                {/* Right Col: Interactive Mock smartphone simulation preview */}
-                <div className="xl:col-span-4 sticky top-28 self-start hidden xl:block">
-                  
-                  <div className="mb-3.5 px-1 flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400 font-mono">
-                      Visualização Mobile (Instagram Preview)
-                    </span>
-                    
-                    <span className="text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-md font-mono font-bold">
-                      Instagram Live Simulator
-                    </span>
-                  </div>
-
-                  {/* Smartphone Frame Outer shell */}
-                  <div className={`mx-auto max-w-[340px] rounded-[40px] border-[10px] shadow-2xl relative overflow-hidden flex flex-col transition-colors duration-350 ${
-                    theme === "light" 
-                      ? "bg-white border-stone-200 shadow-stone-300" 
-                      : "bg-stone-900 border-stone-800 shadow-black"
-                  }`}>
-                    
-                    {/* Smartphone Speaker/Camera notch */}
-                    <div className="absolute top-0 inset-x-0 h-6 bg-stone-900 dark:bg-stone-950 rounded-b-xl z-20 flex justify-center items-center">
-                      <div className="h-1.5 w-12 bg-stone-700 rounded-full" />
-                    </div>
-
-                    {/* Smartphone inner Screen */}
-                    <div className="flex flex-col flex-1 pt-6 text-xs bg-white dark:bg-black font-sans text-stone-950 dark:text-stone-100 min-h-[500px]">
-                      
-                      {/* Top Bar simulating Instagram branding */}
-                      <div className="flex justify-between items-center px-4.5 py-3 border-b border-stone-150 dark:border-stone-900">
-                        <span className="font-serif italic text-base font-semibold text-stone-950 dark:text-stone-100">Instagram</span>
-                        <div className="flex gap-3 text-stone-550 dark:text-stone-400">
-                          <Heart className="h-4.5 w-4.5" />
-                          <MessageCircle className="h-4.5 w-4.5" />
-                          <Send className="h-4.5 w-4.5" />
-                        </div>
-                      </div>
-
-                      {/* Account detail profile row */}
-                      <div className="flex items-center justify-between px-3.5 py-2.5">
-                        <div className="flex items-center gap-2.5">
-                          
-                          {/* Logo avatar layout */}
-                          <div className="h-8.5 w-8.5 rounded-full p-0.5 bg-gradient-to-tr from-yellow-500 via-pink-500 to-purple-600 flex items-center justify-center">
-                            <div className="h-full w-full bg-stone-950 rounded-full border border-stone-800 flex items-center justify-center font-serif text-[10px] italic font-bold text-amber-300">A</div>
-                          </div>
-
-                          <div>
-                            <div className="flex items-center gap-1">
-                              <span className="font-bold text-[11px] hover:underline cursor-pointer text-stone-900 dark:text-stone-100">auragrid_style</span>
-                              <span className="text-[9px] bg-blue-500 text-white p-0.5 rounded-full block">✓</span>
-                            </div>
-                            <span className="text-[9.5px] text-stone-500 -mt-0.5 block">Showroom, Madrid Spain</span>
-                          </div>
-
-                        </div>
-
-                        <span className="text-stone-400 dark:text-stone-600 text-lg font-bold leading-none cursor-pointer">•••</span>
-                      </div>
-
-                      {/* Main Target look image container */}
-                      <div className="aspect-square w-full bg-stone-50 dark:bg-neutral-900 border-y border-stone-100 dark:border-neutral-800 flex items-center justify-center relative overflow-hidden">
-                        {activePost.image ? (
-                          <img src={activePost.image} alt="Planned post look" referrerPolicy="no-referrer" className="w-[100%] h-[100%] object-contain p-2" />
-                        ) : (
-                          <div className="flex flex-col items-center justify-center text-stone-450 dark:text-stone-600 text-center p-6">
-                            <ImageIcon className="h-10 w-10 text-stone-300 dark:text-stone-700 animate-pulse mb-2" />
-                            <p className="text-xs font-semibold">Sem Imagem do Post</p>
-                            <p className="text-[10.5px] text-stone-500 mt-1">Carregue a arte no editor para ver neste simulador de feed.</p>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Post action interaction line */}
-                      <div className="flex justify-between items-center px-4 py-2.5">
-                        <div className="flex gap-4">
-                          <Heart className="h-5 w-5 hover:scale-110 active:scale-95 transition-transform text-red-500 fill-current" />
-                          <MessageCircle className="h-5 w-5 hover:scale-110 active:scale-95 transition-transform text-stone-850 dark:text-stone-200" />
-                          <Send className="h-5 w-5 hover:scale-110 active:scale-95 transition-transform text-stone-850 dark:text-stone-200" />
-                        </div>
-                        <Bookmark className="h-5 w-5 text-stone-850 dark:text-stone-200" />
-                      </div>
-
-                      {/* Likes simulated metadata */}
-                      <div className="px-4 text-[11.5px] font-bold text-stone-900 dark:text-stone-100">
-                        Curtido por boutiques_madrid e outras 412 pessoas
-                      </div>
-
-                      {/* Caption Render and Scrolling block */}
-                      <div className="px-4 py-1.5 flex-1 overflow-y-auto max-h-[145px] text-[11px] leading-relaxed scrollbar-thin">
-                        <p className="whitespace-pre-line text-stone-800 dark:text-stone-200">
-                          <span className="font-bold mr-1.5 text-stone-950 dark:text-stone-100">auragrid_style</span>
-                          {activePost.caption ? activePost.caption : "Nenhuma legenda gerada ainda. Carregue uma imagem do look do Canva e clique em 'Pedir IA Mapear & Criar'!"}
-                        </p>
-
-                        <span className="text-[9.5px] text-stone-400 dark:text-stone-600 block mt-3 uppercase font-semibold">
-                          Há 1 hora • Ver Tradução
-                        </span>
-                      </div>
-
-                    </div>
-
-                  </div>
-
-                </div>
-
-              </div>
-            ) : (
-              // MODE B: COMPLETE 7-DAY CAPTION BOARD & EDITORIAL GRID (The user wanted detailed captions/legends with rich weekly review)
-              <div className="flex flex-col gap-6">
-                
-                {/* Board header summary count */}
-                <div className={`p-4 rounded-xl border flex justify-between items-center text-xs font-medium ${
-                  theme === "light" ? "bg-amber-500/5 border-amber-200 text-stone-800" : "bg-amber-950/10 border-amber-900/40 text-stone-300"
-                }`}>
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-amber-600" />
-                    <span>Revisão em Massa: {posts.filter(p => p.caption).length} de 7 legendas rascunhadas • {posts.filter(p => p.isConfirmed).length} aprovadas</span>
-                  </div>
-                  <div className="text-[10px] uppercase tracking-wider text-stone-400 font-mono font-bold">
-                    Painel Editorial de Mídias Reais
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-8">
-                  {posts.map((post) => {
-                    const status = getPostStatus(post);
-                    const isFocused = post.id === activePreviewId;
-                    
-                    return (
-                      <div 
-                        key={post.id}
-                        id={`editorial-row-${post.id}`}
-                        className={`p-5 sm:p-6 rounded-2xl border transition-all duration-350 relative ${
-                          isFocused 
-                            ? "ring-2 ring-amber-500 bg-amber-500/5" 
-                            : theme === "light"
-                            ? "bg-white border-stone-200 shadow-sm hover:border-stone-350"
-                            : "bg-stone-900 border-stone-800 shadow-xl hover:border-stone-750"
-                        } ${post.isConfirmed ? "border-emerald-500/50" : ""}`}
-                      >
-                        
-                        {/* Row Header Row */}
-                        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 pb-3 border-b border-stone-800/10 dark:border-stone-800/60 mb-5">
-                          <div className="flex items-center gap-3.5">
-                            <div className="h-7 w-7 rounded-lg bg-stone-100 dark:bg-stone-850 flex items-center justify-center font-serif italic font-extrabold text-amber-700">
-                              D{post.dayNumber}
-                            </div>
-                            <span className="font-serif italic font-semibold text-lg text-stone-900 dark:text-stone-105">
-                              {post.dateLabel}
-                            </span>
-                            
-                            {/* Color Tag status bubble */}
-                            <span className={`text-[9.5px] font-mono border px-2.5 py-0.5 rounded-full font-bold ${status.bg}`}>
-                              {status.label}
-                            </span>
-                          </div>
-
-                          {/* Quick top row action tools */}
-                          <div className="flex items-center flex-wrap gap-2">
-                            <button
-                              onClick={() => handleAddNewPostToDay(post.dayNumber)}
-                              className="bg-amber-600/10 hover:bg-amber-600/20 text-amber-700 dark:text-amber-400 border border-amber-600/20 text-[10.5px] font-semibold px-3 py-1.5 rounded-xl flex items-center gap-1 cursor-pointer transition-colors"
-                              title="Adicionar outro post neste dia"
-                            >
-                              <Plus className="h-3 w-3 stroke-[2.5]" />
-                              <span>+ Post</span>
-                            </button>
-
-                            <button
-                              onClick={() => handleRemovePost(post.id)}
-                              className="bg-rose-600/10 hover:bg-rose-600/20 text-rose-700 dark:text-rose-400 border border-rose-500/20 text-[10.5px] font-semibold px-3 py-1.5 rounded-xl flex items-center gap-1 cursor-pointer transition-colors"
-                              title="Remover postagem"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                              <span>Remover</span>
-                            </button>
-
-                            {post.caption && (
-                              <button
-                                onClick={() => handleCopy(post.id, post.caption)}
-                                className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border flex items-center gap-1.5 transition-colors cursor-pointer ${
-                                  theme === "light"
-                                    ? "bg-stone-50 hover:bg-stone-100 border-stone-200 text-stone-700"
-                                    : "bg-stone-950 hover:bg-stone-800 border-stone-800 text-amber-400"
-                                }`}
-                              >
-                                {copiedId === post.id ? (
-                                  <>
-                                    <Check className="h-3.5 w-3.5 text-emerald-500" />
-                                    <span>Copiado!</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Copy className="h-3.5 w-3.5" />
-                                    <span>Copiar Legenda</span>
-                                  </>
-                                )}
-                              </button>
-                            )}
-
-                            <button
-                              onClick={() => handleToggleConfirm(post.id)}
-                              disabled={!post.caption}
-                              className={`text-[11px] font-bold px-4 py-1.5 rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40 ${
-                                post.isConfirmed 
-                                  ? "bg-emerald-600 border-emerald-600 text-white shadow-xs" 
-                                  : "bg-transparent border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-850 text-stone-700 dark:text-stone-300"
-                              }`}
-                            >
-                              <CheckCircle2 className="h-4 w-4" />
-                              <span>{post.isConfirmed ? "Aprovada ✓" : "Aprovar"}</span>
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Internal Contents grid */}
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                          
-                          {/* Column Left: Visual look / drag area (col-span-4) */}
-                          <div className="lg:col-span-4 flex flex-col gap-3.5">
-                            <div>
-                              <span className="text-[10px] uppercase font-mono tracking-widest text-stone-400 font-bold block mb-1.5">
-                                Foto Real do Feed (Canva)
-                              </span>
-
-                              <div
-                                onDragOver={(e) => {
-                                  e.preventDefault();
-                                  setPostDragOver(prev => ({ ...prev, [post.id]: true }));
-                                }}
-                                onDragLeave={() => {
-                                  setPostDragOver(prev => ({ ...prev, [post.id]: false }));
-                                }}
-                                onDrop={async (e) => {
-                                  e.preventDefault();
-                                  setPostDragOver(prev => ({ ...prev, [post.id]: false }));
-                                  const files = e.dataTransfer.files;
-                                  if (files && files.length > 0) {
-                                    await handlePostPhotoUpload(post.id, files[0]);
-                                  }
-                                }}
-                                onClick={() => {
-                                  const picker = document.getElementById(`list-editorial-file-${post.id}`);
-                                  picker?.click();
-                                }}
-                                className={`border-2 border-dashed rounded-xl p-3 flex flex-col items-center justify-center text-center cursor-pointer transition-all aspect-[4/5] relative group overflow-hidden ${
-                                  post.image 
-                                    ? "border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950" 
-                                    : "border-stone-300 hover:border-amber-500 bg-stone-50/50 dark:bg-stone-950/40"
-                                } ${postDragOver[post.id] ? "border-amber-600 bg-amber-500/5" : ""}`}
-                              >
-                                {post.image ? (
-                                  <>
-                                    <img 
-                                      src={post.image} 
-                                      alt={`Canva ${post.dateLabel}`} 
-                                      referrerPolicy="no-referrer"
-                                      className="w-full h-full object-contain max-h-56 group-hover:scale-102 transition-transform duration-305" 
-                                    />
-                                    <div className="absolute inset-0 bg-stone-950/85 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center p-3">
-                                      <Upload className="h-5.5 w-5.5 text-amber-400 mb-1" />
-                                      <span className="text-[10.5px] font-bold text-stone-100">Atualizar Imagem</span>
-                                      <span className="text-[8.5px] text-stone-500 mt-1">Carregar nova foto real</span>
-                                      
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleClearPostImage(post.id);
-                                        }}
-                                        className="mt-4 bg-rose-600 hover:bg-rose-700 text-white text-[9.5px] font-bold uppercase py-1 px-2.5 rounded-md transition-all cursor-pointer"
-                                      >
-                                        Remover
-                                      </button>
-                                    </div>
-                                  </>
-                                ) : (
-                                  <div className="flex flex-col items-center justify-center p-3">
-                                    <div className="p-2.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-full mb-1.5 shadow-xs group-hover:bg-amber-100/50 transition-colors">
-                                      <Upload className="h-4.5 w-4.5 text-stone-500 group-hover:text-amber-600" />
-                                    </div>
-                                    <span className="text-[11px] font-bold text-stone-700 dark:text-stone-350">Carregar Imagem</span>
-                                    <span className="text-[9px] text-stone-400 mt-1 block">Arraste a arte do Canva ou clique</span>
-                                  </div>
-                                )}
-
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  id={`list-editorial-file-${post.id}`}
-                                  className="hidden"
-                                  onChange={async (e) => {
-                                    const files = e.target.files;
-                                    if (files && files.length > 0) {
-                                      await handlePostPhotoUpload(post.id, files[0]);
-                                    }
-                                  }}
-                                />
-                              </div>
-                            </div>
-
-                            {/* Dropdown clothing code binding */}
-                            <div className={`p-3 rounded-xl border flex flex-col gap-2 ${
-                              theme === "light" ? "bg-stone-50/70 border-stone-200" : "bg-stone-950/20 border-stone-800/80"
-                            }`}>
-                              <span className="text-[9px] uppercase font-mono tracking-widest text-amber-700 dark:text-amber-400 font-bold block">
-                                Código de Referência
-                              </span>
-                              <select
-                                value={post.matchedCatalogId || ""}
-                                onChange={(e) => handleSelectReferenceManual(post.id, e.target.value || null)}
-                                className={`text-[11px] font-semibold rounded-lg px-2.5 py-1.5 outline-none border focus:border-amber-500 w-full select-wrapper ${
-                                  theme === "light" 
-                                    ? "bg-white border-stone-200 text-stone-800" 
-                                    : "bg-stone-900 border-stone-800 text-stone-200"
-                                }`}
-                              >
-                                <option value="">-- Vincular Referência --</option>
-                                {catalog.map(cat => (
-                                  <option key={cat.id} value={cat.id}>
-                                    Ref: {cat.label}
-                                  </option>
-                                ))}
-                              </select>
-
-                              {post.image ? (
-                                <button
-                                  onClick={() => matchAndGenerateForPost(post.id)}
-                                  disabled={post.isGenerating}
-                                  className="w-full mt-1 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white font-bold py-1.5 rounded-lg text-[10px] uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer transition-all disabled:opacity-50"
-                                >
-                                  {post.isGenerating ? (
-                                    <>
-                                      <RefreshCw className="h-3 w-3 animate-spin" />
-                                      <span>IA Escrevendo...</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Sparkles className="h-3 w-3" />
-                                      <span>Escrever com IA</span>
-                                    </>
-                                  )}
-                                </button>
-                              ) : (
-                                <span className="text-[9px] text-stone-400 text-center italic mt-1 block">Falta imagem para IA escrever</span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Column Right: Text blocks (col-span-8) */}
-                          <div className="lg:col-span-8 flex flex-col gap-4">
-                            
-                            {/* Reasoning banner if active */}
-                            {post.reasoning && (
-                              <div className={`p-3 rounded-xl border text-[11px] leading-relaxed flex gap-2 ${
-                                theme === "light" ? "bg-amber-500/5 border-amber-200 text-stone-700" : "bg-amber-950/10 border-amber-900/40 text-stone-300"
-                              }`}>
-                                <div className="p-1 bg-amber-500/10 rounded shrink-0">
-                                  <Sparkles className="h-3.5 w-3.5 text-amber-650" />
-                                </div>
-                                <div>
-                                  <strong className="text-amber-850 dark:text-amber-400 text-xs block mb-0.5">Visão do Mapeamento Inteligente:</strong> {post.reasoning}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Error block if any */}
-                            {post.error && (
-                              <div className="p-3 bg-rose-50 border border-rose-250 text-rose-700 text-xs rounded-lg font-mono">
-                                ⚠️ {post.error}
-                              </div>
-                            )}
-
-                            {/* Textarea */}
-                            <div className="flex flex-col gap-1.5 flex-1">
-                              <span className="text-[10px] uppercase font-mono tracking-widest text-stone-400 font-bold block px-0.5">
-                                📝 Roteiro Editorial / Legenda Completa
-                              </span>
-                              <textarea
-                                value={post.caption}
-                                onChange={(e) => updateCaptionBodyManual(post.id, e.target.value)}
-                                rows={8}
-                                className={`w-full text-xs rounded-xl p-3.5 outline-none font-mono leading-relaxed transition-colors border flex-1 ${
-                                  theme === "light" 
-                                    ? "bg-stone-50 border-stone-200 text-stone-800 focus:border-amber-500" 
-                                    : "bg-stone-950 border-stone-800 text-stone-200 focus:border-amber-500"
-                                }`}
-                                placeholder="Carregue sua foto real do Canva acima e clique em 'Escrever com IA' para mapear as roupas à imagem e gerar as legendas personalizadas para o Instagram!"
-                              />
-                            </div>
-
-                            {/* Conversational refinement trigger panel */}
-                            {post.caption && (
-                              <div className={`p-3.5 rounded-xl border flex flex-col gap-2 ${
-                                theme === "light" ? "bg-stone-50 border-stone-150" : "bg-stone-950/30 border-stone-850"
-                              }`}>
-                                <div className="flex items-center gap-1.5">
-                                  <Sliders className="h-3.5 w-3.5 text-amber-600" />
-                                  <span className="text-[11px] font-bold text-stone-700 dark:text-stone-300">
-                                    Refinar Legenda deste Dia com IA (Ajuste Fino Conversacional)
-                                  </span>
-                                </div>
-                                
-                                <div className="flex items-center gap-2 mt-1">
-                                  <input
-                                    type="text"
-                                    value={refineInstructions[post.id] || ""}
-                                    onChange={(e) => setRefineInstructions({ ...refineInstructions, [post.id]: e.target.value })}
-                                    placeholder="Instruções adicionais (ex: 'escreva mais focado em valorizar a marca', 'use mais emojis', 'deixe mais curto'...)"
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") handleRefineCaption(post.id);
-                                    }}
-                                    className={`text-xs rounded-lg px-3 py-2 outline-none flex-1 border transition-colors ${
-                                      theme === "light" 
-                                        ? "bg-white border-stone-200 text-stone-850 focus:border-amber-500" 
-                                        : "bg-stone-900 border-stone-800 text-stone-100 focus:border-amber-500"
-                                    }`}
-                                  />
-                                  <button
-                                    onClick={() => handleRefineCaption(post.id)}
-                                    disabled={isRefining[post.id] || !refineInstructions[post.id]}
-                                    className="bg-stone-900 border border-stone-800 text-amber-400 hover:bg-stone-800 text-xs font-bold px-3 py-2 rounded-lg uppercase tracking-wider flex items-center gap-1.5 disabled:opacity-50 transition-colors cursor-pointer"
-                                  >
-                                    {isRefining[post.id] ? <RefreshCw className="h-3 w-3 animate-spin" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                                    <span>Mudar</span>
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-
-                          </div>
-
-                        </div>
-
-                      </div>
-                    );
-                  })}
-                </div>
-
-              </div>
-            )}
-
-          </div>
-        )}
-
-        {/* WORKSPACE VIEW: CANVA STYLE FEED BLOCK ORGANIZER (Grid of 12) */}
-        {activeTab === "canva_grid" && (
-          <div className="flex flex-col gap-8 font-sans">
-            
-            {/* Quick explanation banner */}
-            <div className={`p-5 rounded-2xl border flex flex-col md:flex-row items-start md:items-center gap-4 justify-between transition-colors ${
-              theme === "light" ? "bg-amber-500/5 border-amber-600/10 text-stone-800" : "bg-stone-900 border-stone-850 text-stone-100"
-            }`}>
-              <div className="flex gap-3">
-                <div className="p-2 rounded-xl bg-amber-600/10 text-amber-600 shrink-0">
-                  <Sparkles className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="font-serif italic font-bold text-amber-900 dark:text-amber-200 text-lg">
-                    Quadro de Criação de Looks (Canva Style)
-                  </h3>
-                  <p className="text-xs text-stone-500 mt-1 max-w-2xl">
-                    Monte a sua sequência de fotos em páginas de 12 imagens — simulando exatamente a rolagem do Instagram. Arraste ou clique para trocar as fotos de posição. No Instagram, <strong>o feed funciona de baixo para cima</strong>, de modo que suas fotos inferiores nas páginas do Canva representam as primeiras postagens. O agendador automático respeitará essa sequência!
-                  </p>
-                </div>
-              </div>
-
-              {/* Action trigger: Plan 30 days */}
-              <div className="flex flex-col sm:flex-row gap-2 shrink-0 w-full md:w-auto">
-                <button
-                  onClick={() => {
-                    const confirmAction = confirm("Esse procedimento redefinirá a distribuição dos seus looks no cronograma de 30 dias com base na sequência atual que você configurou aqui no Canva Grid. Deseja prosseguir?");
-                    if (confirmAction) {
-                      handlePlanFromCanva("active", true);
-                      alert("Excelente! Calendário de 30 dias atualizado e adaptado para a sequência visual do Canva Grid (metodologia do Instagram).");
-                      setActiveTab("posts");
-                    }
+                <CanvaTimelineSyncPanel
+                  autoSync={autoSyncCanva}
+                  onAutoSyncChange={(enabled) => {
+                    setAutoSyncCanva(enabled);
+                    if (enabled) syncCanvaGridToTimeline(canvaPages, true);
                   }}
-                  className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs uppercase tracking-wider flex items-center gap-2 justify-center cursor-pointer shadow-sm"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  <span>Aplicar Bloco Ativo (12 Looks)</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    const confirmAction = confirm("Deseja sequenciar TODOS os looks de todas as páginas criadas no Canva Grid para distribuir ao longo dos seus 30 dias de cronograma? Isso otimizará o feed em sequência.");
-                    if (confirmAction) {
-                      handlePlanFromCanva("all", true);
-                      alert("Excelente! Calendário de 30 dias atualizado em sequência contínua com todas as páginas do Canva Grid.");
-                      setActiveTab("posts");
-                    }
-                  }}
-                  className="bg-stone-900 hover:bg-stone-800 dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold py-2.5 px-4 rounded-xl text-xs uppercase tracking-wider flex items-center gap-2 justify-center cursor-pointer shadow-sm"
-                >
-                  <CalendarDays className="h-4 w-4" />
-                  <span>Aplicar Todas as Páginas</span>
-                </button>
-              </div>
-            </div>
-
-            {/* INTEGRATED INTELLIGENT REAL-TIME SYNC BAR */}
-            <div className="bg-sys-surf1 border border-sys-surf3/15 rounded-2xl p-5 flex flex-col md:flex-row gap-5 items-center justify-between shadow-xs transition-colors">
-              <div className="flex gap-3 items-center">
-                <div className={`p-3 rounded-xl flex items-center justify-center shrink-0 text-white ${
-                  autoSyncCanva ? "bg-emerald-600 shadow-[0_0_12px_rgba(16,185,129,0.3)]" : "bg-stone-500/70"
-                }`}>
-                  <RefreshCw className={`h-5 w-5 ${autoSyncCanva ? "animate-spin [animation-duration:4s]" : ""}`} />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-serif italic font-bold text-stone-850 dark:text-stone-100 text-sm">
-                      Sincronizador Inteligente de Roteiros
-                    </h4>
-                    {autoSyncCanva ? (
-                      <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold font-mono px-2 py-0.5 rounded-full flex items-center gap-1">
-                        <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-ping" />
-                        ATIVO (TEMPO REAL)
-                      </span>
-                    ) : (
-                      <span className="bg-stone-500/10 text-stone-500 text-[10px] font-bold font-mono px-2 py-0.5 rounded-full">
-                        DESATIVADO
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-stone-500 mt-0.5 max-w-2xl leading-relaxed">
-                    Sincroniza automaticamente a sequência visual do seu Canva Grid direto no <strong>Roteiro e Editor de 30 Dias</strong> como uma timeline real do feed. Seus textos e legendas existentes são inteligentemente <strong>preservados</strong> quando as imagens correspondentes se mantêm!
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 shrink-0 w-full md:w-auto justify-end">
-                {/* Switch button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nextVal = !autoSyncCanva;
-                    setAutoSyncCanva(nextVal);
-                    if (nextVal) {
-                      syncCanvaGridToTimeline(canvaPages, true);
-                    }
-                  }}
-                  className={`text-xs font-bold px-4 py-2 rounded-xl border flex items-center gap-2 cursor-pointer shadow-xs transition-all ${
-                    autoSyncCanva
-                      ? "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600"
-                      : "bg-sys-surf2 hover:bg-sys-surf3 text-stone-700 dark:text-stone-300 border-sys-surf3/20"
-                  }`}
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  <span>{autoSyncCanva ? "Sincronização Ativa" : "Ativar Auto-Sync"}</span>
-                </button>
-
-                {/* Swap Order direction button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nextReversed = !canvaGridReversed;
-                    setCanvaGridReversed(nextReversed);
-                    // Standard alerts and forces synchronization
+                  canvaGridReversed={canvaGridReversed}
+                  onCanvaGridReversedChange={(reversed) => {
+                    setCanvaGridReversed(reversed);
                     setTimeout(() => {
-                      if (autoSyncCanva) {
-                        syncCanvaGridToTimeline(canvaPages, false);
-                      } else {
-                        alert(`Configuração de ordenação atualizada! Ative a sincronização ou clique em "Sincronizar Agora" para aplicar.`);
-                      }
+                      if (autoSyncCanva) syncCanvaGridToTimeline(canvaPages, false);
                     }, 50);
                   }}
-                  className="bg-sys-surf2 hover:bg-sys-surf3 border border-sys-surf3/20 text-sys-text font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
-                  title="Mudar rotação das imagens da grade no cronograma de agendamento"
-                >
-                  {canvaGridReversed ? (
-                    <>
-                      <ArrowDown className="h-4 w-4 text-amber-500" />
-                      <span>Insta Grid (Debaixo p/ Cima)</span>
-                    </>
-                  ) : (
-                    <>
-                      <ArrowUp className="h-4 w-4 text-emerald-500" />
-                      <span>Leitura Sequencial (Grid L1→L12)</span>
-                    </>
-                  )}
-                </button>
+                  onSyncNow={() => syncCanvaGridToTimeline(canvaPages, true)}
+                  canvaImageCount={canvaImageCount}
+                  onOpenCanvaGrid={() => setActiveSection("canva_grid")}
+                />
 
-                {/* Force sync trigger */}
+                <TimelineStrip
+                  posts={posts}
+                  catalog={referenceCatalog}
+                  activePreviewId={activePreviewId}
+                  swapSourceId={swapSourceId}
+                  onSelectPost={handleScrollToDay}
+                  onSwapClick={(id) => {
+                    if (swapSourceId) {
+                      handleSwapDays(swapSourceId, id);
+                    } else {
+                      setSwapSourceId(id);
+                      alert("Origem selecionada! Escolha outro post para inverter os conteúdos.");
+                    }
+                  }}
+                />
+              </>
+            )}
+
+            <CaptionBatchPanel
+              stats={captionBatchStats}
+              isRunning={isProcessingAll}
+              progress={captionBatchProgress}
+              onGeneratePending={handleRunAllMatching}
+              onRegenerateErrors={handleRegenerateCaptionErrors}
+              onStop={stopCaptionBatch}
+              onReviewAll={() => setViewMode("editorial")}
+              compact={viewMode === "split"}
+            />
+
+            {viewMode === "split" ? (
+              <PostDayStudio
+                cardRef={(el) => (dayCardRefs.current[activePost.id] = el)}
+                post={activePost}
+                position={activeEditorialIndex + 1}
+                total={orderedEditorialPosts.length}
+                status={getPostStatus(activePost)}
+                referenceCatalog={referenceCatalog}
+                postDragOver={!!postDragOver[activePost.id]}
+                copiedId={copiedId}
+                refineInstruction={refineInstructions[activePost.id] || ""}
+                isRefining={!!isRefining[activePost.id]}
+                hasPrevious={activeEditorialIndex > 0}
+                hasNext={activeEditorialIndex < orderedEditorialPosts.length - 1}
+                onPrevious={() => navigateEditorialPost(-1)}
+                onNext={() => navigateEditorialPost(1)}
+                onAddPostToDay={() => handleAddNewPostToDay(activePost.dayNumber)}
+                onRemove={() => handleRemovePost(activePost.id)}
+                onToggleConfirm={() => handleToggleConfirm(activePost.id)}
+                onPhotoUpload={async (file) => handlePostPhotoUpload(activePost.id, file)}
+                onClearImage={() => handleClearPostImage(activePost.id)}
+                onSelectReference={(id) => handleSelectReferenceManual(activePost.id, id)}
+                onGenerate={() => matchAndGenerateForPost(activePost.id)}
+                onStopGenerate={() => stopCaptionGeneration(activePost.id)}
+                onCopyCaption={() => handleCopy(activePost.id, activePost.caption)}
+                onCaptionChange={(v) => updateCaptionBodyManual(activePost.id, v)}
+                onRefineInstructionChange={(v) =>
+                  setRefineInstructions({ ...refineInstructions, [activePost.id]: v })
+                }
+                onRefine={() => handleRefineCaption(activePost.id)}
+              />
+            ) : (
+              <EditorialGridView
+                posts={posts}
+                referenceCatalog={referenceCatalog}
+                activePreviewId={activePreviewId}
+                postDragOver={postDragOver}
+                copiedId={copiedId}
+                refineInstructions={refineInstructions}
+                isRefining={isRefining}
+                onAddPostToDay={handleAddNewPostToDay}
+                onRemove={handleRemovePost}
+                onToggleConfirm={handleToggleConfirm}
+                onCopy={handleCopy}
+                onPhotoUpload={(postId, file) => handlePostPhotoUpload(postId, file)}
+                onClearImage={handleClearPostImage}
+                onSelectReference={handleSelectReferenceManual}
+                onGenerate={matchAndGenerateForPost}
+                onStopGenerate={stopCaptionGeneration}
+                onCaptionChange={updateCaptionBodyManual}
+                onRefineInstructionChange={(postId, v) =>
+                  setRefineInstructions({ ...refineInstructions, [postId]: v })
+                }
+                onRefine={handleRefineCaption}
+                onFocusPost={(id) => setActivePreviewId(id)}
+                onOpenStudio={(id) => {
+                  setActivePreviewId(id);
+                  setViewMode("split");
+                }}
+              />
+            )}
+          </>
+        )}
+
+        {hasActiveClient && activeSection === "canva_grid" && (
+          <StudioSection
+            title="Grid Canva"
+            subtitle={
+              <>
+                Páginas de 12 fotos no fluxo do Instagram (de baixo para cima). Arraste para
+                reordenar.{" "}
+                <CanvaGridOrderHint onOpenRoteiros={() => setActiveSection("posts")} />
+              </>
+            }
+            actions={
+              <>
                 <button
                   type="button"
-                  onClick={() => syncCanvaGridToTimeline(canvaPages, true)}
-                  className="bg-stone-900 hover:bg-stone-800 text-white dark:bg-amber-600 dark:hover:bg-amber-700 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
-                  title="Distribuir do zero preservando o que for igual"
+                  onClick={() => {
+                    if (
+                      confirm(
+                        "Aplicar a sequência desta página ao calendário de 30 dias?"
+                      )
+                    ) {
+                      handlePlanFromCanva("active", true);
+                      alert("Calendário atualizado com o bloco ativo.");
+                      setActiveSection("posts");
+                    }
+                  }}
+                  className="text-xs font-semibold px-4 py-2 rounded-xl bg-ag-accent text-white hover:opacity-90 flex items-center gap-2 cursor-pointer"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
-                  <span>Sincronizar Agora</span>
+                  Aplicar 12 looks
                 </button>
-              </div>
-            </div>
-
-            {/* Layout layout frame splits */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              
-              {/* SECTION 1: THE CANVA PAGE CONTENT STAGE (ColSpan 8) */}
-              <div className="lg:col-span-8 flex flex-col gap-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm("Aplicar todas as páginas ao cronograma de 30 dias?")) {
+                      handlePlanFromCanva("all", true);
+                      alert("Calendário atualizado com todas as páginas.");
+                      setActiveSection("posts");
+                    }
+                  }}
+                  className="text-xs font-semibold px-4 py-2 rounded-xl border border-ag-border bg-ag-surface-2 hover:bg-ag-surface-3 flex items-center gap-2 cursor-pointer"
+                >
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  Todas as páginas
+                </button>
+              </>
+            }
+          >
+            <div className="flex flex-col lg:flex-row gap-5 items-start w-full">
+              <div className="flex-1 min-w-0 flex flex-col gap-4">
                 
                 {/* Active page header */}
                 {(() => {
                   const activePage = canvaPages.find(p => p.id === activeCanvaPageId) || canvaPages[0];
                   
                   return (
-                    <div className={`p-4 rounded-xl border flex flex-col sm:flex-row justify-between items-center gap-3 transition-colors ${
-                      theme === "light" ? "bg-stone-50 border-stone-200" : "bg-stone-900/40 border-stone-800"
-                    }`}>
+                    <div className="p-3 rounded-xl border border-ag-border/60 bg-ag-surface-2/50 flex flex-col sm:flex-row justify-between items-center gap-3">
                       <div className="flex items-center gap-2.5">
-                        <LayoutGrid className="h-5 w-5 text-amber-600" />
-                        <span className="font-serif italic font-semibold text-stone-850 dark:text-stone-200 text-lg">
+                        <LayoutGrid className="h-5 w-5 text-ag-accent" />
+                        <span className="font-display italic font-semibold text-ag-text dark:text-stone-200 text-lg">
                           {activePage.name} (Grid de 12 Fotos)
                         </span>
                       </div>
@@ -3041,11 +1973,9 @@ export default function App() {
                       <div className="flex flex-wrap gap-2">
                         {/* Batch upload to Canva */}
                         <label className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 cursor-pointer ${
-                          theme === "light" 
-                            ? "bg-white border-stone-200 hover:bg-stone-50 text-stone-700" 
-                            : "bg-stone-900 border-stone-800 hover:bg-stone-800 text-amber-400"
+                          "bg-ag-surface-1 border-ag-border"
                         }`}>
-                          <Upload className="h-3.5 w-3.5 text-amber-600" />
+                          <Upload className="h-3.5 w-3.5 text-ag-accent" />
                           <span>Subir Lote Sequencial (1 ao 12...)</span>
                           <input 
                             type="file" 
@@ -3063,16 +1993,16 @@ export default function App() {
                         <button
                           onClick={() => handleDuplicateCanvaPage(activePage.id)}
                           className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1 cursor-pointer ${
-                            theme === "light" ? "bg-white hover:bg-stone-50 text-stone-700 border-stone-200" : "bg-stone-900 hover:bg-stone-800 border-stone-800 text-stone-300"
+                            "bg-ag-surface-1 border-ag-border"
                           }`}
                         >
-                          <Copy className="h-3.5 w-3.5 text-stone-400" />
+                          <Copy className="h-3.5 w-3.5 text-ag-muted" />
                           <span>Duplicar</span>
                         </button>
 
                         <button
                           onClick={() => handleClearCanvaPage(activePage.id)}
-                          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 dark:bg-stone-850 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-300 transition-colors flex items-center gap-1 cursor-pointer"
+                          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 dark:bg-stone-850 dark:hover:bg-stone-800 text-ag-muted dark:text-stone-300 transition-colors flex items-center gap-1 cursor-pointer"
                         >
                           <RotateCcw className="h-3.5 w-3.5" />
                           <span>Limpar Grid</span>
@@ -3098,7 +2028,7 @@ export default function App() {
                     <div className="relative">
                       {/* Selection notice bar */}
                       {selectedCanvaSlotId && (
-                        <div className="absolute -top-1 inset-x-0 bg-amber-600 text-white rounded-lg px-4 py-2 text-xs font-bold flex items-center justify-between z-30 shadow-md">
+                        <div className="absolute -top-1 inset-x-0 bg-ag-accent text-white rounded-lg px-4 py-2 text-xs font-bold flex items-center justify-between z-30 shadow-md">
                           <span>
                             🔄 Item selecionado! Clique em outro quadrado do grid para inverter/trocar as fotos, ou selecione uma peça do Guarda-roupa na lateral direita para atribuir diretamente.
                           </span>
@@ -3112,11 +2042,8 @@ export default function App() {
                       )}
 
                       {/* Canva Grid Frame container */}
-                      <div className={`p-4 rounded-2xl border transition-colors ${
-                        theme === "light" ? "bg-stone-200 border-stone-200" : "bg-stone-950 border-stone-900"
-                      }`}>
-                        
-                        <div className="grid grid-cols-3 gap-3 bg-stone-100 dark:bg-black p-3 rounded-xl border border-stone-300 dark:border-stone-900 shadow-xl">
+                      <div className="p-4 rounded-2xl border border-ag-border/60 bg-ag-surface-2/30 ring-1 ring-inset ring-ag-border/30">
+                        <div className="grid grid-cols-3 gap-2 sm:gap-3 bg-black/90 p-2 sm:p-3 rounded-xl">
                           {activePage.slots.map((slot, index) => {
                             const isSlotSelected = selectedCanvaSlotId === slot.id;
                             const slotNumber = index + 1;
@@ -3126,10 +2053,10 @@ export default function App() {
                                 key={slot.id}
                                 className={`aspect-square relative flex flex-col items-center justify-center rounded-lg border overflow-hidden transition-all group ${
                                   isSlotSelected
-                                    ? "border-amber-600 ring-4 ring-amber-600/40 z-10 scale-95"
+                                    ? "border-ag-accent ring-4 ring-amber-600/40 z-10 scale-95"
                                     : "border-stone-300 dark:border-stone-850 hover:scale-[1.01] hover:shadow-md cursor-pointer"
                                 } ${
-                                  theme === "light" ? "bg-white" : "bg-stone-900"
+                                  "bg-ag-surface-1 border-ag-border"
                                 }`}
                                 onClick={() => {
                                   if (selectedCanvaSlotId) {
@@ -3164,7 +2091,7 @@ export default function App() {
                                             e.stopPropagation();
                                             setSelectedCanvaSlotId(slot.id);
                                           }}
-                                          className="text-[9px] font-bold bg-amber-600 text-white px-2 py-1 rounded hover:bg-amber-700 cursor-pointer"
+                                          className="text-[9px] font-bold bg-ag-accent text-white px-2 py-1 rounded hover:opacity-90 cursor-pointer"
                                           title="Mover ou trocar de posição com outro look"
                                         >
                                           Mover / Inverter
@@ -3184,11 +2111,11 @@ export default function App() {
                                   </>
                                 ) : (
                                   <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center bg-stone-50 dark:bg-neutral-900 hover:bg-stone-100/50 dark:hover:bg-neutral-800 transition-colors">
-                                    <Plus className="h-5 w-5 mb-1 text-stone-455 group-hover:text-amber-600 transition-colors" />
-                                    <span className="text-[9px] uppercase font-bold text-stone-500 font-mono tracking-wider">
+                                    <Plus className="h-5 w-5 mb-1 text-stone-455 group-hover:text-ag-accent transition-colors" />
+                                    <span className="text-[9px] uppercase font-bold text-ag-muted font-mono tracking-wider">
                                       Espaço {slotNumber}
                                     </span>
-                                    <span className="text-[7.5px] text-stone-400 block mt-0.5 font-sans">
+                                    <span className="text-[7.5px] text-ag-muted block mt-0.5 font-sans">
                                       Clique p/ colocar foto
                                     </span>
                                   </div>
@@ -3211,7 +2138,7 @@ export default function App() {
                                     }}
                                     className="hidden" 
                                   />
-                                  <div className="bg-amber-600 hover:bg-amber-700 text-white p-1 rounded-md cursor-pointer" title="Fazer upload direto neste espaço">
+                                  <div className="bg-ag-accent hover:opacity-90 text-white p-1 rounded-md cursor-pointer" title="Fazer upload direto neste espaço">
                                     <Upload className="h-3 w-3" />
                                   </div>
                                 </label>
@@ -3227,7 +2154,7 @@ export default function App() {
 
                 {/* THE CANVA PAGES THUMBNAIL MANAGER CAROUSEL TRACK */}
                 <div className="mt-2 text-sans">
-                  <h4 className="text-xs font-bold text-stone-500 font-mono uppercase tracking-wider mb-2">
+                  <h4 className="text-xs font-bold text-ag-muted font-mono uppercase tracking-wider mb-2">
                     Minhas Páginas do Canva Grid
                   </h4>
                   
@@ -3241,7 +2168,7 @@ export default function App() {
                           key={page.id}
                           className={`flex-shrink-0 w-32 rounded-xl p-2.5 transition-all text-center border relative cursor-pointer group ${
                             isActive 
-                              ? "bg-amber-55/15 border-amber-500 ring-2 ring-amber-500/20" 
+                              ? "bg-amber-55/15 border-ag-accent ring-2 ring-amber-500/20" 
                               : "bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-850 hover:bg-stone-50 dark:hover:bg-stone-850"
                           }`}
                           onClick={() => {
@@ -3255,17 +2182,17 @@ export default function App() {
                               <div
                                 key={sIdx}
                                 className={`h-1.5 rounded-2xs ${
-                                  s && s.image ? "bg-amber-600" : "bg-stone-400/35"
+                                  s && s.image ? "bg-ag-accent" : "bg-stone-400/35"
                                 }`}
                               />
                             ))}
                           </div>
 
-                          <div className="text-[11px] font-bold text-stone-850 dark:text-stone-300 truncate font-serif">
+                          <div className="text-[11px] font-bold text-ag-text dark:text-stone-300 truncate font-display">
                             {page.name}
                           </div>
                           
-                          <div className="text-[9px] font-semibold text-stone-500 mt-0.5">
+                          <div className="text-[9px] font-semibold text-ag-muted mt-0.5">
                             {filledCount} / 12 looks
                           </div>
 
@@ -3290,12 +2217,10 @@ export default function App() {
                     <button
                       onClick={handleAddCanvaPage}
                       className={`flex-shrink-0 w-32 h-[105px] rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                        theme === "light" 
-                          ? "border-stone-300 bg-stone-50/50 hover:bg-stone-50 text-stone-500 hover:text-stone-800" 
-                          : "border-stone-800 bg-stone-900/20 hover:bg-stone-900/40 text-stone-400 hover:text-stone-200"
+                        "bg-ag-surface-1 border-ag-border"
                       }`}
                     >
-                      <Plus className="h-5 w-5 text-amber-600 animate-pulse" />
+                      <Plus className="h-5 w-5 text-ag-accent animate-pulse" />
                       <span className="text-[10px] font-bold tracking-wide uppercase">Add Página</span>
                     </button>
                   </div>
@@ -3303,29 +2228,26 @@ export default function App() {
 
               </div>
 
-              {/* SECTION 2: WARDROBE PANEL INPUT PICKER SIDEBAR (ColSpan 4) */}
-              <div className={`lg:col-span-4 p-5 rounded-2xl border transition-colors ${
-                theme === "light" ? "bg-white border-stone-200 shadow-sm" : "bg-stone-900 border-stone-850"
-              }`}>
-                <div className="flex items-center justify-between mb-4 pb-2 border-b border-stone-200 dark:border-stone-800">
+              <div className="w-full lg:w-[min(300px,28%)] shrink-0 p-4 rounded-xl border border-ag-border/60 bg-ag-surface-2/40 backdrop-blur-sm">
+                <div className="flex items-center justify-between mb-4 pb-2 border-b border-ag-border">
                   <div>
-                    <h3 className="font-serif italic text-lg font-bold text-stone-900 dark:text-stone-100 flex items-center gap-1.5">
-                      <ShoppingBag className="h-5 w-5 text-amber-600" />
+                    <h3 className="font-display italic text-lg font-bold text-ag-text flex items-center gap-1.5">
+                      <ShoppingBag className="h-5 w-5 text-ag-accent" />
                       Guarda-roupa
                     </h3>
-                    <p className="text-[10px] text-stone-500 font-sans mt-0.5">
+                    <p className="text-[10px] text-ag-muted font-sans mt-0.5">
                       Selecione um look para colocar no espaço ativo do grid
                     </p>
                   </div>
                   
-                  <span className="text-[10px] font-bold font-mono bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-amber-400 px-2 py-0.5 rounded-full">
-                    {catalog.length} Itens
+                  <span className="text-[10px] font-bold font-mono bg-stone-100 dark:bg-stone-800 text-ag-muted dark:text-ag-accent px-2 py-0.5 rounded-full">
+                    {referenceCatalog.length} Itens
                   </span>
                 </div>
 
                 {/* State notification indicator */}
                 {selectedCanvaSlotId ? (
-                  <div className="bg-amber-600/10 text-amber-700 dark:text-amber-300 p-3 rounded-lg text-xs font-semibold mb-4 leading-relaxed flex items-center justify-between">
+                  <div className="bg-ag-accent/10 text-ag-accent dark:text-ag-accent p-3 rounded-lg text-xs font-semibold mb-4 leading-relaxed flex items-center justify-between">
                     <div>
                       <span>👉 Clique em qualquer look abaixo para aplicá-lo ao <strong>Espaço {
                         selectedCanvaSlotId.split("_").pop() ? parseInt(selectedCanvaSlotId.split("_").pop() || "0") + 1 : ""
@@ -3333,20 +2255,20 @@ export default function App() {
                     </div>
                     <button 
                       onClick={() => setSelectedCanvaSlotId(null)}
-                      className="text-stone-500 hover:text-stone-850 dark:hover:text-stone-100 font-bold ml-1 cursor-pointer"
+                      className="text-ag-muted hover:text-ag-text dark:hover:text-stone-100 font-bold ml-1 cursor-pointer"
                     >
                       X
                     </button>
                   </div>
                 ) : (
-                  <div className="bg-stone-100 dark:bg-stone-950 p-3 rounded-lg text-[11px] text-stone-500 mb-4 font-serif italic text-center">
+                  <div className="bg-stone-100 dark:bg-stone-950 p-3 rounded-lg text-[11px] text-ag-muted mb-4 font-display italic text-center">
                     💡 Dica: Clique em qualquer quadrado do Canva Grid à esquerda, e depois clique em um look abaixo para preenchê-lo!
                   </div>
                 )}
 
                 {/* Scrollable list of clothes */}
                 <div className="grid grid-cols-2 gap-2 max-h-[460px] overflow-y-auto pr-1.5 scrollbar-thin">
-                  {catalog.map(item => (
+                  {referenceCatalog.map(item => (
                     <div
                       key={item.id}
                       onClick={() => {
@@ -3364,7 +2286,7 @@ export default function App() {
                         }
                       }}
                       className={`group border rounded-lg p-1.5 transition-all text-center relative cursor-pointer hover:shadow-md ${
-                        theme === "light" ? "bg-stone-50 hover:bg-white border-stone-200" : "bg-stone-950 hover:bg-neutral-900 border-stone-900"
+                        "bg-ag-surface-1 border-ag-border"
                       }`}
                     >
                       <div className="aspect-square rounded-md overflow-hidden bg-white dark:bg-stone-900 relative mb-1.5">
@@ -3382,8 +2304,8 @@ export default function App() {
                     </div>
                   ))}
 
-                  {catalog.length === 0 && (
-                    <div className="col-span-2 py-10 text-center text-stone-500 text-xs italic">
+                  {referenceCatalog.length === 0 && (
+                    <div className="col-span-2 py-10 text-center text-ag-muted text-xs italic">
                       Guarda-roupa vazio! Adicione novas fotos clicando nos botões de importação.
                     </div>
                   )}
@@ -3392,162 +2314,70 @@ export default function App() {
               </div>
 
             </div>
-
-          </div>
+          </StudioSection>
         )}
 
         {/* WORKSPACE VIEW 2: FEED GRID HARMONY SIMULATOR (Instagram 3x3) */}
-        {activeTab === "feed_simulator" && (
-          <div className={`p-6 sm:p-8 rounded-2xl border transition-colors ${
-            theme === "light" ? "bg-white border-stone-200 shadow-xs" : "bg-stone-900 border-stone-800"
-          }`}>
-            
-            <div className="max-w-xl mx-auto mb-8 text-center">
-              <span className="font-serif italic text-amber-700 dark:text-amber-300 text-2xl font-bold flex items-center justify-center gap-2">
-                <Grid className="h-6 w-6 text-amber-600" />
-                Mural Estético: Consistência do Feed de Moda (3x3)
-              </span>
-              <p className="text-xs text-stone-500 mt-1">
-                Veja o look do feed semanal montado em tempo real no padrão quadrado. Arraste ou clique abaixo para inverter looks e garantir que as cores, padrões de estampas e texturas das fotos fiquem harmoniosas lado a lado antes de postar.
-              </p>
-            </div>
-
-            {/* Simulated Feed Profile info */}
-            <div className="max-w-md mx-auto mb-10 border-b border-stone-200 dark:border-stone-800 pb-6">
-              <div className="flex items-center gap-6 justify-center">
-                <div className="h-16 w-16 rounded-full p-0.5 bg-gradient-to-tr from-yellow-500 via-pink-500 to-purple-600 flex items-center justify-center">
-                  <div className="h-full w-full bg-stone-950 rounded-full border-2 border-white flex items-center justify-center font-serif text-lg italic font-bold text-amber-300">A</div>
-                </div>
-
-                <div className="text-left font-sans">
-                  <div className="flex items-center gap-1.5">
-                    <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">auragrid_style</h3>
-                    <span className="text-xs bg-blue-500 text-white p-0.5 rounded-full">✓</span>
-                  </div>
-                  <p className="text-xs text-stone-500 mt-1">
-                    <strong>7</strong> publicações de planejamento • <strong>4.8k</strong> seguidores • <strong>B2B Showroom Spain</strong>
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* 3x3 Grid of Planned posts (Mural de Looks) */}
-            <div className="max-w-md mx-auto grid grid-cols-3 gap-1.5 bg-stone-100 dark:bg-black p-1.5 rounded-xl border border-stone-200 dark:border-stone-900">
-              {posts.map((post) => {
-                const isFocused = post.id === activePreviewId;
-                
-                return (
-                  <div
-                    key={post.id}
-                    onClick={() => handleScrollToDay(post.id)}
-                    className={`aspect-square relative cursor-pointer border overflow-hidden rounded-md group ${
-                      isFocused 
-                        ? "border-amber-600 ring-2 ring-amber-600/35 z-10 scale-95" 
-                        : "border-transparent hover:scale-99 transition-transform"
-                    } ${
-                      theme === "light" ? "bg-stone-50" : "bg-stone-950"
-                    }`}
-                  >
-                    {post.image ? (
-                      <img 
-                        src={post.image} 
-                        alt={`Look ${post.dateLabel}`} 
-                        referrerPolicy="no-referrer"
-                        className="w-[100%] h-[100%] object-contain" 
-                      />
-                    ) : (
-                      <div className="w-[100%] h-[100%] flex flex-col items-center justify-center text-stone-400 text-center p-1 bg-stone-100 dark:bg-neutral-900">
-                        <Plus className="h-4 w-4 mb-0.5 text-stone-400" />
-                        <span className="text-[7.5px] uppercase font-mono">Sem look</span>
-                      </div>
-                    )}
-
-                    {/* Badge Overlay */}
-                    <div className="absolute inset-x-0 bottom-0 bg-stone-950/80 p-1 text-center font-mono opacity-80 group-hover:opacity-100 transition-opacity">
-                      <span className="text-[7.5px] font-bold text-stone-100 truncate block uppercase leading-none">
-                        D{post.dayNumber} {post.dateLabel.substring(0, 3)}
-                      </span>
-                    </div>
-
-                    {/* Order swap shortcut indicator */}
-                    {swapSourceId && swapSourceId !== post.id && (
-                      <div 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSwapDays(swapSourceId, post.id);
-                        }}
-                        className="absolute inset-0 bg-amber-600/90 flex flex-col items-center justify-center text-white p-1 text-center"
-                      >
-                        <ArrowRight className="h-5 w-5 animate-bounce" />
-                        <span className="text-[9px] font-bold font-mono">Soltar Aqui para Inverter</span>
-                      </div>
-                    )}
-
-                    {/* Quick selection status indicator checkmark badge */}
-                    {post.isConfirmed && (
-                      <div className="absolute top-1 right-1 bg-emerald-500 text-stone-950 p-0.5 rounded-full z-10">
-                        <Check className="h-2 w-2" strokeWidth={4} />
-                      </div>
-                    )}
-
-                  </div>
-                );
-              })}
-
-              {/* Grid placeholders to fill 3x3 nicely */}
-              {[...Array(2)].map((_, idx) => (
-                <div key={idx} className="aspect-square bg-stone-50/50 dark:bg-stone-950/50 opacity-40 rounded-md border border-dashed border-stone-200 dark:border-stone-850 flex flex-col items-center justify-center text-center p-2 text-stone-500 text-[8px] font-mono select-none">
-                  <HelpCircle className="h-4.5 w-4.5 mb-1" />
-                  <span>Em breve</span>
-                </div>
-              ))}
-
-            </div>
-
-            <div className="max-w-md mx-auto mt-6 text-center">
-              <p className="text-xs text-stone-500 italic">
-                * Dica: Você também pode trocar a ordem dos dias livremente passando o mouse sobre os cards da Linha Editorial de 7 Dias localizada no topo.
-              </p>
-            </div>
-
-          </div>
+        {hasActiveClient && activeSection === "feed_simulator" && (
+          <FeedInstagramPreview
+            posts={posts}
+            profileDisplayName={brandGem.name}
+            profileHandle={
+              activeClient.instagramHandle ?? activeClient.id.replace(/-/g, "_")
+            }
+            activePreviewId={activePreviewId}
+            swapSourceId={swapSourceId}
+            onSelectPost={handleScrollToDay}
+            onSwapDays={handleSwapDays}
+            onOpenStudio={() => {
+              setViewMode("split");
+              setActiveSection("posts");
+            }}
+          />
         )}
 
         {/* WORKSPACE VIEW 3: REFERENCE CLOTHES BATCH FILES MANAGER */}
-        {activeTab === "catalog" && (
-          <div className="p-6 sm:p-8 rounded-2xl border transition-colors bg-sys-surf1 border-sys-surf3/20 shadow-sm">
-            
-            {/* Catalog Intro banner */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-6 border-b border-sys-surf3/15">
-              
-              <div>
-                <span className="font-serif italic text-amber-700 dark:text-amber-300 text-2xl font-bold flex items-center gap-2">
-                  <ShoppingBag className="h-5 w-5 text-amber-600" />
-                  Gerenciamento de Referências (Guarda-roupa de Acervo)
-                </span>
-                <p className="text-xs text-stone-500 mt-1">
-                  Arraste pastas inteiras contendo imagens ou carregue arquivos de fotos em lote. 
-                  A IA lerá os arquivos e conectará automaticamente o código correspondente às fotos de planejamento de cada dia, preenchendo as legendas logo em seguida.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 w-full md:w-auto">
-                <button
-                  onClick={() => setShowCatalogModal(true)}
-                  className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors cursor-pointer w-full md:w-auto shadow-sm"
-                >
-                  <Plus className="h-4 w-4" />
-                  <span>Adicionar Único</span>
-                </button>
-              </div>
-
-            </div>
-
-            {/* DIRECTORIES & FILES BATCH UPLOAD STAGE CARD */}
+        {hasActiveClient && activeSection === "catalog" && (
+          <StudioSection
+            title="Catálogo de referências"
+            subtitle={
+              <>
+                Cada foto gera um perfil JSON para a IA fazer match sem reenviar imagens.
+                {!serverEnrichReady && (
+                  <span className="block mt-2 text-ag-danger text-xs p-2 rounded-lg bg-ag-danger/10 border border-ag-danger/25">
+                    Reinicie com <strong>npm run dev</strong> para ativar indexação.
+                  </span>
+                )}
+                {isEnrichingCatalog && (
+                  <span className="flex items-center gap-2 mt-2 text-ag-accent text-xs">
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    Indexando…
+                    <button
+                      type="button"
+                      onClick={stopCatalogEnrichment}
+                      className="font-semibold text-ag-danger cursor-pointer"
+                    >
+                      Parar
+                    </button>
+                  </span>
+                )}
+              </>
+            }
+            actions={
+              <button
+                type="button"
+                onClick={() => setShowCatalogModal(true)}
+                className="text-xs font-semibold px-4 py-2 rounded-xl bg-ag-accent text-white hover:opacity-90 flex items-center gap-2 cursor-pointer"
+              >
+                <Plus className="h-4 w-4" />
+                Nova referência
+              </button>
+            }
+          >
             <div className={`p-6 sm:p-8 border-2 border-dashed rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-4 mb-8 ${
               catalogDragOver 
-                ? "border-amber-600 bg-amber-600/5 rotate-0 scale-99" 
-                : "border-sys-surf3/30 hover:border-sys-surf3/60 bg-sys-surf2/40 hover:bg-sys-surf2"
+                ? "border-ag-accent bg-ag-accent/5 rotate-0 scale-99" 
+                : "border-ag-border hover:border-ag-border bg-ag-surface-2/40 hover:bg-ag-surface-2"
             }`}
               onDragOver={(e) => {
                 e.preventDefault();
@@ -3561,22 +2391,21 @@ export default function App() {
                 setCatalogDragOver(false);
                 const files = e.dataTransfer.files;
                 if (files && files.length > 0) {
-                  await handleBatchImages(files);
+                  await handleBatchImages(files, { asReference: true });
                 }
               }}
             >
               
-              <div className="p-4 bg-amber-500/10 rounded-full text-amber-700 dark:text-amber-400">
-                <FolderOpen className="h-8 w-8 text-amber-600" />
+              <div className="p-4 bg-ag-accent/10 rounded-full text-ag-accent dark:text-ag-accent">
+                <FolderOpen className="h-8 w-8 text-ag-accent" />
               </div>
 
               <div>
-                <h3 className="text-sm font-bold text-stone-850 dark:text-stone-100">
+                <h3 className="text-sm font-bold text-ag-text dark:text-stone-100">
                   Importar Pasta de Ativos ou Seleção de Imagens em Lote
                 </h3>
-                <p className="text-xs text-stone-500 max-w-md mx-auto mt-1 leading-relaxed">
-                  Arraste arquivos de imagem ou <strong>solte uma pasta inteira</strong> diretamente nesta área! 
-                  A plataforma lerá os nomes dos arquivos (Ex: <code>"9146_Pink.png"</code>) e criará imediatamente os códigos de referência correspondentes (<code>"9146 Pink"</code>) que serão correlacionados com o cronograma.
+                <p className="text-xs text-ag-muted max-w-md mx-auto mt-1 leading-relaxed">
+                  Arraste pasta ou arquivos. Cada look vira um código (ex: <code>9146 Pink</code>) e um JSON detalhado para match nos roteiros sem reler a foto do catálogo.
                 </p>
               </div>
 
@@ -3586,7 +2415,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => filesUploadInputRef.current?.click()}
-                  className="bg-sys-surf3 hover:bg-sys-surf3/80 border border-sys-surf3/55 text-sys-text text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer shadow-sm transition-colors"
+                  className="bg-ag-surface-3 hover:bg-ag-surface-3/80 border border-ag-border text-ag-text text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer shadow-sm transition-colors"
                 >
                   <ImageIcon className="h-4 w-4 text-amber-500" />
                   <span>Selecionar Vários Arquivos</span>
@@ -3596,7 +2425,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => folderUploadInputRef.current?.click()}
-                  className="bg-sys-surf3 hover:bg-sys-surf3/80 border border-sys-surf3/55 text-sys-text text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer shadow-sm transition-colors"
+                  className="bg-ag-surface-3 hover:bg-ag-surface-3/80 border border-ag-border text-ag-text text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer shadow-sm transition-colors"
                 >
                   <FolderOpen className="h-4 w-4 text-amber-500" />
                   <span>Subir Pasta de Referências</span>
@@ -3629,29 +2458,72 @@ export default function App() {
             </div>
 
             {/* Catalog list Render */}
-            <div className="mb-4 flex items-center justify-between border-b pb-2 border-sys-surf3/15">
-              <span className="text-xs font-bold font-mono uppercase tracking-widest text-stone-400">
-                Looks Referenciados Ativos ({catalog.length})
-              </span>
-              <span className="text-[10.5px] text-stone-500">Filtrado por mais recente</span>
+            <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3 border-ag-border">
+              <div>
+                <span className="text-xs font-bold font-mono uppercase tracking-widest text-ag-muted">
+                  Looks Referenciados Ativos ({referenceCatalog.length})
+                </span>
+                <span className="text-[10.5px] text-ag-muted block mt-0.5">
+                  {referenceCatalog.filter((c) => c.enrichmentStatus === "ready").length} indexados ·{" "}
+                  {referenceCatalog.filter((c) => c.enrichmentStatus === "failed").length} com erro ·{" "}
+                  {referenceCatalog.filter((c) => c.enrichmentStatus !== "ready" && c.enrichmentStatus !== "failed").length} pendentes
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {isEnrichingCatalog && (
+                  <button
+                    type="button"
+                    onClick={stopCatalogEnrichment}
+                    className="text-[10px] font-bold px-3 py-1.5 rounded-lg border border-ag-danger/35 bg-ag-danger/10 text-ag-danger hover:bg-ag-danger/15 cursor-pointer flex items-center gap-1"
+                  >
+                    <Square className="h-3 w-3 fill-current" />
+                    Parar indexação
+                  </button>
+                )}
+                {referenceCatalog.some((c) => c.enrichmentStatus === "failed") && (
+                  <button
+                    type="button"
+                    disabled={isEnrichingCatalog}
+                    onClick={() => void handleReindexCatalog("failed")}
+                    className="text-[10px] font-bold px-3 py-1.5 rounded-lg border border-ag-danger/30 bg-ag-danger/10 text-ag-danger hover:bg-ag-danger/15 disabled:opacity-50 cursor-pointer"
+                  >
+                    Reindexar falhas
+                  </button>
+                )}
+                {referenceCatalog.some(
+                  (c) => c.enrichmentStatus !== "ready" && c.enrichmentStatus !== "failed"
+                ) && (
+                  <button
+                    type="button"
+                    disabled={isEnrichingCatalog}
+                    onClick={() => void handleReindexCatalog("all-incomplete")}
+                    className="text-[10px] font-bold px-3 py-1.5 rounded-lg border border-ag-border bg-ag-surface-2 text-ag-text hover:bg-ag-surface-3 disabled:opacity-50 cursor-pointer flex items-center gap-1"
+                  >
+                    {isEnrichingCatalog && <RefreshCw className="h-3 w-3 animate-spin" />}
+                    Indexar pendentes
+                  </button>
+                )}
+              </div>
             </div>
 
-            {catalog.length === 0 ? (
-              <div className="p-12 text-center rounded-2xl bg-sys-surf2 border border-sys-surf3/15">
-                <ImageIcon className="h-8 w-8 text-stone-400 mx-auto animate-pulse mb-1" />
-                <p className="text-xs font-semibold text-stone-600">Nenhuma roupa no acervo</p>
-                <p className="text-[10px] text-stone-400 mt-1">Carregue suas mídias usando o mecanismo de lote ou o botão 'Adicionar Único'!</p>
+            {referenceCatalog.length === 0 ? (
+              <div className="p-12 text-center rounded-2xl bg-ag-surface-2 border border-ag-border">
+                <ImageIcon className="h-8 w-8 text-ag-muted mx-auto animate-pulse mb-1" />
+                <p className="text-xs font-semibold text-ag-muted">Nenhuma referência no acervo</p>
+                <p className="text-[10px] text-ag-muted mt-1">
+                  Use &quot;Subir Pasta de Referências&quot; ou &quot;Adicionar Único&quot; para cadastrar looks que a IA usará no match dos roteiros.
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                {catalog.map((item) => (
+                {referenceCatalog.map((item) => (
                   <div 
                     key={item.id}
-                    className="border rounded-2xl p-3 flex flex-col gap-2.5 relative group transition-all shadow-xs bg-sys-surf2 border-sys-surf3/25 hover:border-sys-surf3/60"
+                    className="border rounded-2xl p-3 flex flex-col gap-2.5 relative group transition-all shadow-xs bg-ag-surface-2 border-ag-border hover:border-ag-border"
                   >
                     
                     {/* Visual aspect */}
-                    <div className="aspect-[3/4] rounded-xl overflow-hidden relative flex items-center justify-center border transition-colors bg-sys-surf1 border-sys-surf3/15">
+                    <div className="aspect-[3/4] rounded-xl overflow-hidden relative flex items-center justify-center border transition-colors bg-ag-surface-1 border-ag-border">
                       <img 
                         src={item.image} 
                         alt={item.label} 
@@ -3660,9 +2532,29 @@ export default function App() {
                       />
                       
                       {/* Delete look trigger */}
+                      <span
+                        className={`absolute top-1.5 left-1.5 text-[8px] font-mono font-bold px-1.5 py-0.5 rounded-md border ${
+                          item.enrichmentStatus === "ready"
+                            ? "bg-ag-success/15 text-ag-success border-ag-success/30"
+                            : item.enrichmentStatus === "processing"
+                              ? "bg-ag-warning/15 text-ag-warning border-ag-warning/30"
+                              : item.enrichmentStatus === "failed"
+                                ? "bg-ag-danger/15 text-ag-danger border-ag-danger/30"
+                                : "bg-ag-surface-3 text-ag-muted border-ag-border"
+                        }`}
+                      >
+                        {item.enrichmentStatus === "ready"
+                          ? "JSON ✓"
+                          : item.enrichmentStatus === "processing"
+                            ? "…"
+                            : item.enrichmentStatus === "failed"
+                              ? "Erro"
+                              : "Pend."}
+                      </span>
+
                       <button
                         onClick={() => removeCatalogItem(item.id)}
-                        className="absolute top-1.5 right-1.5 bg-sys-bg/90 p-1.5 rounded-lg hover:bg-rose-600 hover:text-white text-stone-400 opacity-0 group-hover:opacity-100 transition-all cursor-pointer border border-sys-surf3/30"
+                        className="absolute top-1.5 right-1.5 bg-ag-bg/90 p-1.5 rounded-lg hover:bg-ag-danger hover:text-white text-ag-muted opacity-0 group-hover:opacity-100 transition-all cursor-pointer border border-ag-border"
                         title="Excluir do catálogo"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -3671,13 +2563,48 @@ export default function App() {
 
                     {/* Metadata text inputs */}
                     <div className="font-sans min-w-0">
-                      <span className="text-xs font-bold text-center uppercase block truncate text-amber-700 dark:text-amber-400" title={item.label}>
+                      <span className="text-xs font-bold text-center uppercase block truncate text-ag-accent dark:text-ag-accent" title={item.label}>
                         {item.label}
                       </span>
-                      {item.description && (
-                        <span className="text-[9px] text-stone-450 dark:text-stone-500 text-center truncate block mt-0.5" title={item.description}>
-                          {item.description}
+                      {item.enrichmentError && item.enrichmentStatus === "failed" && (
+                        <span
+                          className="text-[9px] text-ag-danger text-center block mt-0.5 line-clamp-2"
+                          title={item.enrichmentError}
+                        >
+                          {item.enrichmentError}
                         </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      {item.enrichmentStatus === "ready" && item.visualProfile && (
+                        <button
+                          type="button"
+                          onClick={() => setProfileViewItem(item)}
+                          className="w-full text-[10px] font-bold py-1.5 rounded-lg border border-ag-accent/25 bg-ag-accent/10 text-ag-accent hover:bg-ag-accent/15 cursor-pointer flex items-center justify-center gap-1"
+                        >
+                          <FileText className="h-3 w-3" />
+                          Ver perfil
+                        </button>
+                      )}
+                      {(item.enrichmentStatus === "failed" ||
+                        item.enrichmentStatus === "pending" ||
+                        !item.enrichmentStatus) && (
+                        <button
+                          type="button"
+                          disabled={isEnrichingCatalog || item.enrichmentStatus === "processing"}
+                          onClick={() =>
+                            void runCatalogEnrichment([
+                              { ...item, enrichmentStatus: "pending" },
+                            ])
+                          }
+                          className="w-full text-[10px] font-bold py-1.5 rounded-lg border border-ag-border bg-ag-surface-1 text-ag-muted hover:text-ag-text disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1"
+                        >
+                          <RefreshCw
+                            className={`h-3 w-3 ${item.enrichmentStatus === "processing" ? "animate-spin" : ""}`}
+                          />
+                          {item.enrichmentStatus === "processing" ? "Indexando…" : "Indexar"}
+                        </button>
                       )}
                     </div>
 
@@ -3686,132 +2613,53 @@ export default function App() {
               </div>
             )}
 
-          </div>
+          </StudioSection>
         )}
 
-      </main>
+      </AppShell>
 
-      {/* MODAL DIALOG: ADD SINGLE DIALOG MANUALLY */}
-      {showCatalogModal && (
-        <div className="fixed inset-0 bg-sys-bg/90 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          
-          <div className="max-w-md w-full rounded-2xl border shadow-2xl p-6 flex flex-col gap-5 animate-scaleUp transition-colors bg-sys-surf1 border-sys-surf3/30">
-            
-            <div className="flex items-center justify-between border-b pb-3 border-sys-surf3/15">
-              <h3 className="font-serif italic font-semibold text-lg text-amber-700 dark:text-amber-300">
-                Cadastrar Nova Referência de Acervo
-              </h3>
-              <button 
-                onClick={() => setShowCatalogModal(false)}
-                className="text-sys-text opacity-70 hover:opacity-100 p-1 cursor-pointer"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+      <CatalogProfileModal
+        item={profileViewItem}
+        onClose={() => setProfileViewItem(null)}
+      />
 
-            <div className="flex flex-col gap-4">
-              
-              {/* Image Input drag and drop */}
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[10px] uppercase font-mono tracking-widest text-stone-400 font-bold block">
-                  Foto do Look Disponível no Showroom / Canva
-                </span>
-                
-                <div 
-                  onClick={() => catalogFileInputRef.current?.click()}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setCatalogDragOver(true);
-                  }}
-                  onDragLeave={() => {
-                    setCatalogDragOver(false);
-                  }}
-                  onDrop={async (e) => {
-                    e.preventDefault();
-                    setCatalogDragOver(false);
-                    const files = e.dataTransfer.files;
-                    if (files && files.length > 0) {
-                      const file = files[0];
-                      const base64 = await processImageFile(file);
-                      setNewCatalogImage(base64);
-                      
-                      const nameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-                      setNewCatalogLabel(nameWithoutExt);
-                    }
-                  }}
-                  className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all min-h-[140px] ${
-                    newCatalogImage ? "border-sys-surf3" : "border-sys-surf3/40 hover:border-sys-surf3/70"
-                  } ${catalogDragOver ? "border-sys-cta bg-sys-cta/5" : "bg-sys-surf2"}`}
-                >
-                  {newCatalogImage ? (
-                    <div className="flex flex-col items-center gap-2">
-                      <img src={newCatalogImage} alt="Uploaded Item" referrerPolicy="no-referrer" className="max-h-24 object-contain rounded border border-sys-surf3/20" />
-                      <span className="text-[10px] text-stone-500">Clique para substituir foto</span>
-                    </div>
-                  ) : (
-                    <>
-                      <Upload className="h-6 w-6 text-stone-400 mb-2" />
-                      <span className="text-xs font-semibold text-stone-700 dark:text-stone-300">Selecione ou Arraste a Foto</span>
-                      <span className="text-[10px] text-stone-500 mt-0.5">Formatos suportados: PNG, JPG</span>
-                    </>
-                  )}
-                </div>
+      <CatalogModal
+        open={showCatalogModal}
+        onClose={() => setShowCatalogModal(false)}
+        label={newCatalogLabel}
+        onLabelChange={setNewCatalogLabel}
+        image={newCatalogImage}
+        dragOver={catalogDragOver}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setCatalogDragOver(true);
+        }}
+        onDragLeave={() => setCatalogDragOver(false)}
+        onDrop={async (e) => {
+          e.preventDefault();
+          setCatalogDragOver(false);
+          const files = e.dataTransfer.files;
+          if (files?.length) {
+            const file = files[0];
+            const base64 = await processImageFile(file);
+            setNewCatalogImage(base64);
+            const nameWithoutExt =
+              file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
+            setNewCatalogLabel(nameWithoutExt);
+          }
+        }}
+        onPickFile={() => catalogFileInputRef.current?.click()}
+        onSave={createCatalogItem}
+      />
 
-                <input
-                  type="file"
-                  accept="image/*"
-                  ref={catalogFileInputRef}
-                  className="hidden"
-                  onChange={handleCatalogPhotoUpload}
-                />
-              </div>
+      <input
+        type="file"
+        accept="image/*"
+        ref={catalogFileInputRef}
+        className="hidden"
+        onChange={handleCatalogPhotoUpload}
+      />
 
-              {/* Garment Reference code */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] uppercase font-mono tracking-widest text-stone-400 font-bold block">
-                  Código de Referência (ex: 9146 Pink)
-                </label>
-                <input
-                  type="text"
-                  value={newCatalogLabel}
-                  onChange={(e) => setNewCatalogLabel(e.target.value)}
-                  placeholder="Ex: 9146 Pink"
-                  className="w-full text-xs rounded-lg px-3 py-2 outline-none border focus:border-sys-cta bg-sys-surf2 border-sys-surf3/25 text-sys-text"
-                />
-              </div>
-
-            </div>
-
-            <div className="flex justify-end gap-2.5 pt-4 border-t border-sys-surf3/15 mt-1">
-              <button
-                onClick={() => setShowCatalogModal(false)}
-                className="text-xs font-bold px-4 py-2 rounded-lg cursor-pointer bg-sys-surf2 hover:bg-sys-surf3 text-sys-text border border-sys-surf3/20"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={createCatalogItem}
-                className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-xs"
-              >
-                Salvar Look
-              </button>
-            </div>
-
-          </div>
-
-        </div>
-      )}
-
-      {/* STYLED LUXURY FOOTER */}
-      <footer className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-20 pt-8 border-t flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-sys-text opacity-60 border-sys-surf3/15">
-        <div>
-          <span>© {new Date().getFullYear()} AuraGrid Intelligence Showroom Spain — Madrid B2B. Compatível com exportações rápidas de Copys para Canva.</span>
-        </div>
-        <div className="flex items-center gap-1.5 font-semibold">
-          <span>* As fotos de referências estão salvas no armazenamento local de rascunhos de forma segura.</span>
-        </div>
-      </footer>
-
-    </div>
+    </>
   );
 }
