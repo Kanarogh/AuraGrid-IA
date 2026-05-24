@@ -1,4 +1,4 @@
-import { DEFAULT_BRAND_GEM } from "../data/preloaded";
+import { createEmptyBrandGem } from "./brandGemDefaults";
 import type { BrandGem } from "../types";
 
 const STORAGE_KEY = "auragrid_brand_gem";
@@ -7,7 +7,7 @@ const LEGACY_REPEATING_KEY = "palak_repeating";
 
 /** @deprecated Gem vive no workspace do cliente — use ClientWorkspaceContext */
 export function loadBrandGem(): BrandGem {
-  if (typeof window === "undefined") return DEFAULT_BRAND_GEM;
+  if (typeof window === "undefined") return createEmptyBrandGem("cliente");
 
   try {
     const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -23,7 +23,7 @@ export function loadBrandGem(): BrandGem {
 }
 
 function migrateLegacyBrandGem(): BrandGem {
-  const gem = { ...DEFAULT_BRAND_GEM };
+  const gem = createEmptyBrandGem("cliente");
 
   try {
     const legacyContext = window.localStorage.getItem(LEGACY_CONTEXT_KEY);
@@ -35,7 +35,7 @@ function migrateLegacyBrandGem(): BrandGem {
       gem.footer = { ...gem.footer, ...JSON.parse(legacyRepeating) };
     }
   } catch {
-    /* defaults */
+    /* vazio */
   }
 
   saveBrandGem(gem);
@@ -43,14 +43,18 @@ function migrateLegacyBrandGem(): BrandGem {
 }
 
 function normalizeBrandGem(partial: Partial<BrandGem>): BrandGem {
+  const base = createEmptyBrandGem(partial.id?.trim() || "cliente", partial.name ?? "");
   return {
-    id: partial.id?.trim() || DEFAULT_BRAND_GEM.id,
-    name: partial.name?.trim() || DEFAULT_BRAND_GEM.name,
-    description: partial.description?.trim() ?? DEFAULT_BRAND_GEM.description,
-    instructions: partial.instructions?.trim() || DEFAULT_BRAND_GEM.instructions,
+    id: partial.id?.trim() || base.id,
+    name: partial.name?.trim() ?? "",
+    description: partial.description?.trim() ?? "",
+    instructions: partial.instructions?.trim() ?? "",
     footer: {
-      ...DEFAULT_BRAND_GEM.footer,
-      ...(partial.footer ?? {}),
+      structure: partial.footer?.structure?.trim() ?? "",
+      address: partial.footer?.address?.trim() ?? "",
+      contact: partial.footer?.contact?.trim() ?? "",
+      hashtags: partial.footer?.hashtags?.trim() ?? "",
+      extra: partial.footer?.extra?.trim() ?? "",
     },
   };
 }

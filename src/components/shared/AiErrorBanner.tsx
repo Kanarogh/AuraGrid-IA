@@ -5,7 +5,7 @@ import { useAiSettings } from "../../hooks/useAiSettings";
 
 const QUOTA_REGEX = /429|quota|cota|RESOURCE_EXHAUSTED|rate.?limit|insufficient_quota/i;
 const TIMEOUT_REGEX = /timeout|timed out|tempo esgotado|ETIMEDOUT/i;
-const VISION_REGEX = /image_url|unknown variant.*text|DeepSeek não analisa imagens/i;
+const VISION_REGEX = /image_url|unknown variant.*text/i;
 
 type ErrorKind = "quota" | "timeout" | "vision" | "other";
 
@@ -46,8 +46,7 @@ export function AiErrorBanner({
         .filter(
           (p) =>
             p.id !== settings.activeProvider &&
-            p.configured &&
-            (kind !== "vision" || p.id !== "deepseek")
+            p.configured
         )
         .map((p) => p.id)
     : [];

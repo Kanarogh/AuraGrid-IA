@@ -56,6 +56,7 @@ import {
   getCachedCaption,
   setCachedCaption,
 } from "./lib/captionCache";
+import { applyCaptionReferenceRule } from "./lib/captionFormat";
 import { recalculatePostDates } from "./lib/dates";
 import { createEmptyCanvaPage } from "./lib/canva";
 import { getPostStatus } from "./lib/postStatus";
@@ -1100,8 +1101,8 @@ export default function App() {
           "Cota de visão esgotada — a indexação parou para não gastar mais chamadas.\n\n" +
             "• Groq free: ~500k tokens/dia (no log: TPD). Volta amanhã ou use outra chave.\n" +
             "• Gemini free: cota diária também pode zerar.\n" +
-            "• Com DeepSeek ativo, o app tenta Gemini → Groq → OpenRouter.\n\n" +
-            "No painel IA (✨), escolha OpenRouter e o modelo «Qwen 2.5 VL 32B» se o free automático falhar."
+            "• Com Ollama ativo, confira se o app Ollama está aberto.\n\n" +
+            "No painel IA (Configurações), use OpenRouter + «Qwen 2.5 VL 32B» ou Ollama local."
         );
       }
     } finally {
@@ -1343,6 +1344,10 @@ export default function App() {
       if (!options?.force) {
         const cached = getCachedCaption(cacheKey);
         if (cached) {
+          const cachedCaption = applyCaptionReferenceRule(
+            cached.caption,
+            cached.matchedId
+          );
           setPosts((prev) =>
             prev.map((p) =>
               p.id === postId
@@ -1350,7 +1355,7 @@ export default function App() {
                     ...p,
                     matchedCatalogId: cached.matchedId,
                     reasoning: cached.reasoning,
-                    caption: cached.caption,
+                    caption: cachedCaption,
                     isGenerating: false,
                     isGenerated: true,
                     error: null,
@@ -1390,9 +1395,12 @@ export default function App() {
       noteLastProviderUsed(providerUsed);
       const matchMode = response.headers.get("X-AI-Match-Mode") ?? undefined;
 
+      const matchedId = result.matchedId ?? null;
+      const caption = applyCaptionReferenceRule(result.caption ?? "", matchedId);
+
       setCachedCaption(cacheKey, {
-        caption: result.caption ?? "",
-        matchedId: result.matchedId ?? null,
+        caption,
+        matchedId,
         reasoning: result.reasoning ?? null,
         providerUsed,
         matchMode,
@@ -1404,9 +1412,9 @@ export default function App() {
           p.id === postId
             ? {
                 ...p,
-                matchedCatalogId: result.matchedId ?? null,
+                matchedCatalogId: matchedId,
                 reasoning: result.reasoning ?? null,
-                caption: result.caption ?? "",
+                caption,
                 isGenerating: false,
                 isGenerated: true,
                 error: null,

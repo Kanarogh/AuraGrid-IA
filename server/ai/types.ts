@@ -1,4 +1,4 @@
-export type AiProviderId = "gemini" | "groq" | "deepseek" | "openrouter";
+export type AiProviderId = "gemini" | "groq" | "openrouter" | "ollama";
 
 export interface AiProviderHealth {
   configured: boolean;
@@ -22,8 +22,6 @@ export interface AiHealthResponse {
   features: {
     catalogEnrich: boolean;
     catalogJsonMatch: boolean;
-    /** Quando o provedor ativo é DeepSeek, qual IA faz visão (se houver). */
-    visionDelegate?: AiProviderId | null;
     fallbackChain?: boolean;
   };
   circuitBreaker?: Record<AiProviderId, AiCircuitState>;
@@ -41,6 +39,7 @@ export type BrandGemPayload = {
   description?: string;
   instructions?: string;
   footer?: {
+    structure?: string;
     address?: string;
     contact?: string;
     hashtags?: string;

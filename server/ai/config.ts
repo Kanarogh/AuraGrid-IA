@@ -7,15 +7,16 @@ import {
 
 export const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
 export const DEFAULT_GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
-export const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
 /** Roteador free com visão quando disponível (evita IDs que saíram do ar). */
 export const DEFAULT_OPENROUTER_MODEL = "openrouter/free";
+export const DEFAULT_OLLAMA_MODEL = "gemma4:e4b";
+export const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434";
 
 export function getEnvDefaultProviderId(): AiProviderId {
   const raw = (process.env.AI_PROVIDER || "gemini").trim().toLowerCase();
   if (raw === "groq" || raw === "grog") return "groq";
-  if (raw === "deepseek") return "deepseek";
   if (raw === "openrouter") return "openrouter";
+  if (raw === "ollama" || raw === "local") return "ollama";
   return "gemini";
 }
 
@@ -40,14 +41,6 @@ export function hasGroqKey(): boolean {
   return !!process.env.GROQ_API_KEY?.trim();
 }
 
-export function getDeepSeekModel(): string {
-  return process.env.DEEPSEEK_MODEL?.trim() || DEFAULT_DEEPSEEK_MODEL;
-}
-
-export function hasDeepSeekKey(): boolean {
-  return !!process.env.DEEPSEEK_API_KEY?.trim();
-}
-
 export function getOpenRouterModel(): string {
   const raw =
     getRuntimeOpenRouterModel() ||
@@ -63,4 +56,23 @@ export function getEnvOpenRouterModel(): string {
 
 export function hasOpenRouterKey(): boolean {
   return !!process.env.OPENROUTER_API_KEY?.trim();
+}
+
+export function getOllamaBaseUrl(): string {
+  return process.env.OLLAMA_BASE_URL?.trim() || DEFAULT_OLLAMA_BASE_URL;
+}
+
+export function getOllamaModel(): string {
+  return process.env.OLLAMA_MODEL?.trim() || DEFAULT_OLLAMA_MODEL;
+}
+
+/** Local Ollama ativo (sem API key). Defina OLLAMA_DISABLED=1 para esconder no painel. */
+export function isOllamaConfigured(): boolean {
+  return process.env.OLLAMA_DISABLED !== "1";
+}
+
+/** Por padrão só o provedor/modelo escolhido no painel. Defina AI_ALLOW_FALLBACK=1 para cadeia antiga. */
+export function isAiFallbackAllowed(): boolean {
+  const v = process.env.AI_ALLOW_FALLBACK?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
 }

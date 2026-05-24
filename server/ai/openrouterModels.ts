@@ -107,12 +107,6 @@ export const OPENROUTER_MODELS: OpenRouterModelOption[] = [
     description: "Refinar legenda. Sem visão.",
     vision: false,
   },
-  {
-    id: "deepseek/deepseek-chat-v3-0324:free",
-    label: "DeepSeek V3 0324 (free, só texto)",
-    description: "Refinamento e copywriting. Sem visão.",
-    vision: false,
-  },
 ];
 
 export function sanitizeOpenRouterModelId(id: string | null): string | null {

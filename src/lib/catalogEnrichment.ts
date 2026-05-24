@@ -10,6 +10,13 @@ const ENRICH_DELAY_MS = 2500;
 const ENRICH_DELAY_OPENROUTER_MS = 8000;
 /** Evita ficar minutos esperando retry do servidor quando a cota já estourou */
 const ENRICH_FETCH_TIMEOUT_MS = 45_000;
+/** Ollama + visão na 1ª peça pode levar 1–3 min (carrega o modelo). */
+const ENRICH_FETCH_TIMEOUT_OLLAMA_MS = 180_000;
+
+function enrichFetchTimeoutMs(): number {
+  const provider = getAiSettingsState().settings?.activeProvider;
+  return provider === "ollama" ? ENRICH_FETCH_TIMEOUT_OLLAMA_MS : ENRICH_FETCH_TIMEOUT_MS;
+}
 
 export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) return Promise.resolve();
@@ -64,7 +71,8 @@ export async function enrichCatalogItemOnServer(
   signal?: AbortSignal
 ): Promise<CatalogVisualProfile> {
   const timeoutController = new AbortController();
-  const timeoutId = setTimeout(() => timeoutController.abort(), ENRICH_FETCH_TIMEOUT_MS);
+  const fetchTimeoutMs = enrichFetchTimeoutMs();
+  const timeoutId = setTimeout(() => timeoutController.abort(), fetchTimeoutMs);
   const requestSignal = mergeAbortSignals(signal, timeoutController.signal);
 
   try {
@@ -98,8 +106,12 @@ export async function enrichCatalogItemOnServer(
     return normalizeVisualProfile(data.profile, item.label);
   } catch (err) {
     if (timeoutController.signal.aborted && !signal?.aborted) {
+      const secs = Math.round(fetchTimeoutMs / 1000);
+      const isOllama = getAiSettingsState().settings?.activeProvider === "ollama";
       throw new Error(
-        "Tempo esgotado aguardando o servidor (45s). Use Parar indexação ou verifique a cota Gemini."
+        isOllama
+          ? `Tempo esgotado aguardando o Ollama (${secs}s). A 1ª foto demora mais (modelo carregando). Tente de novo ou aumente OLLAMA_TIMEOUT_MS no .env.`
+          : `Tempo esgotado aguardando o servidor (${secs}s). Use Parar indexação ou troque o provedor no painel IA.`
       );
     }
     throw err;
@@ -113,7 +125,9 @@ export type EnrichQueueResult = { cancelled: boolean; quotaExceeded: boolean };
 /** Indexa referências em fila (evita estourar cota por minuto) */
 function enrichDelayMs(): number {
   const provider = getAiSettingsState().settings?.activeProvider;
-  return provider === "openrouter" ? ENRICH_DELAY_OPENROUTER_MS : ENRICH_DELAY_MS;
+  if (provider === "openrouter") return ENRICH_DELAY_OPENROUTER_MS;
+  if (provider === "ollama") return 500;
+  return ENRICH_DELAY_MS;
 }
 
 export async function enrichCatalogItemsInQueue(

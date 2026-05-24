@@ -1,4 +1,4 @@
-export type AiProviderId = "gemini" | "groq" | "deepseek" | "openrouter";
+export type AiProviderId = "gemini" | "groq" | "openrouter" | "ollama";
 
 export interface AiProviderOption {
   id: AiProviderId;
@@ -51,8 +51,8 @@ export interface AiSettingsResponse {
 
 export function providerDisplayName(id: AiProviderId): string {
   if (id === "groq") return "Groq";
-  if (id === "deepseek") return "DeepSeek";
   if (id === "openrouter") return "OpenRouter";
+  if (id === "ollama") return "Ollama";
   return "Gemini";
 }
 

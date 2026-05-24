@@ -1,6 +1,7 @@
 /** Blocos de prompt derivados do Gem (estilo Gemini) + rodapé fixo das legendas */
 
 export type RepeatingTextConfig = {
+  structure?: string;
   address?: string;
   contact?: string;
   hashtags?: string;
@@ -41,7 +42,7 @@ export function buildBrandVoiceBlock(gem?: BrandGemConfig): string {
   const instructions = gem?.instructions?.trim();
 
   if (!name && !description && !instructions) {
-    return `BRAND VOICE: Boutique mayorista de moda india "Palak" (Madrid). Legendas en español, tono sofisticado, cálido y estético para Instagram.`;
+    return `BRAND VOICE: Use only what the user configured in INSTRUCTIONS when present.`;
   }
 
   const parts: string[] = [];
@@ -54,27 +55,60 @@ export function buildBrandVoiceBlock(gem?: BrandGemConfig): string {
   return `BRAND VOICE AND WRITING RULES:\n${parts.join("\n\n")}`;
 }
 
+/** Estrutura fixa da legenda + linha Referencia condicional (dados fixos). */
+export function buildCaptionStructureBlock(gem?: BrandGemConfig): string {
+  const custom = gem?.footer?.structure?.trim();
+
+  const rules = `CAPTION STRUCTURE ("dados fixos" — follow this order):
+
+1. MAIN BODY (top): Hook + description of what is in the post (language and tone per INSTRUCTIONS).
+
+2. CATALOG REFERENCE LINE — CONDITIONAL (middle, only sometimes):
+   - Include exactly one line: Referencia: [LABEL]
+   - Use the matched catalog item's label (from matchedId). [LABEL] is the catalog reference code/name.
+   - ADD this line ONLY when ALL are true:
+     • matchedId is not null (a catalog match exists), AND
+     • The image clearly shows a wearable garment: a dress, outfit on a person/model, or a product shot where the garment is the focus.
+   - Place this line immediately AFTER the main body and BEFORE footer lines.
+   - OMIT "Referencia: …" entirely when:
+     • matchedId is null, OR
+     • The image has no dress/outfit/clothing to tie to the catalog (e.g. scenery only, abstract graphic, text-only slide, flat lay without a clear garment reference, logo, or lifestyle photo with no visible catalog piece).
+
+3. FOOTER (bottom): Address, contact, hashtags, and closing note — only from MANDATORY CAPTION ELEMENTS below (if configured).`;
+
+  if (custom) {
+    return `${rules}\n\nADDITIONAL STRUCTURE NOTES FROM CLIENT:\n${custom}`;
+  }
+  return rules;
+}
+
 export function buildCaptionFooterBlock(footer?: RepeatingTextConfig): string {
   const rt = footer ?? {};
-  return `MANDATORY CAPTION ELEMENTS (use in the Spanish caption — do not replace with invented text):
-- Address: ${rt.address || "Calle Manuel Cobo Calleja, 46 Local 5, Madrid"}
-- Contact / CTA: ${rt.contact || "Contacta vía WhatsApp en el enlace de la biografía"}
-- Hashtags (include this set): ${rt.hashtags || "#PalakModa #ModaIndia #BoutiqueMadrid"}
-- Closing note: ${rt.extra || "*Imagen creada con inteligencia artificial"}`;
+  const lines: string[] = [];
+  if (rt.address?.trim()) lines.push(`- Address: ${rt.address.trim()}`);
+  if (rt.contact?.trim()) lines.push(`- Contact / CTA: ${rt.contact.trim()}`);
+  if (rt.hashtags?.trim()) lines.push(`- Hashtags (include this set): ${rt.hashtags.trim()}`);
+  if (rt.extra?.trim()) lines.push(`- Closing note: ${rt.extra.trim()}`);
+
+  if (lines.length === 0) {
+    return `MANDATORY CAPTION FOOTER: None configured — do not invent address, hashtags or legal notes unless INSTRUCTIONS require them.`;
+  }
+
+  return `MANDATORY CAPTION FOOTER (bottom of caption — do not replace with invented text):\n${lines.join("\n")}`;
 }
 
 /** Instruções completas para gerar legenda no match-and-generate */
 export function buildMatchCaptionInstructions(gem?: BrandGemConfig): string {
   return `${buildBrandVoiceBlock(gem)}
 
+${buildCaptionStructureBlock(gem)}
+
 ${buildCaptionFooterBlock(gem?.footer)}
 
-CAPTION TASK (Spanish only):
-- Write for the brand described in the GEM above (wholesale + premium Instagram aesthetic).
-- Opening hook, outfit description aligned with INSTRUCTIONS.
-- Line on its own: Referencia: [LABEL] (use the matched catalog label).
-- Naturally include address, contact, hashtags, and closing note from MANDATORY CAPTION ELEMENTS.
-- Do NOT use a different tone, address, or hashtags than configured above.`;
+CAPTION TASK:
+- Write the full caption following CAPTION STRUCTURE above.
+- Respect the conditional Referencia line: include it only for dress/outfit/person-with-garment posts with a valid matchedId; skip it for image-only posts without catalog clothing.
+- Do NOT use a different tone, address, or hashtags than configured in the GEM and footer.`;
 }
 
 export function buildRefineCaptionPrompt(
@@ -82,12 +116,15 @@ export function buildRefineCaptionPrompt(
   instructions: string,
   gem?: BrandGemConfig
 ): string {
-  return `Refine this Spanish fashion Instagram caption for the brand configured below.
+  return `Refine this fashion Instagram caption for the brand configured below.
 
 ${buildBrandVoiceBlock(gem)}
 
+${buildCaptionStructureBlock(gem)}
+
 ${buildCaptionFooterBlock(gem?.footer)}
 
+Preserve the caption structure: main body, optional "Referencia: …" only if the post shows catalog clothing with a match, then footer lines.
 Preserve address, contact, hashtags and closing note unless the user explicitly asks to change them.
 Apply the GEM instructions to every edit.
 
@@ -98,7 +135,7 @@ Current caption:
 ${currentCaption}
 """
 
-Return ONLY the full revised caption in Spanish.`;
+Return ONLY the full revised caption.`;
 }
 
 /** Compat: APIs antigas que enviam promptContext + repeatingText */

@@ -1,7 +1,7 @@
 import { normalizeCatalogItem } from "../catalog";
 import { loadBrandGem } from "../brandGem";
+import { createEmptyBrandGem } from "../brandGemDefaults";
 import {
-  DEFAULT_BRAND_GEM,
   PRELOADED_CATALOG,
   PRELOADED_POSTS,
 } from "../../data/preloaded";
@@ -70,7 +70,7 @@ function buildLegacyWorkspace(): ClientWorkspace {
 
   return {
     version: 1,
-    brandGem: brandGem.name ? brandGem : DEFAULT_BRAND_GEM,
+    brandGem: brandGem.name ? brandGem : createEmptyBrandGem(LEGACY_PALAK_ID, "Palak"),
     catalog,
     posts,
     startDate,
@@ -126,7 +126,7 @@ export function ensureClientRegistry(): ClientRegistry {
   }
 
   if (hasLegacyData()) {
-    const meta = createClientMeta(LEGACY_PALAK_ID, DEFAULT_BRAND_GEM.name);
+    const meta = createClientMeta(LEGACY_PALAK_ID, "Palak");
     const workspace = buildLegacyWorkspace();
     workspace.brandGem.id = LEGACY_PALAK_ID;
     saveWorkspace(LEGACY_PALAK_ID, workspace);

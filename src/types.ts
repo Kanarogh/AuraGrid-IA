@@ -44,6 +44,8 @@ export interface CatalogItem {
 }
 
 export interface RepeatingText {
+  /** Ordem dos blocos da legenda (opcional — complementa as regras padrão) */
+  structure: string;
   address: string;
   contact: string;
   hashtags: string;
@@ -60,7 +62,7 @@ export interface BrandGem {
   description: string;
   /** Instruções completas (system prompt) enviadas à IA */
   instructions: string;
-  /** Endereço, hashtags e rodapé fixos nas legendas */
+  /** Endereço, hashtags, estrutura e rodapé fixos nas legendas */
   footer: RepeatingText;
 }
 

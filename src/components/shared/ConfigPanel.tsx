@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Building, ChevronDown, Hash, Info, PhoneCall, Sparkles } from "lucide-react";
+import { Building, ChevronDown, Hash, Info, ListOrdered, PhoneCall, Sparkles } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { gemInitial } from "../../lib/brandGem";
 import type { BrandGem } from "../../types";
@@ -19,7 +19,7 @@ export function ConfigPanel({
   brandGem: BrandGem;
   onBrandGemChange: (gem: BrandGem) => void;
 }) {
-  const [footerOpen, setFooterOpen] = useState(true);
+  const [footerOpen, setFooterOpen] = useState(false);
 
   if (!open) return null;
 
@@ -47,10 +47,9 @@ export function ConfigPanel({
         </h2>
       </div>
       <p className="text-sm text-ag-muted mb-6">
-        Mesma estrutura dos <strong>Gems do Gemini</strong>: nome, descrição e instruções viram o
-        system prompt em toda geração de legenda para o cliente ativo (
-        <code className="text-xs font-mono text-ag-accent">{brandGem.id}</code>). Troque de cliente
-        na barra lateral.
+        Preencha os campos abaixo para este cliente (
+        <code className="text-xs font-mono text-ag-accent">{brandGem.id}</code>). Tudo fica salvo
+        automaticamente no workspace — nada vem pré-preenchido com texto de outra marca.
       </p>
 
       <div className="mb-8">
@@ -70,7 +69,7 @@ export function ConfigPanel({
             <Input
               value={brandGem.name}
               onChange={(e) => patch({ name: e.target.value })}
-              placeholder="Ex.: Palak Euro"
+              placeholder="Nome da marca ou do Gem"
               className="text-base font-medium"
             />
           </div>
@@ -82,7 +81,7 @@ export function ConfigPanel({
             value={brandGem.description}
             onChange={(e) => patch({ description: e.target.value })}
             rows={3}
-            placeholder="Resumo do papel do assistente para esta marca…"
+            placeholder="Ex.: papel do assistente, público, idioma das legendas…"
             className="text-sm"
           />
         </div>
@@ -103,13 +102,14 @@ export function ConfigPanel({
             value={brandGem.instructions}
             onChange={(e) => patch({ instructions: e.target.value })}
             rows={14}
-            placeholder="Você é o estrategista de marketing da marca… REGRA DE IDIOMA: …"
+            placeholder="Tom, idioma, regras de venda, estilo Instagram…"
             className="text-sm leading-relaxed font-mono"
           />
           <p className="text-[11px] text-ag-muted mt-1.5">
             Enviado à IA em cada legenda (individual, lote ou refinamento).
           </p>
         </div>
+
       </div>
 
       <div className="mt-6 rounded-xl border border-ag-border bg-ag-surface-1/80 overflow-hidden">
@@ -126,10 +126,27 @@ export function ConfigPanel({
         {footerOpen && (
           <div className="px-4 pb-4 pt-0 grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-ag-border/60">
             <div className="sm:col-span-2">
-              <p className="text-xs text-ag-muted py-2">
-                Endereço, contato e hashtags entram no rodapé de cada legenda gerada (complementam o
-                Gem).
+              <p className="text-xs text-ag-muted py-2 leading-relaxed">
+                Ordem da legenda: <strong className="text-ag-text">texto principal</strong> →{" "}
+                <strong className="text-ag-text">Referencia: código</strong> só se o post tiver
+                vestido ou pessoa com roupa do catálogo →{" "}
+                <strong className="text-ag-text">rodapé</strong> (endereço, contato, hashtags).
+                Imagem sem peça (paisagem, arte, etc.) não leva linha Referencia.
               </p>
+            </div>
+            <div className="sm:col-span-2">
+              <FieldLabel>
+                <span className="inline-flex items-center gap-1">
+                  <ListOrdered className="h-3 w-3" /> Estrutura da legenda (opcional)
+                </span>
+              </FieldLabel>
+              <Textarea
+                value={brandGem.footer.structure ?? ""}
+                onChange={(e) => patchFooter({ structure: e.target.value })}
+                rows={4}
+                placeholder="Notas extras sobre a ordem dos blocos, se precisar…"
+                className="text-sm"
+              />
             </div>
             <div>
               <FieldLabel>
@@ -140,6 +157,7 @@ export function ConfigPanel({
               <Input
                 value={brandGem.footer.address}
                 onChange={(e) => patchFooter({ address: e.target.value })}
+                placeholder="Endereço da loja (se quiser no rodapé da legenda)"
               />
             </div>
             <div>
@@ -151,6 +169,7 @@ export function ConfigPanel({
               <Input
                 value={brandGem.footer.contact}
                 onChange={(e) => patchFooter({ contact: e.target.value })}
+                placeholder="WhatsApp, CTA, link da bio…"
               />
             </div>
             <div className="sm:col-span-2">
@@ -162,6 +181,7 @@ export function ConfigPanel({
               <Input
                 value={brandGem.footer.hashtags}
                 onChange={(e) => patchFooter({ hashtags: e.target.value })}
+                placeholder="#Marca #Coleção …"
               />
             </div>
             <div className="sm:col-span-2">
@@ -173,6 +193,7 @@ export function ConfigPanel({
               <Input
                 value={brandGem.footer.extra}
                 onChange={(e) => patchFooter({ extra: e.target.value })}
+                placeholder="Nota legal ou frase fixa no fim da legenda"
               />
             </div>
           </div>

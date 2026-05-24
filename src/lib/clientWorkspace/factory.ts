@@ -1,6 +1,9 @@
 import { createEmptyCanvaPage } from "../canva";
 import { recalculatePostDates } from "../dates";
-import { DEFAULT_BRAND_GEM } from "../../data/preloaded";
+import {
+  clearFactoryPlaceholderGem,
+  createEmptyBrandGem,
+} from "../brandGemDefaults";
 import type { BrandGem, PlannedPost } from "../../types";
 import type { ClientMeta, ClientWorkspace } from "./types";
 
@@ -69,14 +72,7 @@ export function createClientMeta(id: string, name: string): ClientMeta {
 }
 
 export function createBrandGemForClient(id: string, name: string): BrandGem {
-  return {
-    ...DEFAULT_BRAND_GEM,
-    id,
-    name: name.trim() || id,
-    description: `Assistente criativo para ${name.trim() || id}. Configure nome, descrição e instruções no estilo Gem.`,
-    instructions: DEFAULT_BRAND_GEM.instructions,
-    footer: { ...DEFAULT_BRAND_GEM.footer },
-  };
+  return createEmptyBrandGem(id, name.trim() || id);
 }
 
 /** Workspace em memória quando não há cliente ativo (não persiste). */
@@ -115,9 +111,20 @@ export function normalizeWorkspace(
   const empty = createEmptyWorkspace(meta);
   if (!raw) return empty;
 
-  const brandGem = raw.brandGem
-    ? { ...empty.brandGem, ...raw.brandGem, id: meta.id }
+  let brandGem = raw.brandGem
+    ? {
+        ...empty.brandGem,
+        ...raw.brandGem,
+        id: meta.id,
+        footer: {
+          ...empty.brandGem.footer,
+          ...(raw.brandGem.footer ?? {}),
+          structure: raw.brandGem.footer?.structure ?? "",
+        },
+      }
     : { ...empty.brandGem, id: meta.id };
+
+  brandGem = clearFactoryPlaceholderGem(brandGem, meta.name);
 
   return {
     version: 1,

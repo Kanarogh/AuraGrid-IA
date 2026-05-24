@@ -3,7 +3,7 @@ import {
   buildRefineCaptionPrompt,
   resolveBrandGemFromBody,
 } from "./brandContext.ts";
-import { getOpenRouterModel, hasOpenRouterKey } from "./config.ts";
+import { getOpenRouterModel, hasOpenRouterKey, isAiFallbackAllowed } from "./config.ts";
 import {
   buildOpenRouterVisionModelChain,
   isOpenRouterRetryableError,
@@ -218,12 +218,30 @@ async function openrouterChatVision(
     catalogLabel?: string;
   } = {}
 ): Promise<{ content: string; modelUsed: string }> {
+  const selected = getOpenRouterModel();
+
+  if (!isAiFallbackAllowed()) {
+    console.info(`[OpenRouter] modelo fixo: ${selected}`);
+    try {
+      const content = await openrouterChat(messages, options, selected);
+      if (options.catalogEnrich) {
+        const raw = JSON.parse(extractJson(content)) as Record<string, unknown>;
+        finalizeCatalogProfile(raw, options.catalogLabel);
+      }
+      logAiAttemptOk("openrouter-vision", "openrouter", selected);
+      return { content, modelUsed: selected };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`OpenRouter (${selected}): ${msg}`);
+    }
+  }
+
   const models = options.catalogEnrich
-    ? await resolveOpenRouterCatalogVisionChain(getOpenRouterModel())
-    : buildOpenRouterVisionModelChain(getOpenRouterModel(), "default");
+    ? await resolveOpenRouterCatalogVisionChain(selected)
+    : buildOpenRouterVisionModelChain(selected, "default");
   const errors: string[] = [];
 
-  console.info(`[OpenRouter] cadeia visão: ${models.join(" → ")}`);
+  console.info(`[OpenRouter] cadeia visão (fallback ligado): ${models.join(" → ")}`);
 
   for (const model of models) {
     try {
@@ -233,7 +251,7 @@ async function openrouterChatVision(
         finalizeCatalogProfile(raw, options.catalogLabel);
       }
       logAiAttemptOk("openrouter-vision", "openrouter", model, `modelo usado: ${model}`);
-      if (model !== getOpenRouterModel()) {
+      if (model !== selected) {
         console.info(`[OpenRouter] visão OK com fallback: ${model}`);
       }
       return { content, modelUsed: model };

@@ -74,8 +74,8 @@ async function fetchHealth(): Promise<AiHealthSnapshot | null> {
       catalogEnrich: data?.features?.catalogEnrich === true,
       provider:
         provider === "groq" ||
-        provider === "deepseek" ||
         provider === "openrouter" ||
+        provider === "ollama" ||
         provider === "gemini"
           ? provider
           : "gemini",
@@ -175,8 +175,8 @@ export function noteLastProviderUsed(provider: string | null | undefined) {
   if (
     provider === "gemini" ||
     provider === "groq" ||
-    provider === "deepseek" ||
-    provider === "openrouter"
+    provider === "openrouter" ||
+    provider === "ollama"
   ) {
     setState({ lastProviderUsed: provider });
   }

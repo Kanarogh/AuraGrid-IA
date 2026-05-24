@@ -16,8 +16,8 @@ function isValidProvider(value: unknown): value is AiProviderId {
   return (
     value === "gemini" ||
     value === "groq" ||
-    value === "deepseek" ||
-    value === "openrouter"
+    value === "openrouter" ||
+    value === "ollama"
   );
 }
 
@@ -34,10 +34,17 @@ export async function loadRuntimeAiSettings(): Promise<void> {
         : null;
     const openrouterModel = rawModel ? sanitizeOpenRouterModelId(rawModel) : null;
 
+    const savedProvider =
+      data.provider === "deepseek" ? null : isValidProvider(data.provider) ? data.provider : null;
+
     runtime = {
-      provider: isValidProvider(data.provider) ? data.provider : null,
+      provider: savedProvider,
       openrouterModel,
     };
+
+    if (data.provider === "deepseek") {
+      await persist();
+    }
 
     if (rawModel && openrouterModel && rawModel !== openrouterModel) {
       await persist();

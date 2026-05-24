@@ -55,6 +55,12 @@ type CaptionCacheKeyInput = {
 function serializeRepeating(rep: RepeatingTextInput): string {
   if (!rep) return "";
   if (typeof rep === "string") return rep.trim();
+  if (typeof rep === "object" && rep !== null && "structure" in rep) {
+    const r = rep as Record<string, unknown>;
+    return [r.structure, r.address, r.contact, r.hashtags, r.extra]
+      .map((v) => (v ?? "").toString().trim())
+      .join("\n");
+  }
   return [rep.address, rep.contact, rep.hashtags, rep.extra]
     .map((v) => (v ?? "").toString().trim())
     .join("\n");

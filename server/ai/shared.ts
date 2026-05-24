@@ -81,22 +81,22 @@ export async function sleep(ms: number): Promise<void> {
 const PROVIDER_LABELS: Record<AiProviderId, string> = {
   gemini: "Gemini",
   groq: "Groq",
-  deepseek: "DeepSeek",
   openrouter: "OpenRouter",
+  ollama: "Ollama",
 };
 
 const PROVIDER_KEY_ENV: Record<AiProviderId, string> = {
   gemini: "GEMINI_API_KEY",
   groq: "GROQ_API_KEY",
-  deepseek: "DEEPSEEK_API_KEY",
   openrouter: "OPENROUTER_API_KEY",
+  ollama: "OLLAMA (sem chave)",
 };
 
 const PROVIDER_MODEL_ENV: Record<AiProviderId, string> = {
   gemini: "GEMINI_MODEL",
   groq: "GROQ_MODEL",
-  deepseek: "DEEPSEEK_MODEL",
   openrouter: "OPENROUTER_MODEL",
+  ollama: "OLLAMA_MODEL",
 };
 
 export function formatAiError(error: unknown, provider: AiProviderId): string {
@@ -130,10 +130,12 @@ export function formatAiError(error: unknown, provider: AiProviderId): string {
     return `Modelo OpenRouter indisponível. No painel IA (topo), escolha "OpenRouter Free (auto)" ou "Qwen 2.5 VL 32B (free)" e tente de novo.`;
   }
 
+  if (/Ollama não está acessível|model.*not found.*Ollama/i.test(raw)) {
+    return raw;
+  }
+
   if (/image_url|unknown variant.*expected.*text/i.test(raw)) {
-    return provider === "deepseek"
-      ? "DeepSeek não analisa imagens. Configure GROQ_API_KEY ou GEMINI_API_KEY no .env (reinicie o servidor) e tente de novo."
-      : `Este provedor não aceita imagens no formato enviado. Detalhe: ${raw.slice(0, 120)}…`;
+    return `Este provedor não aceita imagens no formato enviado. Detalhe: ${raw.slice(0, 120)}…`;
   }
 
   if (raw.length > 280) return `${raw.slice(0, 280)}…`;
@@ -158,7 +160,7 @@ export async function withRetry<T>(
       const requested = parseRetrySeconds(err) ?? 15;
       if (requested > MAX_RETRY_WAIT_SEC) {
         console.warn(
-          `${label} pediu retry em ${requested}s (> ${MAX_RETRY_WAIT_SEC}s) — abortando para dar fallback.`
+          `${label} pediu retry em ${requested}s (> ${MAX_RETRY_WAIT_SEC}s) — abortando retries.`
         );
         throw err;
       }

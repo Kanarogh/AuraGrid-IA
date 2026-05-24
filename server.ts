@@ -109,12 +109,12 @@ app.put("/api/ai/settings", async (req, res) => {
     if (
       provider !== "gemini" &&
       provider !== "groq" &&
-      provider !== "deepseek" &&
-      provider !== "openrouter"
+      provider !== "openrouter" &&
+      provider !== "ollama"
     ) {
       return res
         .status(400)
-        .json({ error: "Provedor inválido. Use: gemini, groq, deepseek ou openrouter." });
+        .json({ error: "Provedor inválido. Use: gemini, groq, openrouter ou ollama." });
     }
     await setActiveAiProvider(provider as AiProviderId);
     res.json(await buildAiSettingsResponse());

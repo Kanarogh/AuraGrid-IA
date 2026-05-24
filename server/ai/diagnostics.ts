@@ -99,6 +99,11 @@ function pushEvent(event: Omit<AiDiagnosticEvent, "at">) {
     return;
   }
 
+  if (event.phase === "start") {
+    console.info(`${prefix} …${providerTag} — ${event.message}`);
+    return;
+  }
+
   const kind = event.failureKind ? ` [${failureKindLabel(event.failureKind)}]` : "";
   const retry =
     event.retryAfterSec != null && event.retryAfterSec > 0

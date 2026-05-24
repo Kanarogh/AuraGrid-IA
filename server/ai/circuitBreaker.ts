@@ -28,8 +28,8 @@ type State = {
 const state: Record<AiProviderId, State> = {
   gemini: { failures: [], cooldownUntil: 0, lastError: null },
   groq: { failures: [], cooldownUntil: 0, lastError: null },
-  deepseek: { failures: [], cooldownUntil: 0, lastError: null },
   openrouter: { failures: [], cooldownUntil: 0, lastError: null },
+  ollama: { failures: [], cooldownUntil: 0, lastError: null },
 };
 
 export function isProviderInCooldown(provider: AiProviderId): boolean {
@@ -64,8 +64,8 @@ export function getCircuitBreakerSnapshot(): Record<
   return {
     gemini: snapshotFor("gemini", now),
     groq: snapshotFor("groq", now),
-    deepseek: snapshotFor("deepseek", now),
     openrouter: snapshotFor("openrouter", now),
+    ollama: snapshotFor("ollama", now),
   };
 }
 

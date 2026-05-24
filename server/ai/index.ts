@@ -1,14 +1,15 @@
 import {
   getAiProviderId,
-  getDeepSeekModel,
   getEnvDefaultProviderId,
   getGeminiModel,
   getGroqModel,
   getOpenRouterModel,
-  hasDeepSeekKey,
+  getOllamaModel,
   hasGeminiKey,
   hasGroqKey,
   hasOpenRouterKey,
+  isOllamaConfigured,
+  isAiFallbackAllowed,
 } from "./config.ts";
 import {
   getRuntimeOpenRouterModel,
@@ -22,13 +23,12 @@ import {
   clearOpenRouterModelsCache,
   type OpenRouterModelsFilter,
 } from "./openrouterModelsLive.ts";
-import { deepseekProvider } from "./deepseekProvider.ts";
 import { formatAiError } from "./shared.ts";
-import { getVisionDelegateId } from "./visionDelegate.ts";
 import { getCircuitBreakerSnapshot } from "./circuitBreaker.ts";
 import { geminiProvider } from "./geminiProvider.ts";
 import { groqProvider } from "./groqProvider.ts";
 import { openrouterProvider } from "./openrouterProvider.ts";
+import { ollamaProvider } from "./ollamaProvider.ts";
 import type { AiHealthResponse, AiProvider, AiProviderId } from "./types.ts";
 
 export type AiProviderOption = {
@@ -60,8 +60,8 @@ export type { AiHealthResponse, AiProviderId };
 const PROVIDER_LABELS: Record<AiProviderId, string> = {
   gemini: "Google Gemini",
   groq: "Groq (Llama 4 Scout)",
-  deepseek: "DeepSeek V4",
   openrouter: "OpenRouter (free vision)",
+  ollama: "Ollama (Gemma 4 local)",
 };
 
 export async function buildAiSettingsResponse(options?: {
@@ -98,7 +98,7 @@ export async function buildAiSettingsResponse(options?: {
   return {
     activeProvider,
     envDefaultProvider: getEnvDefaultProviderId(),
-    providers: (["gemini", "groq", "deepseek", "openrouter"] as const).map((id) => ({
+    providers: (["gemini", "groq", "openrouter", "ollama"] as const).map((id) => ({
       id,
       label: PROVIDER_LABELS[id],
       model: defaultModelFor(id),
@@ -134,22 +134,22 @@ export function getActiveProviderId(): AiProviderId {
 
 export function getProvider(id: AiProviderId): AiProvider {
   if (id === "groq") return groqProvider;
-  if (id === "deepseek") return deepseekProvider;
   if (id === "openrouter") return openrouterProvider;
+  if (id === "ollama") return ollamaProvider;
   return geminiProvider;
 }
 
 function defaultModelFor(id: AiProviderId): string {
   if (id === "groq") return getGroqModel();
-  if (id === "deepseek") return getDeepSeekModel();
   if (id === "openrouter") return getOpenRouterModel();
+  if (id === "ollama") return getOllamaModel();
   return getGeminiModel();
 }
 
 function envKeyFor(id: AiProviderId): string {
   if (id === "groq") return "GROQ_API_KEY";
-  if (id === "deepseek") return "DEEPSEEK_API_KEY";
   if (id === "openrouter") return "OPENROUTER_API_KEY";
+  if (id === "ollama") return "OLLAMA (local)";
   return "GEMINI_API_KEY";
 }
 
@@ -169,9 +169,6 @@ export function getActiveProvider(): AiProvider {
 export function buildHealthResponse(): AiHealthResponse {
   const providerId = getActiveProviderId();
   const active = getProvider(providerId);
-  const visionDelegate = getVisionDelegateId();
-  const visionOk = visionDelegate !== null;
-
   const breaker = getCircuitBreakerSnapshot();
 
   return {
@@ -182,15 +179,14 @@ export function buildHealthResponse(): AiHealthResponse {
     providers: {
       gemini: { configured: hasGeminiKey(), model: getGeminiModel() },
       groq: { configured: hasGroqKey(), model: getGroqModel() },
-      deepseek: { configured: hasDeepSeekKey(), model: getDeepSeekModel() },
       openrouter: { configured: hasOpenRouterKey(), model: getOpenRouterModel() },
+      ollama: { configured: isOllamaConfigured(), model: getOllamaModel() },
     },
-    apiVersion: 5,
+    apiVersion: 6,
     features: {
-      catalogEnrich: providerId !== "deepseek" || visionOk,
+      catalogEnrich: active.isConfigured(),
       catalogJsonMatch: true,
-      visionDelegate: providerId === "deepseek" ? visionDelegate : null,
-      fallbackChain: true,
+      fallbackChain: isAiFallbackAllowed(),
     },
     circuitBreaker: breaker,
   };

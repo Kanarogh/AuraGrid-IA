@@ -42,7 +42,8 @@ export function AiProviderPanel() {
           </h3>
           <p className="text-xs text-ag-muted mt-0.5">
             Escolha qual API usar para indexar catálogo e gerar legendas. A escolha fica salva na
-            plataforma (não precisa editar o .env a cada troca).
+            plataforma — <strong className="text-ag-text">só esse provedor/modelo</strong> é usado;
+            se falhar, o erro é desse modelo (sem troca automática).
           </p>
         </div>
         <button
@@ -77,7 +78,11 @@ export function AiProviderPanel() {
               {settings?.providers.map((p) => (
                 <option key={p.id} value={p.id} disabled={!p.configured}>
                   {p.label}
-                  {!p.configured ? " (sem chave no .env)" : ""}
+                  {!p.configured
+                    ? p.id === "ollama"
+                      ? " (desativado: OLLAMA_DISABLED=1)"
+                      : " (sem chave no .env)"
+                    : ""}
                 </option>
               ))}
             </select>
@@ -86,7 +91,13 @@ export function AiProviderPanel() {
           {activeProviderOption && (
             <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono">
               <Badge tone={activeProviderOption.configured ? "success" : "danger"} dot>
-                {activeProviderOption.configured ? "Chave OK" : "Sem chave"}
+                {activeProviderOption.id === "ollama"
+                  ? activeProviderOption.configured
+                    ? "Local"
+                    : "Desativado"
+                  : activeProviderOption.configured
+                    ? "Chave OK"
+                    : "Sem chave"}
               </Badge>
               <span className="text-ag-muted truncate max-w-full">
                 Modelo: {activeProviderOption.model}
@@ -101,12 +112,24 @@ export function AiProviderPanel() {
             </p>
           )}
 
-          {settings?.activeProvider === "deepseek" && (
+          {settings?.activeProvider === "ollama" && (
             <p className="text-xs text-ag-muted leading-relaxed rounded-lg border border-ag-border bg-ag-surface-1 px-3 py-2">
-              <strong className="text-ag-text">DeepSeek</strong> não lê imagens na API oficial. Para
-              indexar catálogo e gerar legendas com foto, deixe também{" "}
-              <strong>GROQ_API_KEY</strong> ou <strong>GEMINI_API_KEY</strong> no .env — o servidor
-              usa uma delas automaticamente para visão; o DeepSeek continua útil para refinar texto.
+              <strong className="text-ag-text">Ollama (local)</strong> — texto e imagens no seu Mac,
+              sem API key. Instale{" "}
+              <a
+                href="https://ollama.com"
+                target="_blank"
+                rel="noreferrer"
+                className="text-ag-accent hover:underline"
+              >
+                ollama.com
+              </a>
+              , depois no terminal:{" "}
+              <code className="font-mono text-[10px] bg-ag-surface-2 px-1 rounded">
+                ollama pull gemma4:e4b
+              </code>
+              . A <strong className="text-ag-text">primeira indexação</strong> pode levar 1–3
+              minutos (carrega o modelo). Depois fica mais rápido.
             </p>
           )}
 

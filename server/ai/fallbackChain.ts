@@ -1,9 +1,4 @@
-import {
-  getAiProviderId,
-  hasGeminiKey,
-  hasGroqKey,
-  hasOpenRouterKey,
-} from "./config.ts";
+import { getAiProviderId, isAiFallbackAllowed } from "./config.ts";
 import { getProvider } from "./index.ts";
 import {
   isProviderInCooldown,
@@ -20,76 +15,16 @@ import {
   logAiSkip,
 } from "./diagnostics.ts";
 import { sanitizeForHttpHeader } from "./httpHeaders.ts";
-import { isQuotaExhausted } from "./shared.ts";
 import type { AiProvider, AiProviderId } from "./types.ts";
+import {
+  buildVisionProviderChain,
+  stripAuraGridMeta,
+  shouldTryNextProvider,
+  type FallbackOutcome,
+} from "./visionChain.ts";
 
-export type FallbackOutcome<T> = {
-  result: T;
-  providerUsed: AiProviderId;
-  /** Modelo real (ex.: roteado pelo openrouter/free). */
-  modelLabel?: string;
-  attempts: Array<{ provider: AiProviderId; error?: string; skipped?: string }>;
-};
-
-const AURAGRID_ROUTED_MODEL_KEY = "__auragridRoutedModel";
-
-export function stripAuraGridMeta<T extends Record<string, unknown>>(result: T): {
-  profile: T;
-  routedModel?: string;
-} {
-  if (!(AURAGRID_ROUTED_MODEL_KEY in result)) {
-    return { profile: result };
-  }
-  const { [AURAGRID_ROUTED_MODEL_KEY]: routed, ...profile } = result;
-  return {
-    profile: profile as T,
-    routedModel: typeof routed === "string" ? routed : undefined,
-  };
-}
-
-function isTransientError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  if (isQuotaExhausted(err)) return true;
-  return /429|RESOURCE_EXHAUSTED|rate.?limit|timeout|timed out|ETIMEDOUT|503|502|insufficient_quota|image_url|unknown variant.*text|DeepSeek não analisa|no endpoints found|resposta vazia|indisponível no OpenRouter|perfil json incompleto|incompletecatalogprofile|todos os modelos de visão falharam/i.test(
-    msg
-  );
-}
-
-/** Cadeia de visão: provedor ativo → pares diretos (Gemini↔Groq) → OpenRouter por último. */
-function visionChain(active: AiProviderId): AiProviderId[] {
-  if (active === "openrouter") {
-    const chain: AiProviderId[] = [];
-    if (hasOpenRouterKey()) chain.push("openrouter");
-    // Quando free do OpenRouter oscila, APIs diretas ainda podem ter cota.
-    if (hasGroqKey() && !chain.includes("groq")) chain.push("groq");
-    if (hasGeminiKey() && !chain.includes("gemini")) chain.push("gemini");
-    return chain;
-  }
-
-  const chain: AiProviderId[] = [];
-
-  if (active === "gemini" && hasGeminiKey()) chain.push("gemini");
-  else if (active === "groq" && hasGroqKey()) chain.push("groq");
-  else if (active === "deepseek") {
-    // DeepSeek não vê imagem: Gemini antes de Groq (Groq free esgota TPD rápido).
-    if (hasGeminiKey()) chain.push("gemini");
-    if (hasGroqKey() && !chain.includes("groq")) chain.push("groq");
-  }
-
-  if (active === "gemini" && hasGroqKey() && !chain.includes("groq")) {
-    chain.push("groq");
-  }
-  if (active === "groq" && hasGeminiKey() && !chain.includes("gemini")) {
-    chain.push("gemini");
-  }
-
-  // Último recurso quando APIs diretas falham (cota / rate limit).
-  if (hasOpenRouterKey() && !chain.includes("openrouter")) {
-    chain.push("openrouter");
-  }
-
-  return chain;
-}
+export type { FallbackOutcome } from "./visionChain.ts";
+export { stripAuraGridMeta } from "./visionChain.ts";
 
 export async function runVisionWithFallback<T>(
   label: string,
@@ -97,11 +32,11 @@ export async function runVisionWithFallback<T>(
   activeOverride?: AiProviderId
 ): Promise<FallbackOutcome<T>> {
   const active = activeOverride ?? getAiProviderId();
-  const chain = visionChain(active);
+  const chain = buildVisionProviderChain(active);
   if (chain.length === 0) {
     throw new Error(
-      `Nenhum provedor com visão configurado para ${label}. ` +
-        `Adicione GEMINI_API_KEY, GROQ_API_KEY ou OPENROUTER_API_KEY no .env.`
+      `Provedor "${active}" não está disponível para ${label}. ` +
+        `Configure a chave no .env ou escolha outro provedor no painel (Configurações).`
     );
   }
 
@@ -109,9 +44,11 @@ export async function runVisionWithFallback<T>(
 
   const attempts: FallbackOutcome<T>["attempts"] = [];
   let lastError: unknown = null;
+  const allowFallback = isAiFallbackAllowed();
 
   for (const id of chain) {
-    if (isProviderInCooldown(id)) {
+    const skipCooldown = !allowFallback && id === active;
+    if (!skipCooldown && isProviderInCooldown(id)) {
       logAiSkip(label, id, "cooldown");
       attempts.push({ provider: id, skipped: "cooldown" });
       continue;
@@ -124,7 +61,7 @@ export async function runVisionWithFallback<T>(
       continue;
     }
 
-    const model = provider.isConfigured() ? provider.getModel() : undefined;
+    const model = provider.getModel();
     logAiAttemptStart(label, id, model);
 
     try {
@@ -158,7 +95,18 @@ export async function runVisionWithFallback<T>(
         ),
       });
 
-      if (!isTransientError(err)) {
+      if (!allowFallback) {
+        const hint =
+          id === "openrouter"
+            ? " Escolha outro modelo OpenRouter no painel ou use Ollama local."
+            : id === "ollama"
+              ? " Confira se o Ollama está aberto (ollama pull gemma4:e4b)."
+              : "";
+        const base = err instanceof Error ? err : new Error(String(err));
+        throw new Error(`${base.message}${hint}`);
+      }
+
+      if (!shouldTryNextProvider(err)) {
         throw err;
       }
     }
@@ -177,23 +125,9 @@ export async function runVisionWithFallback<T>(
     err.message = `${err.message}\n\nResumo das tentativas: ${summary || "nenhuma"}`;
     throw err;
   }
-  if (active !== "openrouter") {
-    throw new Error(
-      `${PROVIDER_HINT[active] ?? active} falhou. Resumo: ${summary}. ` +
-        `Troque o provedor no painel IA (✨) — ex.: OpenRouter + Qwen VL 32B. ` +
-        `Logs: AI_DEBUG=1 no .env | GET /api/ai/diagnostics`
-    );
-  }
+
   throw new Error(
-    `Todos os provedores falharam para ${label}. Resumo: ${summary}. ` +
-      `OpenRouter free está instável (muitos modelos «No endpoints found»). ` +
-      `Tente Groq/Gemini no painel, aguarde o reset diário, ou créditos em openrouter.ai. ` +
-      `Diagnóstico: GET /api/ai/diagnostics | AI_DEBUG=1`
+    `Falha em ${label} (${active}). Resumo: ${summary || "nenhuma tentativa"}. ` +
+      `Provedor escolhido: ${active}. Logs: AI_DEBUG=1 | GET /api/ai/diagnostics`
   );
 }
-
-const PROVIDER_HINT: Partial<Record<AiProviderId, string>> = {
-  gemini: "Gemini",
-  groq: "Groq",
-  deepseek: "DeepSeek (visão via Gemini/Groq/OpenRouter)",
-};

@@ -1,10 +1,10 @@
 import type { Request } from "express";
 import {
   getAiProviderId,
-  hasDeepSeekKey,
   hasGeminiKey,
   hasGroqKey,
   hasOpenRouterKey,
+  isOllamaConfigured,
 } from "./config.ts";
 import { sanitizeOpenRouterModelId } from "./openrouterModels.ts";
 import {
@@ -17,16 +17,16 @@ function isValidProvider(value: unknown): value is AiProviderId {
   return (
     value === "gemini" ||
     value === "groq" ||
-    value === "deepseek" ||
-    value === "openrouter"
+    value === "openrouter" ||
+    value === "ollama"
   );
 }
 
 function isProviderConfigured(id: AiProviderId): boolean {
   if (id === "gemini") return hasGeminiKey();
   if (id === "groq") return hasGroqKey();
-  if (id === "deepseek") return hasDeepSeekKey();
   if (id === "openrouter") return hasOpenRouterKey();
+  if (id === "ollama") return isOllamaConfigured();
   return false;
 }
 
