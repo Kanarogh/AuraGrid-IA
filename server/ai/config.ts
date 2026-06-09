@@ -1,8 +1,11 @@
 import type { AiProviderId } from "./types";
 import { sanitizeOpenRouterModelId } from "./openrouterModels";
+import { sanitizeGeminiModelId } from "./geminiModels";
 import {
   getRuntimeOpenRouterModel,
   getRuntimeProviderOverride,
+  getRuntimeGeminiModel,
+  getRuntimeGeminiCatalogModel,
 } from "./runtimeSettings";
 
 /** Match, legenda com imagem, refinar (visão/texto geral). */
@@ -12,7 +15,7 @@ export const DEFAULT_GEMINI_CATALOG_MODEL = "gemini-2.5-flash-lite";
 export const DEFAULT_GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
 /** Primário OpenRouter free (jun/2026): Gemma 4 31B; roteador só como fallback. */
 export const DEFAULT_OPENROUTER_MODEL = "google/gemma-4-31b-it:free";
-export const DEFAULT_OLLAMA_MODEL = "gemma4:e4b";
+export const DEFAULT_OLLAMA_MODEL = "gemma4";
 export const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434";
 
 export function getEnvDefaultProviderId(): AiProviderId {
@@ -29,10 +32,28 @@ export function getAiProviderId(): AiProviderId {
 }
 
 export function getGeminiModel(): string {
-  return process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL;
+  const raw =
+    getRuntimeGeminiModel() ||
+    process.env.GEMINI_MODEL?.trim() ||
+    DEFAULT_GEMINI_MODEL;
+  return sanitizeGeminiModelId(raw) ?? DEFAULT_GEMINI_MODEL;
 }
 
 export function getGeminiCatalogModel(): string {
+  const raw =
+    getRuntimeGeminiCatalogModel() ||
+    process.env.GEMINI_CATALOG_MODEL?.trim() ||
+    process.env.GEMINI_MODEL?.trim() ||
+    DEFAULT_GEMINI_CATALOG_MODEL;
+  return sanitizeGeminiModelId(raw) ?? DEFAULT_GEMINI_CATALOG_MODEL;
+}
+
+/** Apenas .env — sem override de runtime (painel IA). */
+export function getEnvGeminiModel(): string {
+  return process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL;
+}
+
+export function getEnvGeminiCatalogModel(): string {
   return (
     process.env.GEMINI_CATALOG_MODEL?.trim() ||
     process.env.GEMINI_MODEL?.trim() ||
@@ -75,6 +96,13 @@ export function getOllamaBaseUrl(): string {
 
 export function getOllamaModel(): string {
   return process.env.OLLAMA_MODEL?.trim() || DEFAULT_OLLAMA_MODEL;
+}
+
+/** Contexto do modelo local (Gemma/Qwen padrão = 4096 — insuficiente para match+legenda). */
+export function getOllamaNumCtx(): number {
+  const raw = process.env.OLLAMA_NUM_CTX?.trim();
+  const n = raw ? Number.parseInt(raw, 10) : 16_384;
+  return Number.isFinite(n) && n >= 4096 ? n : 16_384;
 }
 
 /** Local Ollama ativo (sem API key). Defina OLLAMA_DISABLED=1 para esconder no painel. */

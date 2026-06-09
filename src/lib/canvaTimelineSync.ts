@@ -24,6 +24,16 @@ function shouldPreserveSyncedPost(
   item: CanvaSlotWithPage
 ): boolean {
   if (!existing) return false;
+
+  const hasEditorial =
+    !!existing.caption?.trim() ||
+    existing.isGenerated ||
+    existing.isConfirmed ||
+    !!existing.reasoning?.trim();
+
+  // Mesmo dia/slot no calendário: mantém legenda aprovada ou gerada (foto pode mudar)
+  if (hasEditorial) return true;
+
   if (existing.image && existing.image === item.image) return true;
   if (existing.canvaSlotRef?.slotId === item.id) return true;
   if (
@@ -32,12 +42,6 @@ function shouldPreserveSyncedPost(
   ) {
     return true;
   }
-  const hasEditorial =
-    !!existing.caption?.trim() ||
-    existing.isGenerated ||
-    existing.isConfirmed ||
-    !!existing.reasoning?.trim();
-  if (hasEditorial && !existing.image && item.image) return true;
   return false;
 }
 

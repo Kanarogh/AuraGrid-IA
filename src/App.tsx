@@ -35,6 +35,8 @@ import {
   Eraser,
   ZoomIn,
   ZoomOut,
+  FileDown,
+  Loader2,
 } from "lucide-react";
 import { PRELOADED_CATALOG } from "./data/preloaded";
 import {
@@ -58,7 +60,10 @@ import {
   apiWorkspaceToClientWorkspace,
   fetchImageAsDataUrl,
   resolveCatalogItemImage,
+  resolveMediaUrl,
 } from "./lib/api/workspaceApi";
+import { exportRoteiroPdf } from "./lib/exportRoteiroPdf";
+import { exportCanvaGridPdf } from "./lib/exportCanvaGridPdf";
 import { ensurePersistedImage, extractMediaAssetId } from "./lib/api/persistMedia";
 import { stablePlannedPostId } from "./lib/postIds";
 import { useAuth } from "./context/AuthContext";
@@ -75,11 +80,12 @@ import {
   buildCaptionCacheKey,
   getCachedCaption,
   getCachedCaptionAsync,
-  removeCachedCaption,
+  removeCachedCaptionAsync,
   setCachedCaption,
   setCachedCaptionAsync,
 } from "./lib/captionCache";
-import { finalizeCaption, resolveCatalogLabel, sanitizeRefinedCaptionOutput } from "./lib/captionFormat";
+import { preparePostImageForAi } from "./lib/preparePostImageForAi";
+import { finalizeCaption, extractMainCaptionText, resolveCatalogLabel, sanitizeRefinedCaptionOutput } from "./lib/captionFormat";
 import { normalizeCaptionGenerationParams } from "./lib/captionParams";
 import { syncCanvaPagesToPosts } from "./lib/canvaTimelineSync";
 import { recalculatePostDates } from "./lib/dates";
@@ -105,9 +111,11 @@ import { PostDayStudio } from "./components/posts/PostDayStudio";
 import { EditorialGridView } from "./components/posts/EditorialGridView";
 import { PostsWorkspaceToolbar } from "./components/posts/PostsWorkspaceToolbar";
 import { StudioSection } from "./components/ui/StudioSection";
+import { Button } from "./components/ui/Button";
 import { EmptyState } from "./components/ui/EmptyState";
 import { FeedInstagramPreview } from "./components/feed/FeedInstagramPreview";
 import { getCaptionBatchStats, getPendingCaptionPosts } from "./lib/captionBatch";
+import { collectRecentCaptionHooks } from "./lib/recentCaptionHooks";
 import { readJsonResponse } from "./lib/apiResponse";
 import { CatalogModal } from "./components/catalog/CatalogModal";
 import { CatalogProfileModal } from "./components/catalog/CatalogProfileModal";
@@ -117,8 +125,7 @@ import {
   CanvaGridOrderHint,
 } from "./components/canva/CanvaTimelineSyncPanel";
 import { CanvaGridLightbox } from "./components/canva/CanvaGridLightbox";
-import { CanvaWardrobePanel } from "./components/canva/CanvaWardrobePanel";
-import { CanvaGridFormatPicker } from "./components/canva/CanvaGridFormatPicker";
+import { CanvaGridWorkspace } from "./components/canva/CanvaGridWorkspace";
 import { getCanvaGridFormat } from "./lib/canvaGridFormats";
 import {
   CATALOG_DRAG_MIME,
@@ -268,6 +275,8 @@ export default function App() {
   const captionBatchAbortRef = useRef<AbortController | null>(null);
   const captionGenerateAbortRef = useRef<AbortController | null>(null);
   const captionGeneratePostIdRef = useRef<string | null>(null);
+  /** Posts que apagaram legenda — próxima geração ignora cache e chama a IA de novo. */
+  const captionCacheBypassRef = useRef(new Set<string>());
   const [isEnrichingCatalog, setIsEnrichingCatalog] = useState(false);
   const { connectionStatus, apiStatusLabel, health } = useAiSettings();
   
@@ -322,6 +331,8 @@ export default function App() {
   const [swapSourceId, setSwapSourceId] = useState<string>("");
   const [refineInstructions, setRefineInstructions] = useState<{ [postId: string]: string }>({});
   const [isRefining, setIsRefining] = useState<{ [postId: string]: boolean }>({});
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isExportingCanvaPdf, setIsExportingCanvaPdf] = useState(false);
 
   const prevClientIdRef = useRef(activeClientId);
 
@@ -414,7 +425,7 @@ export default function App() {
 
     if (showAlert) {
       alert(
-        `Sequência do Canva sincronizada com sucesso no Roteiro de 30 Dias!\n- ${validCount} looks organizados sequencialmente.\n- Copys e legendas existentes preservadas nas posições de foto mantidas!`
+        `Sequência do Canva sincronizada com sucesso no Roteiro de 30 Dias!\n- ${validCount} looks organizados sequencialmente.\n- Legendas e aprovações existentes nos dias foram preservadas.`
       );
     }
   };
@@ -805,20 +816,21 @@ export default function App() {
     slotId: string,
     item: CatalogItem | null
   ) => {
-    let image = item?.image ?? null;
-    let imageAssetId = item?.imageAssetId ?? extractMediaAssetId(image);
-    if (useApiStorage && activeClientId && image) {
-      const persisted = await ensurePersistedImage(
-        activeClientId,
-        image,
-        "canva",
-        imageAssetId
-      );
-      image = persisted.image;
-      imageAssetId = persisted.imageAssetId;
-    }
+    try {
+      let image = item?.image ?? null;
+      let imageAssetId = item?.imageAssetId ?? extractMediaAssetId(image);
+      if (useApiStorage && activeClientId && image) {
+        const persisted = await ensurePersistedImage(
+          activeClientId,
+          image,
+          "canva",
+          imageAssetId
+        );
+        image = persisted.image;
+        imageAssetId = persisted.imageAssetId;
+      }
 
-    setCanvaPages((prev) =>
+      setCanvaPages((prev) =>
       prev.map((page) => {
         if (page.id !== pageId) return page;
         const slots = page.slots.map((slot) => {
@@ -833,8 +845,14 @@ export default function App() {
         });
         return { ...page, slots };
       })
-    );
-    setSelectedCanvaSlotId(null);
+      );
+      setSelectedCanvaSlotId(null);
+    } catch (err) {
+      console.error("Erro ao atribuir look ao slot:", err);
+      alert(
+        "Não foi possível salvar o look neste slot. Verifique sua conexão e tente novamente."
+      );
+    }
   };
 
   // Click-to-swap slots or normal swap position within same page
@@ -958,8 +976,9 @@ export default function App() {
       slots: targetPage.slots.map((s, idx) => ({
         id: `slot_${newId}_${idx}`,
         image: s.image,
+        imageAssetId: s.imageAssetId ?? extractMediaAssetId(s.image),
         label: s.label,
-        matchedCatalogId: s.matchedCatalogId
+        matchedCatalogId: s.matchedCatalogId,
       }))
     };
 
@@ -1568,7 +1587,12 @@ export default function App() {
 
   const matchAndGenerateForPost = async (
     postId: string,
-    options?: { skipCatalogPrompt?: boolean; force?: boolean; signal?: AbortSignal }
+    options?: {
+      skipCatalogPrompt?: boolean;
+      force?: boolean;
+      skipCache?: boolean;
+      signal?: AbortSignal;
+    }
   ): Promise<{ quotaExceeded?: boolean }> => {
     const post = posts.find((p) => p.id === postId);
     if (!post) return {};
@@ -1607,10 +1631,7 @@ export default function App() {
     );
 
     try {
-      const imageSrc =
-        post.image.startsWith("/api/") ? await fetchImageAsDataUrl(post.image) : post.image;
-      const rawPostImage = await convertSvgToDataUrl(imageSrc);
-      const processedPostImage = await resizeForAi(rawPostImage);
+      const processedPostImage = await preparePostImageForAi(post.image);
       const imageOnly = !!post.captionFromImageOnly;
 
       if (controller.signal.aborted) return {};
@@ -1642,12 +1663,31 @@ export default function App() {
         return {};
       }
 
+      const bypassCaptionCache =
+        options?.force ||
+        options?.skipCache ||
+        captionCacheBypassRef.current.has(postId);
+
       const body: Record<string, unknown> = {
         postImage: processedPostImage,
         brandGem,
-        ...(options?.force ? { regenerateCaption: true } : {}),
+        ...(options?.force || bypassCaptionCache ? { regenerateCaption: true } : {}),
         ...(imageOnly ? { captionFromImageOnly: true } : {}),
       };
+
+      let recentHooks = collectRecentCaptionHooks(posts, postId, brandGem.footer, 8);
+      if (options?.force && post.caption?.trim()) {
+        const avoidHook = extractMainCaptionText(post.caption, brandGem.footer).trim();
+        if (
+          avoidHook &&
+          !recentHooks.some((hook) => hook.toLowerCase() === avoidHook.toLowerCase())
+        ) {
+          recentHooks = [avoidHook, ...recentHooks].slice(0, 8);
+        }
+      }
+      if (recentHooks.length > 0) {
+        body.recentHooks = recentHooks;
+      }
 
       let catalogIdsForCache: string[] = [];
 
@@ -1668,7 +1708,7 @@ export default function App() {
         captionFromImageOnly: imageOnly,
       });
 
-      if (!options?.force) {
+      if (!bypassCaptionCache) {
         const cached = useApiStorage
           ? await getCachedCaptionAsync(cacheKey)
           : getCachedCaption(cacheKey);
@@ -1770,6 +1810,7 @@ export default function App() {
             : p
         )
       );
+      captionCacheBypassRef.current.delete(postId);
       return { quotaExceeded: false };
     } catch (error: unknown) {
       if (isAbortError(error) || controller.signal.aborted) {
@@ -1915,10 +1956,11 @@ export default function App() {
     if (!post.caption && !post.isGenerated && !post.reasoning && !post.error) return;
 
     stopCaptionGeneration(postId);
+    captionCacheBypassRef.current.add(postId);
 
     if (post.image) {
       try {
-        const processed = await resizeForAi(await convertSvgToDataUrl(post.image));
+        const processed = await preparePostImageForAi(post.image);
         const refs = getReferenceCatalog(catalogRef.current);
         const cacheKey = buildCaptionCacheKey({
           imageDataUrl: processed,
@@ -1927,7 +1969,7 @@ export default function App() {
           catalogIds: refs.map((c) => c.id),
           captionFromImageOnly: !!post.captionFromImageOnly,
         });
-        removeCachedCaption(cacheKey);
+        await removeCachedCaptionAsync(cacheKey);
       } catch {
         /* ignora falha ao limpar cache */
       }
@@ -2266,6 +2308,65 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+  const handleExportPdf = useCallback(async () => {
+    setIsExportingPdf(true);
+    try {
+      const postsForPdf = await Promise.all(
+        posts.map(async (post) => {
+          const resolved = resolveMediaUrl(post.image) ?? post.image;
+          if (!resolved) return post;
+          if (resolved.startsWith("/api/")) {
+            try {
+              const dataUrl = await fetchImageAsDataUrl(resolved);
+              return { ...post, image: dataUrl };
+            } catch {
+              return { ...post, image: resolved };
+            }
+          }
+          return { ...post, image: resolved };
+        })
+      );
+
+      await exportRoteiroPdf({
+        posts: postsForPdf,
+        brandName: brandGem.name || activeClient!.name,
+        startDate,
+        clientSlug: activeClient!.id,
+      });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Não foi possível gerar o PDF.");
+    } finally {
+      setIsExportingPdf(false);
+    }
+  }, [posts, brandGem.name, activeClient, startDate]);
+
+  const handleExportCanvaGridPdf = useCallback(
+    async (scope: "active" | "all") => {
+      setIsExportingCanvaPdf(true);
+      try {
+        await exportCanvaGridPdf({
+          pages: canvaPages,
+          activePageId: activeCanvaPageId,
+          scope,
+          brandName: brandGem.name || activeClient!.name,
+          clientSlug: activeClient!.id,
+          formatMeta: canvaGridFormatMeta,
+        });
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "Não foi possível gerar o PDF do grid.");
+      } finally {
+        setIsExportingCanvaPdf(false);
+      }
+    },
+    [
+      canvaPages,
+      activeCanvaPageId,
+      brandGem.name,
+      activeClient,
+      canvaGridFormatMeta,
+    ]
+  );
+
   const activePost = posts.find(p => p.id === activePreviewId) || posts[0];
 
   const orderedEditorialPosts = useMemo(
@@ -2339,6 +2440,8 @@ export default function App() {
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               onExportTxt={handleExportTxt}
+              onExportPdf={handleExportPdf}
+              isExportingPdf={isExportingPdf}
             />
 
             {viewMode === "editorial" && (
@@ -2488,17 +2591,40 @@ export default function App() {
         {hasActiveClient && activeSection === "canva_grid" && (
           <StudioSection
             title="Grid Canva"
+            eyebrow="Produção visual"
             subtitle={
               <>
-                Páginas de 12 fotos no fluxo do Instagram (de baixo para cima). Arraste para
-                reordenar.{" "}
+                Monte páginas de 12 fotos, organize looks e envie para o roteiro de 30 dias.{" "}
                 <CanvaGridOrderHint onOpenRoteiros={() => setActiveSection("posts")} />
               </>
             }
             actions={
               <>
-                <button
-                  type="button"
+                <Button
+                  variant="accent"
+                  size="sm"
+                  disabled={isExportingCanvaPdf}
+                  onClick={() => void handleExportCanvaGridPdf("all")}
+                >
+                  {isExportingCanvaPdf ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <FileDown className="h-3.5 w-3.5" />
+                  )}
+                  {isExportingCanvaPdf ? "Gerando PDF…" : "Exportar PDF"}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={isExportingCanvaPdf}
+                  onClick={() => void handleExportCanvaGridPdf("active")}
+                >
+                  <FileDown className="h-3.5 w-3.5" />
+                  PDF página ativa
+                </Button>
+                <Button
+                  variant="accent"
+                  size="sm"
                   onClick={() => {
                     if (
                       confirm(
@@ -2510,13 +2636,13 @@ export default function App() {
                       setActiveSection("posts");
                     }
                   }}
-                  className="text-xs font-semibold px-4 py-2 rounded-xl bg-ag-accent text-white hover:opacity-90 flex items-center gap-2 cursor-pointer"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
-                  Aplicar 12 looks
-                </button>
-                <button
-                  type="button"
+                  Aplicar página ativa
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => {
                     if (confirm("Aplicar todas as páginas ao cronograma de 30 dias?")) {
                       handlePlanFromCanva("all", true);
@@ -2524,447 +2650,72 @@ export default function App() {
                       setActiveSection("posts");
                     }
                   }}
-                  className="text-xs font-semibold px-4 py-2 rounded-xl border border-ag-border bg-ag-surface-2 hover:bg-ag-surface-3 flex items-center gap-2 cursor-pointer"
                 >
                   <CalendarDays className="h-3.5 w-3.5" />
                   Todas as páginas
-                </button>
+                </Button>
               </>
             }
           >
-            <div className="flex flex-col lg:flex-row gap-5 items-start w-full">
-              <div className="flex-1 min-w-0 flex flex-col gap-4">
-                
-                {/* Active page header */}
-                {(() => {
-                  const activePage = activeCanvaPage!;
-                  
-                  return (
-                    <div className="p-3 rounded-xl border border-ag-border/60 bg-ag-surface-2/50 flex flex-col sm:flex-row justify-between items-center gap-3">
-                      <div className="flex items-center gap-2.5">
-                        <LayoutGrid className="h-5 w-5 text-ag-accent" />
-                        <span className="font-display font-semibold text-ag-text text-lg tracking-tight">
-                          {activePage.name} (Grid de 12 Fotos)
-                        </span>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        {/* Batch upload to Canva */}
-                        <label className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 cursor-pointer ${
-                          "bg-ag-surface-1 border-ag-border"
-                        }`}>
-                          <Upload className="h-3.5 w-3.5 text-ag-accent" />
-                          <span>Subir Lote Sequencial (1 ao 12...)</span>
-                          <input 
-                            type="file" 
-                            multiple 
-                            accept="image/*" 
-                            onChange={(e) => {
-                              if (e.target.files && e.target.files.length > 0) {
-                                handleBatchUploadToCanva(e.target.files);
-                              }
-                            }}
-                            className="hidden" 
-                          />
-                        </label>
-
-                        <button
-                          onClick={() => handleDuplicateCanvaPage(activePage.id)}
-                          className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1 cursor-pointer ${
-                            "bg-ag-surface-1 border-ag-border"
-                          }`}
-                        >
-                          <Copy className="h-3.5 w-3.5 text-ag-muted" />
-                          <span>Duplicar</span>
-                        </button>
-
-                        <button
-                          onClick={() => handleClearCanvaPage(activePage.id)}
-                          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-ag-surface-2 hover:bg-ag-surface-3 border border-ag-border text-ag-muted hover:text-ag-text transition-colors flex items-center gap-1 cursor-pointer"
-                        >
-                          <RotateCcw className="h-3.5 w-3.5" />
-                          <span>Limpar Grid</span>
-                        </button>
-
-                        <button
-                          onClick={() => handleDeleteCanvaPage(activePage.id)}
-                          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-ag-danger/10 hover:bg-ag-danger/15 border border-ag-danger/25 text-ag-danger transition-colors flex items-center gap-1 cursor-pointer"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          <span>Excluir</span>
-                        </button>
-                      </div>
-                    </div>
+            <CanvaGridWorkspace
+              pages={canvaPages}
+              activePage={activeCanvaPage!}
+              activePageId={activeCanvaPageId}
+              selectedSlotId={selectedCanvaSlotId}
+              selectedSlotNumber={selectedCanvaSlotNumber}
+              canvaSlotDragOver={canvaSlotDragOver}
+              canvaGridFormat={canvaGridFormat}
+              canvaGridFormatMeta={canvaGridFormatMeta}
+              canvaGridMaxWidth={canvaGridMaxWidth}
+              wardrobeItems={canvaCatalog}
+              catalogUsageOnActivePage={catalogUsageOnActivePage}
+              onSelectPage={(id) => {
+                setActiveCanvaPageId(id);
+                setSelectedCanvaSlotId(null);
+              }}
+              onAddPage={handleAddCanvaPage}
+              onDeletePage={handleDeleteCanvaPage}
+              onDuplicatePage={handleDuplicateCanvaPage}
+              onClearPage={handleClearCanvaPage}
+              onBatchUpload={handleBatchUploadToCanva}
+              onSelectSlot={setSelectedCanvaSlotId}
+              onClearSlotSelection={() => setSelectedCanvaSlotId(null)}
+              onSwapSlots={(a, b) => handleSwapCanvaSlots(activeCanvaPage!.id, a, b)}
+              onClearSlotImage={(slotId) =>
+                handleAssignCatalogToCanvaSlot(activeCanvaPage!.id, slotId, null)
+              }
+              onUploadSlot={(slotId, file) =>
+                void handleUploadImageToCanvaSlot(activeCanvaPage!.id, slotId, file)
+              }
+              onDropOnSlot={async (slotId, dt) => {
+                setCanvaSlotDragOver(null);
+                await handleDropOnCanvaSlot(activeCanvaPage!.id, slotId, dt);
+              }}
+              onSlotDragOver={setCanvaSlotDragOver}
+              onSlotDragLeave={(id) =>
+                setCanvaSlotDragOver((prev) => (prev === id ? null : prev))
+              }
+              onOpenLightbox={(slot, num) =>
+                setCanvaLightbox({ image: slot.image!, label: slot.label, slotNumber: num })
+              }
+              onFormatChange={setCanvaGridFormat}
+              onZoomChange={setCanvaGridMaxWidth}
+              onAssignWardrobeItem={(item) => {
+                const page = activeCanvaPage!;
+                if (selectedCanvaSlotId) {
+                  handleAssignCatalogToCanvaSlot(page.id, selectedCanvaSlotId, item);
+                  return;
+                }
+                const firstEmptySlot = [...page.slots].reverse().find((s) => s.image === null);
+                if (firstEmptySlot) {
+                  handleAssignCatalogToCanvaSlot(page.id, firstEmptySlot.id, item);
+                } else {
+                  alert(
+                    "Não há espaços vazios nesta página! Selecione um slot para substituir."
                   );
-                })()}
-
-                {/* THE 12 PHOTO INSTAGRAM GRID (arranged in 3 columns x 4 rows) */}
-                {(() => {
-                  const activePage = activeCanvaPage!;
-                  
-                  return (
-                    <div className="relative">
-                      {/* Selection notice bar */}
-                      {selectedCanvaSlotId && (
-                        <div className="absolute -top-1 inset-x-0 bg-ag-accent text-ag-accent-fg rounded-lg px-4 py-2 text-xs font-bold flex items-center justify-between z-30 shadow-md">
-                          <span>
-                            🔄 Item selecionado! Clique em outro quadrado do grid para inverter/trocar as fotos, ou selecione uma peça do Guarda-roupa na lateral direita para atribuir diretamente.
-                          </span>
-                          <button 
-                            onClick={() => setSelectedCanvaSlotId(null)}
-                            className="bg-ag-accent-fg/20 hover:bg-ag-accent-fg/30 text-ag-accent-fg px-2 py-0.5 rounded uppercase text-[10px] cursor-pointer"
-                          >
-                            Cancelar
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Formato dos slots (Instagram / Stories) */}
-                      <div className="mb-4">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-ag-muted mb-2">
-                          Formato do grid
-                        </p>
-                        <CanvaGridFormatPicker
-                          value={canvaGridFormat}
-                          onChange={setCanvaGridFormat}
-                        />
-                        <p className="text-[10px] text-ag-muted mt-2 text-center sm:text-left">
-                          Proporção ativa:{" "}
-                          <strong className="text-ag-text">
-                            {canvaGridFormatMeta.ratioLabel}
-                          </strong>{" "}
-                          ({canvaGridFormatMeta.dimensions}px) — salvo por cliente no workspace.
-                        </p>
-                      </div>
-
-                      {/* Canva Grid Frame container */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-                        <p className="text-[11px] text-ag-muted leading-relaxed">
-                          Tamanho do grid na tela
-                          {canvaGridMaxWidth >= canvaGridFormatMeta.zoomMax - 20 && (
-                            <span className="text-ag-accent ml-1">(máx.)</span>
-                          )}
-                        </p>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setCanvaGridMaxWidth(canvaGridMaxWidth - 80)
-                            }
-                            className="p-1.5 rounded-lg border border-ag-border bg-ag-surface-1 hover:bg-ag-surface-2 cursor-pointer"
-                            title="Diminuir grid"
-                          >
-                            <ZoomOut className="h-4 w-4 text-ag-muted" />
-                          </button>
-                          <input
-                            type="range"
-                            min={canvaGridFormatMeta.zoomMin}
-                            max={canvaGridFormatMeta.zoomMax}
-                            step={40}
-                            value={Math.min(canvaGridMaxWidth, canvaGridFormatMeta.zoomMax)}
-                            onChange={(e) =>
-                              setCanvaGridMaxWidth(Number(e.target.value))
-                            }
-                            className="w-36 sm:w-44 accent-ag-accent"
-                            title={`Largura do grid: ${canvaGridMaxWidth}px`}
-                          />
-                          <span className="text-[10px] font-mono text-ag-muted w-12 text-right tabular-nums">
-                            {canvaGridMaxWidth}px
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setCanvaGridMaxWidth(canvaGridMaxWidth + 80)
-                            }
-                            className="p-1.5 rounded-lg border border-ag-border bg-ag-surface-1 hover:bg-ag-surface-2 cursor-pointer"
-                            title="Aumentar grid"
-                          >
-                            <ZoomIn className="h-4 w-4 text-ag-muted" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="mb-3 rounded-lg border border-ag-border/60 bg-ag-surface-1/80 px-3 py-2 text-[10px] text-ag-muted leading-relaxed">
-                        <strong className="text-ag-text">Canva → AuraGrid:</strong> o Canva{" "}
-                        <em>não costuma</em> liberar Ctrl+C/Ctrl+V direto (copia formato interno, não
-                        arquivo). O que funciona melhor:{" "}
-                        <strong className="text-ag-text">Exportar/Download PNG</strong> no Canva e
-                        arrastar para o slot, usar{" "}
-                        <strong className="text-ag-text">Subir lote</strong>, ou copiar imagem já
-                        exportada e <strong className="text-ag-text">Ctrl+V</strong> com um espaço
-                        selecionado. Arraste looks do guarda-roupa → slot.
-                      </div>
-
-                      <div
-                        className={`overflow-hidden rounded-lg border border-ag-border/40 shadow-sm mx-auto transition-[width] duration-200 ${
-                          canvaGridFormat === "stories" ? "max-h-[min(85vh,1200px)] overflow-y-auto ag-scrollbar-thin" : ""
-                        }`}
-                        style={{
-                          width: canvaGridMaxWidth,
-                          maxWidth: "100%",
-                        }}
-                      >
-                        <div className="grid grid-cols-3 gap-0 bg-ag-surface-3">
-                          {activePage.slots.map((slot, index) => {
-                            const isSlotSelected = selectedCanvaSlotId === slot.id;
-                            const isDragOver = canvaSlotDragOver === slot.id;
-                            const slotNumber = index + 1;
-                            
-                            return (
-                              <div
-                                key={slot.id}
-                                style={{ aspectRatio: canvaGridFormatMeta.aspectRatio }}
-                                className={`relative flex flex-col items-center justify-center overflow-hidden transition-all group ${
-                                  isSlotSelected
-                                    ? "ring-2 ring-inset ring-ag-accent z-10 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
-                                    : isDragOver
-                                      ? "ring-2 ring-inset ring-ag-accent/60 z-10"
-                                      : slot.image
-                                        ? "cursor-pointer"
-                                        : "cursor-pointer border border-dashed border-ag-border hover:border-ag-accent/50"
-                                } bg-ag-surface-3`}
-                                onDragOver={(e) => {
-                                  e.preventDefault();
-                                  e.dataTransfer.dropEffect = "copy";
-                                  setCanvaSlotDragOver(slot.id);
-                                }}
-                                onDragLeave={() => {
-                                  setCanvaSlotDragOver((id) => (id === slot.id ? null : id));
-                                }}
-                                onDrop={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setCanvaSlotDragOver(null);
-                                  void handleDropOnCanvaSlot(activePage.id, slot.id, e.dataTransfer);
-                                }}
-                                onClick={() => {
-                                  if (selectedCanvaSlotId) {
-                                    if (selectedCanvaSlotId === slot.id) {
-                                      setSelectedCanvaSlotId(null);
-                                    } else {
-                                      handleSwapCanvaSlots(activePage.id, selectedCanvaSlotId, slot.id);
-                                    }
-                                  } else {
-                                    setSelectedCanvaSlotId(slot.id);
-                                  }
-                                }}
-                                onDoubleClick={(e) => {
-                                  e.stopPropagation();
-                                  if (slot.image) {
-                                    setCanvaLightbox({
-                                      image: slot.image,
-                                      label: slot.label,
-                                      slotNumber,
-                                    });
-                                  }
-                                }}
-                              >
-                                {slot.image ? (
-                                  <>
-                                    <img
-                                      src={slot.image}
-                                      alt={slot.label || "Mockup"}
-                                      referrerPolicy="no-referrer"
-                                      className="w-full h-full object-cover"
-                                    />
-                                    {slot.matchedCatalogId && (
-                                      <div className="absolute bottom-0 inset-x-0 bg-ag-success/90 text-[7px] font-bold text-white text-center py-0.5 px-1 truncate z-[5] pointer-events-none">
-                                        ✓ {slot.label}
-                                      </div>
-                                    )}
-                                    
-                                    {/* Action Hover overlay block */}
-                                    <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity p-1.5 gap-1 text-center">
-                                      <p className="text-[9px] font-bold text-white uppercase tracking-wider truncate max-w-full">
-                                        {slot.label}
-                                      </p>
-                                      
-                                      <div className="flex gap-1 flex-wrap justify-center">
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setCanvaLightbox({
-                                              image: slot.image!,
-                                              label: slot.label,
-                                              slotNumber,
-                                            });
-                                          }}
-                                          className="text-[8px] font-bold bg-white/20 text-white px-1.5 py-0.5 rounded hover:bg-white/30 cursor-pointer inline-flex items-center gap-0.5"
-                                          title="Ampliar (lupa)"
-                                        >
-                                          <ZoomIn className="h-3 w-3" />
-                                          Lupa
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setSelectedCanvaSlotId(slot.id);
-                                          }}
-                                          className="text-[8px] font-bold bg-ag-accent text-ag-accent-fg px-1.5 py-0.5 rounded hover:bg-ag-accent-strong cursor-pointer"
-                                          title="Mover ou trocar de posição com outro look"
-                                        >
-                                          Mover
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleAssignCatalogToCanvaSlot(activePage.id, slot.id, null);
-                                          }}
-                                          className="text-[8px] font-bold bg-white/15 text-white hover:bg-white/25 px-1 py-0.5 rounded cursor-pointer"
-                                          title="Remover foto"
-                                        >
-                                          <X className="h-3 w-3 text-ag-danger" />
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </>
-                                ) : (
-                                  <div className="absolute inset-0 flex flex-col items-center justify-center p-2 text-center bg-ag-surface-3 hover:bg-ag-surface-2 transition-colors">
-                                    <Plus className="h-4 w-4 mb-0.5 text-ag-muted group-hover:text-ag-accent transition-colors opacity-0 group-hover:opacity-100" />
-                                    <span className="text-[7px] uppercase font-bold text-ag-muted group-hover:text-ag-text font-mono tracking-wider opacity-0 group-hover:opacity-100">
-                                      L{slotNumber}
-                                    </span>
-                                  </div>
-                                )}
-
-                                {/* Floating sequence badge indicator */}
-                                <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-[7px] font-bold font-mono text-white rounded px-1 py-0.5 z-10">
-                                  L{slotNumber}
-                                </div>
-                                
-                                {/* Slot specific single upload hidden input */}
-                                <label className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                                  <input 
-                                    type="file" 
-                                    accept="image/*" 
-                                    onChange={(e) => {
-                                      if (e.target.files && e.target.files[0]) {
-                                        handleUploadImageToCanvaSlot(activePage.id, slot.id, e.target.files[0]);
-                                      }
-                                    }}
-                                    className="hidden" 
-                                  />
-                                  <div className="bg-ag-accent hover:opacity-90 text-white p-1 rounded-md cursor-pointer" title="Fazer upload direto neste espaço">
-                                    <Upload className="h-3 w-3" />
-                                  </div>
-                                </label>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* THE CANVA PAGES THUMBNAIL MANAGER CAROUSEL TRACK */}
-                <div className="mt-2 text-sans">
-                  <h4 className="text-xs font-bold text-ag-muted font-mono uppercase tracking-wider mb-2">
-                    Minhas Páginas do Canva Grid
-                  </h4>
-                  
-                  <div className="flex items-center gap-3 overflow-x-auto pb-4 pt-1 px-1 scrollbar-thin">
-                    {/* Nova página sempre à esquerda (mais recente primeiro) */}
-                    <button
-                      onClick={handleAddCanvaPage}
-                      className={`flex-shrink-0 w-32 h-[105px] rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                        "bg-ag-surface-1 border-ag-border"
-                      }`}
-                    >
-                      <Plus className="h-5 w-5 text-ag-accent animate-pulse" />
-                      <span className="text-[10px] font-bold tracking-wide uppercase">Add Página</span>
-                    </button>
-
-                    {canvaPages.map((page, idx) => {
-                      const isActive = page.id === activeCanvaPageId;
-                      const filledCount = (page?.slots || []).filter(s => s && s.image !== null).length;
-                      
-                      return (
-                        <div
-                          key={page.id}
-                          className={`flex-shrink-0 w-32 rounded-xl p-2.5 transition-all text-center border relative cursor-pointer group ${
-                            isActive 
-                              ? "bg-ag-accent-soft border-ag-accent ring-2 ring-ag-accent/20" 
-                              : "bg-ag-surface-1 border-ag-border hover:bg-ag-surface-2"
-                          }`}
-                          onClick={() => {
-                            setActiveCanvaPageId(page.id);
-                            setSelectedCanvaSlotId(null);
-                          }}
-                        >
-                          {/* Miniature visual grid simulator mockup */}
-                          <div className="grid grid-cols-3 gap-0.5 bg-ag-surface-3 p-1 rounded-lg mb-2 text-center aspect-video items-center">
-                            {(page?.slots || []).map((s, sIdx) => (
-                              <div
-                                key={sIdx}
-                                className={`h-1.5 rounded-2xs ${
-                                  s && s.image ? "bg-ag-accent" : "bg-ag-muted/30"
-                                }`}
-                              />
-                            ))}
-                          </div>
-
-                          <div className="text-[11px] font-bold text-ag-text truncate font-display">
-                            {page.name}
-                          </div>
-                          
-                          <div className="text-[9px] font-semibold text-ag-muted mt-0.5">
-                            {filledCount} / 12 looks
-                          </div>
-
-                          {/* Quick miniature control delete page button */}
-                          {canvaPages.length > 1 && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteCanvaPage(page.id);
-                              }}
-                              className="absolute -top-1.5 -right-1.5 h-5 w-5 bg-ag-danger text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shadow-xs"
-                              title="Remover página"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-              </div>
-
-              <CanvaWardrobePanel
-                items={canvaCatalog}
-                usageByCatalogId={catalogUsageOnActivePage}
-                gridAspectRatio={canvaGridFormatMeta.aspectRatio}
-                gridRatioLabel={canvaGridFormatMeta.ratioLabel}
-                selectedSlotId={selectedCanvaSlotId}
-                selectedSlotNumber={selectedCanvaSlotNumber}
-                onClearSlotSelection={() => setSelectedCanvaSlotId(null)}
-                onAssignItem={(item) => {
-                  const page = activeCanvaPage!;
-                  if (selectedCanvaSlotId) {
-                    handleAssignCatalogToCanvaSlot(page.id, selectedCanvaSlotId, item);
-                    return;
-                  }
-                  const firstEmptySlot = [...page.slots]
-                    .reverse()
-                    .find((s) => s.image === null);
-                  if (firstEmptySlot) {
-                    handleAssignCatalogToCanvaSlot(page.id, firstEmptySlot.id, item);
-                  } else {
-                    alert(
-                      "Não há espaços vazios nesta página! Selecione um quadrado do grid para substituir."
-                    );
-                  }
-                }}
-              />
-
-            </div>
+                }
+              }}
+            />
             {canvaLightbox && (
               <CanvaGridLightbox
                 image={canvaLightbox.image}

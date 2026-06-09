@@ -15,14 +15,17 @@ import {
   buildMatchResultInstructions,
   buildImageOnlyCaptionTask,
   buildImageOnlyResultInstructions,
+  buildCaptionPromptOptions,
   isImageOnlyCaptionMode,
   MATCH_REFERENCE_RESPONSE_HINT,
   MATCH_RESPONSE_HINT,
   normalizeMatchedId,
   resolveMatchedIdFromCandidates,
 } from "./matchPrompts";
-import { getOllamaBaseUrl, getOllamaModel, isOllamaConfigured } from "./config";
+import { getOllamaBaseUrl, getOllamaModel, getOllamaNumCtx, isOllamaConfigured } from "./config";
 import { logAiAttemptFail } from "./diagnostics";
+import { shrinkVisionImage } from "./imagePayload";
+import { buildPostFingerprintPrompt, normalizePostFingerprint } from "./postFingerprint";
 import { cleanBase64, withRetry } from "./shared";
 import type {
   AiProvider,
@@ -40,6 +43,11 @@ type OllamaMessage = {
 function base64Payload(image: string): string {
   const { data } = cleanBase64(image);
   return data;
+}
+
+async function ollamaVisionImage(image: string): Promise<string> {
+  const dataUrl = image.startsWith("data:") ? image : `data:image/jpeg;base64,${base64Payload(image)}`;
+  return shrinkVisionImage(dataUrl, { maxSide: 512, quality: 0.72 });
 }
 
 /** Extrai o primeiro JSON válido de uma string que pode conter prosa/markdown. */
@@ -124,6 +132,7 @@ async function ollamaChat(
     options: {
       temperature: 0.2,
       num_predict: options.maxTokens ?? 4096,
+      num_ctx: getOllamaNumCtx(),
     },
   };
 
@@ -171,10 +180,19 @@ async function ollamaChat(
 
   if (!res.ok) {
     const detail = data.error || raw.slice(0, 300) || `HTTP ${res.status}`;
+    const detailStr = String(detail);
+    const ctxHint = /exceed.*context|context size|n_ctx/i.test(detailStr)
+      ? ` Aumente OLLAMA_NUM_CTX no .env (ex.: 32768) ou use modelo com mais contexto (qwen2.5vl:7b).`
+      : "";
+    const authHint = /unauthorized/i.test(detailStr)
+      ? model.includes(":cloud")
+        ? ` Modelos *:cloud exigem conta/login no app Ollama. Troque no .env para OLLAMA_MODEL=gemma4 (local).`
+        : ` Faça login no app Ollama ou use OLLAMA_MODEL=gemma4 (modelo local).`
+      : "";
     const err = new Error(
-      /model.*not found|pull/i.test(detail)
+      /model.*not found|pull/i.test(detailStr)
         ? `Modelo "${model}" não encontrado no Ollama. Execute: ollama pull ${model}`
-        : `Ollama: ${detail}`
+        : `Ollama: ${detail}${ctxHint}${authHint}`
     );
     logAiAttemptFail("ollama-chat", "ollama", err, { model, httpStatus: res.status, detail });
     throw err;
@@ -223,14 +241,33 @@ export const ollamaProvider: AiProvider = {
   getModel: getOllamaModel,
   isConfigured: isOllamaConfigured,
 
+  async analyzePostVisual({ postImage }) {
+    const image = await ollamaVisionImage(postImage);
+    const content = await withRetry(
+      () =>
+        ollamaChat(
+          [
+            partsToOllamaMessage([
+              { type: "text", text: `${buildPostFingerprintPrompt()}\n\nReturn ONLY valid JSON.` },
+              { type: "image", image },
+            ]),
+          ],
+          { jsonMode: true, maxTokens: 1024 }
+        ),
+      "Ollama"
+    );
+    return normalizePostFingerprint(JSON.parse(extractJson(content)) as Record<string, unknown>);
+  },
+
   async enrichCatalogItem({ image, label, id }: CatalogEnrichInput) {
+    const visionImage = await ollamaVisionImage(image);
     const prompt = `${buildEnrichCatalogPrompt(label, id)}\n\nReturn ONLY valid JSON matching the catalog profile schema. No markdown, no explanation.`;
 
     return ollamaChatCatalogJson(
       [
         partsToOllamaMessage([
           { type: "text", text: prompt },
-          { type: "image", image },
+          { type: "image", image: visionImage },
         ]),
       ],
       label
@@ -238,20 +275,21 @@ export const ollamaProvider: AiProvider = {
   },
 
   async matchAndGenerate(input: MatchGenerateInput): Promise<MatchGenerateResult> {
-    const { postImage, catalogItems, catalogProfiles, matchOnly, regenerateCaption } = input;
+    const { postImage, matchOnly, regenerateCaption } = input;
+    const catalogProfiles = input.catalogProfiles;
+    const catalogItems = input.catalogProfiles?.length ? undefined : input.catalogItems;
     const gem = resolveBrandGemFromBody(input);
+    const visionPost = await ollamaVisionImage(postImage);
 
     if (isImageOnlyCaptionMode(input)) {
       const parts: Array<
         { type: "text"; text: string } | { type: "image"; image: string }
       > = [
         { type: "text", text: buildImageOnlyCaptionTask(gem) },
-        { type: "image", image: postImage },
+        { type: "image", image: visionPost },
         {
           type: "text",
-          text: `${buildImageOnlyResultInstructions(gem, {
-            regenerate: !!regenerateCaption,
-          })}\n\n${MATCH_RESPONSE_HINT}`,
+          text: `${buildImageOnlyResultInstructions(gem, buildCaptionPromptOptions(input, true))}\n\n${MATCH_RESPONSE_HINT}`,
         },
       ];
 
@@ -285,20 +323,24 @@ export const ollamaProvider: AiProvider = {
         type: "text",
         text: buildMatchJsonCatalogTask(!!matchOnly, gem),
       });
-      parts.push({ type: "image", image: postImage });
+      parts.push({ type: "image", image: visionPost });
       parts.push({
         type: "text",
-        text: buildCatalogProfilesPromptSection(profiles),
+        text: buildCatalogProfilesPromptSection(profiles, {
+          brief: true,
+          ultraCompact: false,
+          matchRankHint: input.matchRankHint,
+        }),
       });
     } else {
       parts.push({
         type: "text",
         text: buildMatchImagesCatalogTask(!!matchOnly, gem),
       });
-      parts.push({ type: "image", image: postImage });
+      parts.push({ type: "image", image: visionPost });
 
       if (catalogItems && catalogItems.length > 0) {
-        const maxImages = 4;
+        const maxImages = 3;
         const slice = catalogItems.slice(0, maxImages);
         if (catalogItems.length > maxImages) {
           parts.push({
@@ -306,13 +348,14 @@ export const ollamaProvider: AiProvider = {
             text: `(Showing ${maxImages} of ${catalogItems.length} candidates — prefer visible IDs.)`,
           });
         }
-        slice.forEach((item, idx) => {
+        for (const [idx, item] of slice.entries()) {
+          const candidateImage = await ollamaVisionImage(item.image);
           parts.push({
             type: "text",
             text: `[CANDIDATE #${idx + 1}] ID: "${item.id}" Label: "${item.label}"`,
           });
-          parts.push({ type: "image", image: item.image });
-        });
+          parts.push({ type: "image", image: candidateImage });
+        }
       } else {
         parts.push({ type: "text", text: "No catalog candidates — matchedId null." });
       }
@@ -321,9 +364,7 @@ export const ollamaProvider: AiProvider = {
     const hint = matchOnly ? MATCH_REFERENCE_RESPONSE_HINT : MATCH_RESPONSE_HINT;
     parts.push({
       type: "text",
-      text: `${buildMatchResultInstructions(gem, !!matchOnly, {
-        regenerate: !!regenerateCaption,
-      })}\n\n${hint}`,
+      text: `${buildMatchResultInstructions(gem, !!matchOnly, buildCaptionPromptOptions(input, true))}\n\n${hint}`,
     });
 
     const raw = await withRetry(
@@ -335,11 +376,21 @@ export const ollamaProvider: AiProvider = {
       matchedId?: string | null;
       caption?: string;
     };
-    const candidateIds = useTextCatalog
-      ? profiles.map((p) => p.id)
-      : (catalogItems ?? []).map((c) => c.id);
+    const candidateProfiles = useTextCatalog
+      ? profiles.map((p) => ({ id: p.id, label: p.label }))
+      : (catalogItems ?? []).map((c) => ({ id: c.id, label: c.label }));
+    const resolvedId = resolveMatchedIdFromCandidates(parsed.matchedId, candidateProfiles);
+    if (!resolvedId && parsed.matchedId) {
+      console.warn(
+        `[ollama] matchedId rejeitado (não está nos candidatos): ${String(parsed.matchedId).slice(0, 80)}`
+      );
+    } else if (!resolvedId && input.matchRankHint) {
+      console.info(
+        `[ollama] matchedId null — pre-rank top=${input.matchRankHint.candidateId} score=${input.matchRankHint.score} gap=${input.matchRankHint.scoreGap}`
+      );
+    }
     return {
-      matchedId: resolveMatchedIdFromCandidates(parsed.matchedId, candidateIds),
+      matchedId: resolvedId,
       reasoning: parsed.reasoning ?? "",
       caption: matchOnly ? "" : (parsed.caption ?? ""),
       matchMode: useTextCatalog ? "catalog_json" : "catalog_images",

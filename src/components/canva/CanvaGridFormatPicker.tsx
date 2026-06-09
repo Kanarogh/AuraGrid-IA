@@ -8,10 +8,47 @@ import {
 export function CanvaGridFormatPicker({
   value,
   onChange,
+  variant = "default",
 }: {
   value: CanvaGridFormatId;
   onChange: (format: CanvaGridFormatId) => void;
+  variant?: "default" | "compact";
 }) {
+  if (variant === "compact") {
+    return (
+      <div
+        role="radiogroup"
+        aria-label="Formato do grid"
+        className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-ag-border bg-ag-surface-2 p-1"
+      >
+        {CANVA_GRID_FORMATS.map((format) => {
+          const active = value === format.id;
+          return (
+            <button
+              key={format.id}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              title={`${format.label} · ${format.dimensions}px`}
+              onClick={() => onChange(format.id)}
+              className={cn(
+                "rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all cursor-pointer ag-focus-ring",
+                active
+                  ? "bg-ag-surface-1 text-ag-text shadow-sm ring-1 ring-ag-accent/20"
+                  : "text-ag-muted hover:text-ag-text"
+              )}
+            >
+              <span className="font-mono">{format.ratioLabel}</span>
+              <span className="hidden sm:inline text-ag-muted font-normal ml-1">
+                {format.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
       {CANVA_GRID_FORMATS.map((format) => {

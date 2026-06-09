@@ -84,8 +84,18 @@ export function isQuotaExhausted(error: unknown): boolean {
   );
 }
 
+export function isGroqPayloadTooLarge(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  return (
+    /request too large/i.test(msg) ||
+    /reduce your message size/i.test(msg) ||
+    /tokens per minute \(TPM\)/i.test(msg)
+  );
+}
+
 export function shouldRetryAiError(error: unknown): boolean {
   if (isQuotaExhausted(error)) return false;
+  if (isGroqPayloadTooLarge(error)) return false;
   const msg = error instanceof Error ? error.message : String(error);
   if (/429|rate.?limit/i.test(msg)) return true;
   return parseRetrySeconds(error) !== null;
@@ -129,6 +139,10 @@ export function formatAiError(error: unknown, provider: AiProviderId): string {
 
   if (kind === "model_unavailable") {
     return `Modelo indisponível no ${label}. Escolha outro no painel IA (ex.: Gemini 2.5 Flash ou Gemma 4 31B).`;
+  }
+
+  if (isGroqPayloadTooLarge(error)) {
+    return `${label}: pedido muito grande para o limite do modelo (~30k tokens). O servidor tenta reduzir automaticamente; se persistir, use Gemini ou OpenRouter no painel IA.`;
   }
 
   if (kind === "quota_exhausted" || kind === "rate_limit") {

@@ -3,11 +3,28 @@ import {
   buildMatchCaptionInstructions,
   buildBrandVoiceBlock,
   type BrandGemConfig,
+  type CaptionPromptOptions,
 } from "./brandContext";
-import { buildStrictMatchingRubric, compactProfileForMatch } from "./matchProfile";
+import {
+  buildStrictMatchingRubric,
+  compactProfileForMatch,
+  ultraCompactProfileForMatch,
+} from "./matchProfile";
+import type { MatchGenerateInput, MatchRankHint } from "./types";
 
 function brandLabel(gem?: BrandGemConfig): string {
   return gem?.name?.trim() || "the configured brand";
+}
+
+export function buildCaptionPromptOptions(
+  input: Pick<MatchGenerateInput, "regenerateCaption" | "recentHooks">,
+  brief?: boolean
+): CaptionPromptOptions {
+  return {
+    regenerate: !!input.regenerateCaption,
+    brief,
+    recentHooks: input.recentHooks,
+  };
 }
 
 export type CatalogProfileCandidate = {
@@ -16,11 +33,49 @@ export type CatalogProfileCandidate = {
   profile?: Record<string, unknown>;
 };
 
+type CatalogPromptOptions = {
+  ultraCompact?: boolean;
+  brief?: boolean;
+  matchRankHint?: MatchRankHint;
+};
+
+export function buildMatchRankHintBlock(hint?: MatchRankHint): string {
+  if (!hint) return "";
+  return `
+FINGERPRINT PRE-RANK (starting point only — does NOT bypass strict protocol):
+- Automatic top candidate: id "${hint.candidateId}" → label "${hint.candidateLabel}"
+- Pre-rank score ${hint.score}/100, gap vs 2nd: ${hint.scoreGap}
+- You MUST still apply STRICT MATCHING PROTOCOL (score ≥78, gap ≥15, ≥4 matchAnchors, zero contradictions).
+- Set matchedId ONLY if this candidate satisfies ALL Phase 3 decision rules after your own visual scoring.
+- Pre-rank below 78 means matchedId stays null unless your field-by-field score reaches ≥78.`;
+}
+
 /** Bloco JSON enviado à IA — comparação visual via perfis indexados (sem fotos do catálogo). */
-export function buildCatalogProfilesPromptSection(profiles: CatalogProfileCandidate[]): string {
-  const candidates = profiles.map((p) =>
-    compactProfileForMatch(p.id, p.label, p.profile)
-  );
+export function buildCatalogProfilesPromptSection(
+  profiles: CatalogProfileCandidate[],
+  options?: CatalogPromptOptions
+): string {
+  const toProfile = options?.ultraCompact ? ultraCompactProfileForMatch : compactProfileForMatch;
+  const candidates = profiles.map((p) => toProfile(p.id, p.label, p.profile));
+  const profilesJson = JSON.stringify(candidates);
+  const rankHint = buildMatchRankHintBlock(options?.matchRankHint);
+
+  if (options?.brief) {
+    const labelMap = profiles
+      .map((p) => `  • id "${p.id}" → Referência label: "${p.label}"`)
+      .join("\n");
+
+    return `${buildStrictMatchingRubric()}
+${rankHint}
+
+CANDIDATE PROFILES (${candidates.length}):
+${profilesJson}
+
+ID → LABEL MAP (matchedId = catalog id only; app adds "Referência: [label]" when matchedId is set):
+${labelMap}
+
+Match conservatively (score ≥78, gap ≥15, ≥4 anchors). When you accept the match, matchedId MUST be the candidate id — if null, Referência will not appear. reasoning in Portuguese with top-2 scores.`;
+  }
 
   const labelMap = profiles
     .map((p) => `  • id "${p.id}" → Referência label: "${p.label}"`)
@@ -30,7 +85,7 @@ export function buildCatalogProfilesPromptSection(profiles: CatalogProfileCandid
 
 CANDIDATE CATALOG PROFILES (${candidates.length} items — compact discriminative JSON):
 
-${JSON.stringify(candidates, null, 2)}
+${profilesJson}
 
 ID → LABEL MAP (when matchedId is set, use the EXACT label above in "Referência: …"):
 ${labelMap}
@@ -86,7 +141,7 @@ Target post image:`;
 export function buildMatchResultInstructions(
   gem: Parameters<typeof buildMatchCaptionInstructions>[0],
   matchOnly: boolean,
-  options?: { regenerate?: boolean }
+  options?: CaptionPromptOptions
 ): string {
   if (matchOnly) {
     return `MATCH ONLY — identify the catalog reference with maximum precision. Do not generate captions.
@@ -123,11 +178,28 @@ export function normalizeMatchedId(mid: string | null | undefined): string | nul
 /** Rejeita ids alucinados — só aceita ids presentes nos candidatos. */
 export function resolveMatchedIdFromCandidates(
   matchedId: string | null | undefined,
-  candidateIds: string[]
+  candidates: Array<{ id: string; label?: string }>
 ): string | null {
   const normalized = normalizeMatchedId(matchedId);
   if (!normalized) return null;
-  return candidateIds.includes(normalized) ? normalized : null;
+
+  const ids = candidates.map((c) => c.id);
+  if (ids.includes(normalized)) return normalized;
+
+  const lower = normalized.toLowerCase();
+  const exactLabel = candidates.find(
+    (c) => c.label?.trim() && c.label.trim().toLowerCase() === lower
+  );
+  if (exactLabel) return exactLabel.id;
+
+  const partialLabel = candidates.find((c) => {
+    const label = c.label?.trim().toLowerCase();
+    if (!label || label.length < 8) return false;
+    return label.includes(lower) || lower.includes(label.slice(0, 24));
+  });
+  if (partialLabel) return partialLabel.id;
+
+  return null;
 }
 
 export function isImageOnlyCaptionMode(input: {
@@ -162,7 +234,7 @@ TARGET POST IMAGE:`;
 
 export function buildImageOnlyResultInstructions(
   gem: Parameters<typeof buildMatchCaptionInstructions>[0],
-  options?: { regenerate?: boolean }
+  options?: CaptionPromptOptions
 ): string {
   return `${buildMatchCaptionInstructions(gem, options)}
 

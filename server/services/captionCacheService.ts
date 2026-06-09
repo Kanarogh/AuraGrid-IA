@@ -106,3 +106,15 @@ export async function clearCaptionCache(clientId: string): Promise<void> {
   const db = getDb();
   await db.delete(captionCacheEntries).where(eq(captionCacheEntries.clientId, clientId));
 }
+
+export async function removeCaptionCacheEntry(
+  clientId: string,
+  cacheKey: string
+): Promise<void> {
+  const db = getDb();
+  await db
+    .delete(captionCacheEntries)
+    .where(
+      and(eq(captionCacheEntries.clientId, clientId), eq(captionCacheEntries.cacheKey, cacheKey))
+    );
+}

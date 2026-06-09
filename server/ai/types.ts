@@ -1,3 +1,5 @@
+import type { PostVisualFingerprint } from "./postFingerprint";
+
 export type AiProviderId = "gemini" | "groq" | "openrouter" | "ollama";
 
 export interface AiProviderHealth {
@@ -74,19 +76,39 @@ export interface MatchGenerateInput {
   regenerateCaption?: boolean;
   /** Legenda só pelo conteúdo visual da imagem — sem match no catálogo */
   captionFromImageOnly?: boolean;
+  /** Ganchos já usados no roteiro — a IA deve variar abertura e vocabulário */
+  recentHooks?: string[];
+  /** Hint do ranker visual (fingerprint) — só servidor */
+  matchRankHint?: MatchRankHint;
+}
+
+export type MatchRankHint = {
+  candidateId: string;
+  candidateLabel: string;
+  score: number;
+  scoreGap: number;
+};
+
+export interface PostVisualAnalyzeInput {
+  postImage: string;
 }
 
 export interface MatchGenerateResult {
   matchedId: string | null;
   reasoning: string;
   caption: string;
-  matchMode: "catalog_json" | "catalog_images" | "image_only";
+  matchMode:
+    | "catalog_json"
+    | "catalog_json_shortlist"
+    | "catalog_json_ranker"
+    | "catalog_images"
+    | "image_only";
 }
 
 export interface MatchReferenceResult {
   matchedId: string | null;
   reasoning: string;
-  matchMode: "catalog_json" | "catalog_images";
+  matchMode: "catalog_json" | "catalog_json_shortlist" | "catalog_images";
 }
 
 export interface AiProvider {
@@ -94,6 +116,8 @@ export interface AiProvider {
   getModel(): string;
   isConfigured(): boolean;
   enrichCatalogItem(input: CatalogEnrichInput): Promise<Record<string, unknown>>;
+  /** 1 imagem → JSON leve para ranquear o catálogo localmente (sem enviar todo o acervo à IA). */
+  analyzePostVisual(input: PostVisualAnalyzeInput): Promise<PostVisualFingerprint>;
   matchAndGenerate(input: MatchGenerateInput): Promise<MatchGenerateResult>;
   refineCaption(input: {
     currentCaption: string;

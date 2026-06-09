@@ -192,7 +192,7 @@ export function InstagramProfileMockup({
                       key={post.id}
                       onClick={() => onSelectPost(post.id)}
                       className={cn(
-                        "aspect-square relative cursor-pointer overflow-hidden bg-stone-900 group",
+                        "aspect-[4/5] relative cursor-pointer overflow-hidden bg-stone-900 group",
                         isFocused && "ring-2 ring-ag-accent ring-inset z-10"
                       )}
                     >
@@ -249,7 +249,7 @@ export function InstagramProfileMockup({
       </div>
 
       <p className="text-[10px] text-ag-muted text-center mt-5 leading-relaxed max-w-sm mx-auto">
-        Prévia fiel ao perfil Instagram: topo = mais recente. Clique numa foto para abrir o dia no
+        Miniaturas em 4:5 (retrato). Topo = mais recente — clique numa foto para abrir o dia no
         estúdio.
       </p>
     </div>

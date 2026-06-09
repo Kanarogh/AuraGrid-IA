@@ -5,6 +5,13 @@ import {
   assertBrandGemReadyForCaptions,
   resolveBrandGemFromBody,
 } from "@/server/ai/brandContext";
+import {
+  applyShortlistToResult,
+  applyStrictRankerMatchFallback,
+  prepareMatchInput,
+  shortlistHeaderValue,
+} from "@/server/ai/matchPipeline";
+import { sanitizeMatchOperationInput } from "@/server/ai/operations";
 import { applyAiHeadersFromNextRequest, aiAttemptsHeaderValue } from "@/server/http/aiRequest";
 
 export const dynamic = "force-dynamic";
@@ -12,16 +19,16 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   let providerId = await applyAiHeadersFromNextRequest(req);
   try {
+    const body = await req.json();
     const {
       postImage,
-      catalogItems,
-      catalogProfiles,
       brandGem,
       promptContext,
       repeatingText,
       regenerateCaption,
       captionFromImageOnly,
-    } = await req.json();
+      recentHooks,
+    } = body;
 
     if (!postImage) {
       return NextResponse.json({ error: "No post image provided." }, { status: 400 });
@@ -43,55 +50,41 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const imageOnly = !!captionFromImageOnly;
-    const profiles = Array.isArray(catalogProfiles) ? catalogProfiles : [];
-    const items = Array.isArray(catalogItems) ? catalogItems : [];
+    const sanitized = sanitizeMatchOperationInput("match-and-generate", {
+      postImage,
+      catalogProfiles: body.catalogProfiles,
+      catalogItems: body.catalogItems,
+      brandGem,
+      promptContext,
+      repeatingText,
+      regenerateCaption: !!regenerateCaption,
+      captionFromImageOnly: !!captionFromImageOnly,
+      recentHooks: Array.isArray(recentHooks)
+        ? recentHooks.filter((h): h is string => typeof h === "string")
+        : undefined,
+    });
 
-    if (!imageOnly) {
-      if (items.length > 0 && profiles.length === 0) {
-        return NextResponse.json(
-          {
-            error:
-              "Catálogo não indexado. Indexe todas as referências (JSON) antes de gerar legendas — a comparação usa os perfis indexados, não as fotos do acervo.",
-          },
-          { status: 400 }
-        );
-      }
-      if (profiles.length > 0 && !profiles.every((p) => p?.id && p?.label && p?.profile)) {
-        return NextResponse.json(
-          {
-            error:
-              "catalogProfiles incompleto. Indexe todas as referências antes de gerar legendas.",
-          },
-          { status: 400 }
-        );
-      }
-    }
+    const prepared = await prepareMatchInput(sanitized, providerId);
 
     const outcome = await runVisionWithFallback(
       "match-and-generate",
-      (provider) =>
-        provider.matchAndGenerate({
-          postImage,
-          catalogItems: imageOnly ? undefined : catalogItems,
-          catalogProfiles: imageOnly ? undefined : catalogProfiles,
-          brandGem,
-          promptContext,
-          repeatingText,
-          regenerateCaption: !!regenerateCaption,
-          captionFromImageOnly: imageOnly,
-        }),
+      (provider) => provider.matchAndGenerate(prepared.input),
       providerId
     );
 
     providerId = outcome.providerUsed;
+    let result = applyShortlistToResult(outcome.result, prepared.shortlist);
+    const candidates = prepared.input.catalogProfiles ?? [];
+    result = applyStrictRankerMatchFallback(result, prepared.matchRankHint, candidates);
     const headers = new Headers();
     headers.set("X-AI-Provider-Used", outcome.providerUsed);
-    headers.set("X-AI-Match-Mode", outcome.result.matchMode);
+    headers.set("X-AI-Match-Mode", result.matchMode);
     headers.set("X-AI-Attempts", aiAttemptsHeaderValue(outcome.attempts));
+    const shortlistHeader = shortlistHeaderValue(prepared.shortlist);
+    if (shortlistHeader) headers.set("X-AI-Catalog-Shortlist", shortlistHeader);
 
     return NextResponse.json(
-      { ...outcome.result, providerUsed: outcome.providerUsed },
+      { ...result, providerUsed: outcome.providerUsed },
       { headers }
     );
   } catch (error: unknown) {

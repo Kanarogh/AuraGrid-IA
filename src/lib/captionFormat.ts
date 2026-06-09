@@ -119,10 +119,21 @@ function limitHookSentences(text: string, maxSentences: number): string {
 
 function trimHookToMaxChars(hook: string, maxHookChars: number): string {
   if (hook.length <= maxHookChars) return hook;
-  const cut = hook.slice(0, maxHookChars);
-  const lastSpace = cut.lastIndexOf(" ");
-  if (lastSpace > maxHookChars * 0.6) return `${cut.slice(0, lastSpace).trim()}…`;
-  return `${cut.trim()}…`;
+
+  const chunk = hook.slice(0, maxHookChars);
+
+  // Prefer ending at the last complete sentence still within the limit
+  const sentenceMatch = chunk.match(/[\s\S]*[.!?…](?=\s|$)/);
+  if (sentenceMatch) {
+    const trimmed = sentenceMatch[0].trim();
+    if (trimmed.length >= maxHookChars * 0.45) return trimmed;
+  }
+
+  // Fall back to last word boundary — no ellipsis (avoid "seus…" mid-thought)
+  const lastSpace = chunk.lastIndexOf(" ");
+  if (lastSpace > maxHookChars * 0.55) return chunk.slice(0, lastSpace).trim();
+
+  return chunk.trim();
 }
 
 function enforceHookParams(hook: string, params: CaptionGenerationParams): string {

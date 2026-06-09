@@ -215,6 +215,20 @@ export function removeCachedCaption(hash: string): void {
   if (filtered.length !== all.length) writeAll(filtered);
 }
 
+export async function removeCachedCaptionAsync(hash: string): Promise<void> {
+  if (apiCaptionCacheEnabled && activeClientIdForCache) {
+    try {
+      await apiFetch(
+        `/api/v1/clients/${activeClientIdForCache}/caption-cache/${encodeURIComponent(hash)}`,
+        { method: "DELETE" }
+      );
+    } catch {
+      /* ignore */
+    }
+  }
+  removeCachedCaption(hash);
+}
+
 export function clearCaptionCache(clientId?: string) {
   if (typeof window === "undefined") return;
   if (clientId) {

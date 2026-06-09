@@ -24,21 +24,18 @@ export async function buildMatchReferenceBody(
     postImage: queryImageDataUrl,
   };
 
+  if (!useJsonMatch && refs.length > 0) {
+    throw new Error(
+      "Indexe todas as referências do catálogo (JSON) antes de buscar no acervo. Não enviamos fotos em lote para economizar tokens."
+    );
+  }
+
   if (useJsonMatch) {
     body.catalogProfiles = ready.map((c) => ({
       id: c.id,
       label: c.label,
       profile: c.visualProfile,
     }));
-  } else if (refs.length > 0) {
-    const processedCatalog = await Promise.all(
-      refs.map(async (item) => {
-        const converted = await convertSvgToDataUrl(item.image);
-        const compressed = await resizeForAi(converted, { maxSide: 768 });
-        return { id: item.id, label: item.label, image: compressed };
-      })
-    );
-    body.catalogItems = processedCatalog;
   }
 
   return { body, useJsonMatch };

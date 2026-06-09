@@ -25,7 +25,7 @@ export function CanvaTimelineSyncPanel({
       <CardHeader
         icon={<RefreshCw className={`h-5 w-5 ${autoSync ? "animate-spin [animation-duration:4s]" : ""}`} />}
         title="Espelhar Grid Canva no roteiro"
-        description="Atualiza as fotos dos 30 dias conforme a sequência montada no Grid Canva. Legendas e textos são mantidos quando a mesma imagem permanece no dia."
+        description="Atualiza as fotos dos 30 dias conforme a sequência montada no Grid Canva. Legendas, aprovações e textos já feitos no dia são mantidos; só a foto do slot pode trocar."
         action={
           <Badge tone={autoSync ? "success" : "neutral"} dot>
             {autoSync ? "Auto-sync ligado" : "Auto-sync desligado"}

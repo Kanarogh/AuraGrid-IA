@@ -100,7 +100,7 @@ export async function runVisionWithFallback<T>(
           id === "openrouter"
             ? " Escolha outro modelo OpenRouter no painel ou use Ollama local."
             : id === "ollama"
-              ? " Confira se o Ollama está aberto (ollama pull gemma4:e4b)."
+              ? " Confira se o Ollama está aberto e se OLLAMA_MODEL no .env bate com um modelo com visão (ex.: gemma4)."
               : "";
         const base = err instanceof Error ? err : new Error(String(err));
         throw new Error(`${base.message}${hint}`);

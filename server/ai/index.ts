@@ -1,6 +1,9 @@
 import {
   getAiProviderId,
   getEnvDefaultProviderId,
+  getEnvGeminiCatalogModel,
+  getEnvGeminiModel,
+  getGeminiCatalogModel,
   getGeminiModel,
   getGroqModel,
   getOpenRouterModel,
@@ -13,10 +16,15 @@ import {
 } from "./config";
 import {
   getRuntimeOpenRouterModel,
+  getRuntimeGeminiModel,
+  getRuntimeGeminiCatalogModel,
   setRuntimeOpenRouterModel,
+  setRuntimeGeminiModel,
+  setRuntimeGeminiCatalogModel,
   setRuntimeProvider,
 } from "./runtimeSettings";
 import { OPENROUTER_MODELS, type OpenRouterModelOption } from "./openrouterModels";
+import { GEMINI_MODELS, type GeminiModelOption, sanitizeGeminiModelId } from "./geminiModels";
 import {
   listLiveOpenRouterModels,
   mergeOpenRouterModelsForUi,
@@ -48,6 +56,15 @@ export type AiSettingsResponse = {
     models: OpenRouterModelOption[];
     liveFetchedAt: string | null;
     liveCount: number;
+  };
+  gemini: {
+    activeModel: string;
+    activeCatalogModel: string;
+    envModel: string;
+    envCatalogModel: string;
+    runtimeModel: string | null;
+    runtimeCatalogModel: string | null;
+    models: GeminiModelOption[];
   };
 };
 
@@ -111,11 +128,28 @@ export async function buildAiSettingsResponse(options?: {
       liveFetchedAt,
       liveCount,
     },
+    gemini: {
+      activeModel: getGeminiModel(),
+      activeCatalogModel: getGeminiCatalogModel(),
+      envModel: getEnvGeminiModel(),
+      envCatalogModel: getEnvGeminiCatalogModel(),
+      runtimeModel: getRuntimeGeminiModel(),
+      runtimeCatalogModel: getRuntimeGeminiCatalogModel(),
+      models: GEMINI_MODELS,
+    },
   };
 }
 
 export async function setOpenRouterModelOverride(model: string | null): Promise<void> {
   await setRuntimeOpenRouterModel(model);
+}
+
+export async function setGeminiModelOverride(model: string | null): Promise<void> {
+  await setRuntimeGeminiModel(model ? sanitizeGeminiModelId(model) : null);
+}
+
+export async function setGeminiCatalogModelOverride(model: string | null): Promise<void> {
+  await setRuntimeGeminiCatalogModel(model ? sanitizeGeminiModelId(model) : null);
 }
 
 export async function setActiveAiProvider(provider: AiProviderId): Promise<void> {

@@ -3,6 +3,8 @@ import type { AiProviderId } from "../lib/aiSettings";
 import {
   changeAiProvider,
   changeOpenRouterModel,
+  changeGeminiModel,
+  changeGeminiCatalogModel,
   getActiveModelLabel,
   getActiveProviderOption,
   getApiStatusLabel,
@@ -27,6 +29,8 @@ export function useAiSettings() {
     refreshOpenRouterModels,
     setProvider: changeAiProvider,
     setOpenRouterModel: changeOpenRouterModel,
+    setGeminiModel: changeGeminiModel,
+    setGeminiCatalogModel: changeGeminiCatalogModel,
   };
 }
 

@@ -28,6 +28,25 @@ export interface OpenRouterSettings {
   liveCount: number;
 }
 
+export interface GeminiModelOption {
+  id: string;
+  label: string;
+  description: string;
+  vision: boolean;
+  forCatalog?: boolean;
+  recommended?: boolean;
+}
+
+export interface GeminiSettings {
+  activeModel: string;
+  activeCatalogModel: string;
+  envModel: string;
+  envCatalogModel: string;
+  runtimeModel: string | null;
+  runtimeCatalogModel: string | null;
+  models: GeminiModelOption[];
+}
+
 export type OpenRouterModelsFilter = "vision-text" | "vision-image" | "vision-any";
 
 export interface OpenRouterModelsListResponse {
@@ -47,6 +66,7 @@ export interface AiSettingsResponse {
   envDefaultProvider: AiProviderId;
   providers: AiProviderOption[];
   openrouter: OpenRouterSettings;
+  gemini: GeminiSettings;
 }
 
 export function providerDisplayName(id: AiProviderId): string {
@@ -98,5 +118,20 @@ export async function setOpenRouterModel(
   });
   const data = (await res.json()) as AiSettingsResponse & { error?: string };
   if (!res.ok) throw new Error(data.error || "Falha ao trocar modelo OpenRouter.");
+  return data;
+}
+
+/** Passe `null` em model/catalogModel para voltar ao .env. */
+export async function setGeminiModels(options: {
+  model?: string | null;
+  catalogModel?: string | null;
+}): Promise<AiSettingsResponse> {
+  const res = await fetch("/api/ai/gemini-model", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(options),
+  });
+  const data = (await res.json()) as AiSettingsResponse & { error?: string };
+  if (!res.ok) throw new Error(data.error || "Falha ao trocar modelo Gemini.");
   return data;
 }

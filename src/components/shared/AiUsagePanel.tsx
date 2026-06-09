@@ -11,6 +11,8 @@ import { providerDisplayName, type AiProviderId } from "../../lib/aiSettings";
 import { useAiSettings } from "../../hooks/useAiSettings";
 import { aiQueue, type AiQueueState } from "../../lib/aiQueue";
 import { getCaptionCacheStats } from "../../lib/captionCache";
+import { GeminiModelPicker } from "./GeminiModelPicker";
+import { geminiModelDisplayLabel } from "../../lib/geminiModelDisplay";
 import { useEffect, useState } from "react";
 
 type Stats = ReturnType<typeof getCaptionCacheStats>;
@@ -49,8 +51,15 @@ export function AiUsagePanel() {
     : pending > 0
       ? `IA: ${pending} na fila`
       : activeProvider
-        ? `IA: ${providerName}`
+        ? settings?.activeProvider === "gemini" && settings.gemini
+          ? `IA: ${geminiModelDisplayLabel(settings.gemini)}`
+          : `IA: ${providerName}`
         : "IA";
+
+  const headerModelLabel =
+    settings?.activeProvider === "gemini" && settings.gemini
+      ? geminiModelDisplayLabel(settings.gemini)
+      : activeModelLabel;
 
   return (
     <div className="relative">
@@ -61,7 +70,7 @@ export function AiUsagePanel() {
           isWorking ? "text-ag-accent" : "text-ag-text"
         }`}
         aria-label="Status da IA"
-        title={`${providerName}${activeModelLabel !== "—" ? ` · ${activeModelLabel}` : ""}`}
+        title={`${providerName}${headerModelLabel !== "—" ? ` · ${headerModelLabel}` : ""}`}
       >
         {isWorking ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -87,9 +96,9 @@ export function AiUsagePanel() {
                 </p>
                 <span
                   className="ml-auto text-[10px] font-mono text-ag-muted truncate max-w-[160px]"
-                  title={activeProviderOption?.model ?? activeModelLabel}
+                  title={headerModelLabel}
                 >
-                  {activeModelLabel}
+                  {headerModelLabel}
                 </span>
               </div>
             </div>
@@ -135,7 +144,8 @@ export function AiUsagePanel() {
                     );
                   })}
                 </div>
-                {settings.activeProvider !== "openrouter" && (
+                {settings.activeProvider !== "openrouter" &&
+                  settings.activeProvider !== "gemini" && (
                   <p className="text-[10px] text-ag-muted leading-snug">
                     Com <strong>{providerDisplayName(settings.activeProvider)}</strong> ativo, só
                     esse provedor é usado (padrão). Para cair em Groq/OpenRouter ao esgotar cota,
@@ -172,6 +182,10 @@ export function AiUsagePanel() {
                   ))}
                 </select>
               </div>
+            )}
+
+            {settings?.activeProvider === "gemini" && (
+              <GeminiModelPicker variant="popover" disabled={savingModel || saving} />
             )}
 
             {pending > 0 && (

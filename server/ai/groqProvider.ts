@@ -11,6 +11,7 @@ import {
   buildMatchResultInstructions,
   buildImageOnlyCaptionTask,
   buildImageOnlyResultInstructions,
+  buildCaptionPromptOptions,
   isImageOnlyCaptionMode,
   normalizeMatchedId,
   resolveMatchedIdFromCandidates,
@@ -20,7 +21,18 @@ import {
   MATCH_REFERENCE_JSON_SCHEMA,
   MATCH_RESULT_JSON_SCHEMA,
 } from "./schemas";
-import { annotateErrorWithRetryAfter, toDataUrl, withRetry } from "./shared";
+import { shrinkVisionImage } from "./imagePayload";
+import {
+  buildPostFingerprintPrompt,
+  normalizePostFingerprint,
+  POST_FINGERPRINT_JSON_SCHEMA,
+} from "./postFingerprint";
+import {
+  annotateErrorWithRetryAfter,
+  isGroqPayloadTooLarge,
+  toDataUrl,
+  withRetry,
+} from "./shared";
 import type {
   AiProvider,
   CatalogEnrichInput,
@@ -38,6 +50,67 @@ type GroqMessage = {
 type GroqContentPart =
   | { type: "text"; text: string }
   | { type: "image_url"; image_url: { url: string } };
+
+type GroqPayloadTier = {
+  imageMaxSide: number;
+  imageQuality: number;
+  briefPrompts: boolean;
+  ultraProfiles: boolean;
+};
+
+const GROQ_MATCH_TIERS: GroqPayloadTier[] = [
+  { imageMaxSide: 768, imageQuality: 0.78, briefPrompts: false, ultraProfiles: false },
+  { imageMaxSide: 640, imageQuality: 0.72, briefPrompts: true, ultraProfiles: true },
+  { imageMaxSide: 512, imageQuality: 0.68, briefPrompts: true, ultraProfiles: true },
+];
+
+function pickGroqMatchTiers(profileCount: number): GroqPayloadTier[] {
+  if (profileCount >= 40) {
+    return [
+      { imageMaxSide: 640, imageQuality: 0.72, briefPrompts: true, ultraProfiles: true },
+      ...GROQ_MATCH_TIERS.slice(2),
+    ];
+  }
+  if (profileCount >= 28) {
+    return GROQ_MATCH_TIERS;
+  }
+  return GROQ_MATCH_TIERS.slice(0, 2);
+}
+
+async function groqVisionImage(dataUrl: string, tier: GroqPayloadTier): Promise<string> {
+  return shrinkVisionImage(toDataUrl(dataUrl), {
+    maxSide: tier.imageMaxSide,
+    quality: tier.imageQuality,
+  });
+}
+
+async function groqChatWithPayloadTiers<T>(
+  tiers: GroqPayloadTier[],
+  build: (tier: GroqPayloadTier) => Promise<GroqMessage[]>,
+  options: {
+    jsonSchema?: { name: string; schema: Record<string, unknown> };
+    maxTokens?: number;
+  }
+): Promise<string> {
+  let lastError: unknown;
+
+  for (let i = 0; i < tiers.length; i++) {
+    const tier = tiers[i];
+    try {
+      const messages = await build(tier);
+      return await withRetry(() => groqChat(messages, options), "Groq");
+    } catch (err) {
+      lastError = err;
+      const canShrink = isGroqPayloadTooLarge(err) && i < tiers.length - 1;
+      if (!canShrink) throw err;
+      console.warn(
+        `Groq request too large (tier ${i + 1}/${tiers.length}) — retrying with smaller payload.`
+      );
+    }
+  }
+
+  throw lastError;
+}
 
 function getApiKey() {
   const apiKey = process.env.GROQ_API_KEY?.trim();
@@ -104,6 +177,36 @@ export const groqProvider: AiProvider = {
   getModel: getGroqModel,
   isConfigured: hasGroqKey,
 
+  async analyzePostVisual({ postImage }) {
+    const image = await shrinkVisionImage(toDataUrl(postImage), {
+      maxSide: 512,
+      quality: 0.72,
+    });
+    const content = await withRetry(
+      () =>
+        groqChat(
+          [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: buildPostFingerprintPrompt() },
+                { type: "image_url", image_url: { url: image } },
+              ],
+            },
+          ],
+          {
+            jsonSchema: {
+              name: "post_visual_fingerprint",
+              schema: POST_FINGERPRINT_JSON_SCHEMA as unknown as Record<string, unknown>,
+            },
+            maxTokens: 1024,
+          }
+        ),
+      "Groq"
+    );
+    return normalizePostFingerprint(JSON.parse(content) as Record<string, unknown>);
+  },
+
   async enrichCatalogItem({ image, label, id }: CatalogEnrichInput) {
     const content = await withRetry(
       () =>
@@ -132,28 +235,35 @@ export const groqProvider: AiProvider = {
   },
 
   async matchAndGenerate(input: MatchGenerateInput): Promise<MatchGenerateResult> {
-    const { postImage, catalogItems, catalogProfiles, matchOnly, regenerateCaption } = input;
+    const { postImage, matchOnly, regenerateCaption } = input;
+    const catalogProfiles = input.catalogProfiles;
+    const catalogItems = input.catalogProfiles?.length ? undefined : input.catalogItems;
     const gem = resolveBrandGemFromBody(input);
 
     if (isImageOnlyCaptionMode(input)) {
-      const content: GroqContentPart[] = [
-        { type: "text", text: buildImageOnlyCaptionTask(gem) },
-        { type: "image_url", image_url: { url: toDataUrl(postImage) } },
-        {
-          type: "text",
-          text: buildImageOnlyResultInstructions(gem, { regenerate: !!regenerateCaption }),
-        },
-      ];
-
-      const raw = await withRetry(
-        () =>
-          groqChat([{ role: "user", content }], {
-            jsonSchema: {
-              name: "image_only_caption",
-              schema: MATCH_RESULT_JSON_SCHEMA as unknown as Record<string, unknown>,
+      const raw = await groqChatWithPayloadTiers(
+        GROQ_MATCH_TIERS.slice(0, 2),
+        async (tier) => {
+          const image = await groqVisionImage(postImage, tier);
+          const content: GroqContentPart[] = [
+            { type: "text", text: buildImageOnlyCaptionTask(gem) },
+            { type: "image_url", image_url: { url: image } },
+            {
+              type: "text",
+              text: buildImageOnlyResultInstructions(
+                gem,
+                buildCaptionPromptOptions(input, tier.briefPrompts)
+              ),
             },
-          }),
-        "Groq"
+          ];
+          return [{ role: "user", content }];
+        },
+        {
+          jsonSchema: {
+            name: "image_only_caption",
+            schema: MATCH_RESULT_JSON_SCHEMA as unknown as Record<string, unknown>,
+          },
+        }
       );
 
       const parsed = JSON.parse(raw) as Omit<MatchGenerateResult, "matchMode"> & {
@@ -171,76 +281,95 @@ export const groqProvider: AiProvider = {
     const profiles = Array.isArray(catalogProfiles) ? catalogProfiles : [];
     const useTextCatalog =
       profiles.length > 0 && profiles.every((p) => p?.profile);
+    const tiers = useTextCatalog
+      ? pickGroqMatchTiers(profiles.length)
+      : GROQ_MATCH_TIERS.slice(0, 2);
 
-    const content: GroqContentPart[] = [];
+    const raw = await groqChatWithPayloadTiers(
+      tiers,
+      async (tier) => {
+        const content: GroqContentPart[] = [];
+        const image = await groqVisionImage(postImage, tier);
 
-    if (useTextCatalog) {
-      content.push({
-        type: "text",
-        text: buildMatchJsonCatalogTask(!!matchOnly, gem),
-      });
-      content.push({ type: "image_url", image_url: { url: toDataUrl(postImage) } });
-      content.push({
-        type: "text",
-        text: buildCatalogProfilesPromptSection(profiles),
-      });
-    } else {
-      content.push({
-        type: "text",
-        text: buildMatchImagesCatalogTask(!!matchOnly, gem),
-      });
-      content.push({ type: "image_url", image_url: { url: toDataUrl(postImage) } });
-
-      if (catalogItems && catalogItems.length > 0) {
-        const maxImages = 4;
-        const slice = catalogItems.slice(0, maxImages);
-        if (catalogItems.length > maxImages) {
+        if (useTextCatalog) {
           content.push({
             type: "text",
-            text: `(Mostrando ${maxImages} de ${catalogItems.length} candidatos — prefira IDs visíveis.)`,
+            text: buildMatchJsonCatalogTask(!!matchOnly, gem),
           });
+          content.push({ type: "image_url", image_url: { url: image } });
+          content.push({
+            type: "text",
+            text: buildCatalogProfilesPromptSection(profiles, {
+              brief: tier.briefPrompts,
+              ultraCompact: tier.ultraProfiles,
+              matchRankHint: input.matchRankHint,
+            }),
+          });
+        } else {
+          content.push({
+            type: "text",
+            text: buildMatchImagesCatalogTask(!!matchOnly, gem),
+          });
+          content.push({ type: "image_url", image_url: { url: image } });
+
+          if (catalogItems && catalogItems.length > 0) {
+            const maxImages = tier.briefPrompts ? 3 : 4;
+            const slice = catalogItems.slice(0, maxImages);
+            if (catalogItems.length > maxImages) {
+              content.push({
+                type: "text",
+                text: `(Mostrando ${maxImages} de ${catalogItems.length} candidatos — prefira IDs visíveis.)`,
+              });
+            }
+            for (const [idx, item] of slice.entries()) {
+              const candidateImage = await groqVisionImage(item.image, tier);
+              content.push({
+                type: "text",
+                text: `[CANDIDATE #${idx + 1}] ID: "${item.id}" Label: "${item.label}"`,
+              });
+              content.push({ type: "image_url", image_url: { url: candidateImage } });
+            }
+          } else {
+            content.push({ type: "text", text: "No catalog candidates — matchedId null." });
+          }
         }
-        slice.forEach((item, idx) => {
-          content.push({
-            type: "text",
-            text: `[CANDIDATE #${idx + 1}] ID: "${item.id}" Label: "${item.label}"`,
-          });
-          content.push({ type: "image_url", image_url: { url: toDataUrl(item.image) } });
+
+        content.push({
+          type: "text",
+          text: matchOnly
+            ? buildMatchResultInstructions(
+                gem,
+                true,
+                buildCaptionPromptOptions(input, tier.briefPrompts)
+              )
+            : buildMatchResultInstructions(
+                gem,
+                false,
+                buildCaptionPromptOptions(input, tier.briefPrompts)
+              ),
         });
-      } else {
-        content.push({ type: "text", text: "No catalog candidates — matchedId null." });
+
+        return [{ role: "user", content }];
+      },
+      {
+        jsonSchema: {
+          name: matchOnly ? "match_reference" : "match_and_caption",
+          schema: (matchOnly
+            ? MATCH_REFERENCE_JSON_SCHEMA
+            : MATCH_RESULT_JSON_SCHEMA) as unknown as Record<string, unknown>,
+        },
       }
-    }
-
-    content.push({
-      type: "text",
-      text: matchOnly
-        ? buildMatchResultInstructions(gem, true)
-        : buildMatchResultInstructions(gem, false, { regenerate: !!regenerateCaption }),
-    });
-
-    const raw = await withRetry(
-      () =>
-        groqChat([{ role: "user", content }], {
-          jsonSchema: {
-            name: matchOnly ? "match_reference" : "match_and_caption",
-            schema: (matchOnly
-              ? MATCH_REFERENCE_JSON_SCHEMA
-              : MATCH_RESULT_JSON_SCHEMA) as unknown as Record<string, unknown>,
-          },
-        }),
-      "Groq"
     );
 
     const parsed = JSON.parse(raw) as Omit<MatchGenerateResult, "matchMode"> & {
       matchedId?: string | null;
       caption?: string;
     };
-    const candidateIds = useTextCatalog
-      ? profiles.map((p) => p.id)
-      : (catalogItems ?? []).map((c) => c.id);
+    const candidateProfiles = useTextCatalog
+      ? profiles.map((p) => ({ id: p.id, label: p.label }))
+      : (catalogItems ?? []).map((c) => ({ id: c.id, label: c.label }));
     return {
-      matchedId: resolveMatchedIdFromCandidates(parsed.matchedId, candidateIds),
+      matchedId: resolveMatchedIdFromCandidates(parsed.matchedId, candidateProfiles),
       reasoning: parsed.reasoning ?? "",
       caption: matchOnly ? "" : (parsed.caption ?? ""),
       matchMode: useTextCatalog ? "catalog_json" : "catalog_images",

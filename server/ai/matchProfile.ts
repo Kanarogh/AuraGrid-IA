@@ -8,22 +8,23 @@ function asStringArray(value: unknown): string[] {
   return [];
 }
 
+function pickAnchors(p: Record<string, unknown>): string[] {
+  const anchors = asStringArray(p.matchAnchors);
+  if (anchors.length > 0) return anchors;
+  return [
+    ...asStringArray(p.distinctiveDetails),
+    ...asStringArray(p.embellishments),
+    ...asStringArray(p.matchKeywords),
+  ];
+}
+
 export function compactProfileForMatch(
   id: string,
   label: string,
   profile: Record<string, unknown> | undefined
 ): Record<string, unknown> {
   const p = profile ?? {};
-  const anchors = asStringArray(p.matchAnchors);
-  const fallbackAnchors =
-    anchors.length > 0
-      ? anchors
-      : [
-          ...asStringArray(p.distinctiveDetails),
-          ...asStringArray(p.embellishments),
-          ...asStringArray(p.matchKeywords),
-        ].slice(0, 8);
-
+  const fallbackAnchors = pickAnchors(p).slice(0, 8);
   const primary = asStringArray(p.primaryColors);
 
   return {
@@ -50,6 +51,31 @@ export function compactProfileForMatch(
     distinguishingFingerprint: p.distinguishingFingerprint,
     notToConfuseWith: p.notToConfuseWith ?? null,
     matchKeywords: asStringArray(p.matchKeywords),
+  };
+}
+
+/** Versão mínima para provedores com limite apertado de tokens (ex.: Groq 30k). */
+export function ultraCompactProfileForMatch(
+  id: string,
+  label: string,
+  profile: Record<string, unknown> | undefined
+): Record<string, unknown> {
+  const p = profile ?? {};
+  const primary = asStringArray(p.primaryColors);
+
+  return {
+    id,
+    label,
+    garmentType: p.garmentType ?? null,
+    color: p.dominantColorFamily ?? primary[0] ?? null,
+    colors: primary.slice(0, 2),
+    pattern: p.pattern ?? null,
+    printScale: p.printScale ?? null,
+    neckline: p.neckline ?? null,
+    sleeves: p.sleeveType ?? p.sleeves ?? null,
+    length: p.lengthCategory ?? p.dressLength ?? null,
+    silhouette: p.silhouette ?? null,
+    anchors: pickAnchors(p).slice(0, 5),
   };
 }
 

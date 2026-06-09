@@ -9,6 +9,7 @@ import { useAiSettings } from "../../hooks/useAiSettings";
 import { Alert } from "../ui/Alert";
 import { Badge } from "../ui/Badge";
 import { FieldLabel } from "../ui/Input";
+import { GeminiModelPicker } from "./GeminiModelPicker";
 
 export function AiProviderPanel() {
   const {
@@ -114,27 +115,26 @@ export function AiProviderPanel() {
 
           {settings?.activeProvider === "ollama" && (
             <p className="text-xs text-ag-muted leading-relaxed rounded-lg border border-ag-border bg-ag-surface-1 px-3 py-2">
-              <strong className="text-ag-text">Ollama (local)</strong> — texto e imagens no seu Mac,
-              sem API key. Instale{" "}
-              <a
-                href="https://ollama.com"
-                target="_blank"
-                rel="noreferrer"
-                className="text-ag-accent hover:underline"
-              >
-                ollama.com
-              </a>
-              , depois no terminal:{" "}
-              <code className="font-mono text-[10px] bg-ag-surface-2 px-1 rounded">
-                ollama pull gemma4:e4b
-              </code>
-              . A <strong className="text-ag-text">primeira indexação</strong> pode levar 1–3
-              minutos (carrega o modelo). Depois fica mais rápido.
+              <strong className="text-ag-text">Ollama (local)</strong> — precisa de modelo{" "}
+              <strong className="text-ag-text">com visão</strong> (foto do post). Com os que você
+              tem instalados, use <code className="font-mono text-[10px] bg-ag-surface-2 px-1 rounded">gemma4</code>{" "}
+              no <code className="font-mono text-[10px]">.env</code> (
+              <code className="font-mono text-[10px]">OLLAMA_MODEL=gemma4</code>,{" "}
+              <code className="font-mono text-[10px]">OLLAMA_NUM_CTX=32768</code>). Modelos{" "}
+              <code className="font-mono text-[10px]">*:cloud</code> também funcionam se o Ollama
+              estiver logado.{" "}
+              <code className="font-mono text-[10px]">qwen3.6</code> é só texto — não serve para
+              match/legenda com foto. Opcional:{" "}
+              <code className="font-mono text-[10px]">ollama pull qwen2.5vl:7b</code> (visão).
             </p>
           )}
 
           {settings?.activeProvider === "openrouter" && (
             <OpenRouterModelSelect />
+          )}
+
+          {settings?.activeProvider === "gemini" && (
+            <GeminiModelPicker variant="settings" />
           )}
 
           <ul className="text-[10px] text-ag-muted space-y-1 border-t border-ag-border pt-2">

@@ -4,10 +4,12 @@ import {
   providerDisplayName,
   setAiProvider,
   setOpenRouterModel,
+  setGeminiModels,
   type AiProviderId,
   type AiSettingsResponse,
   type OpenRouterModelsFilter,
 } from "./aiSettings";
+import { geminiModelDisplayLabel } from "./geminiModelDisplay";
 
 export type AiHealthSnapshot = {
   keyConfigured: boolean;
@@ -171,6 +173,35 @@ export async function changeOpenRouterModel(model: string | null): Promise<void>
   }
 }
 
+export async function changeGeminiModel(model: string | null): Promise<void> {
+  setState({ saving: true, error: null });
+  try {
+    const settings = await setGeminiModels({ model });
+    const health = await fetchHealth();
+    setState({ settings, health, saving: false });
+  } catch (err) {
+    setState({
+      saving: false,
+      error: err instanceof Error ? err.message : "Falha ao trocar modelo Gemini.",
+    });
+    throw err;
+  }
+}
+
+export async function changeGeminiCatalogModel(catalogModel: string | null): Promise<void> {
+  setState({ saving: true, error: null });
+  try {
+    const settings = await setGeminiModels({ catalogModel });
+    setState({ settings, saving: false });
+  } catch (err) {
+    setState({
+      saving: false,
+      error: err instanceof Error ? err.message : "Falha ao trocar modelo de catálogo.",
+    });
+    throw err;
+  }
+}
+
 export function noteLastProviderUsed(provider: string | null | undefined) {
   if (
     provider === "gemini" ||
@@ -197,6 +228,9 @@ export function getActiveModelLabel(): string {
     const known = settings.openrouter.models.find((m) => m.id === id);
     if (known) return known.label.replace(/ \(free\)/i, "");
     return id.replace(/^.*\//, "").replace(/:free$/, "");
+  }
+  if (settings.activeProvider === "gemini") {
+    return geminiModelDisplayLabel(settings.gemini);
   }
   const active = getActiveProviderOption();
   return active?.model ?? "—";

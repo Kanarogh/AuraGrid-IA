@@ -180,7 +180,7 @@ Referência: Vestido Luxo com Bordados Neon — Leve e Acinturado-5073
 function normalizeCaptionParams(gem?: BrandGemConfig) {
   const p = gem?.captionParams ?? {};
   return {
-    maxHookChars: Math.min(1500, Math.max(80, p.maxHookChars ?? 280)),
+    maxHookChars: Math.min(1500, Math.max(80, p.maxHookChars ?? 500)),
     maxHookSentences: Math.min(4, Math.max(1, p.maxHookSentences ?? 2)),
     emojiPolicy: p.emojiPolicy ?? "minimal",
     hookStyle: p.hookStyle ?? "balanced",
@@ -214,6 +214,7 @@ export function buildCaptionParamsBlock(gem?: BrandGemConfig): string {
 - Max main text length: ${p.maxHookChars} characters (strict).
 - Max main text sentences: ${p.maxHookSentences}.
 - Full Instagram post may be up to 2200 characters including all fixed blocks.
+- Write COMPLETE sentences within the limit — never end mid-word and never use "..." or ellipsis.
 - Hook style: ${hookRules[p.hookStyle] ?? hookRules.balanced}
 - Sales tone: ${salesRules[p.salesTone] ?? salesRules.balanced}
 - Emojis: ${emojiRules[p.emojiPolicy] ?? emojiRules.minimal}
@@ -221,13 +222,58 @@ export function buildCaptionParamsBlock(gem?: BrandGemConfig): string {
 - Prices: ${p.avoidPriceMention ? "Do NOT mention prices, discounts, or currency in the hook." : "Prices allowed if relevant to INSTRUCTIONS."}`;
 }
 
-export function buildRegenerationBlock(regenerate?: boolean): string {  if (!regenerate) return "";
+export function buildRegenerationBlock(regenerate?: boolean): string {
+  if (!regenerate) return "";
   return `
 REGENERATION REQUEST (user clicked "Regenerate"):
 - Write a COMPLETELY NEW main hook (block 1) — different wording, fresh angle, new adjectives.
 - Do NOT reuse the same opening sentence or phrasing as a typical previous caption.
 - Keep matchedId consistent if the garment match is still valid.
 - Footer blocks (Referência label, disclosure, address, ➡️ CTA, hashtags) stay verbatim from GEM.`;
+}
+
+export type CaptionPromptOptions = {
+  regenerate?: boolean;
+  brief?: boolean;
+  recentHooks?: string[];
+};
+
+function normalizeRecentHooks(raw?: string[]): string[] {
+  if (!raw?.length) return [];
+  const out: string[] = [];
+  for (const hook of raw) {
+    const trimmed = hook.trim();
+    if (trimmed.length < 12) continue;
+    if (out.some((h) => h.toLowerCase() === trimmed.toLowerCase())) continue;
+    out.push(trimmed);
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
+/** Evita ganchos repetidos dentro do post e entre posts do roteiro. */
+export function buildAntiRepetitionBlock(recentHooks?: string[]): string {
+  const hooks = normalizeRecentHooks(recentHooks);
+  const recentBlock =
+    hooks.length > 0
+      ? `
+
+RECENT HOOKS ALREADY USED IN THIS ROTEIRO (do NOT copy — new opening, new angle, new vocabulary):
+${hooks
+  .map((hook, index) => {
+    const preview = hook.length > 140 ? `${hook.slice(0, 140).trim()}…` : hook;
+    return `${index + 1}. """${preview}"""`;
+  })
+  .join("\n")}
+- Do not reuse these opening lines, sentence starters, or key adjective clusters.
+- If a phrase above starts with "O luxo", "Descubra", "Aposte", etc., pick a different starter.`
+      : "";
+
+  return `ANTI-REPETITION RULES (mandatory — block 1 / main hook only):
+- Write copy unique to THIS image and garment — not a generic template.
+- Never repeat footer blocks in the hook (Referência, disclosure, address, ➡️ CTA, hashtags) — the app adds them verbatim.
+- Do not repeat the same word or phrase twice inside the hook.
+- Vary rhythm and structure: alternate short punchy lines vs descriptive lines across posts.${recentBlock}`;
 }
 
 export function buildCaptionFooterBlock(footer?: RepeatingTextConfig): string {
@@ -255,8 +301,29 @@ export function buildCaptionFooterBlock(footer?: RepeatingTextConfig): string {
 /** Instruções completas para gerar legenda no match-and-generate */
 export function buildMatchCaptionInstructions(
   gem?: BrandGemConfig,
-  options?: { regenerate?: boolean }
+  options?: CaptionPromptOptions
 ): string {
+  const antiRepeat = buildAntiRepetitionBlock(options?.recentHooks);
+
+  if (options?.brief) {
+    return `${buildBrandVoiceBlock(gem)}
+
+${buildCampaignContextBlock(gem)}
+
+${buildCaptionParamsBlock(gem)}
+
+${buildCaptionFooterBlock(gem?.footer)}
+
+${antiRepeat}
+
+${buildRegenerationBlock(options?.regenerate)}
+
+CAPTION TASK:
+- JSON "caption" = block 1 (main hook) ONLY.
+- Follow GEM language/tone and caption parameters.
+- System appends Referência, disclosure, address, CTA, hashtags.`;
+  }
+
   return `${buildBrandVoiceBlock(gem)}
 
 ${buildCampaignContextBlock(gem)}
@@ -266,6 +333,8 @@ ${buildCaptionParamsBlock(gem)}
 ${buildCaptionStructureBlock(gem)}
 
 ${buildCaptionFooterBlock(gem?.footer)}
+
+${antiRepeat}
 
 ${buildRegenerationBlock(options?.regenerate)}
 

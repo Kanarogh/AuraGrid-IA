@@ -10,6 +10,7 @@ import {
   buildMatchResultInstructions,
   buildImageOnlyCaptionTask,
   buildImageOnlyResultInstructions,
+  buildCaptionPromptOptions,
   isImageOnlyCaptionMode,
   normalizeMatchedId,
   resolveMatchedIdFromCandidates,
@@ -17,6 +18,10 @@ import {
 import { buildEnrichCatalogPrompt, finalizeCatalogProfile } from "./catalogProfile";
 import { CATALOG_PROFILE_SCHEMA } from "../geminiShared";
 import { getGeminiCatalogModel, getGeminiModel, hasGeminiKey } from "./config";
+import {
+  buildPostFingerprintPrompt,
+  normalizePostFingerprint,
+} from "./postFingerprint";
 import { cleanBase64, withRetry } from "./shared";
 import type {
   AiProvider,
@@ -40,6 +45,44 @@ export const geminiProvider: AiProvider = {
   id: "gemini",
   getModel: getGeminiModel,
   isConfigured: hasGeminiKey,
+
+  async analyzePostVisual({ postImage }) {
+    const ai = getClient();
+    const model = getGeminiModel();
+    const response = await withRetry(
+      () =>
+        ai.models.generateContent({
+          model,
+          contents: [
+            { text: buildPostFingerprintPrompt() },
+            { inlineData: cleanBase64(postImage) },
+          ],
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                garmentType: { type: Type.STRING },
+                dominantColorFamily: { type: Type.STRING },
+                primaryColors: { type: Type.ARRAY, items: { type: Type.STRING } },
+                patternType: { type: Type.STRING },
+                printScale: { type: Type.STRING },
+                neckline: { type: Type.STRING },
+                sleeves: { type: Type.STRING },
+                dressLength: { type: Type.STRING },
+                silhouette: { type: Type.STRING },
+                visibleAnchors: { type: Type.ARRAY, items: { type: Type.STRING } },
+              },
+              required: ["garmentType", "dominantColorFamily", "primaryColors", "visibleAnchors"],
+            },
+          },
+        }),
+      "Gemini"
+    );
+    const rawText = response.text?.trim();
+    if (!rawText) throw new Error("Gemini retornou resposta vazia.");
+    return normalizePostFingerprint(JSON.parse(rawText) as Record<string, unknown>);
+  },
 
   async enrichCatalogItem({ image, label, id }: CatalogEnrichInput) {
     const ai = getClient();
@@ -71,7 +114,9 @@ export const geminiProvider: AiProvider = {
   async matchAndGenerate(input: MatchGenerateInput): Promise<MatchGenerateResult> {
     const ai = getClient();
     const model = getGeminiModel();
-    const { postImage, catalogItems, catalogProfiles, matchOnly, regenerateCaption } = input;
+    const { postImage, matchOnly, regenerateCaption } = input;
+    const catalogProfiles = input.catalogProfiles;
+    const catalogItems = input.catalogProfiles?.length ? undefined : input.catalogItems;
     const gem = resolveBrandGemFromBody(input);
 
     if (isImageOnlyCaptionMode(input)) {
@@ -79,9 +124,7 @@ export const geminiProvider: AiProvider = {
         { text: buildImageOnlyCaptionTask(gem) },
         { inlineData: cleanBase64(postImage) },
         {
-          text: buildImageOnlyResultInstructions(gem, {
-            regenerate: !!regenerateCaption,
-          }),
+          text: buildImageOnlyResultInstructions(gem, buildCaptionPromptOptions(input)),
         },
       ];
 
@@ -129,7 +172,9 @@ export const geminiProvider: AiProvider = {
       });
       parts.push({ inlineData: cleanBase64(postImage) });
       parts.push({
-        text: `\n${buildCatalogProfilesPromptSection(profiles)}`,
+        text: `\n${buildCatalogProfilesPromptSection(profiles, {
+          matchRankHint: input.matchRankHint,
+        })}`,
       });
     } else {
       parts.push({
@@ -151,9 +196,7 @@ export const geminiProvider: AiProvider = {
     }
 
     parts.push({
-      text: buildMatchResultInstructions(gem, !!matchOnly, {
-        regenerate: !!regenerateCaption,
-      }),
+      text: buildMatchResultInstructions(gem, !!matchOnly, buildCaptionPromptOptions(input)),
     });
 
     const response = await withRetry(
@@ -189,11 +232,11 @@ export const geminiProvider: AiProvider = {
     const parsed = JSON.parse(response.text || "{}") as Omit<MatchGenerateResult, "matchMode"> & {
       caption?: string;
     };
-    const candidateIds = useTextCatalog
-      ? profiles.map((p) => p.id)
-      : (catalogItems ?? []).map((c) => c.id);
+    const candidateProfiles = useTextCatalog
+      ? profiles.map((p) => ({ id: p.id, label: p.label }))
+      : (catalogItems ?? []).map((c) => ({ id: c.id, label: c.label }));
     return {
-      matchedId: resolveMatchedIdFromCandidates(parsed.matchedId, candidateIds),
+      matchedId: resolveMatchedIdFromCandidates(parsed.matchedId, candidateProfiles),
       reasoning: parsed.reasoning ?? "",
       caption: matchOnly ? "" : (parsed.caption ?? ""),
       matchMode: useTextCatalog ? "catalog_json" : "catalog_images",

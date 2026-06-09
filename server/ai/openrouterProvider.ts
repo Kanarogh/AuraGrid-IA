@@ -21,6 +21,7 @@ import {
   buildMatchResultInstructions,
   buildImageOnlyCaptionTask,
   buildImageOnlyResultInstructions,
+  buildCaptionPromptOptions,
   isImageOnlyCaptionMode,
   MATCH_REFERENCE_RESPONSE_HINT,
   MATCH_RESPONSE_HINT,
@@ -33,6 +34,11 @@ import {
   MATCH_RESULT_JSON_SCHEMA,
 } from "./schemas";
 import { logAiAttemptFail, logAiAttemptOk } from "./diagnostics";
+import {
+  buildPostFingerprintPrompt,
+  normalizePostFingerprint,
+  POST_FINGERPRINT_JSON_SCHEMA,
+} from "./postFingerprint";
 import { annotateErrorWithRetryAfter, toDataUrl, withRetry } from "./shared";
 import type {
   AiProvider,
@@ -362,6 +368,31 @@ export const openrouterProvider: AiProvider = {
   getModel: getOpenRouterModel,
   isConfigured: hasOpenRouterKey,
 
+  async analyzePostVisual({ postImage }) {
+    const { content } = await withRetry(
+      () =>
+        openrouterChatVision(
+          [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: buildPostFingerprintPrompt() },
+                { type: "image_url", image_url: { url: toDataUrl(postImage) } },
+              ],
+            },
+          ],
+          {
+            jsonSchema: {
+              name: "post_visual_fingerprint",
+              schema: POST_FINGERPRINT_JSON_SCHEMA as unknown as Record<string, unknown>,
+            },
+          }
+        ),
+      "OpenRouter"
+    );
+    return normalizePostFingerprint(parseModelJsonContent(content));
+  },
+
   async enrichCatalogItem({ image, label, id }: CatalogEnrichInput) {
     const prompt = buildEnrichCatalogPrompt(label, id);
 
@@ -391,7 +422,9 @@ export const openrouterProvider: AiProvider = {
   },
 
   async matchAndGenerate(input: MatchGenerateInput): Promise<MatchGenerateResult> {
-    const { postImage, catalogItems, catalogProfiles, matchOnly, regenerateCaption } = input;
+    const { postImage, matchOnly, regenerateCaption } = input;
+    const catalogProfiles = input.catalogProfiles;
+    const catalogItems = input.catalogProfiles?.length ? undefined : input.catalogItems;
     const gem = resolveBrandGemFromBody(input);
 
     if (isImageOnlyCaptionMode(input)) {
@@ -400,9 +433,7 @@ export const openrouterProvider: AiProvider = {
         { type: "image_url", image_url: { url: toDataUrl(postImage) } },
         {
           type: "text",
-          text: `${buildImageOnlyResultInstructions(gem, {
-            regenerate: !!regenerateCaption,
-          })}\n\n${MATCH_RESPONSE_HINT}`,
+          text: `${buildImageOnlyResultInstructions(gem, buildCaptionPromptOptions(input))}\n\n${MATCH_RESPONSE_HINT}`,
         },
       ];
 
@@ -442,7 +473,9 @@ export const openrouterProvider: AiProvider = {
       content.push({ type: "image_url", image_url: { url: toDataUrl(postImage) } });
       content.push({
         type: "text",
-        text: buildCatalogProfilesPromptSection(profiles),
+        text: buildCatalogProfilesPromptSection(profiles, {
+          matchRankHint: input.matchRankHint,
+        }),
       });
     } else {
       content.push({
@@ -475,9 +508,7 @@ export const openrouterProvider: AiProvider = {
     const hint = matchOnly ? MATCH_REFERENCE_RESPONSE_HINT : MATCH_RESPONSE_HINT;
     content.push({
       type: "text",
-      text: `${buildMatchResultInstructions(gem, !!matchOnly, {
-        regenerate: !!regenerateCaption,
-      })}\n\n${hint}`,
+      text: `${buildMatchResultInstructions(gem, !!matchOnly, buildCaptionPromptOptions(input))}\n\n${hint}`,
     });
 
     const { content: raw } = await withRetry(
@@ -497,11 +528,11 @@ export const openrouterProvider: AiProvider = {
       matchedId?: string | null;
       caption?: string;
     };
-    const candidateIds = useTextCatalog
-      ? profiles.map((p) => p.id)
-      : (catalogItems ?? []).map((c) => c.id);
+    const candidateProfiles = useTextCatalog
+      ? profiles.map((p) => ({ id: p.id, label: p.label }))
+      : (catalogItems ?? []).map((c) => ({ id: c.id, label: c.label }));
     return {
-      matchedId: resolveMatchedIdFromCandidates(parsed.matchedId, candidateIds),
+      matchedId: resolveMatchedIdFromCandidates(parsed.matchedId, candidateProfiles),
       reasoning: parsed.reasoning ?? "",
       caption: matchOnly ? "" : (parsed.caption ?? ""),
       matchMode: useTextCatalog ? "catalog_json" : "catalog_images",

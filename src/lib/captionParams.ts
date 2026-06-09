@@ -23,7 +23,7 @@ export interface CaptionGenerationParams {
 }
 
 export const DEFAULT_CAPTION_GENERATION_PARAMS: CaptionGenerationParams = {
-  maxHookChars: 280,
+  maxHookChars: 500,
   maxHookSentences: 2,
   emojiPolicy: "minimal",
   hookStyle: "balanced",

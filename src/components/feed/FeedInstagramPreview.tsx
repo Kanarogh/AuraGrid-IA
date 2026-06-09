@@ -31,7 +31,7 @@ export function FeedInstagramPreview({
       title="Feed 3×3"
       subtitle={
         <>
-          Prévia do perfil no estilo Instagram.
+          Prévia do perfil no estilo Instagram · miniaturas 4:5.
           {ordered.length > 0 ? (
             <>
               {" "}
