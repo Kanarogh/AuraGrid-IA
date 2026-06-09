@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import {
   Grid,
   LayoutGrid,
+  LogOut,
   PanelLeftClose,
   PanelLeftOpen,
   RotateCcw,
@@ -14,6 +15,7 @@ import {
 import { Badge } from "../ui/Badge";
 import { cn } from "../../lib/cn";
 import { ClientSwitcher } from "./ClientSwitcher";
+import { useAuth } from "../../context/AuthContext";
 
 export type AppSection =
   | "posts"
@@ -138,6 +140,7 @@ export function AppSidebar({
   onReset: () => void;
   onClientCreated?: () => void;
 }) {
+  const { storageMode, user, logout } = useAuth();
   const groups = NAV_GROUPS.map((g) => ({
     ...g,
     items: g.items.map((item) => {
@@ -335,6 +338,20 @@ export function AppSidebar({
           <RotateCcw className="h-3.5 w-3.5" />
           {!collapsed && <span>Reiniciar sistema</span>}
         </button>
+        {storageMode === "postgresql" && user && (
+          <button
+            type="button"
+            onClick={() => void logout()}
+            title="Sair da conta"
+            className={cn(
+              "flex items-center gap-2 text-xs text-ag-muted hover:text-ag-text hover:bg-ag-surface-3 rounded-lg transition-colors cursor-pointer",
+              collapsed ? "p-2" : "w-full px-3 py-2"
+            )}
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            {!collapsed && <span>Sair ({user.displayName})</span>}
+          </button>
+        )}
         <button
           type="button"
           onClick={onToggleCollapsed}

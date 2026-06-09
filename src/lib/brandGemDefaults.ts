@@ -16,6 +16,7 @@ export function createEmptyBrandGem(id: string, displayName = ""): BrandGem {
     name: displayName.trim(),
     description: "",
     instructions: "",
+    campaignContext: "",
     captionParams: { ...DEFAULT_CAPTION_GENERATION_PARAMS },
     footer: { ...EMPTY_REPEATING_TEXT },
   };

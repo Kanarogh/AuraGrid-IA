@@ -1,3 +1,5 @@
+"use client";
+
 import {
   createContext,
   useCallback,
@@ -14,7 +16,7 @@ import type { AppSection } from "../components/layout/AppSidebar";
 import { aiQueue } from "../lib/aiQueue";
 import type { CanvaGridFormatId } from "../lib/canvaGridFormats";
 import { getCanvaGridFormat } from "../lib/canvaGridFormats";
-import { setCaptionCacheClientId } from "../lib/captionCache";
+import { setCaptionCacheClientId, setApiCaptionCacheEnabled } from "../lib/captionCache";
 import { normalizeCatalogItem } from "../lib/catalog";
 import {
   createClientMeta,
@@ -36,6 +38,8 @@ import {
 } from "../lib/clientWorkspace";
 import { notifyStorageSaveFailure } from "../lib/clientWorkspace/saveNotify";
 import type { BrandGem, CanvaGridPage, CatalogItem, PlannedPost } from "../types";
+import { useAuth } from "./AuthContext";
+import { getApiHelpers, type ApiRegistryEvent } from "./ApiWorkspaceSync";
 
 type ClientWorkspaceContextValue = {
   registry: ClientRegistry;
@@ -62,6 +66,7 @@ type ClientWorkspaceContextValue = {
   deleteClient: (clientId: string) => boolean;
   resetActiveClient: () => void;
   persistWorkspaceNow: () => void;
+  useApiStorage: boolean;
 };
 
 const ClientWorkspaceContext = createContext<ClientWorkspaceContextValue | null>(null);
@@ -81,17 +86,33 @@ function initialWorkspace(reg: ClientRegistry): ClientWorkspace {
 }
 
 export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
+  const { storageMode, user } = useAuth();
+  const useApiStorage = storageMode === "postgresql" && !!user;
+
   const [registry, setRegistry] = useState<ClientRegistry>(() => ensureClientRegistry());
   const [workspace, setWorkspace] = useState<ClientWorkspace>(() =>
     initialWorkspace(ensureClientRegistry())
   );
+
+  useEffect(() => {
+    if (!useApiStorage) return;
+    const onApiRegistry = (e: Event) => {
+      const { registry: reg, workspace: ws } = (e as CustomEvent<ApiRegistryEvent>).detail;
+      setRegistry(reg);
+      setWorkspace(ws);
+      workspaceRef.current = ws;
+    };
+    window.addEventListener("auragrid:api-registry", onApiRegistry);
+    return () => window.removeEventListener("auragrid:api-registry", onApiRegistry);
+  }, [useApiStorage]);
 
   const hasActiveClient = registry.clients.length > 0;
   const activeClientId = hasActiveClient ? registry.activeClientId : "";
 
   useEffect(() => {
     setCaptionCacheClientId(activeClientId);
-  }, [activeClientId]);
+    setApiCaptionCacheEnabled(useApiStorage);
+  }, [activeClientId, useApiStorage]);
   const activeClient = useMemo(() => {
     const found = registry.clients.find((c) => c.id === activeClientId);
     if (found) return found;
@@ -113,8 +134,12 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
+    if (useApiStorage) {
+      void getApiHelpers()?.patchWorkspace(activeClientId, workspaceRef.current);
+      return;
+    }
     flushSave(activeClientId, workspaceRef.current);
-  }, [activeClientId, flushSave]);
+  }, [activeClientId, flushSave, useApiStorage]);
 
   const scheduleSave = useCallback(
     (clientId: string) => {
@@ -128,12 +153,12 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    if (!activeClientId) return;
+    if (!activeClientId || useApiStorage) return;
     scheduleSave(activeClientId);
-  }, [workspace, activeClientId, scheduleSave]);
+  }, [workspace, activeClientId, scheduleSave, useApiStorage]);
 
   useEffect(() => {
-    if (!activeClientId) return;
+    if (!activeClientId || useApiStorage) return;
     const flushOnExit = () => {
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
@@ -172,6 +197,26 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
 
   const switchClient = useCallback(
     (clientId: string) => {
+      if (useApiStorage) {
+        void (async () => {
+          if (registry.activeClientId === clientId) return;
+          const api = getApiHelpers();
+          if (!api) return;
+          if (registry.activeClientId) {
+            await api.patchWorkspace(registry.activeClientId, workspaceRef.current);
+          }
+          aiQueue.cancelPending();
+          await api.activateClient(clientId);
+          const reg = await api.fetchRegistry();
+          const dto = await api.fetchWorkspace(clientId);
+          setRegistry(reg);
+          const ws = api.toWorkspace(dto);
+          setWorkspace(ws);
+          workspaceRef.current = ws;
+        })();
+        return;
+      }
+
       setRegistry((reg) => {
         if (clientId === reg.activeClientId) return reg;
         if (reg.activeClientId) flushSave(reg.activeClientId, workspaceRef.current);
@@ -182,7 +227,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
         return next;
       });
     },
-    [flushSave, loadClientIntoState]
+    [flushSave, loadClientIntoState, registry, useApiStorage]
   );
 
   const setCatalog: Dispatch<SetStateAction<CatalogItem[]>> = useCallback(
@@ -195,7 +240,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
         const next = { ...prev, catalog: nextCatalog };
         workspaceRef.current = next;
 
-        if (activeClientId && nextCatalog.length !== prev.catalog.length) {
+        if (activeClientId && !useApiStorage && nextCatalog.length !== prev.catalog.length) {
           if (saveTimerRef.current) {
             clearTimeout(saveTimerRef.current);
             saveTimerRef.current = null;
@@ -322,17 +367,43 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
           ui: { ...prev.ui, brandGemSavedAt: savedAt },
         };
         workspaceRef.current = next;
-        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-        saveWorkspace(activeClientId, next);
+        if (!useApiStorage) {
+          if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+          saveWorkspace(activeClientId, next);
+        } else {
+          void getApiHelpers()?.saveBrandGem(activeClientId, normalized);
+        }
         return next;
       });
       return savedAt;
     },
-    [activeClientId]
+    [activeClientId, useApiStorage]
   );
 
   const createClient = useCallback(
     (name: string, slug?: string): string => {
+      if (useApiStorage) {
+        let createdId = "";
+        void (async () => {
+          const api = getApiHelpers();
+          if (!api) return;
+          if (registry.activeClientId) {
+            await api.patchWorkspace(registry.activeClientId, workspaceRef.current);
+          }
+          aiQueue.cancelPending();
+          const created = await api.createClient(name, slug);
+          createdId = created.id;
+          await api.activateClient(created.id);
+          const reg = await api.fetchRegistry();
+          const dto = await api.fetchWorkspace(created.id);
+          setRegistry(reg);
+          const ws = api.toWorkspace(dto);
+          setWorkspace(ws);
+          workspaceRef.current = ws;
+        })();
+        return slug?.trim() || slugifyClientName(name);
+      }
+
       const reg = registry;
       const base = slug?.trim() || slugifyClientName(name);
       const id = uniqueClientId(base, reg.clients.map((c) => c.id));
@@ -351,7 +422,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       loadClientIntoState(id, next.clients);
       return id;
     },
-    [registry, flushSave, loadClientIntoState]
+    [registry, flushSave, loadClientIntoState, useApiStorage]
   );
 
   const renameClient = useCallback(
@@ -377,6 +448,29 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
 
   const deleteClient = useCallback(
     (clientId: string) => {
+      if (useApiStorage) {
+        void (async () => {
+          const api = getApiHelpers();
+          if (!api) return;
+          await api.deleteClient(clientId);
+          const reg = await api.fetchRegistry();
+          setRegistry(reg);
+          const nextId = reg.activeClientId || reg.clients[0]?.id;
+          if (nextId) {
+            const dto = await api.fetchWorkspace(nextId);
+            const ws = api.toWorkspace(dto);
+            setWorkspace(ws);
+            workspaceRef.current = ws;
+          } else {
+            const orphan = createOrphanWorkspace();
+            setWorkspace(orphan);
+            workspaceRef.current = orphan;
+          }
+          aiQueue.cancelPending();
+        })();
+        return true;
+      }
+
       if (!registry.clients.some((c) => c.id === clientId)) return false;
       deleteWorkspace(clientId);
       clearClientCaptionCache(clientId);
@@ -397,18 +491,29 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       }
       return true;
     },
-    [registry, activeClientId, persistRegistry, loadClientIntoState]
+    [registry, activeClientId, persistRegistry, loadClientIntoState, useApiStorage]
   );
 
   const resetActiveClient = useCallback(() => {
     if (!hasActiveClient) return;
+    if (useApiStorage) {
+      void (async () => {
+        const api = getApiHelpers();
+        if (!api) return;
+        const dto = await api.resetClient(activeClientId);
+        const ws = api.toWorkspace(dto);
+        setWorkspace(ws);
+        workspaceRef.current = ws;
+      })();
+      return;
+    }
     const meta = activeClient;
     const ws = createEmptyWorkspace(meta);
     setWorkspace(ws);
     workspaceRef.current = ws;
     flushSave(activeClientId, ws);
     clearClientCaptionCache(activeClientId);
-  }, [activeClient, activeClientId, flushSave, hasActiveClient]);
+  }, [activeClient, activeClientId, flushSave, hasActiveClient, useApiStorage]);
 
   const value = useMemo(
     (): ClientWorkspaceContextValue => ({
@@ -436,6 +541,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       deleteClient,
       resetActiveClient,
       persistWorkspaceNow,
+      useApiStorage,
     }),
     [
       registry,
@@ -461,6 +567,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       deleteClient,
       resetActiveClient,
       persistWorkspaceNow,
+      useApiStorage,
     ]
   );
 

@@ -1,4 +1,4 @@
-import type { AiProviderId } from "./types.ts";
+import type { AiProviderId } from "./types";
 
 /**
  * Circuit breaker simples por provedor.

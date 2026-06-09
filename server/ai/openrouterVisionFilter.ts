@@ -14,6 +14,7 @@ const EXCLUDED_ID_PATTERNS = [
   /-pro-preview$/i,
   /suno/i,
   /elevenlabs/i,
+  /content-safety/i,
 ];
 
 export function isOpenRouterCatalogVisionModelId(id: string): boolean {
@@ -22,14 +23,14 @@ export function isOpenRouterCatalogVisionModelId(id: string): boolean {
   return !EXCLUDED_ID_PATTERNS.some((re) => re.test(normalized));
 }
 
-/** Ordem preferida na cadeia live (Gemma 4 → Qwen VL → resto → roteador). */
+/** Ordem preferida na cadeia live (jun/2026 — qualidade decrescente). */
 export function sortOpenRouterVisionModelIds(ids: string[]): string[] {
   const score = (id: string): number => {
     if (/gemma-4-31b/i.test(id)) return 0;
     if (/gemma-4-26b/i.test(id)) return 1;
-    if (/gemma-4/i.test(id)) return 2;
-    if (/qwen.*vl/i.test(id)) return 3;
-    if (/nemotron.*vl/i.test(id)) return 4;
+    if (/nemotron-3-nano-omni/i.test(id)) return 2;
+    if (/nemotron-nano-12b.*vl/i.test(id)) return 3;
+    if (/kimi-k2/i.test(id)) return 4;
     if (id === "openrouter/free") return 100;
     return 50;
   };

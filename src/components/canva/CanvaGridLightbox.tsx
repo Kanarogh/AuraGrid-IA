@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Minus, Plus, X, ZoomIn } from "lucide-react";
 import { cn } from "../../lib/cn";
 
@@ -15,9 +15,14 @@ export function CanvaGridLightbox({
   slotNumber?: number;
   onClose: () => void;
 }) {
-  const [zoomIndex, setZoomIndex] = useState(3);
+  const [zoomIndex, setZoomIndex] = useState(0);
+  const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
+  const [canPan, setCanPan] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
 
-  const zoom = ZOOM_STEPS[zoomIndex] ?? 1.5;
+  const zoom = ZOOM_STEPS[zoomIndex] ?? 1;
 
   const zoomIn = useCallback(() => {
     setZoomIndex((i) => Math.min(ZOOM_STEPS.length - 1, i + 1));
@@ -26,6 +31,33 @@ export function CanvaGridLightbox({
   const zoomOut = useCallback(() => {
     setZoomIndex((i) => Math.max(0, i - 1));
   }, []);
+
+  const updateCanPan = useCallback(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const overflow =
+      el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1;
+    setCanPan(overflow);
+  }, []);
+
+  useEffect(() => {
+    setNaturalSize(null);
+    setZoomIndex(0);
+    setIsDragging(false);
+  }, [image]);
+
+  useEffect(() => {
+    updateCanPan();
+    const el = viewportRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(updateCanPan);
+    ro.observe(el);
+    window.addEventListener("resize", updateCanPan);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", updateCanPan);
+    };
+  }, [zoom, naturalSize, updateCanPan]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -37,13 +69,47 @@ export function CanvaGridLightbox({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, zoomIn, zoomOut]);
 
+  useEffect(() => {
+    if (!isDragging) return;
+    const onMove = (e: MouseEvent) => {
+      const el = viewportRef.current;
+      if (!el) return;
+      el.scrollLeft = dragRef.current.scrollLeft - (e.clientX - dragRef.current.x);
+      el.scrollTop = dragRef.current.scrollTop - (e.clientY - dragRef.current.y);
+    };
+    const onUp = () => setIsDragging(false);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [isDragging]);
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!canPan || e.button !== 0) return;
+    const el = viewportRef.current;
+    if (!el) return;
+    e.preventDefault();
+    setIsDragging(true);
+    dragRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      scrollLeft: el.scrollLeft,
+      scrollTop: el.scrollTop,
+    };
+  };
+
+  const displayW = naturalSize ? Math.round(naturalSize.w * zoom) : undefined;
+  const displayH = naturalSize ? Math.round(naturalSize.h * zoom) : undefined;
+
   return (
     <div
       className="fixed inset-0 z-[100] flex flex-col bg-black/92 backdrop-blur-sm"
       onClick={onClose}
       role="dialog"
       aria-modal
-      aria-label="Visualização ampliada do grid"
+      aria-label="Visualização ampliada"
     >
       <div
         className="flex items-center justify-between gap-3 px-4 py-3 shrink-0 border-b border-white/10"
@@ -91,27 +157,45 @@ export function CanvaGridLightbox({
       </div>
 
       <div
-        className="flex-1 min-h-0 overflow-auto ag-scrollbar-thin flex items-center justify-center p-2 sm:p-4"
+        ref={viewportRef}
+        className={cn(
+          "flex-1 min-h-0 overflow-auto ag-scrollbar-thin p-2 sm:p-4",
+          canPan && (isDragging ? "cursor-grabbing" : "cursor-grab")
+        )}
         onClick={(e) => e.stopPropagation()}
+        onMouseDown={handleMouseDown}
       >
-        <img
-          src={image}
-          alt={label || "Look ampliado"}
-          draggable={false}
-          className={cn(
-            "rounded-sm shadow-2xl object-contain select-none",
-            "transition-[width] duration-150 ease-out"
-          )}
-          style={{
-            width: `calc(min(96vw, calc(100vh - 5rem)) * ${zoom})`,
-            maxWidth: "none",
-            height: "auto",
-          }}
-        />
+        <div className="min-w-full min-h-full flex items-center justify-center">
+          <img
+            src={image}
+            alt={label || "Look ampliado"}
+            draggable={false}
+            onLoad={(e) => {
+              const img = e.currentTarget;
+              setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
+            }}
+            className={cn(
+              "rounded-sm shadow-2xl object-contain select-none",
+              "transition-[width,height] duration-150 ease-out",
+              !naturalSize &&
+                "max-w-[min(96vw,calc(100vh-5rem))] max-h-[min(96vw,calc(100vh-5rem))] w-auto h-auto"
+            )}
+            style={
+              naturalSize
+                ? {
+                    width: displayW,
+                    height: displayH,
+                    maxWidth: "none",
+                    maxHeight: "none",
+                  }
+                : undefined
+            }
+          />
+        </div>
       </div>
 
       <p className="text-[10px] text-center text-white/40 pb-3 shrink-0">
-        Scroll para mover · + / − para zoom · Esc para fechar
+        {canPan ? "Arraste para mover · " : ""}+ / − para zoom · Esc para fechar
       </p>
     </div>
   );

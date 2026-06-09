@@ -1,5 +1,10 @@
-import { buildMatchCaptionInstructions, buildBrandVoiceBlock, type BrandGemConfig } from "./brandContext.ts";
-import { buildStrictMatchingRubric, compactProfileForMatch } from "./matchProfile.ts";
+import {
+  buildCampaignContextBlock,
+  buildMatchCaptionInstructions,
+  buildBrandVoiceBlock,
+  type BrandGemConfig,
+} from "./brandContext";
+import { buildStrictMatchingRubric, compactProfileForMatch } from "./matchProfile";
 
 function brandLabel(gem?: BrandGemConfig): string {
   return gem?.name?.trim() || "the configured brand";
@@ -135,6 +140,8 @@ export function isImageOnlyCaptionMode(input: {
 /** Prompt quando a imagem é arte/banner — sem comparar catálogo de vestidos. */
 export function buildImageOnlyCaptionTask(gem?: BrandGemConfig): string {
   return `${buildBrandVoiceBlock(gem)}
+
+${buildCampaignContextBlock(gem)}
 
 You are an expert social media copywriter for "${brandLabel(gem)}".
 

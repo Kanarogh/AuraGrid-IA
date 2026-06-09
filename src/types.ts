@@ -43,9 +43,11 @@ export type CatalogEnrichmentStatus =
 export interface CatalogItem {
   id: string;
   label: string; // e.g., "9146 Pink"
-  image: string; // base64 encoded photo
+  image: string | null; // base64 or /api/v1/media URL
+  imageAssetId?: string | null;
+  imageUrl?: string;
   description?: string; // Optional metadata
-  /** Apenas itens do guarda-roupa (aba Catálogo) entram na lista e na IA de match */
+  /** true = look de roupa (match IA); false = peça de grid/atmosfera (não indexada) */
   isReference?: boolean;
   visualProfile?: CatalogVisualProfile;
   enrichmentStatus?: CatalogEnrichmentStatus;
@@ -77,6 +79,8 @@ export interface BrandGem {
   description: string;
   /** Instruções completas (system prompt) enviadas à IA */
   instructions: string;
+  /** Briefing da coleção/campanha do planejamento atual (muda a cada mês/coleção) */
+  campaignContext?: string;
   /** Parâmetros de geração (limites, emojis, estilo do gancho) */
   captionParams?: CaptionGenerationParams;
   /** Endereço, hashtags, estrutura e rodapé fixos nas legendas */
@@ -88,6 +92,7 @@ export interface PlannedPost {
   dayNumber: number;
   dateLabel: string; // e.g., "Segunda (23 de Mai)"
   image: string | null; // Base64 raw representation of the planned dress photograph
+  imageAssetId?: string | null;
   matchedCatalogId: string | null; // Identified ID from the reference catalog items
   reasoning: string | null; // Reasoning provided by Gemini on why this matched
   caption: string; // Drafted Spanish caption
@@ -104,6 +109,7 @@ export interface PlannedPost {
 export interface CanvaGridSlot {
   id: string;
   image: string | null;
+  imageAssetId?: string | null;
   label: string | null;
   matchedCatalogId: string | null;
 }

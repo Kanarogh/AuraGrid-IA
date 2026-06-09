@@ -1,0 +1,89 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: auragrid
+      POSTGRES_PASSWORD: auragrid
+      POSTGRES_DB: auragrid
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auragrid -d auragrid"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: auragrid
+      MINIO_ROOT_PASSWORD: auragridsecret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 auragrid auragridsecret &&
+      mc mb -p local/auragrid-media || true &&
+      mc anonymous set none local/auragrid-media || true
+      "
+
+  migrate:
+    build:
+      context: .
+      target: dev
+    command: npx tsx server/db/migrate.ts
+    environment:
+      DATABASE_URL: postgresql://auragrid:auragrid@postgres:5432/auragrid
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app:
+    build:
+      context: .
+      target: dev
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://auragrid:auragrid@postgres:5432/auragrid
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_USE_SSL: "false"
+      MINIO_ACCESS_KEY: auragrid
+      MINIO_SECRET_KEY: auragridsecret
+      MINIO_BUCKET: auragrid-media
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me-in-production}
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pg_data:
+  minio_data:

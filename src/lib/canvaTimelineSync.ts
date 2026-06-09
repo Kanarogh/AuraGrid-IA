@@ -1,4 +1,5 @@
 import { recalculatePostDates } from "./dates";
+import { stablePlannedPostId } from "./postIds";
 import type { CanvaGridPage, CanvaGridSlot, PlannedPost } from "../types";
 
 export type CanvaSlotWithPage = CanvaGridSlot & { pageId: string };
@@ -83,6 +84,7 @@ export function syncCanvaPagesToPosts(
   }
 
   const existing = [...(existingPosts || [])];
+  const existingById = new Map(existing.map((p) => [p.id, p]));
   const resultPosts: PlannedPost[] = [];
   let itemIndex = 0;
 
@@ -91,21 +93,23 @@ export function syncCanvaPagesToPosts(
     const countForDay = postsPerDay[dIndex];
 
     if (countForDay === 0) {
-      const currentFlatIndex = resultPosts.length;
-      const existingAtSlot = existing[currentFlatIndex];
+      const postId = stablePlannedPostId(dayNum, 0);
+      const existingAtSlot = existingById.get(postId) ?? existing[resultPosts.length];
 
       if (existingAtSlot && existingAtSlot.image === null) {
         resultPosts.push({
           ...existingAtSlot,
+          id: postId,
           dayNumber: dayNum,
           dateLabel: "",
         });
       } else {
         resultPosts.push({
-          id: `post_day${dayNum}_blank_${Date.now()}_${dIndex}`,
+          id: postId,
           dayNumber: dayNum,
           dateLabel: "",
           image: null,
+          imageAssetId: null,
           matchedCatalogId: null,
           reasoning: null,
           caption: "",
@@ -120,13 +124,15 @@ export function syncCanvaPagesToPosts(
         const item = orderedSlots[itemIndex];
         itemIndex++;
 
-        const currentFlatIndex = resultPosts.length;
-        const existingAtSlot = existing[currentFlatIndex];
+        const postId = stablePlannedPostId(dayNum, pIndex);
+        const existingAtSlot = existingById.get(postId) ?? existing[resultPosts.length];
 
         if (item && shouldPreserveSyncedPost(existingAtSlot, item)) {
           resultPosts.push({
             ...existingAtSlot!,
+            id: postId,
             image: item.image,
+            imageAssetId: item.imageAssetId ?? existingAtSlot!.imageAssetId ?? null,
             matchedCatalogId:
               existingAtSlot!.matchedCatalogId ?? item.matchedCatalogId ?? null,
             canvaSlotRef: { pageId: item.pageId, slotId: item.id },
@@ -135,10 +141,11 @@ export function syncCanvaPagesToPosts(
           });
         } else {
           resultPosts.push({
-            id: `post_day${dayNum}_p${pIndex}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            id: postId,
             dayNumber: dayNum,
             dateLabel: "",
             image: item?.image ?? null,
+            imageAssetId: item?.imageAssetId ?? null,
             matchedCatalogId: item?.matchedCatalogId ?? null,
             canvaSlotRef: item ? { pageId: item.pageId, slotId: item.id } : null,
             reasoning:

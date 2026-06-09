@@ -2,7 +2,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import {
   buildRefineCaptionPrompt,
   resolveBrandGemFromBody,
-} from "./brandContext.ts";
+} from "./brandContext";
 import {
   buildMatchJsonCatalogTask,
   buildMatchImagesCatalogTask,
@@ -13,17 +13,17 @@ import {
   isImageOnlyCaptionMode,
   normalizeMatchedId,
   resolveMatchedIdFromCandidates,
-} from "./matchPrompts.ts";
-import { buildEnrichCatalogPrompt, finalizeCatalogProfile } from "./catalogProfile.ts";
-import { CATALOG_PROFILE_SCHEMA } from "../geminiShared.ts";
-import { getGeminiModel, hasGeminiKey } from "./config.ts";
-import { cleanBase64, withRetry } from "./shared.ts";
+} from "./matchPrompts";
+import { buildEnrichCatalogPrompt, finalizeCatalogProfile } from "./catalogProfile";
+import { CATALOG_PROFILE_SCHEMA } from "../geminiShared";
+import { getGeminiCatalogModel, getGeminiModel, hasGeminiKey } from "./config";
+import { cleanBase64, withRetry } from "./shared";
 import type {
   AiProvider,
   CatalogEnrichInput,
   MatchGenerateInput,
   MatchGenerateResult,
-} from "./types.ts";
+} from "./types";
 
 function getClient() {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -43,7 +43,7 @@ export const geminiProvider: AiProvider = {
 
   async enrichCatalogItem({ image, label, id }: CatalogEnrichInput) {
     const ai = getClient();
-    const model = getGeminiModel();
+    const model = getGeminiCatalogModel();
 
     const response = await withRetry(
       () =>

@@ -1,5 +1,4 @@
-import type { Response } from "express";
-import type { AiProviderId } from "./types.ts";
+import type { AiProviderId } from "./types";
 
 export type AiAttemptHeader = {
   provider: AiProviderId;
@@ -25,9 +24,4 @@ export function sanitizeAiAttemptsForHeader(
     skipped: a.skipped,
     error: a.error ? sanitizeForHttpHeader(a.error, 240) : undefined,
   }));
-}
-
-export function setAiAttemptsHeader(res: Response, attempts: AiAttemptHeader[]): void {
-  const json = JSON.stringify(sanitizeAiAttemptsForHeader(attempts));
-  res.setHeader("X-AI-Attempts", sanitizeForHttpHeader(json, 4096));
 }

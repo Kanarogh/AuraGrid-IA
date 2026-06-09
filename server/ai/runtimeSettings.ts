@@ -1,7 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
-import type { AiProviderId } from "./types.ts";
-import { sanitizeOpenRouterModelId } from "./openrouterModels.ts";
+import type { AiProviderId } from "./types";
+import { sanitizeOpenRouterModelId } from "./openrouterModels";
 
 const SETTINGS_FILE = path.join(process.cwd(), ".auragrid-ai.json");
 

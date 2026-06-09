@@ -13,6 +13,7 @@ import {
   Sparkles,
   Trash2,
   Type,
+  CalendarDays,
 } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { gemInitial } from "../../lib/brandGem";
@@ -41,6 +42,9 @@ import { AiProviderPanel } from "./AiProviderPanel";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { FieldLabel, Input, Textarea } from "../ui/Input";
+import { useAuth } from "../../context/AuthContext";
+import { migrateLocalStorageApi } from "../../lib/api/workspaceApi";
+import { REGISTRY_KEY } from "../../lib/clientWorkspace/types";
 
 function formatSavedAt(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -70,6 +74,7 @@ export function ConfigPanel({
   brandGemSavedAt?: string | null;
   onSaveBrandGem: (gem: BrandGem) => string | null;
 }) {
+  const { storageMode } = useAuth();
   const [footerOpen, setFooterOpen] = useState(true);
   const [captionParamsOpen, setCaptionParamsOpen] = useState(true);
   const [draftGem, setDraftGem] = useState<BrandGem>(brandGem);
@@ -167,7 +172,9 @@ export function ConfigPanel({
           Cliente: <span className="text-ag-accent">{clientName}</span>
         </p>
         <p className="text-[11px] text-ag-muted mt-0.5 font-mono truncate">
-          {`localStorage → auragrid_ws:${brandGem.id}`}
+          {storageMode === "postgresql"
+            ? `PostgreSQL + MinIO → cliente ${brandGem.id}`
+            : `localStorage → auragrid_ws:${brandGem.id}`}
         </p>
         <p className="text-xs mt-1.5">
           {isDirty ? (
@@ -309,6 +316,33 @@ export function ConfigPanel({
           />
           <p className="text-[11px] text-ag-muted mt-1.5">
             Enviado à IA em cada legenda (individual, lote ou refinamento) após salvar.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4">
+          <FieldLabel>
+            <span className="inline-flex items-center gap-1.5">
+              <CalendarDays className="h-3.5 w-3.5 text-amber-500" />
+              Briefing da coleção / campanha
+              <span
+                className="text-ag-muted cursor-help"
+                title="Contexto do planejamento atual: tema do mês, manifesto da coleção, restrições legais, ganchos emocionais. Atualize a cada nova coleção."
+              >
+                ⓘ
+              </span>
+            </span>
+          </FieldLabel>
+          <Textarea
+            value={draftGem.campaignContext ?? ""}
+            onChange={(e) => patch({ campaignContext: e.target.value })}
+            rows={12}
+            placeholder="Ex.: mês de junho/2026, tema Copa, manifesto da Coleção Encanto Brasileiro, variações de nome, ganchos de desejo…"
+            className="text-sm leading-relaxed mt-1.5"
+          />
+          <p className="text-[11px] text-ag-muted mt-1.5 leading-relaxed">
+            Complemento que <strong className="text-ag-text font-medium">muda a cada planejamento</strong> — não
+            misture com as instruções gerais da marca. A IA usa este texto para nomes de coleção, ângulos sazonais e
+            legendas do mês atual.
           </p>
         </div>
       </div>
@@ -645,10 +679,44 @@ export function ConfigPanel({
       <div className="mt-6">{saveBar}</div>
 
       {isPage && (
-        <p className="text-xs text-ag-muted pt-6 border-t border-ag-border mt-6">
-          Cada cliente tem workspace próprio no navegador. Troque de marca na barra lateral — o Gem
-          carregado é sempre o daquele cliente.
-        </p>
+        <div className="text-xs text-ag-muted pt-6 border-t border-ag-border mt-6 space-y-3">
+          <p>
+            {storageMode === "postgresql"
+              ? "Dados persistidos no PostgreSQL (metadados) e MinIO (fotos)."
+              : "Cada cliente tem workspace próprio no navegador. Troque de marca na barra lateral."}
+          </p>
+          {storageMode === "postgresql" && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={async () => {
+                try {
+                  const rawReg = localStorage.getItem(REGISTRY_KEY);
+                  if (!rawReg) {
+                    alert("Nenhum dado local encontrado para importar.");
+                    return;
+                  }
+                  const registry = JSON.parse(rawReg);
+                  const workspaces: Record<string, unknown> = {};
+                  for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (!key?.startsWith("auragrid_ws:")) continue;
+                    const id = key.replace("auragrid_ws:", "");
+                    const raw = localStorage.getItem(key);
+                    if (raw) workspaces[id] = JSON.parse(raw);
+                  }
+                  await migrateLocalStorageApi({ registry, workspaces });
+                  alert("Importação concluída! Recarregue a página.");
+                } catch (err) {
+                  alert(err instanceof Error ? err.message : "Falha na importação.");
+                }
+              }}
+            >
+              Importar dados do localStorage
+            </Button>
+          )}
+        </div>
       )}
     </>
   );

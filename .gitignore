@@ -7,3 +7,7 @@ coverage/
 .env*
 !.env.example
 .auragrid-ai.json
+
+# Next.js
+.next/
+next-env.d.ts

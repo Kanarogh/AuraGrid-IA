@@ -19,6 +19,7 @@ export type BrandGemConfig = {
   name?: string;
   description?: string;
   instructions?: string;
+  campaignContext?: string;
   footer?: RepeatingTextConfig;
   captionParams?: {
     maxTotalChars?: number;
@@ -84,6 +85,7 @@ export function resolveBrandGemFromBody(body: {
       name: body.brandGem.name,
       description: body.brandGem.description,
       instructions: body.brandGem.instructions ?? body.promptContext,
+      campaignContext: body.brandGem.campaignContext,
       footer: body.brandGem.footer ?? body.repeatingText,
       captionParams: body.brandGem.captionParams,
     };
@@ -114,6 +116,16 @@ export function buildBrandVoiceBlock(gem?: BrandGemConfig): string {
   }
 
   return `BRAND VOICE AND WRITING RULES:\n${parts.join("\n\n")}`;
+}
+
+/** Briefing da coleção/campanha do planejamento atual (muda a cada mês). */
+export function buildCampaignContextBlock(gem?: BrandGemConfig): string {
+  const ctx = gem?.campaignContext?.trim();
+  if (!ctx) return "";
+  return (
+    `CAMPAIGN & COLLECTION BRIEF (current planning cycle — seasonal theme, collection manifesto, naming ideas, emotional hooks; complements but does NOT replace GEM INSTRUCTIONS):\n---\n${ctx}\n---\n` +
+    `Use this brief for collection naming variations, seasonal angles, and desire-driven hooks in captions. Respect legal constraints mentioned here (e.g. avoid prohibited trademark names).`
+  );
 }
 
 /** Estrutura fixa da legenda (layout padrão MIA / Instagram). */
@@ -247,6 +259,8 @@ export function buildMatchCaptionInstructions(
 ): string {
   return `${buildBrandVoiceBlock(gem)}
 
+${buildCampaignContextBlock(gem)}
+
 ${buildCaptionParamsBlock(gem)}
 
 ${buildCaptionStructureBlock(gem)}
@@ -270,6 +284,8 @@ export function buildRefineCaptionPrompt(
   return `Refine this fashion Instagram caption for the brand configured below.
 
 ${buildBrandVoiceBlock(gem)}
+
+${buildCampaignContextBlock(gem)}
 
 ${buildCaptionParamsBlock(gem)}
 

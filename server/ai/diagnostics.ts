@@ -1,5 +1,5 @@
-import { isQuotaExhausted, parseRetrySeconds } from "./shared.ts";
-import type { AiProviderId } from "./types.ts";
+import { isQuotaExhausted, parseRetrySeconds } from "./shared";
+import type { AiProviderId } from "./types";
 
 export type AiFailureKind =
   | "quota_exhausted"

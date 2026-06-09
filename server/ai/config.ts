@@ -1,14 +1,17 @@
-import type { AiProviderId } from "./types.ts";
-import { sanitizeOpenRouterModelId } from "./openrouterModels.ts";
+import type { AiProviderId } from "./types";
+import { sanitizeOpenRouterModelId } from "./openrouterModels";
 import {
   getRuntimeOpenRouterModel,
   getRuntimeProviderOverride,
-} from "./runtimeSettings.ts";
+} from "./runtimeSettings";
 
-export const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
+/** Match, legenda com imagem, refinar (visão/texto geral). */
+export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+/** Indexação em lote — maior cota free (1.000 req/dia no tier Google). */
+export const DEFAULT_GEMINI_CATALOG_MODEL = "gemini-2.5-flash-lite";
 export const DEFAULT_GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
-/** Roteador free com visão quando disponível (evita IDs que saíram do ar). */
-export const DEFAULT_OPENROUTER_MODEL = "openrouter/free";
+/** Primário OpenRouter free (jun/2026): Gemma 4 31B; roteador só como fallback. */
+export const DEFAULT_OPENROUTER_MODEL = "google/gemma-4-31b-it:free";
 export const DEFAULT_OLLAMA_MODEL = "gemma4:e4b";
 export const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434";
 
@@ -27,6 +30,14 @@ export function getAiProviderId(): AiProviderId {
 
 export function getGeminiModel(): string {
   return process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL;
+}
+
+export function getGeminiCatalogModel(): string {
+  return (
+    process.env.GEMINI_CATALOG_MODEL?.trim() ||
+    process.env.GEMINI_MODEL?.trim() ||
+    DEFAULT_GEMINI_CATALOG_MODEL
+  );
 }
 
 export function getGroqModel(): string {

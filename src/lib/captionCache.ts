@@ -3,13 +3,20 @@
  * Evita reprocessar a mesma foto + contexto duas vezes.
  */
 
+import { apiFetch } from "./api/apiClient";
+
 const STORAGE_KEY_BASE = "ag.captionCache.v1";
 const MAX_ENTRIES = 200;
 
 let activeClientIdForCache = "default";
+let apiCaptionCacheEnabled = false;
 
 export function setCaptionCacheClientId(clientId: string) {
   activeClientIdForCache = clientId || "default";
+}
+
+export function setApiCaptionCacheEnabled(enabled: boolean) {
+  apiCaptionCacheEnabled = enabled;
 }
 
 function storageKey(): string {
@@ -40,6 +47,7 @@ type BrandGemCacheSlice = {
   name?: string;
   description?: string;
   instructions?: string;
+  campaignContext?: string;
   captionParams?: unknown;
   footer?: RepeatingTextInput;
 };
@@ -107,12 +115,13 @@ export function buildCaptionCacheKey(input: CaptionCacheKeyInput): string {
   const name = (gem?.name ?? "").trim();
   const desc = (gem?.description ?? "").trim();
   const ctx = (gem?.instructions ?? input.promptContext ?? "").trim();
+  const campaign = (gem?.campaignContext ?? "").trim();
   const params = JSON.stringify(gem?.captionParams ?? {});
   const rep = serializeRepeating(gem?.footer ?? input.repeatingText);
   const ids = (input.catalogIds ?? []).slice().sort().join("|");
   const slot = (input.postId ?? "").trim();
   const imgOnly = input.captionFromImageOnly ? "1" : "0";
-  return djb2(`${imageFp}__slot:${slot}__imgonly:${imgOnly}__${name}__${desc}__${ctx}__${params}__${rep}__${ids}`);
+  return djb2(`${imageFp}__slot:${slot}__imgonly:${imgOnly}__${name}__${desc}__${ctx}__${campaign}__${params}__${rep}__${ids}`);
 }
 
 function readAll(): StoredEntry[] {
@@ -141,6 +150,37 @@ function writeAll(entries: StoredEntry[]) {
   } catch {
     /* quota cheia ou indisponível: ignora */
   }
+}
+
+export async function getCachedCaptionAsync(hash: string): Promise<CaptionCacheValue | null> {
+  if (apiCaptionCacheEnabled && activeClientIdForCache) {
+    try {
+      const res = await apiFetch(
+        `/api/v1/clients/${activeClientIdForCache}/caption-cache/${encodeURIComponent(hash)}`
+      );
+      if (!res.ok) return null;
+      const data = await res.json();
+      return (data as { hit: CaptionCacheValue | null }).hit;
+    } catch {
+      return null;
+    }
+  }
+  return getCachedCaption(hash);
+}
+
+export async function setCachedCaptionAsync(hash: string, value: CaptionCacheValue) {
+  if (apiCaptionCacheEnabled && activeClientIdForCache) {
+    try {
+      await apiFetch(
+        `/api/v1/clients/${activeClientIdForCache}/caption-cache/${encodeURIComponent(hash)}`,
+        { method: "PUT", body: JSON.stringify(value) }
+      );
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
+  setCachedCaption(hash, value);
 }
 
 export function getCachedCaption(hash: string): CaptionCacheValue | null {

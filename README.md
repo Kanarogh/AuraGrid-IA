@@ -1,20 +1,75 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# AuraGrid IA
 
-# Run and deploy your AI Studio app
+Planejamento Instagram com catálogo de referências, grid Canva, roteiro 30 dias e geração de legendas via IA.
 
-This contains everything you need to run your app locally.
+## Desenvolvimento local (sem Docker)
 
-View your app in AI Studio: https://ai.studio/apps/ae78818a-1dc6-4566-983f-d492a7dfc6a6
+1. `npm install`
+2. Copie `.env.example` → `.env` e configure `GEMINI_API_KEY` (ou outro provedor)
+3. `npm run dev` → http://localhost:3000
 
-## Run Locally
+Sem `DATABASE_URL`, os dados ficam no **localStorage** do navegador.
 
-**Prerequisites:**  Node.js
+## PostgreSQL + MinIO (Docker)
 
+> Guia completo: **[docs/SETUP-INFRAESTRUTURA.md](docs/SETUP-INFRAESTRUTURA.md)** (Docker, migrations, MinIO, auth, catálogo, troubleshooting).
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+### 1. Subir infraestrutura
+
+```bash
+npm run docker:infra
+```
+
+Sobe Postgres (5432) e MinIO (9000 API, 9001 console).
+
+### 2. Configurar `.env`
+
+```env
+DATABASE_URL=postgresql://auragrid:auragrid@localhost:5432/auragrid
+MINIO_ENDPOINT=localhost
+MINIO_PORT=9000
+MINIO_ACCESS_KEY=auragrid
+MINIO_SECRET_KEY=auragridsecret
+MINIO_BUCKET=auragrid-media
+JWT_SECRET=sua-chave-secreta-longa
+```
+
+### 3. Migrar banco e rodar app
+
+```bash
+npm run db:migrate
+npm run dev
+```
+
+Com `DATABASE_URL` configurada, o app exige **login/cadastro** e persiste tudo no PostgreSQL + blobs no MinIO.
+
+### Stack completa (app + DB + MinIO)
+
+```bash
+npm run docker:up
+```
+
+## Scripts úteis
+
+| Script | Descrição |
+|--------|-----------|
+| `npm run dev` | Servidor Express + Vite |
+| `npm run docker:infra` | Só Postgres + MinIO |
+| `npm run docker:up` | Stack completa |
+| `npm run db:migrate` | Aplica migrations SQL |
+
+## Migração localStorage → PostgreSQL
+
+1. Faça login no app com Docker/DB ativo
+2. Vá em **Configurações**
+3. Clique **Importar dados do localStorage**
+
+## API v1
+
+- `POST /api/v1/auth/register|login|refresh|logout`
+- `GET /api/v1/clients` — lista marcas
+- `GET /api/v1/clients/:id/workspace` — workspace completo
+- `POST /api/v1/clients/:id/catalog/batch` — upload de referências
+- `GET /api/v1/media/:id` — serve imagem (auth Bearer ou `?token=`)
+
+Health: `GET /api/health` inclui status de DB e MinIO.

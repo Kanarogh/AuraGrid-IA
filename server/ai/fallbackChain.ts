@@ -1,10 +1,10 @@
-import { getAiProviderId, isAiFallbackAllowed } from "./config.ts";
-import { getProvider } from "./index.ts";
+import { getAiProviderId, isAiFallbackAllowed } from "./config";
+import { getProvider } from "./index";
 import {
   isProviderInCooldown,
   recordFailure,
   recordSuccess,
-} from "./circuitBreaker.ts";
+} from "./circuitBreaker";
 import {
   classifyAiFailure,
   failureKindLabel,
@@ -13,18 +13,18 @@ import {
   logAiAttemptStart,
   logAiChain,
   logAiSkip,
-} from "./diagnostics.ts";
-import { sanitizeForHttpHeader } from "./httpHeaders.ts";
-import type { AiProvider, AiProviderId } from "./types.ts";
+} from "./diagnostics";
+import { sanitizeForHttpHeader } from "./httpHeaders";
+import type { AiProvider, AiProviderId } from "./types";
 import {
   buildVisionProviderChain,
   stripAuraGridMeta,
   shouldTryNextProvider,
   type FallbackOutcome,
-} from "./visionChain.ts";
+} from "./visionChain";
 
-export type { FallbackOutcome } from "./visionChain.ts";
-export { stripAuraGridMeta } from "./visionChain.ts";
+export type { FallbackOutcome } from "./visionChain";
+export { stripAuraGridMeta } from "./visionChain";
 
 export async function runVisionWithFallback<T>(
   label: string,

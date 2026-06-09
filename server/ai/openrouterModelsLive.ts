@@ -4,11 +4,11 @@
  * @see https://openrouter.ai/models?output_modalities=image&input_modalities=image
  */
 
-import type { OpenRouterModelOption } from "./openrouterModels.ts";
+import type { OpenRouterModelOption } from "./openrouterModels";
 import {
   filterOpenRouterCatalogVisionModelIds,
   isOpenRouterCatalogVisionModelId,
-} from "./openrouterVisionFilter.ts";
+} from "./openrouterVisionFilter";
 
 const CACHE_MS = 30 * 60 * 1000;
 
@@ -101,7 +101,11 @@ function mapOrModel(m: OrModel): OpenRouterLiveModel | null {
     availableNow: true,
     source: "live",
     recommended:
-      id === "openrouter/free" || /gemma-4/i.test(id) || /qwen.*vl/i.test(id),
+      /gemma-4-31b/i.test(id) ||
+      /gemma-4-26b/i.test(id) ||
+      /nemotron.*vl/i.test(id) ||
+      /nemotron-3-nano-omni/i.test(id) ||
+      /kimi-k2/i.test(id),
   };
 }
 

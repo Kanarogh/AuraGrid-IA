@@ -138,7 +138,8 @@ export function AiUsagePanel() {
                 {settings.activeProvider !== "openrouter" && (
                   <p className="text-[10px] text-ag-muted leading-snug">
                     Com <strong>{providerDisplayName(settings.activeProvider)}</strong> ativo, só
-                    APIs diretas são usadas. Para OpenRouter, selecione-o acima.
+                    esse provedor é usado (padrão). Para cair em Groq/OpenRouter ao esgotar cota,
+                    defina <code className="text-[9px]">AI_ALLOW_FALLBACK=1</code> no .env.
                   </p>
                 )}
               </div>

@@ -1,5 +1,5 @@
-import { classifyAiFailure, failureKindLabel } from "./diagnostics.ts";
-import type { AiProviderId } from "./types.ts";
+import { classifyAiFailure, failureKindLabel } from "./diagnostics";
+import type { AiProviderId } from "./types";
 
 /** Remove cercas markdown/aspas que modelos costumam devolver no refine. */
 export function sanitizeRefinedCaptionOutput(raw: string): string {
@@ -124,11 +124,11 @@ export function formatAiError(error: unknown, provider: AiProviderId): string {
   if (kind === "empty_response") {
     return raw.includes("Não é cota")
       ? raw
-      : `${label}: o modelo respondeu sem texto (não é cota). No painel IA, use OpenRouter + "Qwen 2.5 VL 32B (free)".`;
+      : `${label}: o modelo respondeu sem texto (não é cota). No painel IA, use Gemini ou OpenRouter + Gemma 4 31B.`;
   }
 
   if (kind === "model_unavailable") {
-    return `Modelo indisponível no ${label}. Escolha outro no painel IA (ex.: Qwen VL 32B ou OpenRouter Free).`;
+    return `Modelo indisponível no ${label}. Escolha outro no painel IA (ex.: Gemini 2.5 Flash ou Gemma 4 31B).`;
   }
 
   if (kind === "quota_exhausted" || kind === "rate_limit") {
@@ -144,7 +144,7 @@ export function formatAiError(error: unknown, provider: AiProviderId): string {
   }
 
   if (/no endpoints found/i.test(raw)) {
-    return `Modelo OpenRouter indisponível. No painel IA (topo), escolha "OpenRouter Free (auto)" ou "Qwen 2.5 VL 32B (free)" e tente de novo.`;
+    return `Modelo OpenRouter indisponível. No painel IA, escolha "Gemma 4 31B" ou "OpenRouter Free (auto)" e tente de novo.`;
   }
 
   if (/Ollama não está acessível|model.*not found.*Ollama/i.test(raw)) {

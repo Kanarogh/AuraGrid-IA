@@ -1,0 +1,58 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { formatAiError, getActiveProvider } from "@/server/ai/index";
+import {
+  assertBrandGemReadyForCaptions,
+  resolveBrandGemFromBody,
+} from "@/server/ai/brandContext";
+import { sanitizeRefinedCaptionOutput } from "@/server/ai/shared";
+import { applyAiHeadersFromNextRequest } from "@/server/http/aiRequest";
+
+export const dynamic = "force-dynamic";
+
+export async function POST(req: NextRequest) {
+  const providerId = await applyAiHeadersFromNextRequest(req);
+  try {
+    const { currentCaption, instructions, brandGem, promptContext, repeatingText } =
+      await req.json();
+    if (!currentCaption) {
+      return NextResponse.json({ error: "Missing caption to refine." }, { status: 400 });
+    }
+
+    try {
+      assertBrandGemReadyForCaptions(
+        brandGem ?? resolveBrandGemFromBody({ promptContext, repeatingText })
+      );
+    } catch (validationError: unknown) {
+      return NextResponse.json(
+        {
+          error:
+            validationError instanceof Error
+              ? validationError.message
+              : String(validationError),
+        },
+        { status: 400 }
+      );
+    }
+
+    const provider = getActiveProvider();
+    if (!String(instructions ?? "").trim()) {
+      return NextResponse.json(
+        { error: "Informe como deseja refinar a legenda." },
+        { status: 400 }
+      );
+    }
+
+    const caption = await provider.refineCaption({
+      currentCaption,
+      instructions,
+      brandGem,
+      promptContext,
+      repeatingText,
+    });
+    return NextResponse.json({ caption: sanitizeRefinedCaptionOutput(caption) });
+  } catch (error: unknown) {
+    console.error("Error refining caption:", error);
+    const status = /429|quota|RESOURCE_EXHAUSTED|rate.?limit/i.test(String(error)) ? 429 : 500;
+    return NextResponse.json({ error: formatAiError(error, providerId) }, { status });
+  }
+}

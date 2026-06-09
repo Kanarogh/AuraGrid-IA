@@ -1,9 +1,9 @@
 import {
   buildRefineCaptionPrompt,
   resolveBrandGemFromBody,
-} from "./brandContext.ts";
-import { getGroqModel, hasGroqKey } from "./config.ts";
-import { buildEnrichCatalogPrompt, finalizeCatalogProfile } from "./catalogProfile.ts";
+} from "./brandContext";
+import { getGroqModel, hasGroqKey } from "./config";
+import { buildEnrichCatalogPrompt, finalizeCatalogProfile } from "./catalogProfile";
 import {
   buildMatchJsonCatalogTask,
   buildMatchImagesCatalogTask,
@@ -14,19 +14,19 @@ import {
   isImageOnlyCaptionMode,
   normalizeMatchedId,
   resolveMatchedIdFromCandidates,
-} from "./matchPrompts.ts";
+} from "./matchPrompts";
 import {
   CATALOG_PROFILE_JSON_SCHEMA,
   MATCH_REFERENCE_JSON_SCHEMA,
   MATCH_RESULT_JSON_SCHEMA,
-} from "./schemas.ts";
-import { annotateErrorWithRetryAfter, toDataUrl, withRetry } from "./shared.ts";
+} from "./schemas";
+import { annotateErrorWithRetryAfter, toDataUrl, withRetry } from "./shared";
 import type {
   AiProvider,
   CatalogEnrichInput,
   MatchGenerateInput,
   MatchGenerateResult,
-} from "./types.ts";
+} from "./types";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 

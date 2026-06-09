@@ -62,7 +62,7 @@ export function normalizeVisualProfile(
 }
 
 /** Itens importados automaticamente por Canva/calendário — não são referência de showroom */
-function wasAutoImported(item: CatalogItem): boolean {
+export function wasAutoImported(item: CatalogItem): boolean {
   const d = item.description?.toLowerCase() ?? "";
   return (
     d.includes("canva grid") ||
@@ -89,6 +89,25 @@ export function isReferenceCatalogItem(item: CatalogItem): boolean {
 
 export function getReferenceCatalog(catalog: CatalogItem[]): CatalogItem[] {
   return catalog.filter(isReferenceCatalogItem);
+}
+
+export function isGridCatalogItem(item: CatalogItem): boolean {
+  return item.isReference === false && !wasAutoImported(item);
+}
+
+/** Fotos de grid/atmosfera (banners, lifestyle) — não entram na IA de match */
+export function getGridCatalog(catalog: CatalogItem[]): CatalogItem[] {
+  return catalog.filter(isGridCatalogItem);
+}
+
+/** Itens legados do Canva/calendário que não devem ficar no acervo */
+export function isAutoImportedCatalogItem(item: CatalogItem): boolean {
+  return item.isReference === false && wasAutoImported(item);
+}
+
+/** Looks + peças de grid para arrastar no Canva */
+export function getCanvaCatalog(catalog: CatalogItem[]): CatalogItem[] {
+  return catalog.filter((item) => isReferenceCatalogItem(item) || isGridCatalogItem(item));
 }
 
 export function isCatalogItemIndexed(item: CatalogItem): boolean {

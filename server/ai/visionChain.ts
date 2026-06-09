@@ -4,10 +4,10 @@ import {
   hasOpenRouterKey,
   isAiFallbackAllowed,
   isOllamaConfigured,
-} from "./config.ts";
-import { getProvider } from "./index.ts";
-import { isQuotaExhausted } from "./shared.ts";
-import type { AiProviderId } from "./types.ts";
+} from "./config";
+import { getProvider } from "./index";
+import { isQuotaExhausted } from "./shared";
+import type { AiProviderId } from "./types";
 
 export type FallbackOutcome<T> = {
   result: T;

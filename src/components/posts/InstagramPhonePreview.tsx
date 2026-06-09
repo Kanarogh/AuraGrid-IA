@@ -47,7 +47,7 @@ export function InstagramPhonePreview({
             <div className="h-1 w-14 rounded-full bg-stone-700" />
           </div>
 
-          <div className="pt-4 bg-black text-white text-[10px] min-h-[380px] flex flex-col">
+          <div className="pt-4 bg-black text-white text-[10px] min-h-[420px] flex flex-col">
             <div className="flex justify-between items-center px-3 py-2 border-b border-white/10">
               <span className="font-display italic text-sm">Instagram</span>
               <div className="flex gap-2 opacity-80">
@@ -66,7 +66,7 @@ export function InstagramPhonePreview({
               <span className="font-semibold text-[10px]">{handle}</span>
             </div>
 
-            <div className="aspect-square w-full bg-stone-900 flex items-center justify-center overflow-hidden">
+            <div className="aspect-[4/5] w-full bg-stone-900 flex items-center justify-center overflow-hidden shrink-0">
               {post.image ? (
                 <img
                   src={post.image}

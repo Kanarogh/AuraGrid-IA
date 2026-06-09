@@ -10,26 +10,26 @@ import {
   hasOpenRouterKey,
   isOllamaConfigured,
   isAiFallbackAllowed,
-} from "./config.ts";
+} from "./config";
 import {
   getRuntimeOpenRouterModel,
   setRuntimeOpenRouterModel,
   setRuntimeProvider,
-} from "./runtimeSettings.ts";
-import { OPENROUTER_MODELS, type OpenRouterModelOption } from "./openrouterModels.ts";
+} from "./runtimeSettings";
+import { OPENROUTER_MODELS, type OpenRouterModelOption } from "./openrouterModels";
 import {
   listLiveOpenRouterModels,
   mergeOpenRouterModelsForUi,
   clearOpenRouterModelsCache,
   type OpenRouterModelsFilter,
-} from "./openrouterModelsLive.ts";
-import { formatAiError } from "./shared.ts";
-import { getCircuitBreakerSnapshot } from "./circuitBreaker.ts";
-import { geminiProvider } from "./geminiProvider.ts";
-import { groqProvider } from "./groqProvider.ts";
-import { openrouterProvider } from "./openrouterProvider.ts";
-import { ollamaProvider } from "./ollamaProvider.ts";
-import type { AiHealthResponse, AiProvider, AiProviderId } from "./types.ts";
+} from "./openrouterModelsLive";
+import { formatAiError } from "./shared";
+import { getCircuitBreakerSnapshot } from "./circuitBreaker";
+import { geminiProvider } from "./geminiProvider";
+import { groqProvider } from "./groqProvider";
+import { openrouterProvider } from "./openrouterProvider";
+import { ollamaProvider } from "./ollamaProvider";
+import type { AiHealthResponse, AiProvider, AiProviderId } from "./types";
 
 export type AiProviderOption = {
   id: AiProviderId;

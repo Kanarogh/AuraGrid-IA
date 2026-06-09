@@ -1,13 +1,13 @@
 import {
   buildRefineCaptionPrompt,
   resolveBrandGemFromBody,
-} from "./brandContext.ts";
+} from "./brandContext";
 import {
   buildEnrichCatalogPrompt,
   coerceCatalogProfile,
   finalizeCatalogProfile,
   IncompleteCatalogProfileError,
-} from "./catalogProfile.ts";
+} from "./catalogProfile";
 import {
   buildMatchJsonCatalogTask,
   buildMatchImagesCatalogTask,
@@ -20,16 +20,16 @@ import {
   MATCH_RESPONSE_HINT,
   normalizeMatchedId,
   resolveMatchedIdFromCandidates,
-} from "./matchPrompts.ts";
-import { getOllamaBaseUrl, getOllamaModel, isOllamaConfigured } from "./config.ts";
-import { logAiAttemptFail } from "./diagnostics.ts";
-import { cleanBase64, withRetry } from "./shared.ts";
+} from "./matchPrompts";
+import { getOllamaBaseUrl, getOllamaModel, isOllamaConfigured } from "./config";
+import { logAiAttemptFail } from "./diagnostics";
+import { cleanBase64, withRetry } from "./shared";
 import type {
   AiProvider,
   CatalogEnrichInput,
   MatchGenerateInput,
   MatchGenerateResult,
-} from "./types.ts";
+} from "./types";
 
 type OllamaMessage = {
   role: "user" | "assistant" | "system";

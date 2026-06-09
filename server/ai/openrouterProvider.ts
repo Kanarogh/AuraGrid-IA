@@ -1,15 +1,19 @@
 import {
   buildRefineCaptionPrompt,
   resolveBrandGemFromBody,
-} from "./brandContext.ts";
-import { getOpenRouterModel, hasOpenRouterKey, isAiFallbackAllowed } from "./config.ts";
+} from "./brandContext";
+import { getOpenRouterModel, hasOpenRouterKey, isAiFallbackAllowed } from "./config";
 import {
   buildOpenRouterVisionModelChain,
+  getLastSuccessfulCatalogVisionModel,
+  getOpenRouterModelOption,
   isOpenRouterRetryableError,
+  prioritizeCatalogVisionChain,
   resolveOpenRouterCatalogVisionChain,
+  setLastSuccessfulCatalogVisionModel,
   shouldTryNextCatalogVisionModel,
-} from "./openrouterModels.ts";
-import { buildEnrichCatalogPrompt, finalizeCatalogProfile } from "./catalogProfile.ts";
+} from "./openrouterModels";
+import { buildEnrichCatalogPrompt, finalizeCatalogProfile } from "./catalogProfile";
 import {
   buildMatchJsonCatalogTask,
   buildMatchImagesCatalogTask,
@@ -22,20 +26,20 @@ import {
   MATCH_RESPONSE_HINT,
   normalizeMatchedId,
   resolveMatchedIdFromCandidates,
-} from "./matchPrompts.ts";
+} from "./matchPrompts";
 import {
   CATALOG_PROFILE_JSON_SCHEMA,
   MATCH_REFERENCE_JSON_SCHEMA,
   MATCH_RESULT_JSON_SCHEMA,
-} from "./schemas.ts";
-import { logAiAttemptFail, logAiAttemptOk } from "./diagnostics.ts";
-import { annotateErrorWithRetryAfter, toDataUrl, withRetry } from "./shared.ts";
+} from "./schemas";
+import { logAiAttemptFail, logAiAttemptOk } from "./diagnostics";
+import { annotateErrorWithRetryAfter, toDataUrl, withRetry } from "./shared";
 import type {
   AiProvider,
   CatalogEnrichInput,
   MatchGenerateInput,
   MatchGenerateResult,
-} from "./types.ts";
+} from "./types";
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -206,7 +210,7 @@ async function openrouterChat(
     const err = new Error(
       `OpenRouter retornou resposta vazia (pedido: ${model}, roteado: ${routedModel ?? "?"}). ` +
         `Não é cota — o modelo free respondeu sem texto (${shape}). ` +
-        `Tente "Qwen 2.5 VL 32B" no painel IA.`
+        `Tente "Gemma 4 31B" no painel IA.`
     );
     logAiAttemptFail("openrouter-chat", "openrouter", err, {
       model,
@@ -236,12 +240,12 @@ async function openrouterChatVision(
 ): Promise<{ content: string; modelUsed: string }> {
   const selected = getOpenRouterModel();
 
-  if (!isAiFallbackAllowed()) {
+  if (!shouldUseOpenRouterVisionChain(selected)) {
     console.info(`[OpenRouter] modelo fixo: ${selected}`);
     try {
       const content = await openrouterChat(messages, options, selected);
       if (options.catalogEnrich) {
-        const raw = JSON.parse(extractJson(content)) as Record<string, unknown>;
+        const raw = parseModelJsonContent(content);
         finalizeCatalogProfile(raw, options.catalogLabel);
       }
       logAiAttemptOk("openrouter-vision", "openrouter", selected);
@@ -252,19 +256,31 @@ async function openrouterChatVision(
     }
   }
 
-  const models = options.catalogEnrich
+  const baseChain = options.catalogEnrich
     ? await resolveOpenRouterCatalogVisionChain(selected)
     : buildOpenRouterVisionModelChain(selected, "default");
+  const models = options.catalogEnrich
+    ? prioritizeCatalogVisionChain(baseChain)
+    : baseChain;
   const errors: string[] = [];
 
-  console.info(`[OpenRouter] cadeia visão (fallback ligado): ${models.join(" → ")}`);
+  const chainReason = isAiFallbackAllowed()
+    ? "fallback ligado"
+    : "roteador openrouter/free";
+  const preferred = options.catalogEnrich ? getLastSuccessfulCatalogVisionModel() : null;
+  if (preferred && models[0] === preferred) {
+    console.info(`[OpenRouter] reutilizando modelo OK anterior: ${preferred}`);
+  } else {
+    console.info(`[OpenRouter] cadeia visão (${chainReason}): ${models.join(" → ")}`);
+  }
 
   for (const model of models) {
     try {
       const content = await openrouterChat(messages, options, model);
       if (options.catalogEnrich) {
-        const raw = JSON.parse(extractJson(content)) as Record<string, unknown>;
+        const raw = parseModelJsonContent(content);
         finalizeCatalogProfile(raw, options.catalogLabel);
+        setLastSuccessfulCatalogVisionModel(model);
       }
       logAiAttemptOk("openrouter-vision", "openrouter", model, `modelo usado: ${model}`);
       if (model !== selected) {
@@ -274,6 +290,9 @@ async function openrouterChatVision(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`${model}: ${msg}`);
+      if (options.catalogEnrich && model === getLastSuccessfulCatalogVisionModel()) {
+        setLastSuccessfulCatalogVisionModel(null);
+      }
       const tryNext = options.catalogEnrich
         ? shouldTryNextCatalogVisionModel(err)
         : isOpenRouterRetryableError(err);
@@ -301,6 +320,41 @@ function extractJson(content: string): string {
   if (objMatch) return objMatch[0];
 
   return trimmed;
+}
+
+function isNonJsonModelResponse(content: string): boolean {
+  const t = content.trim();
+  if (/^user\s+safety\s*:/i.test(t)) return true;
+  if (/^i(?:'m| am) sorry/i.test(t)) return true;
+  if (/^i cannot/i.test(t)) return true;
+  if (/^content\s+(?:policy|filtered)/i.test(t)) return true;
+  if (t.length < 240 && !t.includes("{") && !t.includes("[")) return true;
+  return false;
+}
+
+function parseModelJsonContent(content: string): Record<string, unknown> {
+  if (isNonJsonModelResponse(content)) {
+    throw new Error(
+      `O modelo retornou texto em vez de JSON (${content.trim().slice(0, 100)}). ` +
+        `Escolha outro modelo de visão no painel IA (ex.: Gemma 4 31B ou Qwen 2.5 VL 32B).`
+    );
+  }
+  const jsonStr = extractJson(content);
+  try {
+    return JSON.parse(jsonStr) as Record<string, unknown>;
+  } catch {
+    throw new Error(
+      `Resposta do modelo não é JSON válido (${jsonStr.slice(0, 100)}${jsonStr.length > 100 ? "…" : ""}). ` +
+        `Escolha outro modelo de visão no painel IA.`
+    );
+  }
+}
+
+/** Cadeia de visão: roteador free, modelos multimodais ou AI_ALLOW_FALLBACK. */
+function shouldUseOpenRouterVisionChain(selectedModel: string): boolean {
+  if (isAiFallbackAllowed()) return true;
+  if (selectedModel === "openrouter/free") return true;
+  return getOpenRouterModelOption(selectedModel)?.vision === true;
 }
 
 export const openrouterProvider: AiProvider = {
@@ -331,7 +385,7 @@ export const openrouterProvider: AiProvider = {
       }
     );
 
-    const raw = JSON.parse(extractJson(content)) as Record<string, unknown>;
+    const raw = parseModelJsonContent(content);
     const profile = finalizeCatalogProfile(raw, label);
     return { ...profile, __auragridRoutedModel: modelUsed };
   },
@@ -363,7 +417,7 @@ export const openrouterProvider: AiProvider = {
         "OpenRouter"
       );
 
-      const parsed = JSON.parse(extractJson(raw)) as Omit<MatchGenerateResult, "matchMode"> & {
+      const parsed = parseModelJsonContent(raw) as Omit<MatchGenerateResult, "matchMode"> & {
         matchedId?: string | null;
         caption?: string;
       };
@@ -439,7 +493,7 @@ export const openrouterProvider: AiProvider = {
       "OpenRouter"
     );
 
-    const parsed = JSON.parse(extractJson(raw)) as Omit<MatchGenerateResult, "matchMode"> & {
+    const parsed = parseModelJsonContent(raw) as Omit<MatchGenerateResult, "matchMode"> & {
       matchedId?: string | null;
       caption?: string;
     };

@@ -7,6 +7,7 @@ export function brandGemSignature(gem: BrandGem): string {
     name: gem.name.trim(),
     description: gem.description.trim(),
     instructions: gem.instructions.trim(),
+    campaignContext: (gem.campaignContext ?? "").trim(),
     captionParams: normalizeCaptionGenerationParams(gem.captionParams),
     footer: {
       structure: gem.footer.structure?.trim() ?? "",
