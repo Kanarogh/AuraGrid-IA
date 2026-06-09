@@ -82,7 +82,7 @@ export function CanvaWardrobePanel({
             </p>
           </div>
           <div className="text-right shrink-0">
-            <span className="text-[10px] font-bold font-mono bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 px-2 py-0.5 rounded-full block">
+            <span className="text-[10px] font-bold font-mono bg-ag-success/15 text-ag-success border border-ag-success/25 px-2 py-0.5 rounded-full block">
               {inGridCount} no grid
             </span>
             <span className="text-[9px] text-ag-muted mt-1 block">{items.length} total</span>
@@ -105,7 +105,7 @@ export function CanvaWardrobePanel({
         ) : (
           <div className="text-[10px] text-ag-muted leading-relaxed rounded-lg bg-ag-surface-1/80 border border-ag-border/50 px-2.5 py-2">
             Clique em um quadrado do grid, depois escolha o look — ou arraste direto para o slot.
-            <span className="block mt-1 text-emerald-400/90">
+            <span className="block mt-1 text-ag-success">
               <CheckCircle2 className="inline h-3 w-3 mr-0.5 -mt-px" />
               Borda verde = já está nesta página
             </span>
@@ -150,12 +150,12 @@ export function CanvaWardrobePanel({
                     "group text-left border rounded-xl p-1.5 transition-all relative cursor-grab active:cursor-grabbing",
                     "hover:shadow-md hover:border-ag-accent/35",
                     isInGrid
-                      ? "bg-emerald-500/8 border-emerald-500/45 ring-1 ring-emerald-500/30"
+                      ? "bg-ag-success/8 border-ag-success/45 ring-1 ring-ag-success/30"
                       : "bg-ag-surface-1 border-ag-border"
                   )}
                 >
                   <div
-                    className="rounded-lg overflow-hidden bg-stone-950 relative mb-1.5 w-full"
+                    className="rounded-lg overflow-hidden bg-ag-surface-3 relative mb-1.5 w-full"
                     style={{ aspectRatio: gridAspectRatio }}
                   >
                     <img
@@ -166,13 +166,13 @@ export function CanvaWardrobePanel({
                       className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-200"
                     />
                     {isInGrid && (
-                      <span className="absolute top-1 left-1 flex items-center gap-0.5 text-[8px] font-bold font-mono px-1.5 py-0.5 rounded-md bg-emerald-600/95 text-white shadow-sm">
+                      <span className="absolute top-1 left-1 flex items-center gap-0.5 text-[8px] font-bold font-mono px-1.5 py-0.5 rounded-md bg-ag-success/95 text-white shadow-sm">
                         <CheckCircle2 className="h-2.5 w-2.5" />
                         L{slotNumbers.join(", L")}
                       </span>
                     )}
                     {isGridAsset && !isInGrid && (
-                      <span className="absolute top-1 right-1 text-[7px] font-bold px-1 py-0.5 rounded bg-violet-500/80 text-white">
+                      <span className="absolute top-1 right-1 text-[7px] font-bold px-1 py-0.5 rounded bg-ag-accent/85 text-ag-accent-fg">
                         Grid
                       </span>
                     )}
@@ -180,7 +180,7 @@ export function CanvaWardrobePanel({
                   <p
                     className={cn(
                       "text-[9px] font-bold truncate leading-tight uppercase px-0.5",
-                      isInGrid ? "text-emerald-300" : "text-ag-text"
+                      isInGrid ? "text-ag-success" : "text-ag-text"
                     )}
                     title={item.label}
                   >

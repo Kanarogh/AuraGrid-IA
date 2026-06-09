@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import type { AppSection } from "./AppSidebar";
 import { AppSidebar } from "./AppSidebar";
 import { AppTopBar } from "./AppTopBar";
+import { SectionTransition } from "../ui/Motion";
 export function AppShell({
   activeSection,
   onNavigate,
@@ -64,7 +65,12 @@ export function AppShell({
         />
 
         <main className="flex-1 overflow-auto ag-page-mesh">
-          <div className="w-full max-w-[100rem] mx-auto px-4 sm:px-5 lg:px-6 py-5 space-y-5">{children}</div>
+          <SectionTransition
+            transitionKey={activeSection}
+            className="w-full max-w-[100rem] mx-auto px-4 sm:px-5 lg:px-6 py-6 space-y-5"
+          >
+            {children}
+          </SectionTransition>
           {footer}
         </main>
       </div>

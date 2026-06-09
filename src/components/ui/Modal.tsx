@@ -1,7 +1,14 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { Button } from "./Button";
+
+const sizeMap = {
+  sm: "max-w-sm",
+  md: "max-w-md",
+  lg: "max-w-2xl",
+  xl: "max-w-4xl",
+} as const;
 
 export function Modal({
   open,
@@ -16,13 +23,27 @@ export function Modal({
   title: string;
   children: ReactNode;
   footer?: ReactNode;
-  size?: "md" | "lg";
+  size?: keyof typeof sizeMap;
 }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ag-bg/80 backdrop-blur-sm animate-ag-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ag-bg/70 backdrop-blur-md animate-ag-fade-in"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
@@ -30,7 +51,7 @@ export function Modal({
       <div
         className={cn(
           "w-full rounded-2xl border border-ag-border bg-ag-surface-1 shadow-[var(--ag-shadow-lg)] animate-ag-scale-in flex flex-col max-h-[90vh]",
-          size === "md" ? "max-w-md" : "max-w-2xl"
+          sizeMap[size]
         )}
         onClick={(e) => e.stopPropagation()}
       >

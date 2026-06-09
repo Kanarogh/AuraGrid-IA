@@ -105,6 +105,7 @@ import { PostDayStudio } from "./components/posts/PostDayStudio";
 import { EditorialGridView } from "./components/posts/EditorialGridView";
 import { PostsWorkspaceToolbar } from "./components/posts/PostsWorkspaceToolbar";
 import { StudioSection } from "./components/ui/StudioSection";
+import { EmptyState } from "./components/ui/EmptyState";
 import { FeedInstagramPreview } from "./components/feed/FeedInstagramPreview";
 import { getCaptionBatchStats, getPendingCaptionPosts } from "./lib/captionBatch";
 import { readJsonResponse } from "./lib/apiResponse";
@@ -787,9 +788,9 @@ export default function App() {
     if (element) {
       element.scrollIntoView({ behavior: "smooth", block: "center" });
       // Add a visual pulse
-      element.classList.add("ring-2", "ring-emerald-500", "scale-[1.01]");
+      element.classList.add("ring-2", "ring-ag-accent", "scale-[1.01]");
       setTimeout(() => {
-        element.classList.remove("ring-2", "ring-emerald-500", "scale-[1.01]");
+        element.classList.remove("ring-2", "ring-ag-accent", "scale-[1.01]");
       }, 1500);
     }
   };
@@ -2542,7 +2543,7 @@ export default function App() {
                     <div className="p-3 rounded-xl border border-ag-border/60 bg-ag-surface-2/50 flex flex-col sm:flex-row justify-between items-center gap-3">
                       <div className="flex items-center gap-2.5">
                         <LayoutGrid className="h-5 w-5 text-ag-accent" />
-                        <span className="font-display italic font-semibold text-ag-text dark:text-stone-200 text-lg">
+                        <span className="font-display font-semibold text-ag-text text-lg tracking-tight">
                           {activePage.name} (Grid de 12 Fotos)
                         </span>
                       </div>
@@ -2579,7 +2580,7 @@ export default function App() {
 
                         <button
                           onClick={() => handleClearCanvaPage(activePage.id)}
-                          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 dark:bg-stone-850 dark:hover:bg-stone-800 text-ag-muted dark:text-stone-300 transition-colors flex items-center gap-1 cursor-pointer"
+                          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-ag-surface-2 hover:bg-ag-surface-3 border border-ag-border text-ag-muted hover:text-ag-text transition-colors flex items-center gap-1 cursor-pointer"
                         >
                           <RotateCcw className="h-3.5 w-3.5" />
                           <span>Limpar Grid</span>
@@ -2587,7 +2588,7 @@ export default function App() {
 
                         <button
                           onClick={() => handleDeleteCanvaPage(activePage.id)}
-                          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/15 text-red-600 dark:text-red-400 transition-colors flex items-center gap-1 cursor-pointer"
+                          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-ag-danger/10 hover:bg-ag-danger/15 border border-ag-danger/25 text-ag-danger transition-colors flex items-center gap-1 cursor-pointer"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                           <span>Excluir</span>
@@ -2605,13 +2606,13 @@ export default function App() {
                     <div className="relative">
                       {/* Selection notice bar */}
                       {selectedCanvaSlotId && (
-                        <div className="absolute -top-1 inset-x-0 bg-ag-accent text-white rounded-lg px-4 py-2 text-xs font-bold flex items-center justify-between z-30 shadow-md">
+                        <div className="absolute -top-1 inset-x-0 bg-ag-accent text-ag-accent-fg rounded-lg px-4 py-2 text-xs font-bold flex items-center justify-between z-30 shadow-md">
                           <span>
                             🔄 Item selecionado! Clique em outro quadrado do grid para inverter/trocar as fotos, ou selecione uma peça do Guarda-roupa na lateral direita para atribuir diretamente.
                           </span>
                           <button 
                             onClick={() => setSelectedCanvaSlotId(null)}
-                            className="bg-white/20 hover:bg-white/30 text-white px-2 py-0.5 rounded uppercase text-[10px] cursor-pointer"
+                            className="bg-ag-accent-fg/20 hover:bg-ag-accent-fg/30 text-ag-accent-fg px-2 py-0.5 rounded uppercase text-[10px] cursor-pointer"
                           >
                             Cancelar
                           </button>
@@ -2703,7 +2704,7 @@ export default function App() {
                           maxWidth: "100%",
                         }}
                       >
-                        <div className="grid grid-cols-3 gap-0 bg-stone-950">
+                        <div className="grid grid-cols-3 gap-0 bg-ag-surface-3">
                           {activePage.slots.map((slot, index) => {
                             const isSlotSelected = selectedCanvaSlotId === slot.id;
                             const isDragOver = canvaSlotDragOver === slot.id;
@@ -2720,8 +2721,8 @@ export default function App() {
                                       ? "ring-2 ring-inset ring-ag-accent/60 z-10"
                                       : slot.image
                                         ? "cursor-pointer"
-                                        : "cursor-pointer border border-dashed border-stone-800 hover:border-ag-accent/40"
-                                } bg-stone-950`}
+                                        : "cursor-pointer border border-dashed border-ag-border hover:border-ag-accent/50"
+                                } bg-ag-surface-3`}
                                 onDragOver={(e) => {
                                   e.preventDefault();
                                   e.dataTransfer.dropEffect = "copy";
@@ -2767,13 +2768,13 @@ export default function App() {
                                       className="w-full h-full object-cover"
                                     />
                                     {slot.matchedCatalogId && (
-                                      <div className="absolute bottom-0 inset-x-0 bg-emerald-600/88 text-[7px] font-bold text-white text-center py-0.5 px-1 truncate z-[5] pointer-events-none">
+                                      <div className="absolute bottom-0 inset-x-0 bg-ag-success/90 text-[7px] font-bold text-white text-center py-0.5 px-1 truncate z-[5] pointer-events-none">
                                         ✓ {slot.label}
                                       </div>
                                     )}
                                     
                                     {/* Action Hover overlay block */}
-                                    <div className="absolute inset-0 bg-stone-950/70 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity p-1.5 gap-1 text-center">
+                                    <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity p-1.5 gap-1 text-center">
                                       <p className="text-[9px] font-bold text-white uppercase tracking-wider truncate max-w-full">
                                         {slot.label}
                                       </p>
@@ -2801,7 +2802,7 @@ export default function App() {
                                             e.stopPropagation();
                                             setSelectedCanvaSlotId(slot.id);
                                           }}
-                                          className="text-[8px] font-bold bg-ag-accent text-white px-1.5 py-0.5 rounded hover:opacity-90 cursor-pointer"
+                                          className="text-[8px] font-bold bg-ag-accent text-ag-accent-fg px-1.5 py-0.5 rounded hover:bg-ag-accent-strong cursor-pointer"
                                           title="Mover ou trocar de posição com outro look"
                                         >
                                           Mover
@@ -2812,25 +2813,25 @@ export default function App() {
                                             e.stopPropagation();
                                             handleAssignCatalogToCanvaSlot(activePage.id, slot.id, null);
                                           }}
-                                          className="text-[8px] font-bold bg-stone-800 text-stone-200 hover:text-white px-1 py-0.5 rounded hover:bg-stone-700 cursor-pointer"
+                                          className="text-[8px] font-bold bg-white/15 text-white hover:bg-white/25 px-1 py-0.5 rounded cursor-pointer"
                                           title="Remover foto"
                                         >
-                                          <X className="h-3 w-3 text-red-500" />
+                                          <X className="h-3 w-3 text-ag-danger" />
                                         </button>
                                       </div>
                                     </div>
                                   </>
                                 ) : (
-                                  <div className="absolute inset-0 flex flex-col items-center justify-center p-2 text-center bg-stone-950 hover:bg-stone-900/80 transition-colors">
-                                    <Plus className="h-4 w-4 mb-0.5 text-stone-500 group-hover:text-ag-accent transition-colors opacity-0 group-hover:opacity-100" />
-                                    <span className="text-[7px] uppercase font-bold text-stone-600 group-hover:text-ag-muted font-mono tracking-wider opacity-0 group-hover:opacity-100">
+                                  <div className="absolute inset-0 flex flex-col items-center justify-center p-2 text-center bg-ag-surface-3 hover:bg-ag-surface-2 transition-colors">
+                                    <Plus className="h-4 w-4 mb-0.5 text-ag-muted group-hover:text-ag-accent transition-colors opacity-0 group-hover:opacity-100" />
+                                    <span className="text-[7px] uppercase font-bold text-ag-muted group-hover:text-ag-text font-mono tracking-wider opacity-0 group-hover:opacity-100">
                                       L{slotNumber}
                                     </span>
                                   </div>
                                 )}
 
                                 {/* Floating sequence badge indicator */}
-                                <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-[7px] font-bold font-mono text-stone-100 rounded px-1 py-0.5 z-10">
+                                <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-[7px] font-bold font-mono text-white rounded px-1 py-0.5 z-10">
                                   L{slotNumber}
                                 </div>
                                 
@@ -2887,8 +2888,8 @@ export default function App() {
                           key={page.id}
                           className={`flex-shrink-0 w-32 rounded-xl p-2.5 transition-all text-center border relative cursor-pointer group ${
                             isActive 
-                              ? "bg-amber-55/15 border-ag-accent ring-2 ring-amber-500/20" 
-                              : "bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-850 hover:bg-stone-50 dark:hover:bg-stone-850"
+                              ? "bg-ag-accent-soft border-ag-accent ring-2 ring-ag-accent/20" 
+                              : "bg-ag-surface-1 border-ag-border hover:bg-ag-surface-2"
                           }`}
                           onClick={() => {
                             setActiveCanvaPageId(page.id);
@@ -2896,18 +2897,18 @@ export default function App() {
                           }}
                         >
                           {/* Miniature visual grid simulator mockup */}
-                          <div className="grid grid-cols-3 gap-0.5 bg-stone-200 dark:bg-stone-950 p-1 rounded-lg mb-2 text-center aspect-video items-center">
+                          <div className="grid grid-cols-3 gap-0.5 bg-ag-surface-3 p-1 rounded-lg mb-2 text-center aspect-video items-center">
                             {(page?.slots || []).map((s, sIdx) => (
                               <div
                                 key={sIdx}
                                 className={`h-1.5 rounded-2xs ${
-                                  s && s.image ? "bg-ag-accent" : "bg-stone-400/35"
+                                  s && s.image ? "bg-ag-accent" : "bg-ag-muted/30"
                                 }`}
                               />
                             ))}
                           </div>
 
-                          <div className="text-[11px] font-bold text-ag-text dark:text-stone-300 truncate font-display">
+                          <div className="text-[11px] font-bold text-ag-text truncate font-display">
                             {page.name}
                           </div>
                           
@@ -2922,7 +2923,7 @@ export default function App() {
                                 e.stopPropagation();
                                 handleDeleteCanvaPage(page.id);
                               }}
-                              className="absolute -top-1.5 -right-1.5 h-5 w-5 bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shadow-xs"
+                              className="absolute -top-1.5 -right-1.5 h-5 w-5 bg-ag-danger text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shadow-xs"
                               title="Remover página"
                             >
                               <X className="h-3 w-3" />
@@ -3078,12 +3079,12 @@ export default function App() {
               }}
             >
               
-              <div className="p-4 bg-ag-accent/10 rounded-full text-ag-accent dark:text-ag-accent">
+              <div className="p-4 bg-ag-accent/10 rounded-full text-ag-accent">
                 <FolderOpen className="h-8 w-8 text-ag-accent" />
               </div>
 
               <div>
-                <h3 className="text-sm font-bold text-ag-text dark:text-stone-100">
+                <h3 className="text-sm font-bold text-ag-text">
                   Importar Pasta de Ativos ou Seleção de Imagens em Lote
                 </h3>
                 <p className="text-xs text-ag-muted max-w-md mx-auto mt-1 leading-relaxed">
@@ -3099,7 +3100,7 @@ export default function App() {
                   onClick={() => filesUploadInputRef.current?.click()}
                   className="bg-ag-surface-3 hover:bg-ag-surface-3/80 border border-ag-border text-ag-text text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer shadow-sm transition-colors"
                 >
-                  <ImageIcon className="h-4 w-4 text-amber-500" />
+                  <ImageIcon className="h-4 w-4 text-ag-accent" />
                   <span>Selecionar Vários Arquivos</span>
                 </button>
 
@@ -3109,7 +3110,7 @@ export default function App() {
                   onClick={() => folderUploadInputRef.current?.click()}
                   className="bg-ag-surface-3 hover:bg-ag-surface-3/80 border border-ag-border text-ag-text text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer shadow-sm transition-colors"
                 >
-                  <FolderOpen className="h-4 w-4 text-amber-500" />
+                  <FolderOpen className="h-4 w-4 text-ag-accent" />
                   <span>Subir Pasta de Referências</span>
                 </button>
 
@@ -3378,7 +3379,7 @@ export default function App() {
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div>
                   <h3 className="text-sm font-bold text-ag-text flex items-center gap-2">
-                    <LayoutGrid className="h-4 w-4 text-violet-400" />
+                    <LayoutGrid className="h-4 w-4 text-ag-accent" />
                     Peças de grid ({gridCatalog.length})
                   </h3>
                   <p className="text-[11px] text-ag-muted mt-0.5 max-w-xl">
@@ -3401,8 +3402,8 @@ export default function App() {
               <div
                 className={`p-5 sm:p-6 border-2 border-dashed rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-3 mb-6 ${
                   gridCatalogDragOver
-                    ? "border-violet-400/60 bg-violet-500/5"
-                    : "border-ag-border hover:border-violet-400/30 bg-ag-surface-2/30"
+                    ? "border-ag-accent/60 bg-ag-accent/5"
+                    : "border-ag-border hover:border-ag-accent/30 bg-ag-surface-2/30"
                 }`}
                 onDragOver={(e) => {
                   e.preventDefault();
@@ -3416,7 +3417,7 @@ export default function App() {
                   if (files?.length) await handleBatchImages(files, { asReference: false });
                 }}
               >
-                <div className="p-3 bg-violet-500/10 rounded-full text-violet-400">
+                <div className="p-3 bg-ag-accent-soft rounded-full text-ag-accent">
                   <LayoutGrid className="h-6 w-6" />
                 </div>
                 <p className="text-xs text-ag-muted max-w-md">
@@ -3428,7 +3429,7 @@ export default function App() {
                     onClick={() => gridFilesUploadInputRef.current?.click()}
                     className="bg-ag-surface-3 hover:bg-ag-surface-3/80 border border-ag-border text-ag-text text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-2 cursor-pointer"
                   >
-                    <ImageIcon className="h-4 w-4 text-violet-400" />
+                    <ImageIcon className="h-4 w-4 text-ag-accent" />
                     Selecionar arquivos
                   </button>
                   <button
@@ -3436,7 +3437,7 @@ export default function App() {
                     onClick={() => gridFolderUploadInputRef.current?.click()}
                     className="bg-ag-surface-3 hover:bg-ag-surface-3/80 border border-ag-border text-ag-text text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-2 cursor-pointer"
                   >
-                    <FolderOpen className="h-4 w-4 text-violet-400" />
+                    <FolderOpen className="h-4 w-4 text-ag-accent" />
                     Subir pasta
                   </button>
                 </div>
@@ -3459,16 +3460,18 @@ export default function App() {
               </div>
 
               {gridCatalog.length === 0 ? (
-                <div className="p-8 text-center rounded-2xl bg-ag-surface-2 border border-ag-border border-dashed">
-                  <LayoutGrid className="h-7 w-7 text-ag-muted mx-auto mb-2 opacity-60" />
-                  <p className="text-xs text-ag-muted">Nenhuma peça de grid cadastrada.</p>
-                </div>
+                <EmptyState
+                  icon={LayoutGrid}
+                  title="Nenhuma peça de grid"
+                  description="Banners, lifestyle e composições para o feed — arraste arquivos na área acima."
+                  compact
+                />
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                   {gridCatalog.map((item) => (
                     <div
                       key={item.id}
-                      className="border rounded-2xl p-3 flex flex-col gap-2 relative group bg-ag-surface-2 border-ag-border hover:border-violet-400/30 transition-all"
+                      className="border rounded-2xl p-3 flex flex-col gap-2 relative group bg-ag-surface-2 border-ag-border hover:border-ag-accent/30 transition-all"
                     >
                       <div className="aspect-[3/4] rounded-xl overflow-hidden relative flex items-center justify-center bg-ag-surface-1 border border-ag-border group/img">
                         <button
@@ -3479,7 +3482,7 @@ export default function App() {
                               setCatalogLightbox({ image: item.image, label: item.label });
                             }
                           }}
-                          className="w-full h-full flex items-center justify-center p-1.5 cursor-zoom-in disabled:cursor-default focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/50 rounded-xl"
+                          className="w-full h-full flex items-center justify-center p-1.5 cursor-zoom-in disabled:cursor-default focus:outline-none focus-visible:ring-2 focus-visible:ring-ag-accent/50 rounded-xl"
                           title="Ampliar imagem"
                         >
                           <img
@@ -3494,7 +3497,7 @@ export default function App() {
                             </span>
                           )}
                         </button>
-                        <span className="absolute top-1.5 left-1.5 text-[8px] font-mono font-bold px-1.5 py-0.5 rounded-md border bg-violet-500/15 text-violet-300 border-violet-400/30">
+                        <span className="absolute top-1.5 left-1.5 text-[8px] font-mono font-bold px-1.5 py-0.5 rounded-md border bg-ag-accent-soft text-ag-accent border-ag-accent/30">
                           Grid
                         </span>
                         <button
@@ -3506,7 +3509,7 @@ export default function App() {
                         </button>
                       </div>
                       <span
-                        className="text-xs font-bold text-center uppercase truncate text-violet-300"
+                        className="text-xs font-bold text-center uppercase truncate text-ag-accent"
                         title={item.label}
                       >
                         {item.label}

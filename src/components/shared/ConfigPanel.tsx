@@ -14,6 +14,7 @@ import {
   Trash2,
   Type,
   CalendarDays,
+  Palette,
 } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { gemInitial } from "../../lib/brandGem";
@@ -39,6 +40,7 @@ import {
 } from "../../lib/brandGemValidation";
 import type { BrandGem } from "../../types";
 import { AiProviderPanel } from "./AiProviderPanel";
+import { AccentPicker } from "./AccentPicker";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { FieldLabel, Input, Textarea } from "../ui/Input";
@@ -261,6 +263,20 @@ export function ConfigPanel({
         </div>
       )}
 
+      <div className="mb-8 rounded-2xl border border-ag-border bg-ag-surface-2/50 p-5 sm:p-6 space-y-4">
+        <div className="flex items-center gap-2">
+          <Palette className="h-4 w-4 text-ag-accent" />
+          <h3 className="font-display text-lg font-semibold text-ag-text tracking-tight">
+            Aparência
+          </h3>
+        </div>
+        <p className="text-sm text-ag-muted leading-relaxed">
+          Escolha a cor de destaque do workspace. Neutros e modo claro/escuro continuam na barra
+          superior.
+        </p>
+        <AccentPicker />
+      </div>
+
       <div className="mb-8">
         <AiProviderPanel />
       </div>
@@ -268,7 +284,7 @@ export function ConfigPanel({
       <div className="rounded-2xl border border-ag-border bg-ag-surface-2/50 p-5 sm:p-6 space-y-5">
         <div className="flex items-center gap-4 pb-4 border-b border-ag-border/60">
           <div
-            className="h-14 w-14 rounded-full bg-gradient-to-br from-amber-400/90 to-amber-600/80 flex items-center justify-center text-2xl font-display font-semibold text-stone-900 shadow-md shrink-0"
+            className="h-14 w-14 rounded-full bg-gradient-to-br from-ag-accent to-ag-accent-strong flex items-center justify-center text-2xl font-display font-semibold text-ag-accent-fg shadow-md shrink-0"
             aria-hidden
           >
             {gemInitial(draftGem.name)}
@@ -319,10 +335,10 @@ export function ConfigPanel({
           </p>
         </div>
 
-        <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4">
+        <div className="rounded-xl border border-ag-warning/25 bg-ag-warning/5 p-4">
           <FieldLabel>
             <span className="inline-flex items-center gap-1.5">
-              <CalendarDays className="h-3.5 w-3.5 text-amber-500" />
+              <CalendarDays className="h-3.5 w-3.5 text-ag-warning" />
               Briefing da coleção / campanha
               <span
                 className="text-ag-muted cursor-help"

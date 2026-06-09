@@ -8,10 +8,12 @@ import { ApiWorkspaceSync } from "../src/context/ApiWorkspaceSync";
 import { ClientWorkspaceProvider } from "../src/context/ClientWorkspaceContext";
 import { AuthGate } from "../src/components/auth/AuthGate";
 import { initTheme } from "../src/hooks/useTheme";
+import { initAccent } from "../src/hooks/useAccent";
 
 export default function AppShell() {
   useEffect(() => {
     initTheme();
+    initAccent();
   }, []);
 
   return (

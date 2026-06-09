@@ -179,12 +179,19 @@ export function AppSidebar({
           collapsed ? "justify-center p-4" : "px-5 py-4"
         )}
       >
-        <div className="h-9 w-9 rounded-xl bg-ag-accent text-white flex items-center justify-center font-display italic font-bold text-lg shrink-0">
+        <div
+          className="h-9 w-9 rounded-xl text-ag-accent-fg flex items-center justify-center font-display font-bold text-lg shrink-0 shadow-sm"
+          style={{
+            background: "linear-gradient(135deg, var(--ag-accent), var(--ag-accent-strong))",
+          }}
+        >
           A
         </div>
         {!collapsed && (
           <div className="min-w-0">
-            <p className="font-display text-lg font-semibold text-ag-text leading-tight">AuraGrid</p>
+            <p className="font-display text-lg font-semibold text-ag-text leading-tight tracking-tight">
+              AuraGrid
+            </p>
             <p className="text-[10px] uppercase tracking-widest text-ag-muted font-mono">
               Intelligence
             </p>
@@ -222,18 +229,24 @@ export function AppSidebar({
                           : undefined
                       }
                       className={cn(
-                        "w-full flex items-center gap-3 rounded-xl text-left transition-colors cursor-pointer relative",
+                        "group w-full flex items-center gap-3 rounded-xl text-left transition-all duration-200 cursor-pointer relative",
                         collapsed ? "justify-center p-2.5" : "px-3 py-2.5",
                         isActive
-                          ? "bg-ag-accent text-white shadow-sm"
+                          ? "bg-ag-accent text-ag-accent-fg shadow-sm"
                           : "text-ag-text hover:bg-ag-surface-3"
                       )}
                     >
+                      {isActive && !collapsed && (
+                        <span
+                          className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-ag-accent-fg/80"
+                          aria-hidden
+                        />
+                      )}
                       <span className="relative shrink-0">
                         <Icon
                           className={cn(
-                            "h-4 w-4",
-                            isActive ? "text-white" : "text-ag-muted"
+                            "h-4 w-4 transition-colors",
+                            isActive ? "text-ag-accent-fg" : "text-ag-muted group-hover:text-ag-text"
                           )}
                         />
                         {collapsed && item.id === "settings" && brandGemReady === false && (
@@ -250,7 +263,7 @@ export function AppSidebar({
                             <span
                               className={cn(
                                 "text-[10px] block truncate",
-                                isActive ? "text-white/80" : "text-ag-muted"
+                                isActive ? "text-ag-accent-fg/80" : "text-ag-muted"
                               )}
                             >
                               {item.description}
@@ -264,10 +277,10 @@ export function AppSidebar({
                             "text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md",
                             item.badgeTone === "warning"
                               ? isActive
-                                ? "bg-white/25 text-white"
+                                ? "bg-ag-accent-fg/25 text-ag-accent-fg"
                                 : "bg-ag-warning/15 text-ag-warning"
                               : isActive
-                                ? "bg-white/20 text-white"
+                                ? "bg-ag-accent-fg/20 text-ag-accent-fg"
                                 : "bg-ag-surface-3 text-ag-muted"
                           )}
                         >

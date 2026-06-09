@@ -2,8 +2,9 @@ import type { CatalogItem, PlannedPost } from "../../types";
 import { getPostStatus } from "../../lib/postStatus";
 import { StudioSection } from "../ui/StudioSection";
 import { EditorialPostCard } from "./EditorialPostCard";
-import { CalendarDays, Sparkles } from "lucide-react";
+import { CalendarDays, CalendarPlus, Sparkles } from "lucide-react";
 import { Button } from "../ui/Button";
+import { EmptyState } from "../ui/EmptyState";
 
 export function EditorialGridView({
   posts,
@@ -87,10 +88,11 @@ export function EditorialGridView({
       }
     >
       {posts.length === 0 ? (
-        <div className="text-center py-16 text-ag-muted">
-          <p className="text-sm font-medium text-ag-text">Nenhum dia no calendário</p>
-          <p className="text-xs mt-1">Use o painel de distribuição acima para criar os 30 dias.</p>
-        </div>
+        <EmptyState
+          icon={CalendarPlus}
+          title="Nenhum dia no calendário"
+          description="Use o painel de distribuição acima para criar os 30 dias do planejamento."
+        />
       ) : (
         <>
           <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-10 gap-2 mb-6">

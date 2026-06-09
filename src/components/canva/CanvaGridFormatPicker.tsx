@@ -25,10 +25,10 @@ export function CanvaGridFormatPicker({
             onClick={() => onChange(format.id)}
             className={cn(
               "flex flex-col items-center gap-2 rounded-2xl border-2 px-3 py-4 transition-all cursor-pointer",
-              "bg-white dark:bg-stone-900 shadow-sm hover:shadow-md",
+              "bg-ag-surface-1 shadow-sm hover:shadow-md",
               active
                 ? "border-ag-accent ring-2 ring-ag-accent/25"
-                : "border-stone-200 dark:border-stone-800 hover:border-ag-accent/40"
+                : "border-ag-border hover:border-ag-accent/40"
             )}
           >
             <div

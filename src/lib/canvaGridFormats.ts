@@ -24,8 +24,8 @@ export const CANVA_GRID_FORMATS: CanvaGridFormat[] = [
     defaultMaxWidth: 480,
     zoomMin: 280,
     zoomMax: 1400,
-    accent: "text-pink-500",
-    previewBg: "bg-pink-200/80 dark:bg-pink-500/25",
+    accent: "text-ag-accent",
+    previewBg: "bg-ag-accent-soft",
   },
   {
     id: "portrait",
@@ -36,8 +36,8 @@ export const CANVA_GRID_FORMATS: CanvaGridFormat[] = [
     defaultMaxWidth: 440,
     zoomMin: 260,
     zoomMax: 1200,
-    accent: "text-fuchsia-600",
-    previewBg: "bg-fuchsia-200/80 dark:bg-fuchsia-500/25",
+    accent: "text-ag-accent",
+    previewBg: "bg-ag-accent-soft",
   },
   {
     id: "landscape",
@@ -48,8 +48,8 @@ export const CANVA_GRID_FORMATS: CanvaGridFormat[] = [
     defaultMaxWidth: 640,
     zoomMin: 320,
     zoomMax: 1600,
-    accent: "text-violet-600",
-    previewBg: "bg-violet-200/80 dark:bg-violet-500/25",
+    accent: "text-ag-accent",
+    previewBg: "bg-ag-accent-soft",
   },
   {
     id: "stories",
@@ -60,8 +60,8 @@ export const CANVA_GRID_FORMATS: CanvaGridFormat[] = [
     defaultMaxWidth: 360,
     zoomMin: 200,
     zoomMax: 900,
-    accent: "text-sky-600",
-    previewBg: "bg-sky-200/80 dark:bg-sky-500/25",
+    accent: "text-ag-accent",
+    previewBg: "bg-ag-accent-soft",
   },
 ];
 

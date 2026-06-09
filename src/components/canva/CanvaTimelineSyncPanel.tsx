@@ -76,12 +76,12 @@ export function CanvaTimelineSyncPanel({
           >
             {canvaGridReversed ? (
               <>
-                <ArrowDown className="h-3.5 w-3.5 text-amber-500" />
+                <ArrowDown className="h-3.5 w-3.5 text-ag-warning" />
                 Feed: de baixo p/ cima
               </>
             ) : (
               <>
-                <ArrowUp className="h-3.5 w-3.5 text-emerald-500" />
+                <ArrowUp className="h-3.5 w-3.5 text-ag-success" />
                 Ordem L1 → L12
               </>
             )}

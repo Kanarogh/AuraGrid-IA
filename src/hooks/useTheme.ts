@@ -5,22 +5,26 @@ import { useCallback, useLayoutEffect, useState } from "react";
 export type Theme = "light" | "dark";
 
 const STORAGE_KEY = "palak_theme";
+export const THEME_CHANGE_EVENT = "ag-theme-change";
 
 function readStoredTheme(): Theme {
   if (typeof window === "undefined") return "light";
   return localStorage.getItem(STORAGE_KEY) === "dark" ? "dark" : "light";
 }
 
-function applyTheme(theme: Theme) {
+function applyTheme(theme: Theme, broadcast = true) {
   const root = document.documentElement;
   root.classList.remove("light", "dark");
   root.classList.add(theme);
   localStorage.setItem(STORAGE_KEY, theme);
+  if (broadcast) {
+    window.dispatchEvent(new CustomEvent<Theme>(THEME_CHANGE_EVENT, { detail: theme }));
+  }
 }
 
 /** Apply theme before first paint to avoid flash */
 export function initTheme() {
-  applyTheme(readStoredTheme());
+  applyTheme(readStoredTheme(), false);
 }
 
 export function useTheme() {

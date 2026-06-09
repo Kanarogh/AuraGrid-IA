@@ -163,7 +163,7 @@ export function ClientSwitcher({
           <button
             type="button"
             title={hasActiveClient ? activeClient.name : "Novo cliente"}
-            className="h-9 w-9 rounded-full bg-gradient-to-br from-amber-400/90 to-amber-600/80 flex items-center justify-center text-sm font-bold text-stone-900 cursor-pointer"
+            className="h-9 w-9 rounded-full bg-gradient-to-br from-ag-accent to-ag-accent-strong flex items-center justify-center text-sm font-bold text-ag-accent-fg cursor-pointer"
             onClick={() => setModalOpen(true)}
           >
             {hasActiveClient ? gemInitial(activeClient.name) : <Plus className="h-4 w-4" />}
@@ -250,8 +250,8 @@ export function ClientSwitcher({
                     className={cn(
                       "h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0",
                       isActive
-                        ? "bg-ag-accent text-white"
-                        : "bg-gradient-to-br from-amber-400/80 to-amber-600/70 text-stone-900"
+                        ? "bg-ag-accent text-ag-accent-fg"
+                        : "bg-gradient-to-br from-ag-accent/80 to-ag-accent-strong text-ag-accent-fg"
                     )}
                   >
                     {gemInitial(client.name)}

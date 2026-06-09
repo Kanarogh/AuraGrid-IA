@@ -19,6 +19,7 @@ import { StudioSection } from "../ui/StudioSection";
 import { Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
 import { AiErrorBanner } from "../shared/AiErrorBanner";
+import { EmptyState } from "../ui/EmptyState";
 import { cn } from "../../lib/cn";
 
 async function readImageFile(file: File): Promise<string> {
@@ -306,9 +307,12 @@ export function ReferenceFinderPanel({
             )}
 
             {!error && !isSearching && !effectiveId && !reasoning && (
-              <p className="text-sm text-ag-muted">
-                O código da referência e a análise da IA aparecem aqui após a busca.
-              </p>
+              <EmptyState
+                icon={ScanSearch}
+                title="Aguardando busca"
+                description="O código da referência e a análise da IA aparecem aqui após enviar uma foto."
+                compact
+              />
             )}
 
             {isSearching && (

@@ -9,10 +9,26 @@ export const metadata: Metadata = {
 const themeScript = `
 (function () {
   try {
-    var t = localStorage.getItem("palak_theme") === "dark" ? "dark" : "light";
     var r = document.documentElement;
+    var t = localStorage.getItem("palak_theme") === "dark" ? "dark" : "light";
     r.classList.remove("light", "dark");
     r.classList.add(t);
+    var presets = ["cobalto","esmeralda","argila","rose","vermelho","violeta","grafite","custom"];
+    var a = localStorage.getItem("ag_accent");
+    var accent = presets.indexOf(a) !== -1 ? a : "cobalto";
+    r.setAttribute("data-accent", accent);
+    if (accent === "custom") {
+      try {
+        var c = JSON.parse(localStorage.getItem("ag_accent_custom") || "{}");
+        var tok = t === "dark" ? c.tokensDark : c.tokensLight;
+        if (tok && tok.accent) {
+          r.style.setProperty("--ag-accent", tok.accent);
+          r.style.setProperty("--ag-accent-strong", tok.accentStrong);
+          r.style.setProperty("--ag-accent-soft", tok.accentSoft);
+          r.style.setProperty("--ag-accent-fg", tok.accentFg);
+        }
+      } catch (e) {}
+    }
   } catch (e) {}
 })();
 `;

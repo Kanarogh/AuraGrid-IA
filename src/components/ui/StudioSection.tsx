@@ -4,6 +4,8 @@ import { cn } from "../../lib/cn";
 export function StudioSection({
   title,
   subtitle,
+  eyebrow,
+  icon,
   actions,
   children,
   className,
@@ -11,6 +13,8 @@ export function StudioSection({
 }: {
   title: string;
   subtitle?: ReactNode;
+  eyebrow?: string;
+  icon?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
@@ -26,13 +30,25 @@ export function StudioSection({
       <div className="ag-studio-mesh absolute inset-0 pointer-events-none" aria-hidden />
 
       <header className="relative z-10 flex flex-col sm:flex-row sm:items-start justify-between gap-4 px-5 py-4 sm:px-6 border-b border-ag-border/50 bg-ag-surface-1/85 backdrop-blur-sm">
-        <div className="min-w-0">
-          <h2 className="font-display text-2xl sm:text-3xl font-semibold text-ag-text tracking-tight">
-            {title}
-          </h2>
-          {subtitle && (
-            <div className="text-sm text-ag-muted mt-1.5 leading-relaxed max-w-3xl">{subtitle}</div>
+        <div className="flex items-start gap-3 min-w-0">
+          {icon && (
+            <div className="shrink-0 mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-ag-accent-soft text-ag-accent">
+              {icon}
+            </div>
           )}
+          <div className="min-w-0">
+            {eyebrow && (
+              <p className="text-[10px] font-mono font-semibold uppercase tracking-widest text-ag-accent mb-1">
+                {eyebrow}
+              </p>
+            )}
+            <h2 className="font-display text-2xl sm:text-3xl font-semibold text-ag-text tracking-tight">
+              {title}
+            </h2>
+            {subtitle && (
+              <div className="text-sm text-ag-muted mt-1.5 leading-relaxed max-w-3xl">{subtitle}</div>
+            )}
+          </div>
         </div>
         {actions && <div className="flex flex-wrap gap-2 shrink-0">{actions}</div>}
       </header>

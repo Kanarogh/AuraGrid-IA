@@ -94,7 +94,7 @@ export function CatalogProfileModal({
         )}
 
         {profile.notToConfuseWith && (
-          <p className="text-xs text-ag-muted border-l-2 border-amber-500/50 pl-3">
+          <p className="text-xs text-ag-muted border-l-2 border-ag-warning/50 pl-3">
             {profile.notToConfuseWith}
           </p>
         )}
