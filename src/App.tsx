@@ -31,6 +31,8 @@ import {
   RotateCcw,
   Square,
   Eraser,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { PRELOADED_CATALOG } from "./data/preloaded";
 import {
@@ -40,7 +42,7 @@ import {
   CanvaGridPage,
   CanvaGridSlot,
 } from "./types";
-import { enrichCatalogItemsInQueue, isAbortError } from "./lib/catalogEnrichment";
+import { enrichCatalogItemsInQueue, isAbortError, catalogReadyForTextMatch } from "./lib/catalogEnrichment";
 import { useClientWorkspace } from "./context/ClientWorkspaceContext";
 import { aiFetch } from "./lib/aiFetch";
 import {
@@ -49,17 +51,24 @@ import {
   refreshAiSettings,
 } from "./lib/aiSettingsStore";
 import { useAiSettings } from "./hooks/useAiSettings";
-import { resizeImage, convertSvgToDataUrl, resizeForAi } from "./lib/images";
+import { resizeImage, convertSvgToDataUrl, resizeForAi, fileToCatalogImageDataUrl } from "./lib/images";
 import { aiQueue } from "./lib/aiQueue";
 import {
   buildCaptionCacheKey,
   getCachedCaption,
+  removeCachedCaption,
   setCachedCaption,
 } from "./lib/captionCache";
-import { applyCaptionReferenceRule } from "./lib/captionFormat";
+import { finalizeCaption, resolveCatalogLabel, sanitizeRefinedCaptionOutput } from "./lib/captionFormat";
+import { normalizeCaptionGenerationParams } from "./lib/captionParams";
+import { syncCanvaPagesToPosts } from "./lib/canvaTimelineSync";
 import { recalculatePostDates } from "./lib/dates";
-import { createEmptyCanvaPage } from "./lib/canva";
+import { createEmptyCanvaPage, resolveActiveCanvaPage } from "./lib/canva";
 import { getPostStatus } from "./lib/postStatus";
+
+function captionQueueLabel(postId: string, dayNumber: number): string {
+  return `Legenda#${postId}#dia${dayNumber}`;
+}
 import { useTheme } from "./hooks/useTheme";
 import { AppShell } from "./components/layout/AppShell";
 import type { AppSection } from "./components/layout/AppSidebar";
@@ -81,10 +90,19 @@ import { getCaptionBatchStats, getPendingCaptionPosts } from "./lib/captionBatch
 import { readJsonResponse } from "./lib/apiResponse";
 import { CatalogModal } from "./components/catalog/CatalogModal";
 import { CatalogProfileModal } from "./components/catalog/CatalogProfileModal";
+import { ReferenceFinderPanel } from "./components/reference/ReferenceFinderPanel";
 import {
   CanvaTimelineSyncPanel,
   CanvaGridOrderHint,
 } from "./components/canva/CanvaTimelineSyncPanel";
+import { CanvaGridLightbox } from "./components/canva/CanvaGridLightbox";
+import { CanvaGridFormatPicker } from "./components/canva/CanvaGridFormatPicker";
+import { getCanvaGridFormat } from "./lib/canvaGridFormats";
+import {
+  CATALOG_DRAG_MIME,
+  getImageFileFromClipboard,
+  getImageFileFromDataTransfer,
+} from "./lib/clipboardImage";
 import {
   clearCatalogEnrichmentPatch,
   getReferenceCatalog,
@@ -93,6 +111,12 @@ import {
   isReferenceCatalogItem,
   normalizeCatalogItem,
 } from "./lib/catalog";
+import {
+  brandGemRequiredMessage,
+  formatMissingBrandGemFields,
+  getMissingBrandGemFields,
+  isBrandGemReadyForCaptions,
+} from "./lib/brandGemValidation";
 
 
 export default function App() {
@@ -106,11 +130,13 @@ export default function App() {
     setCatalog,
     setPosts,
     setStartDate,
-    setBrandGem,
+    saveBrandGem,
     setCanvaPages,
     setActiveCanvaPageId,
     setAutoSyncCanva,
     setCanvaGridReversed,
+    setCanvaGridFormat,
+    setCanvaGridMaxWidth,
     setUiPrefs,
     resetActiveClient,
   } = useClientWorkspace();
@@ -119,10 +145,30 @@ export default function App() {
   const posts = workspace.posts;
   const startDate = workspace.startDate;
   const brandGem = workspace.brandGem;
+  const brandGemReady = useMemo(() => isBrandGemReadyForCaptions(brandGem), [brandGem]);
+  const brandGemMissingFields = useMemo(
+    () => formatMissingBrandGemFields(brandGem),
+    [brandGem]
+  );
+  const brandGemMissingCount = useMemo(
+    () => getMissingBrandGemFields(brandGem).length,
+    [brandGem]
+  );
+  const captionGenerationParams = useMemo(
+    () => normalizeCaptionGenerationParams(brandGem.captionParams),
+    [brandGem.captionParams]
+  );
   const canvaPages = workspace.canva.pages;
   const activeCanvaPageId = workspace.canva.activePageId;
   const autoSyncCanva = workspace.canva.autoSync;
   const canvaGridReversed = workspace.canva.reversed;
+  const canvaGridFormat = workspace.canva.gridFormat ?? "square";
+  const canvaGridFormatMeta = useMemo(
+    () => getCanvaGridFormat(canvaGridFormat),
+    [canvaGridFormat]
+  );
+  const canvaGridMaxWidth =
+    workspace.canva.gridMaxWidth ?? canvaGridFormatMeta.defaultMaxWidth;
 
   /** Guarda-roupa: só referências enviadas na aba Catálogo (pasta/arquivo único) */
   const referenceCatalog = useMemo(() => getReferenceCatalog(catalog), [catalog]);
@@ -174,10 +220,21 @@ export default function App() {
   const { connectionStatus, apiStatusLabel, health } = useAiSettings();
   
   const [selectedCanvaSlotId, setSelectedCanvaSlotId] = useState<string | null>(null);
+  const [canvaLightbox, setCanvaLightbox] = useState<{
+    image: string;
+    label: string | null;
+    slotNumber: number;
+  } | null>(null);
+  const [canvaSlotDragOver, setCanvaSlotDragOver] = useState<string | null>(null);
 
   const canvaImageCount = useMemo(
     () => canvaPages.flatMap((p) => p.slots).filter((s) => s?.image).length,
     [canvaPages]
+  );
+
+  const activeCanvaPage = useMemo(
+    () => resolveActiveCanvaPage(canvaPages, activeCanvaPageId),
+    [canvaPages, activeCanvaPageId]
   );
 
   const [activeSection, setActiveSection] = useState<AppSection>(
@@ -207,6 +264,7 @@ export default function App() {
     setRefineInstructions({});
     setSwapSourceId("");
     setSelectedCanvaSlotId(null);
+    setCanvaLightbox(null);
     setUiPrefs({ activeSection, viewMode });
   }, [
     activeClientId,
@@ -238,6 +296,7 @@ export default function App() {
   const folderUploadInputRef = useRef<HTMLInputElement>(null);
   const filesUploadInputRef = useRef<HTMLInputElement>(null);
   const catalogRef = useRef<CatalogItem[]>(catalog);
+  const postsRef = useRef<PlannedPost[]>(posts);
   const catalogEnrichAbortRef = useRef<AbortController | null>(null);
   
   // Elements references for scrolling focus
@@ -245,145 +304,38 @@ export default function App() {
 
   // Synchronize Canva Grid state changes into Roteiros automatically
   const syncCanvaGridToTimeline = (pagesList: CanvaGridPage[], showAlert: boolean = false) => {
-    // Gather all slots in sequence
-    let allSlots: CanvaGridSlot[] = [];
-    (pagesList || []).forEach(page => {
-      if (page && page.slots) {
-        allSlots.push(...page.slots);
-      }
-    });
+    const validCount = pagesList
+      .flatMap((p) => p?.slots ?? [])
+      .filter((s) => s?.image).length;
 
-    // Gather valid slots
-    const validSlots = allSlots.filter(s => s && s.image !== null);
-    if (validSlots.length === 0) {
+    if (validCount === 0) {
       if (showAlert) {
         alert("Nenhum look com foto foi encontrado no Canva Grid para sincronizar!");
       }
       return;
     }
 
-    // Sort order based on user option (reverseOrder bottom-up or normal top-down)
-    let orderedSlots = [...validSlots];
-    if (canvaGridReversed) {
-      orderedSlots.reverse();
-    }
+    setPosts((prevPosts) => {
+      const finalizedList = syncCanvaPagesToPosts(
+        pagesList,
+        prevPosts,
+        startDate,
+        { reversed: canvaGridReversed }
+      );
 
-    const N = orderedSlots.length;
-
-    // Mathematically distribute N files over exactly 30 days
-    const postsPerDay = Array(30).fill(0);
-    if (N >= 30) {
-      for (let i = 0; i < 30; i++) postsPerDay[i] = 1;
-      let remaining = N - 30;
-      let d = 0;
-      while (remaining > 0 && d < 30) {
-        const currentSpace = 3 - postsPerDay[d];
-        if (currentSpace > 0) {
-          const add = Math.min(currentSpace, remaining);
-          postsPerDay[d] += add;
-          remaining -= add;
-        }
-        d++;
-      }
-      let cycle = 0;
-      while (remaining > 0) {
-        postsPerDay[cycle % 30] += 1;
-        remaining--;
-        cycle++;
-      }
-    } else {
-      for (let i = 0; i < N; i++) postsPerDay[i] = 1;
-      for (let i = N; i < 30; i++) postsPerDay[i] = 0;
-    }
-
-    // Construct the actual PlannedPost[] array
-    let itemIndex = 0;
-
-    // Retrieve existing posts list to compare and preserve captions
-    setPosts(prevPosts => {
-      const existingPosts = [...(prevPosts || [])];
-      const resultPosts: PlannedPost[] = [];
-
-      for (let dIndex = 0; dIndex < 30; dIndex++) {
-        const dayNum = dIndex + 1;
-        const countForDay = postsPerDay[dIndex];
-
-        if (countForDay === 0) {
-          // Look if we have an existing blank post at this exact flat position to preserve
-          const currentFlatIndex = resultPosts.length;
-          const existingAtSlot = existingPosts[currentFlatIndex];
-          
-          if (existingAtSlot && existingAtSlot.image === null) {
-            resultPosts.push({
-              ...existingAtSlot,
-              dayNumber: dayNum,
-              dateLabel: "" // calculated below
-            });
-          } else {
-            resultPosts.push({
-              id: `post_day${dayNum}_blank_${Date.now()}_${dIndex}`,
-              dayNumber: dayNum,
-              dateLabel: "",
-              image: null,
-              matchedCatalogId: null,
-              reasoning: null,
-              caption: "",
-              isGenerating: false,
-              isGenerated: false,
-              isConfirmed: false,
-              error: null
-            });
-          }
-        } else {
-          for (let pIndex = 0; pIndex < countForDay; pIndex++) {
-            const item = orderedSlots[itemIndex];
-            itemIndex++;
-
-            const currentFlatIndex = resultPosts.length;
-            const existingAtSlot = existingPosts[currentFlatIndex];
-
-            if (item && existingAtSlot && existingAtSlot.image === item.image) {
-              // Exact same image in index position! Preserve original edited post & text caption
-              resultPosts.push({
-                ...existingAtSlot,
-                dayNumber: dayNum,
-                dateLabel: "" // calculated below
-              });
-            } else {
-              // Replaced / new image. Set with clean state ready for caption writing
-              resultPosts.push({
-                id: `post_day${dayNum}_p${pIndex}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-                dayNumber: dayNum,
-                dateLabel: "",
-                image: item ? item.image : null,
-                matchedCatalogId: item ? (item.matchedCatalogId || null) : null,
-                reasoning: item && item.matchedCatalogId ? `Vínculo automático via distribuidor inteligente de acervo.` : null,
-                caption: "",
-                isGenerating: false,
-                isGenerated: false,
-                isConfirmed: false,
-                error: null
-              });
-            }
-          }
-        }
-      }
-
-      const finalizedList = recalculatePostDates(startDate, resultPosts);
-
-      // Choose active post
-      const firstWithImg = finalizedList.find(p => p && p.image !== null) || finalizedList[0];
+      const firstWithImg =
+        finalizedList.find((p) => p && p.image !== null) || finalizedList[0];
       if (firstWithImg) {
-        setTimeout(() => {
-          setActivePreviewId(firstWithImg.id);
-        }, 50);
+        setTimeout(() => setActivePreviewId(firstWithImg.id), 50);
       }
 
       return finalizedList;
     });
 
     if (showAlert) {
-      alert(`Sequência do Canva sincronizada com sucesso no Roteiro de 30 Dias!\n- ${N} looks organizados sequencialmente.\n- Copys e legendas existentes preservadas nas posições de foto mantidas!`);
+      alert(
+        `Sequência do Canva sincronizada com sucesso no Roteiro de 30 Dias!\n- ${validCount} looks organizados sequencialmente.\n- Copys e legendas existentes preservadas nas posições de foto mantidas!`
+      );
     }
   };
 
@@ -394,6 +346,10 @@ export default function App() {
   useEffect(() => {
     catalogRef.current = catalog;
   }, [catalog]);
+
+  useEffect(() => {
+    postsRef.current = posts;
+  }, [posts]);
 
   // Handle Automatic Synchronization of Canva Grid into Roteiros
   useEffect(() => {
@@ -671,7 +627,7 @@ export default function App() {
       }
       
       try {
-        const base64Str = await processImageFile(file);
+        const base64Str = await fileToCatalogImageDataUrl(file);
         let label = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").trim();
         label = label.replace(/\b\w/g, c => c.toUpperCase());
         
@@ -770,7 +726,7 @@ export default function App() {
   // Upload file directly into Canva slot & replicate to reference catalog
   const handleUploadImageToCanvaSlot = async (pageId: string, slotId: string, file: File) => {
     try {
-      const base64Str = await processImageFile(file);
+      const base64Str = await processImageFileForCanvaGrid(file);
       let label = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").trim();
       label = label.replace(/\b\w/g, c => c.toUpperCase());
       
@@ -794,6 +750,46 @@ export default function App() {
       console.error("Erro no processamento da imagem do slot Canva:", err);
     }
   };
+
+  const handleDropOnCanvaSlot = async (
+    pageId: string,
+    slotId: string,
+    dt: DataTransfer
+  ) => {
+    const catalogId = dt.getData(CATALOG_DRAG_MIME);
+    if (catalogId) {
+      const item = referenceCatalog.find((c) => c.id === catalogId) ?? null;
+      handleAssignCatalogToCanvaSlot(pageId, slotId, item);
+      return;
+    }
+    const file = await getImageFileFromDataTransfer(dt);
+    if (file) {
+      await handleUploadImageToCanvaSlot(pageId, slotId, file);
+      return;
+    }
+    alert(
+      "Não foi possível colar esta imagem aqui. Exporte do Canva (PNG/JPG) ou arraste o arquivo da pasta Downloads."
+    );
+  };
+
+  // Ctrl+V no slot selecionado (funciona se a imagem estiver no clipboard como PNG)
+  useEffect(() => {
+    if (activeSection !== "canva_grid" || !selectedCanvaSlotId) return;
+
+    const onPaste = (e: ClipboardEvent) => {
+      const file = getImageFileFromClipboard(e);
+      if (!file) return;
+      e.preventDefault();
+      const activePage =
+        canvaPages.find((p) => p.id === activeCanvaPageId) ||
+        resolveActiveCanvaPage(canvaPages, activeCanvaPageId);
+      if (!activePage) return;
+      void handleUploadImageToCanvaSlot(activePage.id, selectedCanvaSlotId, file);
+    };
+
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [activeSection, selectedCanvaSlotId, activeCanvaPageId, canvaPages]);
 
   // Duplicate an entire Canva Page
   const handleDuplicateCanvaPage = (pageId: string) => {
@@ -827,7 +823,7 @@ export default function App() {
     const newNum = canvaPages.length + 1;
     const newId = `page_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     const newPage = createEmptyCanvaPage(`Página ${newNum}`, newId);
-    setCanvaPages(prev => [...prev, newPage]);
+    setCanvaPages((prev) => [newPage, ...prev]);
     setActiveCanvaPageId(newId);
   };
 
@@ -838,10 +834,12 @@ export default function App() {
       return;
     }
     if (confirm("Tem certeza que deseja apagar esta página do Canva Grid?")) {
-      const remainingPages = canvaPages.filter(p => p.id !== pageId);
+      const deletedIdx = canvaPages.findIndex((p) => p.id === pageId);
+      const remainingPages = canvaPages.filter((p) => p.id !== pageId);
       setCanvaPages(remainingPages);
       if (activeCanvaPageId === pageId && remainingPages.length > 0) {
-        setActiveCanvaPageId(remainingPages[0].id);
+        const nextIdx = Math.min(Math.max(deletedIdx, 0), remainingPages.length - 1);
+        setActiveCanvaPageId(remainingPages[nextIdx]!.id);
       }
     }
   };
@@ -877,7 +875,7 @@ export default function App() {
         continue;
       }
       try {
-        const base64Str = await processImageFile(file);
+        const base64Str = await processImageFileForCanvaGrid(file);
         let label = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").trim();
         label = label.replace(/\b\w/g, c => c.toUpperCase());
         
@@ -1037,6 +1035,24 @@ export default function App() {
     });
   };
 
+  /** Maior resolução para o grid Canva — lupa e export ficam mais nítidos. */
+  const processImageFileForCanvaGrid = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = async () => {
+        const result = reader.result as string;
+        try {
+          const resized = await resizeImage(result, 1400, 1400);
+          resolve(resized);
+        } catch {
+          resolve(result);
+        }
+      };
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
   const patchCatalogItem = (
     id: string,
     patch: Partial<CatalogItem>
@@ -1150,7 +1166,7 @@ export default function App() {
       label = label.replace(/\b\w/g, char => char.toUpperCase());
  
       try {
-        const base64Str = await processImageFile(file);
+        const base64Str = await fileToCatalogImageDataUrl(file);
         newItems.push({
           id: "cat_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9),
           label: label,
@@ -1214,28 +1230,39 @@ export default function App() {
 
   const ensureCatalogIndexedForMatch = async (): Promise<boolean> => {
     const refs = getReferenceCatalog(catalogRef.current);
-    const notReady = refs.filter((c) => c.enrichmentStatus !== "ready" || !c.visualProfile);
-    if (notReady.length === 0) return true;
+    if (refs.length === 0) return true;
+    if (catalogReadyForTextMatch(refs)) return true;
 
+    const notReady = refs.filter((c) => c.enrichmentStatus !== "ready" || !c.visualProfile);
     const indexNow = confirm(
       `${notReady.length} referência(s) do catálogo ainda não estão indexadas (JSON).\n\n` +
-        `Indexar agora? Recomendado — 1 chamada por foto, com pausa automática.\n\n` +
-        `Cancelar = perguntar se deseja continuar sem índice (envia todas as fotos do acervo, mais lento e caro).`
+        `A geração de legendas compara a foto do post com os perfis JSON das referências — todas precisam estar indexadas.\n\n` +
+        `Indexar agora? (1 chamada por foto, com pausa automática.)`
     );
-    if (indexNow) {
-      await runCatalogEnrichment(notReady);
-      return true;
+    if (!indexNow) return false;
+
+    await runCatalogEnrichment(notReady);
+    const after = getReferenceCatalog(catalogRef.current);
+    if (!catalogReadyForTextMatch(after)) {
+      alert(
+        "Ainda há referências sem índice JSON. Conclua a indexação no painel de referências antes de gerar legendas."
+      );
+      return false;
     }
-    return confirm(
-      "Continuar sem índice JSON? A IA pode enviar todas as imagens do catálogo em cada legenda."
-    );
+    return true;
   };
 
   const stopCaptionGeneration = useCallback((postId?: string) => {
-    captionGenerateAbortRef.current?.abort();
-    captionGenerateAbortRef.current = null;
-    captionGeneratePostIdRef.current = null;
-    aiQueue.cancelPending((label) => label.startsWith("Legenda "));
+    if (!postId || captionGeneratePostIdRef.current === postId) {
+      captionGenerateAbortRef.current?.abort();
+      captionGenerateAbortRef.current = null;
+      captionGeneratePostIdRef.current = null;
+    }
+    if (postId) {
+      aiQueue.cancelPending((label) => label.startsWith(`Legenda#${postId}#`));
+    } else {
+      aiQueue.cancelPending((label) => label.startsWith("Legenda#"));
+    }
     setPosts((prev) =>
       prev.map((p) => {
         if (postId ? p.id === postId : p.isGenerating) {
@@ -1246,7 +1273,14 @@ export default function App() {
     );
   }, []);
 
-  // Match visual + legenda em espanhol (um post)
+  // Match visual + legenda (tom e rodapé vêm do Gem configurado)
+  const ensureBrandGemConfigured = useCallback((): boolean => {
+    if (isBrandGemReadyForCaptions(brandGem)) return true;
+    alert(brandGemRequiredMessage(brandGem));
+    setActiveSection("settings");
+    return false;
+  }, [brandGem]);
+
   const matchAndGenerateForPost = async (
     postId: string,
     options?: { skipCatalogPrompt?: boolean; force?: boolean; signal?: AbortSignal }
@@ -1257,6 +1291,7 @@ export default function App() {
       alert("Carregue a foto do post antes de gerar a legenda.");
       return {};
     }
+    if (!ensureBrandGemConfigured()) return {};
 
     if (post.isGenerating) return {};
 
@@ -1289,10 +1324,11 @@ export default function App() {
     try {
       const rawPostImage = await convertSvgToDataUrl(post.image);
       const processedPostImage = await resizeForAi(rawPostImage);
+      const imageOnly = !!post.captionFromImageOnly;
 
       if (controller.signal.aborted) return {};
 
-      if (!options?.skipCatalogPrompt) {
+      if (!imageOnly && !options?.skipCatalogPrompt) {
         const ok = await ensureCatalogIndexedForMatch();
         if (!ok || controller.signal.aborted) {
           setPosts((prev) =>
@@ -1305,55 +1341,62 @@ export default function App() {
       if (controller.signal.aborted) return {};
 
       const refs = getReferenceCatalog(catalogRef.current);
-      const ready = refs.filter((c) => c.enrichmentStatus === "ready" && c.visualProfile);
-      const useJsonMatch = ready.length > 0 && ready.length === refs.length;
+      if (
+        !imageOnly &&
+        refs.length > 0 &&
+        !catalogReadyForTextMatch(refs)
+      ) {
+        alert(
+          "Todas as referências do catálogo precisam estar indexadas (JSON) antes de gerar a legenda."
+        );
+        setPosts((prev) =>
+          prev.map((p) => (p.id === postId ? { ...p, isGenerating: false } : p))
+        );
+        return {};
+      }
 
       const body: Record<string, unknown> = {
         postImage: processedPostImage,
         brandGem,
+        ...(options?.force ? { regenerateCaption: true } : {}),
+        ...(imageOnly ? { captionFromImageOnly: true } : {}),
       };
 
       let catalogIdsForCache: string[] = [];
 
-      if (useJsonMatch) {
-        const profiles = ready.map((c) => ({
+      if (!imageOnly && refs.length > 0) {
+        body.catalogProfiles = refs.map((c) => ({
           id: c.id,
           label: c.label,
           profile: c.visualProfile,
         }));
-        body.catalogProfiles = profiles;
-        catalogIdsForCache = ready.map((c) => c.id);
-      } else if (refs.length > 0) {
-        const processedCatalog = await Promise.all(
-          refs.map(async (item) => {
-            const converted = await convertSvgToDataUrl(item.image);
-            const compressed = await resizeForAi(converted, { maxSide: 768 });
-            return { id: item.id, label: item.label, image: compressed };
-          })
-        );
-        body.catalogItems = processedCatalog;
         catalogIdsForCache = refs.map((c) => c.id);
       }
 
       const cacheKey = buildCaptionCacheKey({
         imageDataUrl: processedPostImage,
+        postId,
         brandGem,
         catalogIds: catalogIdsForCache,
+        captionFromImageOnly: imageOnly,
       });
 
       if (!options?.force) {
         const cached = getCachedCaption(cacheKey);
         if (cached) {
-          const cachedCaption = applyCaptionReferenceRule(
-            cached.caption,
-            cached.matchedId
-          );
+          const effectiveMatchedId = imageOnly ? null : cached.matchedId;
+          const cachedCaption = finalizeCaption(cached.caption, {
+            matchedCatalogId: effectiveMatchedId,
+            matchedLabel: resolveCatalogLabel(refs, effectiveMatchedId),
+            footer: brandGem.footer,
+            captionParams: brandGem.captionParams,
+          });
           setPosts((prev) =>
             prev.map((p) =>
               p.id === postId
                 ? {
                     ...p,
-                    matchedCatalogId: cached.matchedId,
+                    matchedCatalogId: effectiveMatchedId,
                     reasoning: cached.reasoning,
                     caption: cachedCaption,
                     isGenerating: false,
@@ -1368,7 +1411,7 @@ export default function App() {
       }
 
       const response = await aiQueue.enqueue(
-        `Legenda Dia ${post.dayNumber}`,
+        captionQueueLabel(postId, post.dayNumber),
         () =>
           aiFetch("/api/match-and-generate", {
             method: "POST",
@@ -1395,8 +1438,13 @@ export default function App() {
       noteLastProviderUsed(providerUsed);
       const matchMode = response.headers.get("X-AI-Match-Mode") ?? undefined;
 
-      const matchedId = result.matchedId ?? null;
-      const caption = applyCaptionReferenceRule(result.caption ?? "", matchedId);
+      const matchedId = imageOnly ? null : (result.matchedId ?? null);
+      const caption = finalizeCaption(result.caption ?? "", {
+        matchedCatalogId: matchedId,
+        matchedLabel: resolveCatalogLabel(refs, matchedId),
+        footer: brandGem.footer,
+        captionParams: brandGem.captionParams,
+      });
 
       setCachedCaption(cacheKey, {
         caption,
@@ -1506,6 +1554,8 @@ export default function App() {
   };
 
   const handleRunAllMatching = () => {
+    if (!ensureBrandGemConfigured()) return;
+
     const pending = getPendingCaptionPosts(posts);
     if (pending.length === 0) {
       alert("Não há posts com foto aguardando legenda. Carregue as imagens ou use “Tentar novamente” nos erros.");
@@ -1528,9 +1578,26 @@ export default function App() {
   };
 
   const handleRegenerateCaptionErrors = () => {
+    if (!ensureBrandGemConfigured()) return;
+
     const failed = posts.filter((p) => p.image && p.error && !p.isGenerating);
     if (failed.length === 0) return;
     void runCaptionBatch(failed);
+  };
+
+  const handleToggleCaptionFromImageOnly = (postId: string, enabled: boolean) => {
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === postId
+          ? {
+              ...p,
+              captionFromImageOnly: enabled,
+              ...(enabled ? { matchedCatalogId: null } : {}),
+              isConfirmed: false,
+            }
+          : p
+      )
+    );
   };
 
   // Direct manual modification of part of the caption live
@@ -1542,22 +1609,61 @@ export default function App() {
     } : p));
   };
 
+  const handleClearCaption = async (postId: string) => {
+    const post = posts.find((p) => p.id === postId);
+    if (!post) return;
+    if (!post.caption && !post.isGenerated && !post.reasoning && !post.error) return;
+
+    stopCaptionGeneration(postId);
+
+    if (post.image) {
+      try {
+        const processed = await resizeForAi(await convertSvgToDataUrl(post.image));
+        const refs = getReferenceCatalog(catalogRef.current);
+        const cacheKey = buildCaptionCacheKey({
+          imageDataUrl: processed,
+          postId,
+          brandGem,
+          catalogIds: refs.map((c) => c.id),
+          captionFromImageOnly: !!post.captionFromImageOnly,
+        });
+        removeCachedCaption(cacheKey);
+      } catch {
+        /* ignora falha ao limpar cache */
+      }
+    }
+
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === postId
+          ? {
+              ...p,
+              caption: "",
+              matchedCatalogId: null,
+              reasoning: null,
+              isGenerated: false,
+              isConfirmed: false,
+              isGenerating: false,
+              error: null,
+            }
+          : p
+      )
+    );
+    setRefineInstructions((prev) => ({ ...prev, [postId]: "" }));
+  };
+
 
   // Direct manual modification of look reference link drop-down
   const handleSelectReferenceManual = (postId: string, catalogId: string | null) => {
     setPosts(prev => prev.map(p => {
       if (p.id === postId) {
-        // Automatically inject or strip reference sentence from the caption body as requested
-        const targetRefLabel = referenceCatalog.find((c) => c.id === catalogId)?.label;
-        let revisedCaption = p.caption;
-        
-        // Remove old reference pattern
-        revisedCaption = revisedCaption.replace(/Referencia:\s*[^\n]*/gi, "");
-        
-        // Append new reference if appropriate
-        if (targetRefLabel) {
-          revisedCaption = `Referencia: ${targetRefLabel}\n` + revisedCaption.trim();
-        }
+        const targetRefLabel = referenceCatalog.find((c) => c.id === catalogId)?.label ?? null;
+        const revisedCaption = finalizeCaption(p.caption, {
+          matchedCatalogId: catalogId,
+          matchedLabel: targetRefLabel,
+          footer: brandGem.footer,
+          captionParams: brandGem.captionParams,
+        });
 
         return {
           ...p,
@@ -1570,44 +1676,63 @@ export default function App() {
     }));
   };
 
-  // Refine single caption with conversational instructions via Gemini
-  const handleRefineCaption = async (postId: string) => {
-    const post = posts.find(p => p.id === postId);
-    const instructions = refineInstructions[postId];
-    if (!post || !post.caption || !instructions) return;
+  // Refine single caption with conversational instructions (fora da fila de geração em lote)
+  const handleRefineCaption = async (postId: string, instructionOverride?: string) => {
+    const post = postsRef.current.find((p) => p.id === postId);
+    const instructions = (instructionOverride ?? refineInstructions[postId] ?? "").trim();
+    if (!post?.caption?.trim() || !instructions) return;
+    if (!ensureBrandGemConfigured()) return;
 
-    setIsRefining(prev => ({ ...prev, [postId]: true }));
+    setIsRefining((prev) => ({ ...prev, [postId]: true }));
 
     try {
-      const response = await aiQueue.enqueue(
-        `Refinar Dia ${post.dayNumber}`,
-        () =>
-          aiFetch("/api/refine-caption", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              currentCaption: post.caption,
-              instructions,
-              brandGem,
-            }),
-          })
+      const response = await aiFetch("/api/refine-caption", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentCaption: post.caption,
+          instructions,
+          brandGem,
+        }),
+      });
+
+      const result = await readJsonResponse<{ caption?: string; error?: string }>(response);
+      if (!response.ok) {
+        throw new Error(result.error || "Não foi possível refinar no servidor.");
+      }
+
+      noteLastProviderUsed(response.headers.get("X-AI-Provider-Used"));
+      const refs = getReferenceCatalog(catalogRef.current);
+      const caption = finalizeCaption(sanitizeRefinedCaptionOutput(result.caption ?? ""), {
+        matchedCatalogId: post.matchedCatalogId,
+        matchedLabel: resolveCatalogLabel(refs, post.matchedCatalogId),
+        footer: brandGem.footer,
+        captionParams: brandGem.captionParams,
+      });
+
+      if (!caption.trim()) {
+        throw new Error("A IA devolveu uma legenda vazia. Tente outra instrução.");
+      }
+
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === postId
+            ? {
+                ...p,
+                caption,
+                isGenerated: true,
+                isConfirmed: false,
+              }
+            : p
+        )
       );
 
-      if (!response.ok) throw new Error("Não foi possível refinar no servidor.");
-      noteLastProviderUsed(response.headers.get("X-AI-Provider-Used"));
-      const result = await response.json();
-
-      setPosts(prev => prev.map(p => p.id === postId ? { 
-        ...p, 
-        caption: result.caption,
-        isConfirmed: false 
-      } : p));
-      
-      setRefineInstructions(prev => ({ ...prev, [postId]: "" }));
-    } catch (e: any) {
-      alert("Falha ao ajustar a legenda: " + (e.message || e));
+      setRefineInstructions((prev) => ({ ...prev, [postId]: "" }));
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      alert("Falha ao ajustar a legenda: " + message);
     } finally {
-      setIsRefining(prev => ({ ...prev, [postId]: false }));
+      setIsRefining((prev) => ({ ...prev, [postId]: false }));
     }
   };
 
@@ -1632,7 +1757,7 @@ export default function App() {
     const files = e.target.files;
     if (files && files.length > 0) {
       const file = files[0];
-      const base64 = await processImageFile(file);
+      const base64 = await fileToCatalogImageDataUrl(file);
       setNewCatalogImage(base64);
 
       const nameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
@@ -1671,10 +1796,44 @@ export default function App() {
   };
 
   const removeCatalogItem = (id: string) => {
-    if (confirm("Deseja realmente excluir esta referência do acervo cadastrado?")) {
-      setCatalog(catalog.filter((item) => item.id !== id));
-    }
+    if (!confirm("Deseja realmente excluir esta referência do acervo cadastrado?")) return;
+
+    setCatalog((prev) => prev.filter((item) => item.id !== id));
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.matchedCatalogId === id ? { ...p, matchedCatalogId: null, isConfirmed: false } : p
+      )
+    );
+    setProfileViewItem((current) => (current?.id === id ? null : current));
   };
+
+  const clearEntireCatalog = useCallback(() => {
+    if (referenceCatalog.length === 0) {
+      alert("O catálogo já está vazio.");
+      return;
+    }
+
+    const count = referenceCatalog.length;
+    if (
+      !confirm(
+        `Excluir todo o catálogo (${count} referência${count === 1 ? "" : "s"})?\n\nTodas as fotos e indexações serão removidas. Vínculos de referência nos roteiros também serão desfeitos.\n\nEsta ação não pode ser desfeita.`
+      )
+    ) {
+      return;
+    }
+
+    stopCatalogEnrichment();
+    const refIds = new Set(referenceCatalog.map((c) => c.id));
+    setCatalog((prev) => prev.filter((c) => !isReferenceCatalogItem(c)));
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.matchedCatalogId && refIds.has(p.matchedCatalogId)
+          ? { ...p, matchedCatalogId: null, isConfirmed: false }
+          : p
+      )
+    );
+    setProfileViewItem(null);
+  }, [referenceCatalog, setCatalog, setPosts]);
 
   const handleReindexCatalog = async (filter: "failed" | "pending" | "all-incomplete") => {
     const items = referenceCatalog.filter((c) => {
@@ -1807,6 +1966,8 @@ export default function App() {
         onNavigate={setActiveSection}
         clientName={hasActiveClient ? activeClient.name : "—"}
         catalogCount={referenceCatalog.length}
+        brandGemReady={hasActiveClient ? brandGemReady : undefined}
+        brandGemMissingCount={hasActiveClient ? brandGemMissingCount : undefined}
         apiStatusLabel={apiStatusLabel}
         apiStatusTone={apiStatusTone}
         isDark={isDark}
@@ -1833,8 +1994,10 @@ export default function App() {
         {hasActiveClient && activeSection === "settings" && (
           <ConfigPanel
             variant="page"
+            clientName={activeClient.name}
             brandGem={brandGem}
-            onBrandGemChange={setBrandGem}
+            brandGemSavedAt={workspace.ui?.brandGemSavedAt}
+            onSaveBrandGem={saveBrandGem}
           />
         )}
 
@@ -1898,6 +2061,9 @@ export default function App() {
               stats={captionBatchStats}
               isRunning={isProcessingAll}
               progress={captionBatchProgress}
+              brandGemReady={brandGemReady}
+              brandGemMissingFields={brandGemMissingFields}
+              onOpenGemSettings={() => setActiveSection("settings")}
               onGeneratePending={handleRunAllMatching}
               onRegenerateErrors={handleRegenerateCaptionErrors}
               onStop={stopCaptionBatch}
@@ -1917,6 +2083,12 @@ export default function App() {
                 copiedId={copiedId}
                 refineInstruction={refineInstructions[activePost.id] || ""}
                 isRefining={!!isRefining[activePost.id]}
+                brandGemReady={brandGemReady}
+                captionMaxMainChars={captionGenerationParams.maxHookChars}
+                captionFooter={brandGem.footer}
+                profileHandle={
+                  activeClient.instagramHandle ?? activeClient.id.replace(/-/g, "_")
+                }
                 hasPrevious={activeEditorialIndex > 0}
                 hasNext={activeEditorialIndex < orderedEditorialPosts.length - 1}
                 onPrevious={() => navigateEditorialPost(-1)}
@@ -1927,14 +2099,20 @@ export default function App() {
                 onPhotoUpload={async (file) => handlePostPhotoUpload(activePost.id, file)}
                 onClearImage={() => handleClearPostImage(activePost.id)}
                 onSelectReference={(id) => handleSelectReferenceManual(activePost.id, id)}
-                onGenerate={() => matchAndGenerateForPost(activePost.id)}
+                onToggleCaptionFromImageOnly={(enabled) =>
+                  handleToggleCaptionFromImageOnly(activePost.id, enabled)
+                }
+                onGenerate={() =>
+                  matchAndGenerateForPost(activePost.id, { force: activePost.isGenerated })
+                }
                 onStopGenerate={() => stopCaptionGeneration(activePost.id)}
                 onCopyCaption={() => handleCopy(activePost.id, activePost.caption)}
                 onCaptionChange={(v) => updateCaptionBodyManual(activePost.id, v)}
+                onClearCaption={() => void handleClearCaption(activePost.id)}
                 onRefineInstructionChange={(v) =>
-                  setRefineInstructions({ ...refineInstructions, [activePost.id]: v })
+                  setRefineInstructions((prev) => ({ ...prev, [activePost.id]: v }))
                 }
-                onRefine={() => handleRefineCaption(activePost.id)}
+                onRefine={(instruction) => void handleRefineCaption(activePost.id, instruction)}
               />
             ) : (
               <EditorialGridView
@@ -1945,6 +2123,7 @@ export default function App() {
                 copiedId={copiedId}
                 refineInstructions={refineInstructions}
                 isRefining={isRefining}
+                brandGemReady={brandGemReady}
                 onAddPostToDay={handleAddNewPostToDay}
                 onRemove={handleRemovePost}
                 onToggleConfirm={handleToggleConfirm}
@@ -1952,13 +2131,18 @@ export default function App() {
                 onPhotoUpload={(postId, file) => handlePostPhotoUpload(postId, file)}
                 onClearImage={handleClearPostImage}
                 onSelectReference={handleSelectReferenceManual}
-                onGenerate={matchAndGenerateForPost}
+                onToggleCaptionFromImageOnly={handleToggleCaptionFromImageOnly}
+                onGenerate={(postId) => {
+                  const p = posts.find((x) => x.id === postId);
+                  return matchAndGenerateForPost(postId, { force: !!p?.isGenerated });
+                }}
                 onStopGenerate={stopCaptionGeneration}
                 onCaptionChange={updateCaptionBodyManual}
+                onClearCaption={(postId) => void handleClearCaption(postId)}
                 onRefineInstructionChange={(postId, v) =>
-                  setRefineInstructions({ ...refineInstructions, [postId]: v })
+                  setRefineInstructions((prev) => ({ ...prev, [postId]: v }))
                 }
-                onRefine={handleRefineCaption}
+                onRefine={(postId, instruction) => void handleRefineCaption(postId, instruction)}
                 onFocusPost={(id) => setActivePreviewId(id)}
                 onOpenStudio={(id) => {
                   setActivePreviewId(id);
@@ -2021,7 +2205,7 @@ export default function App() {
                 
                 {/* Active page header */}
                 {(() => {
-                  const activePage = canvaPages.find(p => p.id === activeCanvaPageId) || canvaPages[0];
+                  const activePage = activeCanvaPage!;
                   
                   return (
                     <div className="p-3 rounded-xl border border-ag-border/60 bg-ag-surface-2/50 flex flex-col sm:flex-row justify-between items-center gap-3">
@@ -2084,7 +2268,7 @@ export default function App() {
 
                 {/* THE 12 PHOTO INSTAGRAM GRID (arranged in 3 columns x 4 rows) */}
                 {(() => {
-                  const activePage = canvaPages.find(p => p.id === activeCanvaPageId) || canvaPages[0];
+                  const activePage = activeCanvaPage!;
                   
                   return (
                     <div className="relative">
@@ -2103,23 +2287,122 @@ export default function App() {
                         </div>
                       )}
 
+                      {/* Formato dos slots (Instagram / Stories) */}
+                      <div className="mb-4">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-ag-muted mb-2">
+                          Formato do grid
+                        </p>
+                        <CanvaGridFormatPicker
+                          value={canvaGridFormat}
+                          onChange={setCanvaGridFormat}
+                        />
+                        <p className="text-[10px] text-ag-muted mt-2 text-center sm:text-left">
+                          Proporção ativa:{" "}
+                          <strong className="text-ag-text">
+                            {canvaGridFormatMeta.ratioLabel}
+                          </strong>{" "}
+                          ({canvaGridFormatMeta.dimensions}px) — salvo por cliente no workspace.
+                        </p>
+                      </div>
+
                       {/* Canva Grid Frame container */}
-                      <div className="p-4 rounded-2xl border border-ag-border/60 bg-ag-surface-2/30 ring-1 ring-inset ring-ag-border/30">
-                        <div className="grid grid-cols-3 gap-2 sm:gap-3 bg-black/90 p-2 sm:p-3 rounded-xl">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                        <p className="text-[11px] text-ag-muted leading-relaxed">
+                          Tamanho do grid na tela
+                          {canvaGridMaxWidth >= canvaGridFormatMeta.zoomMax - 20 && (
+                            <span className="text-ag-accent ml-1">(máx.)</span>
+                          )}
+                        </p>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setCanvaGridMaxWidth(canvaGridMaxWidth - 80)
+                            }
+                            className="p-1.5 rounded-lg border border-ag-border bg-ag-surface-1 hover:bg-ag-surface-2 cursor-pointer"
+                            title="Diminuir grid"
+                          >
+                            <ZoomOut className="h-4 w-4 text-ag-muted" />
+                          </button>
+                          <input
+                            type="range"
+                            min={canvaGridFormatMeta.zoomMin}
+                            max={canvaGridFormatMeta.zoomMax}
+                            step={40}
+                            value={Math.min(canvaGridMaxWidth, canvaGridFormatMeta.zoomMax)}
+                            onChange={(e) =>
+                              setCanvaGridMaxWidth(Number(e.target.value))
+                            }
+                            className="w-36 sm:w-44 accent-ag-accent"
+                            title={`Largura do grid: ${canvaGridMaxWidth}px`}
+                          />
+                          <span className="text-[10px] font-mono text-ag-muted w-12 text-right tabular-nums">
+                            {canvaGridMaxWidth}px
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setCanvaGridMaxWidth(canvaGridMaxWidth + 80)
+                            }
+                            className="p-1.5 rounded-lg border border-ag-border bg-ag-surface-1 hover:bg-ag-surface-2 cursor-pointer"
+                            title="Aumentar grid"
+                          >
+                            <ZoomIn className="h-4 w-4 text-ag-muted" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="mb-3 rounded-lg border border-ag-border/60 bg-ag-surface-1/80 px-3 py-2 text-[10px] text-ag-muted leading-relaxed">
+                        <strong className="text-ag-text">Canva → AuraGrid:</strong> o Canva{" "}
+                        <em>não costuma</em> liberar Ctrl+C/Ctrl+V direto (copia formato interno, não
+                        arquivo). O que funciona melhor:{" "}
+                        <strong className="text-ag-text">Exportar/Download PNG</strong> no Canva e
+                        arrastar para o slot, usar{" "}
+                        <strong className="text-ag-text">Subir lote</strong>, ou copiar imagem já
+                        exportada e <strong className="text-ag-text">Ctrl+V</strong> com um espaço
+                        selecionado. Arraste looks do guarda-roupa → slot.
+                      </div>
+
+                      <div
+                        className={`overflow-hidden rounded-lg border border-ag-border/40 shadow-sm mx-auto transition-[width] duration-200 ${
+                          canvaGridFormat === "stories" ? "max-h-[min(85vh,1200px)] overflow-y-auto ag-scrollbar-thin" : ""
+                        }`}
+                        style={{
+                          width: canvaGridMaxWidth,
+                          maxWidth: "100%",
+                        }}
+                      >
+                        <div className="grid grid-cols-3 gap-0 bg-stone-950">
                           {activePage.slots.map((slot, index) => {
                             const isSlotSelected = selectedCanvaSlotId === slot.id;
+                            const isDragOver = canvaSlotDragOver === slot.id;
                             const slotNumber = index + 1;
                             
                             return (
                               <div
                                 key={slot.id}
-                                className={`aspect-square relative flex flex-col items-center justify-center rounded-lg border overflow-hidden transition-all group ${
+                                style={{ aspectRatio: canvaGridFormatMeta.aspectRatio }}
+                                className={`relative flex flex-col items-center justify-center overflow-hidden transition-shadow group ${
                                   isSlotSelected
-                                    ? "border-ag-accent ring-4 ring-amber-600/40 z-10 scale-95"
-                                    : "border-stone-300 dark:border-stone-850 hover:scale-[1.01] hover:shadow-md cursor-pointer"
-                                } ${
-                                  "bg-ag-surface-1 border-ag-border"
-                                }`}
+                                    ? "ring-2 ring-inset ring-ag-accent z-10"
+                                    : isDragOver
+                                      ? "ring-2 ring-inset ring-ag-accent/60 z-10"
+                                      : "cursor-pointer"
+                                } bg-stone-950`}
+                                onDragOver={(e) => {
+                                  e.preventDefault();
+                                  e.dataTransfer.dropEffect = "copy";
+                                  setCanvaSlotDragOver(slot.id);
+                                }}
+                                onDragLeave={() => {
+                                  setCanvaSlotDragOver((id) => (id === slot.id ? null : id));
+                                }}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setCanvaSlotDragOver(null);
+                                  void handleDropOnCanvaSlot(activePage.id, slot.id, e.dataTransfer);
+                                }}
                                 onClick={() => {
                                   if (selectedCanvaSlotId) {
                                     if (selectedCanvaSlotId === slot.id) {
@@ -2129,6 +2412,16 @@ export default function App() {
                                     }
                                   } else {
                                     setSelectedCanvaSlotId(slot.id);
+                                  }
+                                }}
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation();
+                                  if (slot.image) {
+                                    setCanvaLightbox({
+                                      image: slot.image,
+                                      label: slot.label,
+                                      slotNumber,
+                                    });
                                   }
                                 }}
                               >
@@ -2142,49 +2435,64 @@ export default function App() {
                                     />
                                     
                                     {/* Action Hover overlay block */}
-                                    <div className="absolute inset-0 bg-stone-950/70 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity p-2 gap-1.5 text-center">
-                                      <p className="text-[10px] font-bold text-white uppercase tracking-wider truncate max-w-full">
+                                    <div className="absolute inset-0 bg-stone-950/70 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity p-1.5 gap-1 text-center">
+                                      <p className="text-[9px] font-bold text-white uppercase tracking-wider truncate max-w-full">
                                         {slot.label}
                                       </p>
                                       
-                                      <div className="flex gap-1">
+                                      <div className="flex gap-1 flex-wrap justify-center">
                                         <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setCanvaLightbox({
+                                              image: slot.image!,
+                                              label: slot.label,
+                                              slotNumber,
+                                            });
+                                          }}
+                                          className="text-[8px] font-bold bg-white/20 text-white px-1.5 py-0.5 rounded hover:bg-white/30 cursor-pointer inline-flex items-center gap-0.5"
+                                          title="Ampliar (lupa)"
+                                        >
+                                          <ZoomIn className="h-3 w-3" />
+                                          Lupa
+                                        </button>
+                                        <button
+                                          type="button"
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             setSelectedCanvaSlotId(slot.id);
                                           }}
-                                          className="text-[9px] font-bold bg-ag-accent text-white px-2 py-1 rounded hover:opacity-90 cursor-pointer"
+                                          className="text-[8px] font-bold bg-ag-accent text-white px-1.5 py-0.5 rounded hover:opacity-90 cursor-pointer"
                                           title="Mover ou trocar de posição com outro look"
                                         >
-                                          Mover / Inverter
+                                          Mover
                                         </button>
                                         <button
+                                          type="button"
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             handleAssignCatalogToCanvaSlot(activePage.id, slot.id, null);
                                           }}
-                                          className="text-[9px] font-bold bg-stone-800 text-stone-200 hover:text-white px-1.5 py-1 rounded hover:bg-stone-700 cursor-pointer"
+                                          className="text-[8px] font-bold bg-stone-800 text-stone-200 hover:text-white px-1 py-0.5 rounded hover:bg-stone-700 cursor-pointer"
                                           title="Remover foto"
                                         >
-                                          <X className="h-3.5 w-3.5 text-red-500" />
+                                          <X className="h-3 w-3 text-red-500" />
                                         </button>
                                       </div>
                                     </div>
                                   </>
                                 ) : (
-                                  <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center bg-stone-50 dark:bg-neutral-900 hover:bg-stone-100/50 dark:hover:bg-neutral-800 transition-colors">
-                                    <Plus className="h-5 w-5 mb-1 text-stone-455 group-hover:text-ag-accent transition-colors" />
-                                    <span className="text-[9px] uppercase font-bold text-ag-muted font-mono tracking-wider">
-                                      Espaço {slotNumber}
-                                    </span>
-                                    <span className="text-[7.5px] text-ag-muted block mt-0.5 font-sans">
-                                      Clique p/ colocar foto
+                                  <div className="absolute inset-0 flex flex-col items-center justify-center p-2 text-center bg-stone-950 hover:bg-stone-900/80 transition-colors">
+                                    <Plus className="h-4 w-4 mb-0.5 text-stone-500 group-hover:text-ag-accent transition-colors opacity-0 group-hover:opacity-100" />
+                                    <span className="text-[7px] uppercase font-bold text-stone-600 group-hover:text-ag-muted font-mono tracking-wider opacity-0 group-hover:opacity-100">
+                                      L{slotNumber}
                                     </span>
                                   </div>
                                 )}
 
                                 {/* Floating sequence badge indicator */}
-                                <div className="absolute top-1.5 left-1.5 bg-black/60 backdrop-blur-xs text-[8px] font-bold font-mono text-stone-100 rounded px-1.5 py-0.5 z-10">
+                                <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-[7px] font-bold font-mono text-stone-100 rounded px-1 py-0.5 z-10">
                                   L{slotNumber}
                                 </div>
                                 
@@ -2221,6 +2529,17 @@ export default function App() {
                   </h4>
                   
                   <div className="flex items-center gap-3 overflow-x-auto pb-4 pt-1 px-1 scrollbar-thin">
+                    {/* Nova página sempre à esquerda (mais recente primeiro) */}
+                    <button
+                      onClick={handleAddCanvaPage}
+                      className={`flex-shrink-0 w-32 h-[105px] rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        "bg-ag-surface-1 border-ag-border"
+                      }`}
+                    >
+                      <Plus className="h-5 w-5 text-ag-accent animate-pulse" />
+                      <span className="text-[10px] font-bold tracking-wide uppercase">Add Página</span>
+                    </button>
+
                     {canvaPages.map((page, idx) => {
                       const isActive = page.id === activeCanvaPageId;
                       const filledCount = (page?.slots || []).filter(s => s && s.image !== null).length;
@@ -2274,17 +2593,6 @@ export default function App() {
                         </div>
                       );
                     })}
-
-                    {/* Add blank page button */}
-                    <button
-                      onClick={handleAddCanvaPage}
-                      className={`flex-shrink-0 w-32 h-[105px] rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                        "bg-ag-surface-1 border-ag-border"
-                      }`}
-                    >
-                      <Plus className="h-5 w-5 text-ag-accent animate-pulse" />
-                      <span className="text-[10px] font-bold tracking-wide uppercase">Add Página</span>
-                    </button>
                   </div>
                 </div>
 
@@ -2323,8 +2631,9 @@ export default function App() {
                     </button>
                   </div>
                 ) : (
-                  <div className="bg-stone-100 dark:bg-stone-950 p-3 rounded-lg text-[11px] text-ag-muted mb-4 font-display italic text-center">
-                    💡 Dica: Clique em qualquer quadrado do Canva Grid à esquerda, e depois clique em um look abaixo para preenchê-lo!
+                  <div className="bg-stone-100 dark:bg-stone-950 p-3 rounded-lg text-[11px] text-ag-muted mb-4 font-display italic text-center leading-relaxed">
+                    💡 Clique ou arraste um look para um quadrado do grid. Com um espaço selecionado,
+                    Ctrl+V cola imagem do clipboard (PNG exportado do Canva).
                   </div>
                 )}
 
@@ -2333,8 +2642,13 @@ export default function App() {
                   {referenceCatalog.map(item => (
                     <div
                       key={item.id}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData(CATALOG_DRAG_MIME, item.id);
+                        e.dataTransfer.effectAllowed = "copy";
+                      }}
                       onClick={() => {
-                        const activePage = canvaPages.find(p => p.id === activeCanvaPageId) || canvaPages[0];
+                        const activePage = activeCanvaPage!;
                         if (selectedCanvaSlotId) {
                           handleAssignCatalogToCanvaSlot(activePage.id, selectedCanvaSlotId, item);
                         } else {
@@ -2347,7 +2661,7 @@ export default function App() {
                           }
                         }
                       }}
-                      className={`group border rounded-lg p-1.5 transition-all text-center relative cursor-pointer hover:shadow-md ${
+                      className={`group border rounded-lg p-1.5 transition-all text-center relative cursor-grab active:cursor-grabbing hover:shadow-md ${
                         "bg-ag-surface-1 border-ag-border"
                       }`}
                     >
@@ -2376,6 +2690,14 @@ export default function App() {
               </div>
 
             </div>
+            {canvaLightbox && (
+              <CanvaGridLightbox
+                image={canvaLightbox.image}
+                label={canvaLightbox.label}
+                slotNumber={canvaLightbox.slotNumber}
+                onClose={() => setCanvaLightbox(null)}
+              />
+            )}
           </StudioSection>
         )}
 
@@ -2395,6 +2717,16 @@ export default function App() {
               setViewMode("split");
               setActiveSection("posts");
             }}
+          />
+        )}
+
+        {hasActiveClient && activeSection === "reference_finder" && (
+          <ReferenceFinderPanel
+            referenceCatalog={referenceCatalog}
+            isEnrichingCatalog={isEnrichingCatalog}
+            onNavigateCatalog={() => setActiveSection("catalog")}
+            onEnsureCatalogIndexed={ensureCatalogIndexedForMatch}
+            onViewProfile={(item) => setProfileViewItem(item)}
           />
         )}
 
@@ -2426,14 +2758,28 @@ export default function App() {
               </>
             }
             actions={
-              <button
-                type="button"
-                onClick={() => setShowCatalogModal(true)}
-                className="text-xs font-semibold px-4 py-2 rounded-xl bg-ag-accent text-white hover:opacity-90 flex items-center gap-2 cursor-pointer"
-              >
-                <Plus className="h-4 w-4" />
-                Nova referência
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCatalogModal(true)}
+                  className="text-xs font-semibold px-4 py-2 rounded-xl bg-ag-accent text-white hover:opacity-90 flex items-center gap-2 cursor-pointer"
+                >
+                  <Plus className="h-4 w-4" />
+                  Nova referência
+                </button>
+                {referenceCatalog.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearEntireCatalog}
+                    disabled={isEnrichingCatalog}
+                    className="text-xs font-semibold px-4 py-2 rounded-xl border border-ag-danger/35 bg-ag-danger/10 text-ag-danger hover:bg-ag-danger/15 disabled:opacity-50 cursor-pointer flex items-center gap-2"
+                    title="Remove todas as referências do catálogo deste cliente"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Excluir catálogo
+                  </button>
+                )}
+              </div>
             }
           >
             <div className={`p-6 sm:p-8 border-2 border-dashed rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-4 mb-8 ${
@@ -2590,6 +2936,18 @@ export default function App() {
                     title="Só referências com JSON ✓"
                   >
                     Só indexados ({indexedCatalogCount})
+                  </button>
+                )}
+                {referenceCatalog.length > 0 && (
+                  <button
+                    type="button"
+                    disabled={isEnrichingCatalog}
+                    onClick={clearEntireCatalog}
+                    className="text-[10px] font-bold px-3 py-1.5 rounded-lg border border-ag-danger/35 bg-ag-danger/10 text-ag-danger hover:bg-ag-danger/15 disabled:opacity-50 cursor-pointer flex items-center gap-1"
+                    title="Remove todas as referências e indexações"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Excluir catálogo ({referenceCatalog.length})
                   </button>
                 )}
               </div>
@@ -2752,7 +3110,7 @@ export default function App() {
           const files = e.dataTransfer.files;
           if (files?.length) {
             const file = files[0];
-            const base64 = await processImageFile(file);
+            const base64 = await fileToCatalogImageDataUrl(file);
             setNewCatalogImage(base64);
             const nameWithoutExt =
               file.name.substring(0, file.name.lastIndexOf(".")) || file.name;

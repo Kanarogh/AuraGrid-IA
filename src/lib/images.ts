@@ -51,6 +51,58 @@ export function resizeForAi(
   const maxSide = options.maxSide ?? 1024;
   const quality = options.quality ?? 0.82;
 
+  return resizeImageDataUrl(base64Str, { maxSide, quality, minSideToReencode: maxSide });
+}
+
+/** Guarda referências do catálogo com alta fidelidade (só reduz se exceder o limite). */
+export const CATALOG_STORAGE_MAX_SIDE = 2048;
+export const CATALOG_STORAGE_QUALITY = 0.92;
+
+export function resizeForCatalogStorage(base64Str: string): Promise<string> {
+  return resizeImageDataUrl(base64Str, {
+    maxSide: CATALOG_STORAGE_MAX_SIDE,
+    quality: CATALOG_STORAGE_QUALITY,
+    minSideToReencode: CATALOG_STORAGE_MAX_SIDE,
+  });
+}
+
+/** Fallback quando o localStorage enche — ainda boa para grid e match. */
+export const CATALOG_STORAGE_EMERGENCY_MAX_SIDE = 1024;
+export const CATALOG_STORAGE_EMERGENCY_QUALITY = 0.82;
+
+export function resizeForCatalogStorageEmergency(base64Str: string): Promise<string> {
+  return resizeImageDataUrl(base64Str, {
+    maxSide: CATALOG_STORAGE_EMERGENCY_MAX_SIDE,
+    quality: CATALOG_STORAGE_EMERGENCY_QUALITY,
+    minSideToReencode: 256,
+  });
+}
+
+/** Envio à IA na indexação — alta resolução, não altera o arquivo salvo no catálogo. */
+export const CATALOG_ENRICH_MAX_SIDE = 1536;
+export const CATALOG_ENRICH_QUALITY = 0.88;
+
+export function resizeForCatalogEnrich(base64Str: string): Promise<string> {
+  return resizeImageDataUrl(base64Str, {
+    maxSide: CATALOG_ENRICH_MAX_SIDE,
+    quality: CATALOG_ENRICH_QUALITY,
+    minSideToReencode: CATALOG_ENRICH_MAX_SIDE,
+  });
+}
+
+type ResizeImageOptions = {
+  maxSide: number;
+  quality: number;
+  /** Só reencoda JPEG se o lado maior for >= este valor; imagens menores ficam intactas */
+  minSideToReencode?: number;
+};
+
+function resizeImageDataUrl(
+  base64Str: string,
+  options: ResizeImageOptions
+): Promise<string> {
+  const { maxSide, quality, minSideToReencode = maxSide } = options;
+
   return new Promise((resolve) => {
     if (!base64Str || !base64Str.startsWith("data:")) {
       resolve(base64Str);
@@ -64,7 +116,7 @@ export function resizeForAi(
       const h0 = img.height || maxSide;
       const longest = Math.max(w0, h0);
 
-      if (longest <= maxSide && base64Str.startsWith("data:image/jpeg")) {
+      if (longest <= minSideToReencode && !base64Str.startsWith("data:image/svg")) {
         resolve(base64Str);
         return;
       }
@@ -89,6 +141,20 @@ export function resizeForAi(
       resolve(canvas.toDataURL("image/jpeg", quality));
     };
     img.onerror = () => resolve(base64Str);
+  });
+}
+
+export async function fileToCatalogImageDataUrl(file: File): Promise<string> {
+  const raw = await readFileAsDataUrl(file);
+  return resizeForCatalogStorage(raw);
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error ?? new Error("Falha ao ler arquivo."));
+    reader.readAsDataURL(file);
   });
 }
 

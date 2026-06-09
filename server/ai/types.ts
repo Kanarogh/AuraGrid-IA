@@ -44,6 +44,17 @@ export type BrandGemPayload = {
     contact?: string;
     hashtags?: string;
     extra?: string;
+    customFields?: { id: string; label: string; text: string; after: string }[];
+  };
+  captionParams?: {
+    maxTotalChars?: number;
+    maxHookChars?: number;
+    maxHookSentences?: number;
+    emojiPolicy?: string;
+    hookStyle?: string;
+    includeReferenceWhenMatched?: boolean;
+    avoidPriceMention?: boolean;
+    salesTone?: string;
   };
 };
 
@@ -51,18 +62,30 @@ export interface MatchGenerateInput {
   postImage: string;
   catalogItems?: { id: string; label: string; image: string }[];
   catalogProfiles?: { id: string; label: string; profile: Record<string, unknown> }[];
+  /** Só identifica referência no catálogo — sem legenda (endpoint /api/match-reference). */
+  matchOnly?: boolean;
   /** Gem estilo Gemini (preferido) */
   brandGem?: BrandGemPayload;
   /** @deprecated use brandGem */
   promptContext?: string;
   /** @deprecated use brandGem.footer */
   repeatingText?: BrandGemPayload["footer"];
+  /** Usuário pediu nova legenda (ignorar cache + variar o gancho) */
+  regenerateCaption?: boolean;
+  /** Legenda só pelo conteúdo visual da imagem — sem match no catálogo */
+  captionFromImageOnly?: boolean;
 }
 
 export interface MatchGenerateResult {
   matchedId: string | null;
   reasoning: string;
   caption: string;
+  matchMode: "catalog_json" | "catalog_images" | "image_only";
+}
+
+export interface MatchReferenceResult {
+  matchedId: string | null;
+  reasoning: string;
   matchMode: "catalog_json" | "catalog_images";
 }
 

@@ -25,19 +25,36 @@ export function normalizeVisualProfile(
     referenceLabel: asString(p.referenceLabel, label ?? "—"),
     garmentType: asString(p.garmentType),
     category: asString(p.category),
+    dominantColorFamily: asString(
+      p.dominantColorFamily,
+      asStringArray(p.primaryColors)[0] ?? "—"
+    ),
+    colorTemperature:
+      p.colorTemperature === "warm" ||
+      p.colorTemperature === "cool" ||
+      p.colorTemperature === "neutral"
+        ? p.colorTemperature
+        : undefined,
     primaryColors: asStringArray(p.primaryColors),
     secondaryColors: asStringArray(p.secondaryColors),
     pattern: {
       type: asString(pattern.type),
       description: asString(pattern.description),
     },
+    printScale: asString(p.printScale, "") || undefined,
     neckline: asString(p.neckline),
     sleeves: asString(p.sleeves),
+    sleeveType: asString(p.sleeveType, asString(p.sleeves)) || undefined,
     dressLength: asString(p.dressLength),
+    lengthCategory: asString(p.lengthCategory, asString(p.dressLength)) || undefined,
     silhouette: asString(p.silhouette),
     fabricTexture: asString(p.fabricTexture),
     embellishments: asStringArray(p.embellishments),
     distinctiveDetails: asStringArray(p.distinctiveDetails),
+    matchAnchors: asStringArray(p.matchAnchors).length
+      ? asStringArray(p.matchAnchors)
+      : undefined,
+    notToConfuseWith: asString(p.notToConfuseWith, "") || undefined,
     matchKeywords: asStringArray(p.matchKeywords),
     visualSummary: asString(p.visualSummary, "Resumo visual não disponível."),
     distinguishingFingerprint: asString(p.distinguishingFingerprint),

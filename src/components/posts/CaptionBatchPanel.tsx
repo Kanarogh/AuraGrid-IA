@@ -20,6 +20,9 @@ export function CaptionBatchPanel({
   stats,
   isRunning,
   progress,
+  brandGemReady = true,
+  brandGemMissingFields = "",
+  onOpenGemSettings,
   onGeneratePending,
   onRegenerateErrors,
   onStop,
@@ -29,6 +32,9 @@ export function CaptionBatchPanel({
   stats: CaptionBatchStats;
   isRunning: boolean;
   progress: CaptionBatchProgress | null;
+  brandGemReady?: boolean;
+  brandGemMissingFields?: string;
+  onOpenGemSettings?: () => void;
   onGeneratePending: () => void;
   onRegenerateErrors: () => void;
   onStop: () => void;
@@ -40,7 +46,7 @@ export function CaptionBatchPanel({
       ? Math.round((progress.current / progress.total) * 100)
       : 0;
 
-  const canGenerate = stats.pending > 0 && !isRunning;
+  const canGenerate = stats.pending > 0 && !isRunning && brandGemReady;
   const catalogWarning = stats.catalogTotal > 0 && !stats.catalogReady;
 
   if (compact) {
@@ -87,7 +93,7 @@ export function CaptionBatchPanel({
             Gerar legendas com IA
           </h2>
           <p className="text-xs text-ag-muted mt-1 max-w-xl">
-            Fotos → catálogo indexado → legendas → revisão. Tom da IA em Configurações.
+            Fotos → catálogo indexado → legendas → revisão. Configure tom e rodapé no Gem (Configurações).
           </p>
         </div>
         <Button variant="secondary" size="sm" onClick={onReviewAll} type="button">
@@ -135,6 +141,29 @@ export function CaptionBatchPanel({
         <StatChip label="Aprovadas" value={stats.confirmed} success />
         {stats.errors > 0 && <StatChip label="Com erro" value={stats.errors} danger />}
       </div>
+
+      {!brandGemReady && (
+        <div className="flex gap-2 text-xs text-ag-warning bg-ag-warning/10 border border-ag-warning/25 rounded-xl p-3">
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <p>
+            <strong>Gem incompleto:</strong> preencha nome, descrição, instruções (tom), endereço,
+            contato e hashtags em Configurações antes de gerar.
+            {brandGemMissingFields ? ` Pendentes: ${brandGemMissingFields}.` : ""}
+            {onOpenGemSettings && (
+              <>
+                {" "}
+                <button
+                  type="button"
+                  onClick={onOpenGemSettings}
+                  className="font-semibold underline hover:opacity-80 cursor-pointer"
+                >
+                  Abrir Configurações
+                </button>
+              </>
+            )}
+          </p>
+        </div>
+      )}
 
       {catalogWarning && (
         <div className="flex gap-2 text-xs text-ag-warning bg-ag-warning/10 border border-ag-warning/25 rounded-xl p-3">

@@ -11,11 +11,14 @@ import { cn } from "../../lib/cn";
 export function InstagramPhonePreview({
   post,
   variant = "studio",
+  username = "auragrid_style",
 }: {
   post: PlannedPost;
   variant?: "studio" | "compact";
+  username?: string;
 }) {
   const isCompact = variant === "compact";
+  const handle = username.replace(/^@/, "");
 
   return (
     <div className={cn("w-full", isCompact && "pt-3")}>
@@ -60,7 +63,7 @@ export function InstagramPhonePreview({
                   A
                 </div>
               </div>
-              <span className="font-semibold text-[10px]">auragrid_style</span>
+              <span className="font-semibold text-[10px]">{handle}</span>
             </div>
 
             <div className="aspect-square w-full bg-stone-900 flex items-center justify-center overflow-hidden">
@@ -85,9 +88,19 @@ export function InstagramPhonePreview({
               <Bookmark className="h-4 w-4" />
             </div>
 
-            <div className="px-3 pb-4 flex-1 overflow-y-auto max-h-[100px] leading-relaxed text-[9px] text-stone-300">
-              <span className="font-semibold text-white mr-1">auragrid_style</span>
-              {post.caption || "Legenda após gerar com IA."}
+            <div className="px-3 pb-4 flex-1 overflow-y-auto max-h-[140px] leading-relaxed text-[9px] text-stone-300 whitespace-pre-wrap break-words">
+              {post.caption ? (
+                <>
+                  <span className="font-semibold text-white">{handle}</span>
+                  {" "}
+                  {post.caption}
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold text-white">{handle}</span>
+                  {" Legenda após gerar com IA."}
+                </>
+              )}
             </div>
           </div>
         </div>

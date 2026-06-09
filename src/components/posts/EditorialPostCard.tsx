@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Copy,
+  Eraser,
   Plus,
   RefreshCw,
   Sparkles,
@@ -25,6 +26,7 @@ export function EditorialPostCard({
   copiedId,
   refineInstruction,
   isRefining,
+  brandGemReady = true,
   onAddPostToDay,
   onRemove,
   onToggleConfirm,
@@ -32,9 +34,11 @@ export function EditorialPostCard({
   onPhotoUpload,
   onClearImage,
   onSelectReference,
+  onToggleCaptionFromImageOnly,
   onGenerate,
   onStopGenerate,
   onCaptionChange,
+  onClearCaption,
   onRefineInstructionChange,
   onRefine,
   onFocus,
@@ -47,6 +51,7 @@ export function EditorialPostCard({
   copiedId: string | null;
   refineInstruction: string;
   isRefining: boolean;
+  brandGemReady?: boolean;
   onAddPostToDay: () => void;
   onRemove: () => void;
   onToggleConfirm: () => void;
@@ -54,11 +59,13 @@ export function EditorialPostCard({
   onPhotoUpload: (file: File) => void;
   onClearImage: () => void;
   onSelectReference: (id: string | null) => void;
+  onToggleCaptionFromImageOnly: (enabled: boolean) => void;
   onGenerate: () => void;
   onStopGenerate: () => void;
   onCaptionChange: (v: string) => void;
+  onClearCaption: () => void;
   onRefineInstructionChange: (v: string) => void;
-  onRefine: () => void;
+  onRefine: (instruction?: string) => void;
   onFocus: () => void;
 }) {
   const inputId = `editorial-file-${post.id}`;
@@ -183,10 +190,37 @@ export function EditorialPostCard({
             />
           </div>
 
+          <label className="flex items-start gap-2 rounded-lg border border-ag-border/70 bg-ag-surface-2/60 px-2.5 py-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={!!post.captionFromImageOnly}
+              onChange={(e) => {
+                e.stopPropagation();
+                onToggleCaptionFromImageOnly(e.target.checked);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-ag-border text-ag-accent"
+            />
+            <span className="min-w-0 text-[11px] leading-snug text-ag-muted">
+              <span className="font-medium text-ag-text block">Legenda pela imagem</span>
+              Sem catálogo — para artes e banners com texto
+            </span>
+          </label>
+
           <select
             value={post.matchedCatalogId || ""}
             onChange={(e) => onSelectReference(e.target.value || null)}
-            className="w-full text-sm rounded-lg px-3 py-2 border border-ag-border bg-ag-surface-1 text-ag-text outline-none focus:border-ag-accent"
+            disabled={!!post.captionFromImageOnly}
+            onClick={(e) => e.stopPropagation()}
+            className={cn(
+              "w-full text-sm rounded-lg px-3 py-2 border border-ag-border bg-ag-surface-1 text-ag-text outline-none focus:border-ag-accent",
+              post.captionFromImageOnly && "opacity-50 cursor-not-allowed"
+            )}
+            title={
+              post.captionFromImageOnly
+                ? "Desativado — modo legenda pela imagem"
+                : undefined
+            }
           >
             <option value="">Referência do catálogo…</option>
             {referenceCatalog.map((cat) => (
@@ -205,7 +239,14 @@ export function EditorialPostCard({
               post.isGenerating && "text-ag-danger border-ag-danger/30 hover:bg-ag-danger/10"
             )}
             onClick={post.isGenerating ? onStopGenerate : onGenerate}
-            disabled={!post.image}
+            disabled={!post.image || !brandGemReady}
+            title={
+              !brandGemReady
+                ? "Configure o Gem da marca em Configurações"
+                : !post.image
+                  ? "Carregue a foto do post"
+                  : undefined
+            }
           >
             {post.isGenerating ? (
               <>
@@ -237,15 +278,28 @@ export function EditorialPostCard({
           )}
 
           <div className="flex flex-col flex-1 min-h-[180px]">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-ag-muted mb-1.5">
-              Legenda
-            </label>
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <label className="text-[10px] font-mono uppercase tracking-wider text-ag-muted">
+                Legenda
+              </label>
+              {(post.caption || post.isGenerated || post.reasoning) && (
+                <button
+                  type="button"
+                  onClick={onClearCaption}
+                  className="text-[10px] font-medium text-ag-muted hover:text-ag-danger flex items-center gap-1 cursor-pointer"
+                  title="Apagar legenda e recomeçar do zero"
+                >
+                  <Eraser className="h-3 w-3" />
+                  Remover legenda
+                </button>
+              )}
+            </div>
             <textarea
               value={post.caption}
               onChange={(e) => onCaptionChange(e.target.value)}
               rows={8}
               className="w-full min-h-[180px] text-sm leading-relaxed rounded-xl px-3 py-2.5 border border-ag-border bg-ag-surface-1 text-ag-text outline-none resize-y focus:border-ag-accent focus:ring-2 focus:ring-ag-accent/15 placeholder:text-ag-muted"
-              placeholder="Legenda em espanhol (gere com IA ou escreva aqui)…"
+              placeholder="Legenda (gere com IA após configurar o Gem, ou escreva aqui)…"
             />
           </div>
 
@@ -257,14 +311,19 @@ export function EditorialPostCard({
                 onChange={(e) => onRefineInstructionChange(e.target.value)}
                 placeholder="Refinar: ex. mais curto, mais hashtags…"
                 className="flex-1 text-sm rounded-lg px-3 py-2 border border-ag-border bg-ag-surface-1 text-ag-text outline-none focus:border-ag-accent"
-                onKeyDown={(e) => e.key === "Enter" && onRefine()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    onRefine(e.currentTarget.value);
+                  }
+                }}
               />
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={onRefine}
-                disabled={isRefining || !refineInstruction.trim()}
+                onClick={() => onRefine(refineInstruction)}
+                disabled={isRefining || !refineInstruction.trim() || post.isGenerating}
               >
                 {isRefining ? <RefreshCw className="h-4 w-4 animate-spin" /> : "Refinar"}
               </Button>

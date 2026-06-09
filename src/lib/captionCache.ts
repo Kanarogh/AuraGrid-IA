@@ -40,11 +40,16 @@ type BrandGemCacheSlice = {
   name?: string;
   description?: string;
   instructions?: string;
+  captionParams?: unknown;
   footer?: RepeatingTextInput;
 };
 
 type CaptionCacheKeyInput = {
   imageDataUrl: string;
+  /** Slot do roteiro — evita compartilhar cache entre posts com a mesma foto */
+  postId?: string;
+  /** Modo legenda só pela imagem (sem catálogo) */
+  captionFromImageOnly?: boolean;
   brandGem?: BrandGemCacheSlice;
   /** @deprecated use brandGem */
   promptContext?: string;
@@ -55,15 +60,21 @@ type CaptionCacheKeyInput = {
 function serializeRepeating(rep: RepeatingTextInput): string {
   if (!rep) return "";
   if (typeof rep === "string") return rep.trim();
-  if (typeof rep === "object" && rep !== null && "structure" in rep) {
-    const r = rep as Record<string, unknown>;
-    return [r.structure, r.address, r.contact, r.hashtags, r.extra]
-      .map((v) => (v ?? "").toString().trim())
-      .join("\n");
-  }
-  return [rep.address, rep.contact, rep.hashtags, rep.extra]
-    .map((v) => (v ?? "").toString().trim())
-    .join("\n");
+  const base =
+    typeof rep === "object" && rep !== null && "structure" in rep
+      ? [
+          (rep as Record<string, unknown>).structure,
+          rep.address,
+          rep.contact,
+          rep.hashtags,
+          rep.extra,
+        ]
+      : [rep.address, rep.contact, rep.hashtags, rep.extra];
+  const customs =
+    typeof rep === "object" && rep !== null && "customFields" in rep
+      ? JSON.stringify((rep as { customFields?: unknown }).customFields ?? [])
+      : "";
+  return [...base.map((v) => (v ?? "").toString().trim()), customs].join("\n");
 }
 
 type StoredEntry = {
@@ -96,9 +107,12 @@ export function buildCaptionCacheKey(input: CaptionCacheKeyInput): string {
   const name = (gem?.name ?? "").trim();
   const desc = (gem?.description ?? "").trim();
   const ctx = (gem?.instructions ?? input.promptContext ?? "").trim();
+  const params = JSON.stringify(gem?.captionParams ?? {});
   const rep = serializeRepeating(gem?.footer ?? input.repeatingText);
   const ids = (input.catalogIds ?? []).slice().sort().join("|");
-  return djb2(`${imageFp}__${name}__${desc}__${ctx}__${rep}__${ids}`);
+  const slot = (input.postId ?? "").trim();
+  const imgOnly = input.captionFromImageOnly ? "1" : "0";
+  return djb2(`${imageFp}__slot:${slot}__imgonly:${imgOnly}__${name}__${desc}__${ctx}__${params}__${rep}__${ids}`);
 }
 
 function readAll(): StoredEntry[] {
@@ -153,6 +167,12 @@ export function setCachedCaption(hash: string, value: CaptionCacheValue) {
   });
   if (filtered.length > MAX_ENTRIES) filtered.length = MAX_ENTRIES;
   writeAll(filtered);
+}
+
+export function removeCachedCaption(hash: string): void {
+  const all = readAll();
+  const filtered = all.filter((e) => e.hash !== hash);
+  if (filtered.length !== all.length) writeAll(filtered);
 }
 
 export function clearCaptionCache(clientId?: string) {

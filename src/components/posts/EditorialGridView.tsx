@@ -13,6 +13,7 @@ export function EditorialGridView({
   copiedId,
   refineInstructions,
   isRefining,
+  brandGemReady = true,
   onAddPostToDay,
   onRemove,
   onToggleConfirm,
@@ -20,9 +21,11 @@ export function EditorialGridView({
   onPhotoUpload,
   onClearImage,
   onSelectReference,
+  onToggleCaptionFromImageOnly,
   onGenerate,
   onStopGenerate,
   onCaptionChange,
+  onClearCaption,
   onRefineInstructionChange,
   onRefine,
   onFocusPost,
@@ -35,6 +38,7 @@ export function EditorialGridView({
   copiedId: string | null;
   refineInstructions: Record<string, string>;
   isRefining: Record<string, boolean>;
+  brandGemReady?: boolean;
   onAddPostToDay: (dayNumber: number) => void;
   onRemove: (postId: string) => void;
   onToggleConfirm: (postId: string) => void;
@@ -42,11 +46,13 @@ export function EditorialGridView({
   onPhotoUpload: (postId: string, file: File) => void;
   onClearImage: (postId: string) => void;
   onSelectReference: (postId: string, catalogId: string | null) => void;
+  onToggleCaptionFromImageOnly: (postId: string, enabled: boolean) => void;
   onGenerate: (postId: string) => void;
   onStopGenerate: (postId: string) => void;
   onCaptionChange: (postId: string, value: string) => void;
+  onClearCaption: (postId: string) => void;
   onRefineInstructionChange: (postId: string, value: string) => void;
-  onRefine: (postId: string) => void;
+  onRefine: (postId: string, instruction?: string) => void;
   onFocusPost: (postId: string) => void;
   onOpenStudio?: (postId: string) => void;
 }) {
@@ -143,6 +149,7 @@ export function EditorialGridView({
                 copiedId={copiedId}
                 refineInstruction={refineInstructions[post.id] || ""}
                 isRefining={!!isRefining[post.id]}
+                brandGemReady={brandGemReady}
                 onAddPostToDay={() => onAddPostToDay(post.dayNumber)}
                 onRemove={() => onRemove(post.id)}
                 onToggleConfirm={() => onToggleConfirm(post.id)}
@@ -150,11 +157,15 @@ export function EditorialGridView({
                 onPhotoUpload={(file) => onPhotoUpload(post.id, file)}
                 onClearImage={() => onClearImage(post.id)}
                 onSelectReference={(id) => onSelectReference(post.id, id)}
+                onToggleCaptionFromImageOnly={(enabled) =>
+                  onToggleCaptionFromImageOnly(post.id, enabled)
+                }
                 onGenerate={() => onGenerate(post.id)}
                 onStopGenerate={() => onStopGenerate(post.id)}
                 onCaptionChange={(v) => onCaptionChange(post.id, v)}
+                onClearCaption={() => onClearCaption(post.id)}
                 onRefineInstructionChange={(v) => onRefineInstructionChange(post.id, v)}
-                onRefine={() => onRefine(post.id)}
+                onRefine={(instruction) => onRefine(post.id, instruction)}
                 onFocus={() => onFocusPost(post.id)}
               />
               </div>

@@ -6,6 +6,8 @@ export function AppShell({
   activeSection,
   onNavigate,
   catalogCount,
+  brandGemReady,
+  brandGemMissingCount,
   apiStatusLabel,
   apiStatusTone,
   isDark,
@@ -20,6 +22,8 @@ export function AppShell({
   activeSection: AppSection;
   onNavigate: (section: AppSection) => void;
   catalogCount: number;
+  brandGemReady?: boolean;
+  brandGemMissingCount?: number;
   apiStatusLabel: string;
   apiStatusTone: "success" | "warning" | "danger";
   isDark: boolean;
@@ -38,6 +42,8 @@ export function AppShell({
         active={activeSection}
         onNavigate={onNavigate}
         catalogCount={catalogCount}
+        brandGemReady={brandGemReady}
+        brandGemMissingCount={brandGemMissingCount}
         apiStatusLabel={apiStatusLabel}
         apiStatusTone={apiStatusTone}
         collapsed={sidebarCollapsed}

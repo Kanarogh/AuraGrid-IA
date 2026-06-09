@@ -1,5 +1,4 @@
 import {
-  buildMatchCaptionInstructions,
   buildRefineCaptionPrompt,
   resolveBrandGemFromBody,
 } from "./brandContext.ts";
@@ -9,6 +8,19 @@ import {
   finalizeCatalogProfile,
   IncompleteCatalogProfileError,
 } from "./catalogProfile.ts";
+import {
+  buildMatchJsonCatalogTask,
+  buildMatchImagesCatalogTask,
+  buildCatalogProfilesPromptSection,
+  buildMatchResultInstructions,
+  buildImageOnlyCaptionTask,
+  buildImageOnlyResultInstructions,
+  isImageOnlyCaptionMode,
+  MATCH_REFERENCE_RESPONSE_HINT,
+  MATCH_RESPONSE_HINT,
+  normalizeMatchedId,
+  resolveMatchedIdFromCandidates,
+} from "./matchPrompts.ts";
 import { getOllamaBaseUrl, getOllamaModel, isOllamaConfigured } from "./config.ts";
 import { logAiAttemptFail } from "./diagnostics.ts";
 import { cleanBase64, withRetry } from "./shared.ts";
@@ -206,13 +218,6 @@ async function ollamaChatCatalogJson(
   }
 }
 
-const MATCH_RESPONSE_HINT = `RESPOND WITH PURE JSON ONLY (no prose, no markdown fences). The JSON must follow:
-{
-  "matchedId": "string-or-null",
-  "reasoning": "...",
-  "caption": "..."
-}`;
-
 export const ollamaProvider: AiProvider = {
   id: "ollama",
   getModel: getOllamaModel,
@@ -233,8 +238,39 @@ export const ollamaProvider: AiProvider = {
   },
 
   async matchAndGenerate(input: MatchGenerateInput): Promise<MatchGenerateResult> {
-    const { postImage, catalogItems, catalogProfiles } = input;
+    const { postImage, catalogItems, catalogProfiles, matchOnly, regenerateCaption } = input;
     const gem = resolveBrandGemFromBody(input);
+
+    if (isImageOnlyCaptionMode(input)) {
+      const parts: Array<
+        { type: "text"; text: string } | { type: "image"; image: string }
+      > = [
+        { type: "text", text: buildImageOnlyCaptionTask(gem) },
+        { type: "image", image: postImage },
+        {
+          type: "text",
+          text: `${buildImageOnlyResultInstructions(gem, {
+            regenerate: !!regenerateCaption,
+          })}\n\n${MATCH_RESPONSE_HINT}`,
+        },
+      ];
+
+      const raw = await withRetry(
+        () => ollamaChat([partsToOllamaMessage(parts)], { jsonMode: true }),
+        "Ollama"
+      );
+
+      const parsed = JSON.parse(extractJson(raw)) as Omit<MatchGenerateResult, "matchMode"> & {
+        matchedId?: string | null;
+        caption?: string;
+      };
+      return {
+        matchedId: null,
+        reasoning: parsed.reasoning ?? "",
+        caption: parsed.caption ?? "",
+        matchMode: "image_only",
+      };
+    }
 
     const profiles = Array.isArray(catalogProfiles) ? catalogProfiles : [];
     const useTextCatalog =
@@ -247,35 +283,17 @@ export const ollamaProvider: AiProvider = {
     if (useTextCatalog) {
       parts.push({
         type: "text",
-        text: `You are an expert AI fashion planner for boutique 'Palak' (Madrid).
-TASK:
-1. Inspect the TARGET POST IMAGE below.
-2. Compare against CANDIDATE CATALOG PROFILES (JSON).
-3. Pick the best matching catalog id, or null if none match confidently.
-4. Write an elite Spanish Instagram/Facebook caption.
-
-RULES:
-- matchedId MUST be an exact candidate "id" or null.
-- reasoning in Portuguese, 2-4 sentences with visual evidence.
-
-TARGET POST IMAGE:`,
+        text: buildMatchJsonCatalogTask(!!matchOnly, gem),
       });
       parts.push({ type: "image", image: postImage });
       parts.push({
         type: "text",
-        text: `CANDIDATE CATALOG PROFILES:\n${JSON.stringify(
-          profiles.map((p) => ({ id: p.id, label: p.label, ...p.profile })),
-          null,
-          2
-        )}`,
+        text: buildCatalogProfilesPromptSection(profiles),
       });
     } else {
       parts.push({
         type: "text",
-        text: `You are an expert fashion planner for boutique Palak (Madrid).
-Compare the target post image to candidate catalog photos. Pick matchedId or null. Write Spanish caption.
-
-Target post image:`,
+        text: buildMatchImagesCatalogTask(!!matchOnly, gem),
       });
       parts.push({ type: "image", image: postImage });
 
@@ -300,9 +318,12 @@ Target post image:`,
       }
     }
 
+    const hint = matchOnly ? MATCH_REFERENCE_RESPONSE_HINT : MATCH_RESPONSE_HINT;
     parts.push({
       type: "text",
-      text: `${buildMatchCaptionInstructions(gem)}\n\n${MATCH_RESPONSE_HINT}`,
+      text: `${buildMatchResultInstructions(gem, !!matchOnly, {
+        regenerate: !!regenerateCaption,
+      })}\n\n${hint}`,
     });
 
     const raw = await withRetry(
@@ -312,14 +333,15 @@ Target post image:`,
 
     const parsed = JSON.parse(extractJson(raw)) as Omit<MatchGenerateResult, "matchMode"> & {
       matchedId?: string | null;
+      caption?: string;
     };
-    const mid = parsed.matchedId;
-    const matchedId =
-      mid && mid !== "null" && mid !== "none" && String(mid).trim() !== "" ? mid : null;
+    const candidateIds = useTextCatalog
+      ? profiles.map((p) => p.id)
+      : (catalogItems ?? []).map((c) => c.id);
     return {
-      matchedId,
+      matchedId: resolveMatchedIdFromCandidates(parsed.matchedId, candidateIds),
       reasoning: parsed.reasoning ?? "",
-      caption: parsed.caption ?? "",
+      caption: matchOnly ? "" : (parsed.caption ?? ""),
       matchMode: useTextCatalog ? "catalog_json" : "catalog_images",
     };
   },

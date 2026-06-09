@@ -1,11 +1,25 @@
 import {
-  buildMatchCaptionInstructions,
   buildRefineCaptionPrompt,
   resolveBrandGemFromBody,
 } from "./brandContext.ts";
 import { getGroqModel, hasGroqKey } from "./config.ts";
 import { buildEnrichCatalogPrompt, finalizeCatalogProfile } from "./catalogProfile.ts";
-import { CATALOG_PROFILE_JSON_SCHEMA, MATCH_RESULT_JSON_SCHEMA } from "./schemas.ts";
+import {
+  buildMatchJsonCatalogTask,
+  buildMatchImagesCatalogTask,
+  buildCatalogProfilesPromptSection,
+  buildMatchResultInstructions,
+  buildImageOnlyCaptionTask,
+  buildImageOnlyResultInstructions,
+  isImageOnlyCaptionMode,
+  normalizeMatchedId,
+  resolveMatchedIdFromCandidates,
+} from "./matchPrompts.ts";
+import {
+  CATALOG_PROFILE_JSON_SCHEMA,
+  MATCH_REFERENCE_JSON_SCHEMA,
+  MATCH_RESULT_JSON_SCHEMA,
+} from "./schemas.ts";
 import { annotateErrorWithRetryAfter, toDataUrl, withRetry } from "./shared.ts";
 import type {
   AiProvider,
@@ -118,8 +132,41 @@ export const groqProvider: AiProvider = {
   },
 
   async matchAndGenerate(input: MatchGenerateInput): Promise<MatchGenerateResult> {
-    const { postImage, catalogItems, catalogProfiles } = input;
+    const { postImage, catalogItems, catalogProfiles, matchOnly, regenerateCaption } = input;
     const gem = resolveBrandGemFromBody(input);
+
+    if (isImageOnlyCaptionMode(input)) {
+      const content: GroqContentPart[] = [
+        { type: "text", text: buildImageOnlyCaptionTask(gem) },
+        { type: "image_url", image_url: { url: toDataUrl(postImage) } },
+        {
+          type: "text",
+          text: buildImageOnlyResultInstructions(gem, { regenerate: !!regenerateCaption }),
+        },
+      ];
+
+      const raw = await withRetry(
+        () =>
+          groqChat([{ role: "user", content }], {
+            jsonSchema: {
+              name: "image_only_caption",
+              schema: MATCH_RESULT_JSON_SCHEMA as unknown as Record<string, unknown>,
+            },
+          }),
+        "Groq"
+      );
+
+      const parsed = JSON.parse(raw) as Omit<MatchGenerateResult, "matchMode"> & {
+        matchedId?: string | null;
+        caption?: string;
+      };
+      return {
+        matchedId: null,
+        reasoning: parsed.reasoning ?? "",
+        caption: parsed.caption ?? "",
+        matchMode: "image_only",
+      };
+    }
 
     const profiles = Array.isArray(catalogProfiles) ? catalogProfiles : [];
     const useTextCatalog =
@@ -130,36 +177,17 @@ export const groqProvider: AiProvider = {
     if (useTextCatalog) {
       content.push({
         type: "text",
-        text: `You are an expert AI fashion planner for boutique 'Palak' (Madrid).
-
-TASK:
-1. Inspect the TARGET POST IMAGE below.
-2. Compare against CANDIDATE CATALOG PROFILES (JSON).
-3. Pick the best matching catalog id, or null if none match confidently.
-4. Write an elite Spanish Instagram/Facebook caption.
-
-RULES:
-- matchedId MUST be an exact candidate "id" or null.
-- reasoning in Portuguese, 2-4 sentences with visual evidence.
-
-TARGET POST IMAGE:`,
+        text: buildMatchJsonCatalogTask(!!matchOnly, gem),
       });
       content.push({ type: "image_url", image_url: { url: toDataUrl(postImage) } });
       content.push({
         type: "text",
-        text: `CANDIDATE CATALOG PROFILES:\n${JSON.stringify(
-          profiles.map((p) => ({ id: p.id, label: p.label, ...p.profile })),
-          null,
-          2
-        )}`,
+        text: buildCatalogProfilesPromptSection(profiles),
       });
     } else {
       content.push({
         type: "text",
-        text: `You are an expert fashion planner for boutique Palak (Madrid).
-Compare the target post image to candidate catalog photos. Pick matchedId or null. Write Spanish caption.
-
-Target post image:`,
+        text: buildMatchImagesCatalogTask(!!matchOnly, gem),
       });
       content.push({ type: "image_url", image_url: { url: toDataUrl(postImage) } });
 
@@ -186,15 +214,19 @@ Target post image:`,
 
     content.push({
       type: "text",
-      text: buildMatchCaptionInstructions(gem),
+      text: matchOnly
+        ? buildMatchResultInstructions(gem, true)
+        : buildMatchResultInstructions(gem, false, { regenerate: !!regenerateCaption }),
     });
 
     const raw = await withRetry(
       () =>
         groqChat([{ role: "user", content }], {
           jsonSchema: {
-            name: "match_and_caption",
-            schema: MATCH_RESULT_JSON_SCHEMA as unknown as Record<string, unknown>,
+            name: matchOnly ? "match_reference" : "match_and_caption",
+            schema: (matchOnly
+              ? MATCH_REFERENCE_JSON_SCHEMA
+              : MATCH_RESULT_JSON_SCHEMA) as unknown as Record<string, unknown>,
           },
         }),
       "Groq"
@@ -202,13 +234,15 @@ Target post image:`,
 
     const parsed = JSON.parse(raw) as Omit<MatchGenerateResult, "matchMode"> & {
       matchedId?: string | null;
+      caption?: string;
     };
-    const mid = parsed.matchedId;
-    const matchedId =
-      mid && mid !== "null" && mid !== "none" && mid.trim() !== "" ? mid : null;
+    const candidateIds = useTextCatalog
+      ? profiles.map((p) => p.id)
+      : (catalogItems ?? []).map((c) => c.id);
     return {
-      ...parsed,
-      matchedId,
+      matchedId: resolveMatchedIdFromCandidates(parsed.matchedId, candidateIds),
+      reasoning: parsed.reasoning ?? "",
+      caption: matchOnly ? "" : (parsed.caption ?? ""),
       matchMode: useTextCatalog ? "catalog_json" : "catalog_images",
     };
   },

@@ -1,6 +1,23 @@
 import { classifyAiFailure, failureKindLabel } from "./diagnostics.ts";
 import type { AiProviderId } from "./types.ts";
 
+/** Remove cercas markdown/aspas que modelos costumam devolver no refine. */
+export function sanitizeRefinedCaptionOutput(raw: string): string {
+  let text = raw.trim();
+  if (!text) return text;
+
+  if (text.startsWith("```")) {
+    text = text.replace(/^```(?:\w+)?\s*\n?/, "").replace(/\n?```\s*$/, "").trim();
+  }
+  if (text.startsWith('"""') && text.endsWith('"""') && text.length > 6) {
+    text = text.slice(3, -3).trim();
+  }
+  if (text.startsWith('"') && text.endsWith('"') && text.length > 2 && !text.includes("\n")) {
+    text = text.slice(1, -1).trim();
+  }
+  return text;
+}
+
 export function cleanBase64(base64Str: string) {
   if (!base64Str) return { mimeType: "image/png", data: "" };
   const parts = base64Str.split(";base64,");

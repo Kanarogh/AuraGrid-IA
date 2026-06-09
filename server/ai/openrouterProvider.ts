@@ -1,5 +1,4 @@
 import {
-  buildMatchCaptionInstructions,
   buildRefineCaptionPrompt,
   resolveBrandGemFromBody,
 } from "./brandContext.ts";
@@ -11,7 +10,24 @@ import {
   shouldTryNextCatalogVisionModel,
 } from "./openrouterModels.ts";
 import { buildEnrichCatalogPrompt, finalizeCatalogProfile } from "./catalogProfile.ts";
-import { CATALOG_PROFILE_JSON_SCHEMA, MATCH_RESULT_JSON_SCHEMA } from "./schemas.ts";
+import {
+  buildMatchJsonCatalogTask,
+  buildMatchImagesCatalogTask,
+  buildCatalogProfilesPromptSection,
+  buildMatchResultInstructions,
+  buildImageOnlyCaptionTask,
+  buildImageOnlyResultInstructions,
+  isImageOnlyCaptionMode,
+  MATCH_REFERENCE_RESPONSE_HINT,
+  MATCH_RESPONSE_HINT,
+  normalizeMatchedId,
+  resolveMatchedIdFromCandidates,
+} from "./matchPrompts.ts";
+import {
+  CATALOG_PROFILE_JSON_SCHEMA,
+  MATCH_REFERENCE_JSON_SCHEMA,
+  MATCH_RESULT_JSON_SCHEMA,
+} from "./schemas.ts";
 import { logAiAttemptFail, logAiAttemptOk } from "./diagnostics.ts";
 import { annotateErrorWithRetryAfter, toDataUrl, withRetry } from "./shared.ts";
 import type {
@@ -287,13 +303,6 @@ function extractJson(content: string): string {
   return trimmed;
 }
 
-const MATCH_RESPONSE_HINT = `RESPOND WITH PURE JSON ONLY (no prose, no markdown fences). The JSON must follow:
-{
-  "matchedId": "string-or-null",
-  "reasoning": "...",
-  "caption": "..."
-}`;
-
 export const openrouterProvider: AiProvider = {
   id: "openrouter",
   getModel: getOpenRouterModel,
@@ -328,8 +337,43 @@ export const openrouterProvider: AiProvider = {
   },
 
   async matchAndGenerate(input: MatchGenerateInput): Promise<MatchGenerateResult> {
-    const { postImage, catalogItems, catalogProfiles } = input;
+    const { postImage, catalogItems, catalogProfiles, matchOnly, regenerateCaption } = input;
     const gem = resolveBrandGemFromBody(input);
+
+    if (isImageOnlyCaptionMode(input)) {
+      const content: ORContentPart[] = [
+        { type: "text", text: buildImageOnlyCaptionTask(gem) },
+        { type: "image_url", image_url: { url: toDataUrl(postImage) } },
+        {
+          type: "text",
+          text: `${buildImageOnlyResultInstructions(gem, {
+            regenerate: !!regenerateCaption,
+          })}\n\n${MATCH_RESPONSE_HINT}`,
+        },
+      ];
+
+      const { content: raw } = await withRetry(
+        () =>
+          openrouterChatVision([{ role: "user", content }], {
+            jsonSchema: {
+              name: "image_only_caption",
+              schema: MATCH_RESULT_JSON_SCHEMA as unknown as Record<string, unknown>,
+            },
+          }),
+        "OpenRouter"
+      );
+
+      const parsed = JSON.parse(extractJson(raw)) as Omit<MatchGenerateResult, "matchMode"> & {
+        matchedId?: string | null;
+        caption?: string;
+      };
+      return {
+        matchedId: null,
+        reasoning: parsed.reasoning ?? "",
+        caption: parsed.caption ?? "",
+        matchMode: "image_only",
+      };
+    }
 
     const profiles = Array.isArray(catalogProfiles) ? catalogProfiles : [];
     const useTextCatalog = profiles.length > 0 && profiles.every((p) => p?.profile);
@@ -339,35 +383,17 @@ export const openrouterProvider: AiProvider = {
     if (useTextCatalog) {
       content.push({
         type: "text",
-        text: `You are an expert AI fashion planner for boutique 'Palak' (Madrid).
-TASK:
-1. Inspect the TARGET POST IMAGE below.
-2. Compare against CANDIDATE CATALOG PROFILES (JSON).
-3. Pick the best matching catalog id, or null if none match confidently.
-4. Write an elite Spanish Instagram/Facebook caption.
-
-RULES:
-- matchedId MUST be an exact candidate "id" or null.
-- reasoning in Portuguese, 2-4 sentences with visual evidence.
-
-TARGET POST IMAGE:`,
+        text: buildMatchJsonCatalogTask(!!matchOnly, gem),
       });
       content.push({ type: "image_url", image_url: { url: toDataUrl(postImage) } });
       content.push({
         type: "text",
-        text: `CANDIDATE CATALOG PROFILES:\n${JSON.stringify(
-          profiles.map((p) => ({ id: p.id, label: p.label, ...p.profile })),
-          null,
-          2
-        )}`,
+        text: buildCatalogProfilesPromptSection(profiles),
       });
     } else {
       content.push({
         type: "text",
-        text: `You are an expert fashion planner for boutique Palak (Madrid).
-Compare the target post image to candidate catalog photos. Pick matchedId or null. Write Spanish caption.
-
-Target post image:`,
+        text: buildMatchImagesCatalogTask(!!matchOnly, gem),
       });
       content.push({ type: "image_url", image_url: { url: toDataUrl(postImage) } });
 
@@ -392,17 +418,22 @@ Target post image:`,
       }
     }
 
+    const hint = matchOnly ? MATCH_REFERENCE_RESPONSE_HINT : MATCH_RESPONSE_HINT;
     content.push({
       type: "text",
-      text: `${buildMatchCaptionInstructions(gem)}\n\n${MATCH_RESPONSE_HINT}`,
+      text: `${buildMatchResultInstructions(gem, !!matchOnly, {
+        regenerate: !!regenerateCaption,
+      })}\n\n${hint}`,
     });
 
     const { content: raw } = await withRetry(
       () =>
         openrouterChatVision([{ role: "user", content }], {
           jsonSchema: {
-            name: "match_and_caption",
-            schema: MATCH_RESULT_JSON_SCHEMA as unknown as Record<string, unknown>,
+            name: matchOnly ? "match_reference" : "match_and_caption",
+            schema: (matchOnly
+              ? MATCH_REFERENCE_JSON_SCHEMA
+              : MATCH_RESULT_JSON_SCHEMA) as unknown as Record<string, unknown>,
           },
         }),
       "OpenRouter"
@@ -410,14 +441,15 @@ Target post image:`,
 
     const parsed = JSON.parse(extractJson(raw)) as Omit<MatchGenerateResult, "matchMode"> & {
       matchedId?: string | null;
+      caption?: string;
     };
-    const mid = parsed.matchedId;
-    const matchedId =
-      mid && mid !== "null" && mid !== "none" && String(mid).trim() !== "" ? mid : null;
+    const candidateIds = useTextCatalog
+      ? profiles.map((p) => p.id)
+      : (catalogItems ?? []).map((c) => c.id);
     return {
-      matchedId,
+      matchedId: resolveMatchedIdFromCandidates(parsed.matchedId, candidateIds),
       reasoning: parsed.reasoning ?? "",
-      caption: parsed.caption ?? "",
+      caption: matchOnly ? "" : (parsed.caption ?? ""),
       matchMode: useTextCatalog ? "catalog_json" : "catalog_images",
     };
   },

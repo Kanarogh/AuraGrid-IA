@@ -6,6 +6,12 @@ export type RepeatingTextConfig = {
   contact?: string;
   hashtags?: string;
   extra?: string;
+  customFields?: {
+    id: string;
+    label: string;
+    text: string;
+    after: string;
+  }[];
 };
 
 export type BrandGemConfig = {
@@ -14,7 +20,58 @@ export type BrandGemConfig = {
   description?: string;
   instructions?: string;
   footer?: RepeatingTextConfig;
+  captionParams?: {
+    maxTotalChars?: number;
+    maxHookChars?: number;
+    maxHookSentences?: number;
+    emojiPolicy?: string;
+    hookStyle?: string;
+    includeReferenceWhenMatched?: boolean;
+    avoidPriceMention?: boolean;
+    salesTone?: string;
+  };
 };
+
+export type BrandGemRequiredField =
+  | "name"
+  | "description"
+  | "instructions"
+  | "footer.address"
+  | "footer.contact"
+  | "footer.hashtags";
+
+const REQUIRED_FIELD_LABELS: Record<BrandGemRequiredField, string> = {
+  name: "Nome",
+  description: "Descrição",
+  instructions: "Instruções (tom)",
+  "footer.address": "Endereço",
+  "footer.contact": "Contato",
+  "footer.hashtags": "Hashtags",
+};
+
+function filled(value: string | undefined | null): boolean {
+  return Boolean(value?.trim());
+}
+
+export function getMissingBrandGemFields(gem?: BrandGemConfig): BrandGemRequiredField[] {
+  const missing: BrandGemRequiredField[] = [];
+  if (!filled(gem?.name)) missing.push("name");
+  if (!filled(gem?.description)) missing.push("description");
+  if (!filled(gem?.instructions)) missing.push("instructions");
+  if (!filled(gem?.footer?.address)) missing.push("footer.address");
+  if (!filled(gem?.footer?.contact)) missing.push("footer.contact");
+  if (!filled(gem?.footer?.hashtags)) missing.push("footer.hashtags");
+  return missing;
+}
+
+export function assertBrandGemReadyForCaptions(gem?: BrandGemConfig): void {
+  const missing = getMissingBrandGemFields(gem);
+  if (missing.length === 0) return;
+  const labels = missing.map((key) => REQUIRED_FIELD_LABELS[key]).join(", ");
+  throw new Error(
+    `Gem da marca incompleto. Preencha antes de gerar legendas: ${labels}.`
+  );
+}
 
 export function resolveBrandGemFromBody(body: {
   brandGem?: BrandGemConfig;
@@ -28,6 +85,7 @@ export function resolveBrandGemFromBody(body: {
       description: body.brandGem.description,
       instructions: body.brandGem.instructions ?? body.promptContext,
       footer: body.brandGem.footer ?? body.repeatingText,
+      captionParams: body.brandGem.captionParams,
     };
   }
   return {
@@ -42,39 +100,64 @@ export function buildBrandVoiceBlock(gem?: BrandGemConfig): string {
   const instructions = gem?.instructions?.trim();
 
   if (!name && !description && !instructions) {
-    return `BRAND VOICE: Use only what the user configured in INSTRUCTIONS when present.`;
+    return `BRAND VOICE: No GEM configured — do not invent tone, language, or brand personality.`;
   }
 
   const parts: string[] = [];
   if (name) parts.push(`GEM / CLIENT NAME: ${name}`);
   if (description) parts.push(`DESCRIPTION (role & scope):\n${description}`);
   if (instructions) {
-    parts.push(`INSTRUCTIONS (MUST FOLLOW — configured by the client):\n---\n${instructions}\n---`);
+    parts.push(
+      `INSTRUCTIONS — TONE, LANGUAGE, STYLE (HIGHEST PRIORITY — MUST FOLLOW EXACTLY):\n---\n${instructions}\n---\n` +
+        `The caption MUST use the language, tone, voice, audience, and sales style defined above. Do NOT default to Spanish or any other language unless INSTRUCTIONS specify it.`
+    );
   }
 
   return `BRAND VOICE AND WRITING RULES:\n${parts.join("\n\n")}`;
 }
 
-/** Estrutura fixa da legenda + linha Referencia condicional (dados fixos). */
+/** Estrutura fixa da legenda (layout padrão MIA / Instagram). */
 export function buildCaptionStructureBlock(gem?: BrandGemConfig): string {
   const custom = gem?.footer?.structure?.trim();
 
-  const rules = `CAPTION STRUCTURE ("dados fixos" — follow this order):
+  const rules = `CAPTION STRUCTURE — the app assembles blocks 2–6 from GEM footer. Your JSON "caption" field = block 1 ONLY.
 
-1. MAIN BODY (top): Hook + description of what is in the post (language and tone per INSTRUCTIONS).
+Block order in the final post (blank line between each block):
 
-2. CATALOG REFERENCE LINE — CONDITIONAL (middle, only sometimes):
-   - Include exactly one line: Referencia: [LABEL]
-   - Use the matched catalog item's label (from matchedId). [LABEL] is the catalog reference code/name.
-   - ADD this line ONLY when ALL are true:
-     • matchedId is not null (a catalog match exists), AND
-     • The image clearly shows a wearable garment: a dress, outfit on a person/model, or a product shot where the garment is the focus.
-   - Place this line immediately AFTER the main body and BEFORE footer lines.
-   - OMIT "Referencia: …" entirely when:
-     • matchedId is null, OR
-     • The image has no dress/outfit/clothing to tie to the catalog (e.g. scenery only, abstract graphic, text-only slide, flat lay without a clear garment reference, logo, or lifestyle photo with no visible catalog piece).
+1. MAIN HOOK (JSON "caption" field — you write ONLY this):
+   Marketing text about the garment/look or image message.
+   - Tone and language from GEM INSTRUCTIONS only.
+   - Do NOT include hashtags, CTA, legal note, address, or "Referência" in the caption field.
 
-3. FOOTER (bottom): Address, contact, hashtags, and closing note — only from MANDATORY CAPTION ELEMENTS below (if configured).`;
+2. REFERENCE LINE — added by system when matchedId is set:
+   Referência: [exact catalog LABEL]
+
+3. AI DISCLOSURE — added by system (verbatim from GEM footer):
+   *Imagem gerada por inteligência artificial
+
+4. ADDRESS — added by system if configured in GEM footer.
+
+5. CALL TO ACTION — added by system (verbatim from GEM footer contact, starts with ➡️).
+
+6. HASHTAGS — added by system (verbatim from GEM footer, last block).
+
+EXAMPLE — what you put in JSON "caption" (block 1 only):
+"""
+O luxo encontra o conforto nessa modelagem acinturada com saia em camadas.
+"""
+
+EXAMPLE — full post after system assembly (do NOT put this in JSON caption):
+"""
+O luxo encontra o conforto nessa modelagem acinturada com saia em camadas.
+
+Referência: Vestido Luxo com Bordados Neon — Leve e Acinturado-5073
+
+*Imagem gerada por inteligência artificial
+
+➡️ Acesse nosso site pelo link na Bio e acompanhe nossa coleção.
+
+#Hashtag1 #Hashtag2 #Hashtag3
+"""`;
 
   if (custom) {
     return `${rules}\n\nADDITIONAL STRUCTURE NOTES FROM CLIENT:\n${custom}`;
@@ -82,34 +165,102 @@ export function buildCaptionStructureBlock(gem?: BrandGemConfig): string {
   return rules;
 }
 
+function normalizeCaptionParams(gem?: BrandGemConfig) {
+  const p = gem?.captionParams ?? {};
+  return {
+    maxHookChars: Math.min(1500, Math.max(80, p.maxHookChars ?? 280)),
+    maxHookSentences: Math.min(4, Math.max(1, p.maxHookSentences ?? 2)),
+    emojiPolicy: p.emojiPolicy ?? "minimal",
+    hookStyle: p.hookStyle ?? "balanced",
+    includeReferenceWhenMatched: p.includeReferenceWhenMatched !== false,
+    avoidPriceMention: p.avoidPriceMention !== false,
+    salesTone: p.salesTone ?? "balanced",
+  };
+}
+
+export function buildCaptionParamsBlock(gem?: BrandGemConfig): string {
+  const p = normalizeCaptionParams(gem);
+  const emojiRules: Record<string, string> = {
+    none: "Do NOT use emojis anywhere in the hook.",
+    minimal: "Use at most 1 emoji in the hook, only if natural.",
+    moderate: "Use emojis sparingly (1–3 in the hook).",
+    free: "Emojis allowed if they fit the brand tone.",
+  };
+  const hookRules: Record<string, string> = {
+    short: "Write exactly 1 punchy sentence for the hook.",
+    balanced: "Write 1–2 sentences for the hook.",
+    descriptive: "Write 1–2 sentences highlighting fabric, fit, and silhouette.",
+  };
+  const salesRules: Record<string, string> = {
+    soft: "Hook tone: inspirational, elegant, no hard sell.",
+    balanced: "Hook tone: warm and inviting with subtle call to desire.",
+    direct: "Hook tone: clear benefit and urgency, still on-brand.",
+  };
+
+  return `CAPTION GENERATION PARAMETERS (mandatory — MAIN TEXT / hook only):
+- The character limit applies ONLY to block 1 (main marketing hook). It does NOT include Referência, AI disclosure, address, ➡️ CTA, hashtags, or custom footer fields — those are fixed verbatim blocks appended separately.
+- Max main text length: ${p.maxHookChars} characters (strict).
+- Max main text sentences: ${p.maxHookSentences}.
+- Full Instagram post may be up to 2200 characters including all fixed blocks.
+- Hook style: ${hookRules[p.hookStyle] ?? hookRules.balanced}
+- Sales tone: ${salesRules[p.salesTone] ?? salesRules.balanced}
+- Emojis: ${emojiRules[p.emojiPolicy] ?? emojiRules.minimal}
+- Reference line: ${p.includeReferenceWhenMatched ? "Include when matchedId is set." : "Never include Referência line even if matched."}
+- Prices: ${p.avoidPriceMention ? "Do NOT mention prices, discounts, or currency in the hook." : "Prices allowed if relevant to INSTRUCTIONS."}`;
+}
+
+export function buildRegenerationBlock(regenerate?: boolean): string {  if (!regenerate) return "";
+  return `
+REGENERATION REQUEST (user clicked "Regenerate"):
+- Write a COMPLETELY NEW main hook (block 1) — different wording, fresh angle, new adjectives.
+- Do NOT reuse the same opening sentence or phrasing as a typical previous caption.
+- Keep matchedId consistent if the garment match is still valid.
+- Footer blocks (Referência label, disclosure, address, ➡️ CTA, hashtags) stay verbatim from GEM.`;
+}
+
 export function buildCaptionFooterBlock(footer?: RepeatingTextConfig): string {
   const rt = footer ?? {};
   const lines: string[] = [];
   if (rt.address?.trim()) lines.push(`- Address: ${rt.address.trim()}`);
-  if (rt.contact?.trim()) lines.push(`- Contact / CTA: ${rt.contact.trim()}`);
-  if (rt.hashtags?.trim()) lines.push(`- Hashtags (include this set): ${rt.hashtags.trim()}`);
-  if (rt.extra?.trim()) lines.push(`- Closing note: ${rt.extra.trim()}`);
+  if (rt.contact?.trim()) lines.push(`- Contact / CTA (start with ➡️): ${rt.contact.trim()}`);
+  if (rt.hashtags?.trim()) lines.push(`- Hashtags (last block): ${rt.hashtags.trim()}`);
+  if (rt.extra?.trim()) lines.push(`- AI disclosure / legal note: ${rt.extra.trim()}`);
+
+  const customs = (rt.customFields ?? []).filter((f) => f?.text?.trim());
+  for (const field of customs) {
+    lines.push(
+      `- Custom field "${field.label || field.id}" (insert ${field.after}, verbatim): ${field.text.trim()}`
+    );
+  }
 
   if (lines.length === 0) {
     return `MANDATORY CAPTION FOOTER: None configured — do not invent address, hashtags or legal notes unless INSTRUCTIONS require them.`;
   }
 
-  return `MANDATORY CAPTION FOOTER (bottom of caption — do not replace with invented text):\n${lines.join("\n")}`;
+  return `MANDATORY CAPTION FOOTER (fixed blocks — copy verbatim, including custom fields):\n${lines.join("\n")}`;
 }
 
 /** Instruções completas para gerar legenda no match-and-generate */
-export function buildMatchCaptionInstructions(gem?: BrandGemConfig): string {
+export function buildMatchCaptionInstructions(
+  gem?: BrandGemConfig,
+  options?: { regenerate?: boolean }
+): string {
   return `${buildBrandVoiceBlock(gem)}
+
+${buildCaptionParamsBlock(gem)}
 
 ${buildCaptionStructureBlock(gem)}
 
 ${buildCaptionFooterBlock(gem?.footer)}
 
-CAPTION TASK:
-- Write the full caption following CAPTION STRUCTURE above.
-- Respect the conditional Referencia line: include it only for dress/outfit/person-with-garment posts with a valid matchedId; skip it for image-only posts without catalog clothing.
-- Do NOT use a different tone, address, or hashtags than configured in the GEM and footer.`;
-}
+${buildRegenerationBlock(options?.regenerate)}
+
+CAPTION TASK (after JSON catalog match):
+- JSON "caption" = block 1 (main hook) ONLY — never include Referência, disclosure, address, ➡️ CTA, or hashtags.
+- Respect CAPTION GENERATION PARAMETERS for the hook (length, sentences, emojis, tone).
+- Language, tone, hooks, and sales style MUST come from GEM INSTRUCTIONS — never assume Spanish or any default.
+- Set matchedId from catalog comparison; the system adds "Referência:" using the exact catalog label.
+- Do NOT invent address, hashtags, or brand facts — fixed blocks come from GEM footer automatically.`;}
 
 export function buildRefineCaptionPrompt(
   currentCaption: string,
@@ -120,22 +271,25 @@ export function buildRefineCaptionPrompt(
 
 ${buildBrandVoiceBlock(gem)}
 
+${buildCaptionParamsBlock(gem)}
+
 ${buildCaptionStructureBlock(gem)}
 
 ${buildCaptionFooterBlock(gem?.footer)}
 
-Preserve the caption structure: main body, optional "Referencia: …" only if the post shows catalog clothing with a match, then footer lines.
-Preserve address, contact, hashtags and closing note unless the user explicitly asks to change them.
+Preserve the caption structure and generation parameters.
+The main hook is block 1; fixed footer blocks (Referência, disclosure, address, ➡️ CTA, hashtags) are reassembled by the system — edit block 1 unless the user asks to change footer text.
 Apply the GEM instructions to every edit.
 
 User refinement: "${instructions}"
 
-Current caption:
+Current caption (full assembled post):
 """
 ${currentCaption}
 """
 
-Return ONLY the full revised caption.`;
+Return ONLY the full revised caption as plain text with the same block order (blank line between blocks).
+Do NOT wrap in quotes, code fences, or markdown blocks.`;
 }
 
 /** Compat: APIs antigas que enviam promptContext + repeatingText */

@@ -4,10 +4,13 @@ import { readJsonResponse } from "./apiResponse";
 import { aiFetch } from "./aiFetch";
 import { getState as getAiSettingsState } from "./aiSettingsStore";
 import { aiQueue } from "./aiQueue";
-import { resizeForAi, convertSvgToDataUrl } from "./images";
+import { resizeForCatalogEnrich, convertSvgToDataUrl } from "./images";
 
-const ENRICH_DELAY_MS = 2500;
+const ENRICH_DELAY_MS = 5000;
+const ENRICH_DELAY_GEMINI_MS = 5000;
 const ENRICH_DELAY_OPENROUTER_MS = 8000;
+/** Pausa antes de repetir a mesma peça após 503 / alta demanda */
+const ENRICH_RETRY_DELAY_MS = 5000;
 /** Evita ficar minutos esperando retry do servidor quando a cota já estourou */
 const ENRICH_FETCH_TIMEOUT_MS = 45_000;
 /** Ollama + visão na 1ª peça pode levar 1–3 min (carrega o modelo). */
@@ -50,6 +53,10 @@ function isQuotaError(message: string): boolean {
   );
 }
 
+function isTransientOverloadError(message: string): boolean {
+  return /503|UNAVAILABLE|high demand|overloaded|try again later|sobrecarregad/i.test(message);
+}
+
 function mergeAbortSignals(...signals: (AbortSignal | undefined)[]): AbortSignal | undefined {
   const active = signals.filter((s): s is AbortSignal => !!s);
   if (active.length === 0) return undefined;
@@ -77,7 +84,7 @@ export async function enrichCatalogItemOnServer(
 
   try {
     const converted = await convertSvgToDataUrl(item.image);
-    const compressedImage = await resizeForAi(converted, { maxSide: 768 });
+    const compressedImage = await resizeForCatalogEnrich(converted);
 
     const response = await aiQueue.enqueue(
       `Indexar ${item.label || item.id}`,
@@ -122,11 +129,12 @@ export async function enrichCatalogItemOnServer(
 
 export type EnrichQueueResult = { cancelled: boolean; quotaExceeded: boolean };
 
-/** Indexa referências em fila (evita estourar cota por minuto) */
+/** Indexa referências em fila (pausa entre peças para não estourar cota / 503) */
 function enrichDelayMs(): number {
   const provider = getAiSettingsState().settings?.activeProvider;
   if (provider === "openrouter") return ENRICH_DELAY_OPENROUTER_MS;
   if (provider === "ollama") return 500;
+  if (provider === "gemini") return ENRICH_DELAY_GEMINI_MS;
   return ENRICH_DELAY_MS;
 }
 
@@ -148,7 +156,26 @@ export async function enrichCatalogItemsInQueue(
 
     onItemStart?.(item.id);
     try {
-      const profile = await enrichCatalogItemOnServer(item, signal);
+      let profile: CatalogVisualProfile;
+      try {
+        profile = await enrichCatalogItemOnServer(item, signal);
+      } catch (firstErr) {
+        if (signal?.aborted || isAbortError(firstErr)) {
+          return { cancelled: true, quotaExceeded };
+        }
+        const firstMessage = firstErr instanceof Error ? firstErr.message : "Erro desconhecido";
+        if (isQuotaError(firstMessage)) {
+          onItemFailed?.(item.id, firstMessage);
+          return { cancelled: false, quotaExceeded: true };
+        }
+        if (isTransientOverloadError(firstMessage)) {
+          await sleep(ENRICH_RETRY_DELAY_MS, signal);
+          if (signal?.aborted) return { cancelled: true, quotaExceeded };
+          profile = await enrichCatalogItemOnServer(item, signal);
+        } else {
+          throw firstErr;
+        }
+      }
       if (signal?.aborted) return { cancelled: true, quotaExceeded };
       onItemDone?.(item.id, profile);
     } catch (err) {

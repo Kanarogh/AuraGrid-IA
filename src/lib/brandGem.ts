@@ -1,6 +1,6 @@
 import { createEmptyBrandGem } from "./brandGemDefaults";
+import { normalizeCaptionGenerationParams } from "./captionParams";
 import type { BrandGem } from "../types";
-
 const STORAGE_KEY = "auragrid_brand_gem";
 const LEGACY_CONTEXT_KEY = "palak_context";
 const LEGACY_REPEATING_KEY = "palak_repeating";
@@ -49,12 +49,17 @@ function normalizeBrandGem(partial: Partial<BrandGem>): BrandGem {
     name: partial.name?.trim() ?? "",
     description: partial.description?.trim() ?? "",
     instructions: partial.instructions?.trim() ?? "",
-    footer: {
-      structure: partial.footer?.structure?.trim() ?? "",
+    captionParams: normalizeCaptionGenerationParams(
+      partial.captionParams ?? base.captionParams
+    ),
+    footer: {      structure: partial.footer?.structure?.trim() ?? "",
       address: partial.footer?.address?.trim() ?? "",
       contact: partial.footer?.contact?.trim() ?? "",
       hashtags: partial.footer?.hashtags?.trim() ?? "",
       extra: partial.footer?.extra?.trim() ?? "",
+      customFields: Array.isArray(partial.footer?.customFields)
+        ? partial.footer.customFields
+        : [],
     },
   };
 }

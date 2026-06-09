@@ -12,6 +12,8 @@ import {
 } from "react";
 import type { AppSection } from "../components/layout/AppSidebar";
 import { aiQueue } from "../lib/aiQueue";
+import type { CanvaGridFormatId } from "../lib/canvaGridFormats";
+import { getCanvaGridFormat } from "../lib/canvaGridFormats";
 import { setCaptionCacheClientId } from "../lib/captionCache";
 import { normalizeCatalogItem } from "../lib/catalog";
 import {
@@ -23,6 +25,7 @@ import {
   resolveWorkspaceForClient,
   saveRegistry,
   saveWorkspace,
+  saveWorkspaceResilient,
   deleteWorkspace,
   clearClientCaptionCache,
   uniqueClientId,
@@ -31,6 +34,7 @@ import {
   type ClientRegistry,
   type ClientWorkspace,
 } from "../lib/clientWorkspace";
+import { notifyStorageSaveFailure } from "../lib/clientWorkspace/saveNotify";
 import type { BrandGem, CanvaGridPage, CatalogItem, PlannedPost } from "../types";
 
 type ClientWorkspaceContextValue = {
@@ -48,12 +52,16 @@ type ClientWorkspaceContextValue = {
   setActiveCanvaPageId: Dispatch<SetStateAction<string>>;
   setAutoSyncCanva: Dispatch<SetStateAction<boolean>>;
   setCanvaGridReversed: Dispatch<SetStateAction<boolean>>;
+  setCanvaGridFormat: (format: CanvaGridFormatId) => void;
+  setCanvaGridMaxWidth: (width: number) => void;
   setUiPrefs: (partial: NonNullable<ClientWorkspace["ui"]>) => void;
+  saveBrandGem: (gem: BrandGem) => string | null;
   switchClient: (clientId: string) => void;
   createClient: (name: string, slug?: string) => string;
   renameClient: (clientId: string, name: string) => void;
   deleteClient: (clientId: string) => boolean;
   resetActiveClient: () => void;
+  persistWorkspaceNow: () => void;
 };
 
 const ClientWorkspaceContext = createContext<ClientWorkspaceContextValue | null>(null);
@@ -95,17 +103,24 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
   const workspaceRef = useRef(workspace);
   workspaceRef.current = workspace;
 
-  const flushSave = useCallback(
-    (clientId: string, ws: ClientWorkspace) => {
-      saveWorkspace(clientId, ws);
-    },
-    []
-  );
+  const flushSave = useCallback((clientId: string, ws: ClientWorkspace) => {
+    void saveWorkspaceResilient(clientId, ws).then(notifyStorageSaveFailure);
+  }, []);
+
+  const persistWorkspaceNow = useCallback(() => {
+    if (!activeClientId) return;
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    flushSave(activeClientId, workspaceRef.current);
+  }, [activeClientId, flushSave]);
 
   const scheduleSave = useCallback(
     (clientId: string) => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(() => {
+        saveTimerRef.current = null;
         flushSave(clientId, workspaceRef.current);
       }, SAVE_DEBOUNCE_MS);
     },
@@ -115,10 +130,28 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!activeClientId) return;
     scheduleSave(activeClientId);
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
   }, [workspace, activeClientId, scheduleSave]);
+
+  useEffect(() => {
+    if (!activeClientId) return;
+    const flushOnExit = () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      const ws = workspaceRef.current;
+      const result = saveWorkspace(activeClientId, ws);
+      if (result.ok === false && result.reason === "quota") {
+        void saveWorkspaceResilient(activeClientId, ws);
+      }
+    };
+    window.addEventListener("beforeunload", flushOnExit);
+    window.addEventListener("pagehide", flushOnExit);
+    return () => {
+      window.removeEventListener("beforeunload", flushOnExit);
+      window.removeEventListener("pagehide", flushOnExit);
+    };
+  }, [activeClientId, flushSave]);
 
   const persistRegistry = useCallback((next: ClientRegistry) => {
     setRegistry(next);
@@ -159,10 +192,21 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
           typeof action === "function"
             ? action(prev.catalog).map(normalizeCatalogItem)
             : action.map(normalizeCatalogItem);
-        return { ...prev, catalog: nextCatalog };
+        const next = { ...prev, catalog: nextCatalog };
+        workspaceRef.current = next;
+
+        if (activeClientId && nextCatalog.length !== prev.catalog.length) {
+          if (saveTimerRef.current) {
+            clearTimeout(saveTimerRef.current);
+            saveTimerRef.current = null;
+          }
+          void saveWorkspaceResilient(activeClientId, next).then(notifyStorageSaveFailure);
+        }
+
+        return next;
       });
     },
-    []
+    [activeClientId]
   );
 
   const setPosts: Dispatch<SetStateAction<PlannedPost[]>> = useCallback((action) => {
@@ -236,12 +280,56 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  const setCanvaGridFormat = useCallback((format: CanvaGridFormatId) => {
+    const defaults = getCanvaGridFormat(format);
+    setWorkspace((prev) => ({
+      ...prev,
+      canva: {
+        ...prev.canva,
+        gridFormat: format,
+        gridMaxWidth: defaults.defaultMaxWidth,
+      },
+    }));
+  }, []);
+
+  const setCanvaGridMaxWidth = useCallback((width: number) => {
+    setWorkspace((prev) => {
+      const format = getCanvaGridFormat(prev.canva.gridFormat);
+      const clamped = Math.min(format.zoomMax, Math.max(format.zoomMin, width));
+      return {
+        ...prev,
+        canva: { ...prev.canva, gridMaxWidth: clamped },
+      };
+    });
+  }, []);
+
   const setUiPrefs = useCallback((partial: NonNullable<ClientWorkspace["ui"]>) => {
     setWorkspace((prev) => ({
       ...prev,
       ui: { ...prev.ui, ...partial },
     }));
   }, []);
+
+  const saveBrandGem = useCallback(
+    (gem: BrandGem): string | null => {
+      if (!activeClientId) return null;
+      const savedAt = new Date().toISOString();
+      const normalized: BrandGem = { ...gem, id: activeClientId };
+      setWorkspace((prev) => {
+        const next: ClientWorkspace = {
+          ...prev,
+          brandGem: normalized,
+          ui: { ...prev.ui, brandGemSavedAt: savedAt },
+        };
+        workspaceRef.current = next;
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        saveWorkspace(activeClientId, next);
+        return next;
+      });
+      return savedAt;
+    },
+    [activeClientId]
+  );
 
   const createClient = useCallback(
     (name: string, slug?: string): string => {
@@ -338,12 +426,16 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       setActiveCanvaPageId,
       setAutoSyncCanva,
       setCanvaGridReversed,
+      setCanvaGridFormat,
+      setCanvaGridMaxWidth,
       setUiPrefs,
+      saveBrandGem,
       switchClient,
       createClient,
       renameClient,
       deleteClient,
       resetActiveClient,
+      persistWorkspaceNow,
     }),
     [
       registry,
@@ -359,12 +451,16 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       setActiveCanvaPageId,
       setAutoSyncCanva,
       setCanvaGridReversed,
+      setCanvaGridFormat,
+      setCanvaGridMaxWidth,
       setUiPrefs,
+      saveBrandGem,
       switchClient,
       createClient,
       renameClient,
       deleteClient,
       resetActiveClient,
+      persistWorkspaceNow,
     ]
   );
 
@@ -393,6 +489,8 @@ export function useWorkspaceData() {
     activeCanvaPageId: workspace.canva.activePageId,
     autoSyncCanva: workspace.canva.autoSync,
     canvaGridReversed: workspace.canva.reversed,
+    canvaGridFormat: workspace.canva.gridFormat ?? "square",
+    canvaGridMaxWidth: workspace.canva.gridMaxWidth ?? 320,
     ui: workspace.ui,
     setUiPrefs,
   };

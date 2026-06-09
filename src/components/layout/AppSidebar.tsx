@@ -5,9 +5,11 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   RotateCcw,
+  ScanSearch,
   Settings,
   ShoppingBag,
   Sliders,
+  Sparkles,
 } from "lucide-react";
 import { Badge } from "../ui/Badge";
 import { cn } from "../../lib/cn";
@@ -18,6 +20,7 @@ export type AppSection =
   | "canva_grid"
   | "feed_simulator"
   | "catalog"
+  | "reference_finder"
   | "settings";
 
 export type NavItem = {
@@ -26,6 +29,7 @@ export type NavItem = {
   description?: string;
   icon: ComponentType<{ className?: string }>;
   badge?: number | string;
+  badgeTone?: "neutral" | "warning";
 };
 
 export type NavGroup = {
@@ -71,6 +75,12 @@ const NAV_GROUPS: NavGroup[] = [
         description: "Referências e indexação",
         icon: ShoppingBag,
       },
+      {
+        id: "reference_finder",
+        label: "Buscar referência",
+        description: "Foto → código no catálogo",
+        icon: ScanSearch,
+      },
     ],
   },
   {
@@ -91,6 +101,7 @@ const SECTION_TITLES: Record<AppSection, string> = {
   canva_grid: "Grid Canva",
   feed_simulator: "Simulador de feed",
   catalog: "Catálogo de referências",
+  reference_finder: "Buscar referência",
   settings: "Configurações",
 };
 
@@ -102,6 +113,8 @@ export function AppSidebar({
   active,
   onNavigate,
   catalogCount,
+  brandGemReady,
+  brandGemMissingCount = 0,
   apiStatusLabel,
   apiStatusTone,
   collapsed,
@@ -114,6 +127,8 @@ export function AppSidebar({
   active: AppSection;
   onNavigate: (id: AppSection) => void;
   catalogCount: number;
+  brandGemReady?: boolean;
+  brandGemMissingCount?: number;
   apiStatusLabel: string;
   apiStatusTone: "success" | "warning" | "danger";
   collapsed: boolean;
@@ -125,10 +140,33 @@ export function AppSidebar({
 }) {
   const groups = NAV_GROUPS.map((g) => ({
     ...g,
-    items: g.items.map((item) =>
-      item.id === "catalog" ? { ...item, badge: catalogCount || undefined } : item
-    ),
+    items: g.items.map((item) => {
+      if (item.id === "catalog") {
+        return { ...item, badge: catalogCount || undefined };
+      }
+      if (item.id === "settings" && brandGemReady === false) {
+        return {
+          ...item,
+          description: "Tom da IA — campos pendentes",
+          badge: brandGemMissingCount > 0 ? brandGemMissingCount : "!",
+          badgeTone: "warning" as const,
+        };
+      }
+      if (item.id === "settings" && brandGemReady === true) {
+        return { ...item, description: "Gem configurado · provedor IA" };
+      }
+      return item;
+    }),
   }));
+
+  const gemStatusLabel =
+    brandGemReady === undefined
+      ? null
+      : brandGemReady
+        ? "Gem pronto"
+        : brandGemMissingCount > 0
+          ? `Gem — ${brandGemMissingCount} campo${brandGemMissingCount !== 1 ? "s" : ""} pendente${brandGemMissingCount !== 1 ? "s" : ""}`
+          : "Gem incompleto";
 
   const sidebarContent = (
     <div className="flex flex-col h-full">
@@ -173,21 +211,35 @@ export function AppSidebar({
                         onNavigate(item.id);
                         onMobileClose();
                       }}
-                      title={collapsed ? item.label : undefined}
+                      title={
+                        collapsed
+                          ? item.id === "settings" && brandGemReady === false
+                            ? `${item.label} — Gem incompleto`
+                            : item.label
+                          : undefined
+                      }
                       className={cn(
-                        "w-full flex items-center gap-3 rounded-xl text-left transition-colors cursor-pointer",
+                        "w-full flex items-center gap-3 rounded-xl text-left transition-colors cursor-pointer relative",
                         collapsed ? "justify-center p-2.5" : "px-3 py-2.5",
                         isActive
                           ? "bg-ag-accent text-white shadow-sm"
                           : "text-ag-text hover:bg-ag-surface-3"
                       )}
                     >
-                      <Icon
-                        className={cn(
-                          "h-4 w-4 shrink-0",
-                          isActive ? "text-white" : "text-ag-muted"
+                      <span className="relative shrink-0">
+                        <Icon
+                          className={cn(
+                            "h-4 w-4",
+                            isActive ? "text-white" : "text-ag-muted"
+                          )}
+                        />
+                        {collapsed && item.id === "settings" && brandGemReady === false && (
+                          <span
+                            className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-ag-warning ring-2 ring-ag-surface-1"
+                            aria-hidden
+                          />
                         )}
-                      />
+                      </span>
                       {!collapsed && (
                         <span className="flex-1 min-w-0">
                           <span className="text-sm font-medium block truncate">{item.label}</span>
@@ -207,7 +259,13 @@ export function AppSidebar({
                         <span
                           className={cn(
                             "text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md",
-                            isActive ? "bg-white/20 text-white" : "bg-ag-surface-3 text-ag-muted"
+                            item.badgeTone === "warning"
+                              ? isActive
+                                ? "bg-white/25 text-white"
+                                : "bg-ag-warning/15 text-ag-warning"
+                              : isActive
+                                ? "bg-white/20 text-white"
+                                : "bg-ag-surface-3 text-ag-muted"
                           )}
                         >
                           {item.badge}
@@ -228,6 +286,38 @@ export function AppSidebar({
           collapsed && "flex flex-col items-center"
         )}
       >
+        {gemStatusLabel && (
+          <button
+            type="button"
+            onClick={() => {
+              if (!brandGemReady) {
+                onNavigate("settings");
+                onMobileClose();
+              }
+            }}
+            title={gemStatusLabel}
+            className={cn(
+              "transition-opacity",
+              !brandGemReady && "cursor-pointer hover:opacity-90",
+              brandGemReady && "cursor-default",
+              collapsed ? "p-0" : "w-full"
+            )}
+          >
+            <Badge
+              tone={brandGemReady ? "success" : "warning"}
+              dot
+              className={cn(
+                collapsed ? "p-2 rounded-lg" : "w-full justify-center normal-case text-[10px]"
+              )}
+            >
+              {collapsed ? (
+                <Sparkles className="h-3.5 w-3.5" aria-hidden />
+              ) : (
+                gemStatusLabel
+              )}
+            </Badge>
+          </button>
+        )}
         {!collapsed && (
           <Badge tone={apiStatusTone} dot className="w-full justify-center normal-case text-[10px]">
             {apiStatusLabel}

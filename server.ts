@@ -28,6 +28,11 @@ import { setAiAttemptsHeader } from "./server/ai/httpHeaders.ts";
 import { getCircuitBreakerSnapshot } from "./server/ai/circuitBreaker.ts";
 import { getAiDiagnosticsSnapshot } from "./server/ai/diagnostics.ts";
 import type { AiProviderId } from "./server/ai/types.ts";
+import {
+  assertBrandGemReadyForCaptions,
+  resolveBrandGemFromBody,
+} from "./server/ai/brandContext.ts";
+import { sanitizeRefinedCaptionOutput } from "./server/ai/shared.ts";
 
 dotenv.config();
 
@@ -157,10 +162,42 @@ app.post("/api/enrich-catalog-item", async (req, res) => {
 app.post("/api/match-and-generate", async (req, res) => {
   let providerId = await applyAiHeadersFromRequest(req);
   try {
-    const { postImage, catalogItems, catalogProfiles, promptContext, repeatingText } = req.body;
+    const { postImage, catalogItems, catalogProfiles, brandGem, promptContext, repeatingText, regenerateCaption, captionFromImageOnly } =
+      req.body;
 
     if (!postImage) {
       return res.status(400).json({ error: "No post image provided." });
+    }
+
+    try {
+      assertBrandGemReadyForCaptions(
+        brandGem ?? resolveBrandGemFromBody({ promptContext, repeatingText })
+      );
+    } catch (validationError: unknown) {
+      return res.status(400).json({
+        error: validationError instanceof Error ? validationError.message : String(validationError),
+      });
+    }
+
+    const imageOnly = !!captionFromImageOnly;
+    const profiles = Array.isArray(catalogProfiles) ? catalogProfiles : [];
+    const items = Array.isArray(catalogItems) ? catalogItems : [];
+
+    if (!imageOnly) {
+      if (items.length > 0 && profiles.length === 0) {
+        return res.status(400).json({
+          error:
+            "Catálogo não indexado. Indexe todas as referências (JSON) antes de gerar legendas — a comparação usa os perfis indexados, não as fotos do acervo.",
+        });
+      }
+      if (
+        profiles.length > 0 &&
+        !profiles.every((p) => p?.id && p?.label && p?.profile)
+      ) {
+        return res.status(400).json({
+          error: "catalogProfiles incompleto. Indexe todas as referências antes de gerar legendas.",
+        });
+      }
     }
 
     const outcome = await runVisionWithFallback(
@@ -168,10 +205,13 @@ app.post("/api/match-and-generate", async (req, res) => {
       (provider) =>
         provider.matchAndGenerate({
           postImage,
-          catalogItems,
-          catalogProfiles,
+          catalogItems: imageOnly ? undefined : catalogItems,
+          catalogProfiles: imageOnly ? undefined : catalogProfiles,
+          brandGem,
           promptContext,
           repeatingText,
+          regenerateCaption: !!regenerateCaption,
+          captionFromImageOnly: imageOnly,
         }),
       providerId
     );
@@ -188,6 +228,44 @@ app.post("/api/match-and-generate", async (req, res) => {
   }
 });
 
+app.post("/api/match-reference", async (req, res) => {
+  let providerId = await applyAiHeadersFromRequest(req);
+  try {
+    const { postImage, catalogItems, catalogProfiles } = req.body;
+
+    if (!postImage) {
+      return res.status(400).json({ error: "No query image provided." });
+    }
+
+    const outcome = await runVisionWithFallback(
+      "match-reference",
+      (provider) =>
+        provider.matchAndGenerate({
+          postImage,
+          catalogItems,
+          catalogProfiles,
+          matchOnly: true,
+        }),
+      providerId
+    );
+
+    providerId = outcome.providerUsed;
+    res.setHeader("X-AI-Provider-Used", outcome.providerUsed);
+    res.setHeader("X-AI-Match-Mode", outcome.result.matchMode);
+    setAiAttemptsHeader(res, outcome.attempts);
+    return res.json({
+      matchedId: outcome.result.matchedId,
+      reasoning: outcome.result.reasoning,
+      matchMode: outcome.result.matchMode,
+      providerUsed: outcome.providerUsed,
+    });
+  } catch (error: unknown) {
+    console.error("Error matching catalog reference:", error);
+    const status = /429|quota|RESOURCE_EXHAUSTED|rate.?limit/i.test(String(error)) ? 429 : 500;
+    return res.status(status).json({ error: formatAiError(error, providerId) });
+  }
+});
+
 app.get("/api/ai/circuit-breaker", (_req, res) => {
   res.json(getCircuitBreakerSnapshot());
 });
@@ -199,19 +277,34 @@ app.get("/api/ai/diagnostics", (_req, res) => {
 app.post("/api/refine-caption", async (req, res) => {
   const providerId = await applyAiHeadersFromRequest(req);
   try {
-    const { currentCaption, instructions, promptContext, repeatingText } = req.body;
+    const { currentCaption, instructions, brandGem, promptContext, repeatingText } = req.body;
     if (!currentCaption) {
       return res.status(400).json({ error: "Missing caption to refine." });
     }
 
+    try {
+      assertBrandGemReadyForCaptions(
+        brandGem ?? resolveBrandGemFromBody({ promptContext, repeatingText })
+      );
+    } catch (validationError: unknown) {
+      return res.status(400).json({
+        error: validationError instanceof Error ? validationError.message : String(validationError),
+      });
+    }
+
     const provider = getActiveProvider();
+    if (!String(instructions ?? "").trim()) {
+      return res.status(400).json({ error: "Informe como deseja refinar a legenda." });
+    }
+
     const caption = await provider.refineCaption({
       currentCaption,
       instructions,
+      brandGem,
       promptContext,
       repeatingText,
     });
-    return res.json({ caption });
+    return res.json({ caption: sanitizeRefinedCaptionOutput(caption) });
   } catch (error: unknown) {
     console.error("Error refining caption:", error);
     const status = /429|quota|RESOURCE_EXHAUSTED|rate.?limit/i.test(String(error)) ? 429 : 500;

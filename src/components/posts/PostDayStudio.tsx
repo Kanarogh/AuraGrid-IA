@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  Eraser,
   Plus,
   RefreshCw,
   Sparkles,
@@ -12,8 +13,10 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import type { CatalogItem, PlannedPost } from "../../types";
+import type { CatalogItem, PlannedPost, RepeatingText } from "../../types";
 import type { PostStatusStyle } from "../../lib/postStatus";
+import { extractMainCaptionText } from "../../lib/captionFormat";
+import { INSTAGRAM_CAPTION_HARD_MAX } from "../../lib/captionParams";
 import { cn } from "../../lib/cn";
 import { Button } from "../ui/Button";
 import { InstagramPhonePreview } from "./InstagramPhonePreview";
@@ -29,6 +32,10 @@ export function PostDayStudio({
   copiedId,
   refineInstruction,
   isRefining,
+  brandGemReady = true,
+  captionMaxMainChars = 280,
+  captionFooter,
+  profileHandle,
   hasPrevious,
   hasNext,
   onPrevious,
@@ -39,10 +46,12 @@ export function PostDayStudio({
   onPhotoUpload,
   onClearImage,
   onSelectReference,
+  onToggleCaptionFromImageOnly,
   onGenerate,
   onStopGenerate,
   onCopyCaption,
   onCaptionChange,
+  onClearCaption,
   onRefineInstructionChange,
   onRefine,
   cardRef,
@@ -56,6 +65,11 @@ export function PostDayStudio({
   copiedId: string | null;
   refineInstruction: string;
   isRefining: boolean;
+  brandGemReady?: boolean;
+  /** Limite do texto principal (sem rodapé fixo) */
+  captionMaxMainChars?: number;
+  captionFooter?: RepeatingText;
+  profileHandle?: string;
   hasPrevious: boolean;
   hasNext: boolean;
   onPrevious: () => void;
@@ -66,12 +80,14 @@ export function PostDayStudio({
   onPhotoUpload: (file: File) => void;
   onClearImage: () => void;
   onSelectReference: (catalogId: string | null) => void;
+  onToggleCaptionFromImageOnly: (enabled: boolean) => void;
   onGenerate: () => void;
   onStopGenerate: () => void;
   onCopyCaption: () => void;
   onCaptionChange: (value: string) => void;
+  onClearCaption: () => void;
   onRefineInstructionChange: (value: string) => void;
-  onRefine: () => void;
+  onRefine: (instruction?: string) => void;
   cardRef?: Ref<HTMLDivElement>;
 }) {
   const inputId = `feed-image-input-${post.id}`;
@@ -246,6 +262,23 @@ export function PostDayStudio({
         </section>
 
         <section className="p-5 sm:p-6 flex flex-col gap-4 min-w-0 bg-ag-surface-1/50">
+          <label className="flex items-start gap-2.5 rounded-xl border border-ag-border/70 bg-ag-surface-2/50 px-3 py-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={!!post.captionFromImageOnly}
+              onChange={(e) => onToggleCaptionFromImageOnly(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-ag-border text-ag-accent focus:ring-ag-accent/30"
+            />
+            <span className="min-w-0">
+              <span className="text-sm font-medium text-ag-text block">
+                Legenda pelo conteúdo da imagem
+              </span>
+              <span className="text-xs text-ag-muted leading-snug block mt-0.5">
+                Artes, banners ou posts com texto — a IA lê a imagem sem comparar ao catálogo
+              </span>
+            </span>
+          </label>
+
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1 min-w-0">
               <label className="text-[10px] font-mono uppercase tracking-widest text-ag-muted block mb-1.5">
@@ -254,7 +287,16 @@ export function PostDayStudio({
               <select
                 value={post.matchedCatalogId || ""}
                 onChange={(e) => onSelectReference(e.target.value || null)}
-                className="w-full text-sm rounded-xl px-3 py-2.5 border border-ag-border bg-ag-surface-2 text-ag-text outline-none focus:border-ag-accent focus:ring-2 focus:ring-ag-accent/20"
+                disabled={!!post.captionFromImageOnly}
+                className={cn(
+                  "w-full text-sm rounded-xl px-3 py-2.5 border border-ag-border bg-ag-surface-2 text-ag-text outline-none focus:border-ag-accent focus:ring-2 focus:ring-ag-accent/20",
+                  post.captionFromImageOnly && "opacity-50 cursor-not-allowed"
+                )}
+                title={
+                  post.captionFromImageOnly
+                    ? "Desativado — modo legenda pela imagem"
+                    : undefined
+                }
               >
                 <option value="">Vincular ao catálogo…</option>
                 {referenceCatalog.map((cat) => (
@@ -273,7 +315,14 @@ export function PostDayStudio({
                 post.isGenerating && "border-ag-danger/30 text-ag-danger hover:bg-ag-danger/10"
               )}
               onClick={post.isGenerating ? onStopGenerate : onGenerate}
-              disabled={!post.image}
+              disabled={!post.image || !brandGemReady}
+              title={
+                !brandGemReady
+                  ? "Configure o Gem da marca em Configurações antes de gerar legendas"
+                  : !post.image
+                    ? "Carregue a foto do post"
+                    : undefined
+              }
             >
               {post.isGenerating ? (
                 <>
@@ -306,32 +355,68 @@ export function PostDayStudio({
 
           <div className="flex-1 flex flex-col min-h-[200px]">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-mono uppercase tracking-widest text-ag-muted">Legenda</span>
-              {post.caption && (
-                <button
-                  type="button"
-                  onClick={onCopyCaption}
-                  className="text-xs font-medium text-ag-accent flex items-center gap-1 hover:opacity-80 cursor-pointer"
-                >
-                  {copiedId === post.id ? (
-                    <>
-                      <Check className="h-3.5 w-3.5" />
-                      Copiado
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-3.5 w-3.5" />
-                      Copiar
-                    </>
-                  )}
-                </button>
-              )}
+              <span className="text-[10px] font-mono uppercase tracking-widest text-ag-muted">
+                Legenda
+                {post.caption && captionFooter ? (
+                  (() => {
+                    const mainLen = extractMainCaptionText(post.caption, captionFooter).length;
+                    const totalLen = post.caption.length;
+                    return (
+                      <span className="ml-2 normal-case tracking-normal font-sans text-ag-muted">
+                        <span
+                          className={
+                            mainLen > captionMaxMainChars ? "text-ag-danger font-medium" : ""
+                          }
+                        >
+                          {mainLen}/{captionMaxMainChars} texto
+                        </span>
+                        <span className="text-ag-muted/70">
+                          {" "}
+                          · {totalLen}/{INSTAGRAM_CAPTION_HARD_MAX} total
+                        </span>
+                      </span>
+                    );
+                  })()
+                ) : null}
+              </span>
+              <div className="flex items-center gap-2">
+                {(post.caption || post.isGenerated || post.reasoning) && (
+                  <button
+                    type="button"
+                    onClick={onClearCaption}
+                    className="text-xs font-medium text-ag-muted hover:text-ag-danger flex items-center gap-1 cursor-pointer"
+                    title="Apagar legenda e recomeçar do zero"
+                  >
+                    <Eraser className="h-3.5 w-3.5" />
+                    Remover
+                  </button>
+                )}
+                {post.caption && (
+                  <button
+                    type="button"
+                    onClick={onCopyCaption}
+                    className="text-xs font-medium text-ag-accent flex items-center gap-1 hover:opacity-80 cursor-pointer"
+                  >
+                    {copiedId === post.id ? (
+                      <>
+                        <Check className="h-3.5 w-3.5" />
+                        Copiado
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        Copiar
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
             <textarea
               value={post.caption}
               onChange={(e) => onCaptionChange(e.target.value)}
               className="flex-1 w-full min-h-[220px] text-sm leading-relaxed rounded-xl px-4 py-3 border border-ag-border bg-ag-surface-2/80 text-ag-text outline-none resize-y focus:border-ag-accent focus:ring-2 focus:ring-ag-accent/15 placeholder:text-ag-muted/70"
-              placeholder="A legenda em espanhol aparece aqui após gerar com IA. Você pode editar livremente."
+              placeholder="A legenda aparece aqui após gerar com IA (tom definido no Gem). Você pode editar livremente."
             />
           </div>
 
@@ -344,15 +429,18 @@ export function PostDayStudio({
                 placeholder="Refinar: ex. mais curto, mais hashtags…"
                 className="flex-1 text-sm rounded-xl px-4 py-2.5 border border-ag-border bg-ag-surface-2 outline-none focus:border-ag-accent"
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") onRefine();
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    onRefine(e.currentTarget.value);
+                  }
                 }}
               />
               <Button
                 type="button"
                 variant="secondary"
                 size="md"
-                onClick={onRefine}
-                disabled={isRefining || !refineInstruction.trim()}
+                onClick={() => onRefine(refineInstruction)}
+                disabled={isRefining || !refineInstruction.trim() || post.isGenerating}
               >
                 {isRefining ? <RefreshCw className="h-4 w-4 animate-spin" /> : "Refinar"}
               </Button>
@@ -361,12 +449,12 @@ export function PostDayStudio({
         </section>
 
         <section className="hidden xl:flex flex-col items-center justify-start p-5 sm:p-6 bg-ag-surface-2/30">
-          <InstagramPhonePreview post={post} variant="studio" />
+          <InstagramPhonePreview post={post} variant="studio" username={profileHandle} />
         </section>
       </div>
 
       <div className="xl:hidden relative z-10 px-5 pb-5 border-t border-ag-border/50 bg-ag-surface-2/20">
-        <InstagramPhonePreview post={post} variant="compact" />
+        <InstagramPhonePreview post={post} variant="compact" username={profileHandle} />
       </div>
     </article>
   );

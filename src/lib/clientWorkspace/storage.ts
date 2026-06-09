@@ -1,13 +1,24 @@
+import { resizeForCatalogStorageEmergency } from "../images";
 import { createClientMeta, createEmptyWorkspace, normalizeWorkspace } from "./factory";
+import {
+  compactWorkspaceForStorage,
+  hydrateWorkspaceFromStorage,
+  isStorageQuotaError,
+} from "./persistence";
 import type { ClientMeta, ClientRegistry, ClientWorkspace } from "./types";
 import { REGISTRY_KEY, workspaceStorageKey } from "./types";
+
+export type SaveWorkspaceResult =
+  | { ok: true }
+  | { ok: false; reason: "quota" | "error"; message: string };
 
 export function resolveWorkspaceForClient(
   clientId: string,
   meta: ClientMeta
 ): ClientWorkspace {
   const raw = loadWorkspaceRaw(clientId);
-  return normalizeWorkspace(raw, meta);
+  const normalized = normalizeWorkspace(raw, meta);
+  return hydrateWorkspaceFromStorage(normalized);
 }
 
 function loadWorkspaceRaw(clientId: string): Partial<ClientWorkspace> | null {
@@ -50,12 +61,60 @@ export function loadWorkspace(clientId: string, meta?: ClientMeta): ClientWorksp
   const raw = loadWorkspaceRaw(clientId);
   if (!raw) return null;
   const clientMeta = meta ?? createClientMeta(clientId, raw.brandGem?.name ?? clientId);
-  return normalizeWorkspace(raw, clientMeta);
+  return hydrateWorkspaceFromStorage(normalizeWorkspace(raw, clientMeta));
 }
 
-export function saveWorkspace(clientId: string, workspace: ClientWorkspace): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(workspaceStorageKey(clientId), JSON.stringify(workspace));
+export function saveWorkspace(
+  clientId: string,
+  workspace: ClientWorkspace
+): SaveWorkspaceResult {
+  if (typeof window === "undefined") return { ok: true };
+
+  const compact = compactWorkspaceForStorage(workspace);
+  try {
+    window.localStorage.setItem(workspaceStorageKey(clientId), JSON.stringify(compact));
+    return { ok: true };
+  } catch (err) {
+    if (isStorageQuotaError(err)) {
+      return {
+        ok: false,
+        reason: "quota",
+        message: "Espaço do navegador esgotado ao salvar o workspace.",
+      };
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[AuraGrid] Falha ao salvar workspace:", err);
+    return { ok: false, reason: "error", message };
+  }
+}
+
+/** Tenta salvar; se o localStorage encher, recompacta fotos do catálogo e tenta de novo. */
+export async function saveWorkspaceResilient(
+  clientId: string,
+  workspace: ClientWorkspace
+): Promise<SaveWorkspaceResult> {
+  const first = saveWorkspace(clientId, workspace);
+  if (first.ok) return first;
+  if (first.ok === false && first.reason !== "quota") return first;
+
+  const catalog = await Promise.all(
+    workspace.catalog.map(async (item) => {
+      if (!item.image?.startsWith("data:")) return item;
+      try {
+        return { ...item, image: await resizeForCatalogStorageEmergency(item.image) };
+      } catch {
+        return item;
+      }
+    })
+  );
+
+  const second = saveWorkspace(clientId, { ...workspace, catalog });
+  if (second.ok) {
+    console.warn(
+      "[AuraGrid] Catálogo salvo com compressão extra — limite de armazenamento do navegador."
+    );
+  }
+  return second;
 }
 
 export function deleteWorkspace(clientId: string): void {

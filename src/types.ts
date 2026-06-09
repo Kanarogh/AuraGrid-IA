@@ -22,6 +22,16 @@ export interface CatalogVisualProfile {
   visualSummary: string;
   /** Uma linha única que diferencia este look dos demais do catálogo */
   distinguishingFingerprint: string;
+  /** Cor dominante com tom específico (ex.: "verde-azulado/teal") */
+  dominantColorFamily?: string;
+  colorTemperature?: "warm" | "cool" | "neutral";
+  printScale?: string;
+  sleeveType?: string;
+  lengthCategory?: string;
+  /** Fatos visuais verificáveis para match preciso */
+  matchAnchors?: string[];
+  /** Como diferir de peças parecidas no catálogo */
+  notToConfuseWith?: string;
 }
 
 export type CatalogEnrichmentStatus =
@@ -43,6 +53,9 @@ export interface CatalogItem {
   enrichmentError?: string;
 }
 
+import type { CaptionCustomField } from "./lib/captionFields";
+import type { CaptionGenerationParams } from "./lib/captionParams";
+
 export interface RepeatingText {
   /** Ordem dos blocos da legenda (opcional — complementa as regras padrão) */
   structure: string;
@@ -50,6 +63,8 @@ export interface RepeatingText {
   contact: string;
   hashtags: string;
   extra: string;
+  /** Blocos extras configuráveis (texto fixo inserido na legenda) */
+  customFields?: CaptionCustomField[];
 }
 
 /** Perfil estilo Gemini Gems — preparado para vários clientes (id único por marca). */
@@ -62,6 +77,8 @@ export interface BrandGem {
   description: string;
   /** Instruções completas (system prompt) enviadas à IA */
   instructions: string;
+  /** Parâmetros de geração (limites, emojis, estilo do gancho) */
+  captionParams?: CaptionGenerationParams;
   /** Endereço, hashtags, estrutura e rodapé fixos nas legendas */
   footer: RepeatingText;
 }
@@ -78,6 +95,10 @@ export interface PlannedPost {
   isGenerated: boolean;
   isConfirmed?: boolean;
   error: string | null;
+  /** Quando a foto vem do Canva Grid — evita duplicar base64 no localStorage */
+  canvaSlotRef?: { pageId: string; slotId: string } | null;
+  /** Arte/gráfico com texto — legenda pela imagem, sem comparar catálogo de vestidos */
+  captionFromImageOnly?: boolean;
 }
 
 export interface CanvaGridSlot {

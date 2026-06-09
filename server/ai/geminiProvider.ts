@@ -1,9 +1,19 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import {
-  buildMatchCaptionInstructions,
   buildRefineCaptionPrompt,
   resolveBrandGemFromBody,
 } from "./brandContext.ts";
+import {
+  buildMatchJsonCatalogTask,
+  buildMatchImagesCatalogTask,
+  buildCatalogProfilesPromptSection,
+  buildMatchResultInstructions,
+  buildImageOnlyCaptionTask,
+  buildImageOnlyResultInstructions,
+  isImageOnlyCaptionMode,
+  normalizeMatchedId,
+  resolveMatchedIdFromCandidates,
+} from "./matchPrompts.ts";
 import { buildEnrichCatalogPrompt, finalizeCatalogProfile } from "./catalogProfile.ts";
 import { CATALOG_PROFILE_SCHEMA } from "../geminiShared.ts";
 import { getGeminiModel, hasGeminiKey } from "./config.ts";
@@ -61,8 +71,51 @@ export const geminiProvider: AiProvider = {
   async matchAndGenerate(input: MatchGenerateInput): Promise<MatchGenerateResult> {
     const ai = getClient();
     const model = getGeminiModel();
-    const { postImage, catalogItems, catalogProfiles } = input;
+    const { postImage, catalogItems, catalogProfiles, matchOnly, regenerateCaption } = input;
     const gem = resolveBrandGemFromBody(input);
+
+    if (isImageOnlyCaptionMode(input)) {
+      const parts: { text?: string; inlineData?: { mimeType: string; data: string } }[] = [
+        { text: buildImageOnlyCaptionTask(gem) },
+        { inlineData: cleanBase64(postImage) },
+        {
+          text: buildImageOnlyResultInstructions(gem, {
+            regenerate: !!regenerateCaption,
+          }),
+        },
+      ];
+
+      const response = await withRetry(
+        () =>
+          ai.models.generateContent({
+            model,
+            contents: parts,
+            config: {
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  matchedId: { type: Type.STRING },
+                  reasoning: { type: Type.STRING },
+                  caption: { type: Type.STRING },
+                },
+                required: ["matchedId", "reasoning", "caption"],
+              },
+            },
+          }),
+        "Gemini"
+      );
+
+      const parsed = JSON.parse(response.text || "{}") as Omit<MatchGenerateResult, "matchMode"> & {
+        caption?: string;
+      };
+      return {
+        matchedId: null,
+        reasoning: parsed.reasoning ?? "",
+        caption: parsed.caption ?? "",
+        matchMode: "image_only",
+      };
+    }
 
     const profiles = Array.isArray(catalogProfiles) ? catalogProfiles : [];
     const useTextCatalog =
@@ -72,37 +125,15 @@ export const geminiProvider: AiProvider = {
 
     if (useTextCatalog) {
       parts.push({
-        text: `You are an expert AI fashion planner for boutique 'Palak' (Madrid).
-
-TASK:
-1. Inspect the TARGET POST IMAGE (the only image you receive).
-2. Compare it against CANDIDATE CATALOG PROFILES below (structured JSON — each was pre-analyzed from showroom photos).
-3. Pick the single best matching catalog id, or null if none match confidently.
-4. Write an elite Spanish Instagram/Facebook caption.
-
-MATCHING RULES (strict):
-- matchedId MUST be the exact "id" field of one candidate, or null.
-- Only match if pattern, colors, neckline, sleeves, length, and distinctive details align strongly.
-- If two candidates are similar, prefer the one whose distinguishingFingerprint best fits the post image.
-- reasoning in Portuguese, 2-4 sentences, cite specific visual evidence.
-
-TARGET POST IMAGE:`,
+        text: buildMatchJsonCatalogTask(!!matchOnly, gem),
       });
       parts.push({ inlineData: cleanBase64(postImage) });
       parts.push({
-        text: `\nCANDIDATE CATALOG PROFILES (JSON array):\n${JSON.stringify(
-          profiles.map((p) => ({ id: p.id, label: p.label, ...p.profile })),
-          null,
-          2
-        )}`,
+        text: `\n${buildCatalogProfilesPromptSection(profiles)}`,
       });
     } else {
       parts.push({
-        text: `You are an expert AI fashion planner assistant for a high-end Madrid fashion boutique ('Palak').
-Inspect the Target Post Image and compare against candidate catalog photos.
-Determine the exact matching item. Write a Spanish caption.
-
-Target post image:`,
+        text: buildMatchImagesCatalogTask(!!matchOnly, gem),
       });
       parts.push({ inlineData: cleanBase64(postImage) });
 
@@ -115,14 +146,14 @@ Target post image:`,
           parts.push({ inlineData: cleanBase64(item.image) });
         });
       } else {
-        parts.push({ text: "\n(No catalog candidates — write caption with matchedId null.)" });
+        parts.push({ text: "\n(No catalog candidates — matchedId null.)" });
       }
     }
 
     parts.push({
-      text: `${buildMatchCaptionInstructions(gem)}
-
-Output JSON only: { "matchedId": string|null, "reasoning": string (Portuguese), "caption": string }`,
+      text: buildMatchResultInstructions(gem, !!matchOnly, {
+        regenerate: !!regenerateCaption,
+      }),
     });
 
     const response = await withRetry(
@@ -132,24 +163,39 @@ Output JSON only: { "matchedId": string|null, "reasoning": string (Portuguese), 
           contents: parts,
           config: {
             responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                matchedId: { type: Type.STRING },
-                reasoning: { type: Type.STRING },
-                caption: { type: Type.STRING },
-              },
-              required: ["matchedId", "reasoning", "caption"],
-            },
+            responseSchema: matchOnly
+              ? {
+                  type: Type.OBJECT,
+                  properties: {
+                    matchedId: { type: Type.STRING },
+                    reasoning: { type: Type.STRING },
+                  },
+                  required: ["matchedId", "reasoning"],
+                }
+              : {
+                  type: Type.OBJECT,
+                  properties: {
+                    matchedId: { type: Type.STRING },
+                    reasoning: { type: Type.STRING },
+                    caption: { type: Type.STRING },
+                  },
+                  required: ["matchedId", "reasoning", "caption"],
+                },
           },
         }),
       "Gemini"
     );
 
-    const parsed = JSON.parse(response.text || "{}") as Omit<MatchGenerateResult, "matchMode">;
+    const parsed = JSON.parse(response.text || "{}") as Omit<MatchGenerateResult, "matchMode"> & {
+      caption?: string;
+    };
+    const candidateIds = useTextCatalog
+      ? profiles.map((p) => p.id)
+      : (catalogItems ?? []).map((c) => c.id);
     return {
-      ...parsed,
-      matchedId: parsed.matchedId || null,
+      matchedId: resolveMatchedIdFromCandidates(parsed.matchedId, candidateIds),
+      reasoning: parsed.reasoning ?? "",
+      caption: matchOnly ? "" : (parsed.caption ?? ""),
       matchMode: useTextCatalog ? "catalog_json" : "catalog_images",
     };
   },

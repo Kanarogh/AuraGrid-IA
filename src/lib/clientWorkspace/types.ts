@@ -1,4 +1,5 @@
 import type { AppSection } from "../../components/layout/AppSidebar";
+import type { CanvaGridFormatId } from "../canvaGridFormats";
 import type { BrandGem, CanvaGridPage, CatalogItem, PlannedPost } from "../../types";
 
 export const REGISTRY_KEY = "auragrid_client_registry";
@@ -30,11 +31,17 @@ export type ClientWorkspace = {
     activePageId: string;
     autoSync: boolean;
     reversed: boolean;
+    /** Proporção dos slots: square, portrait, landscape, stories */
+    gridFormat?: CanvaGridFormatId;
+    /** Largura máxima do grid em px */
+    gridMaxWidth?: number;
   };
   ui?: {
     activeSection?: AppSection;
     activePreviewId?: string;
     viewMode?: "split" | "editorial";
+    /** ISO — último salvamento explícito do Gem deste cliente */
+    brandGemSavedAt?: string;
   };
 };
 

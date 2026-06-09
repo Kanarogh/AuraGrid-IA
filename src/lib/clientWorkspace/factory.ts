@@ -1,10 +1,16 @@
-import { createEmptyCanvaPage } from "../canva";
+import { createEmptyCanvaPage, getDefaultActiveCanvaPageId } from "../canva";
+import {
+  DEFAULT_CANVA_GRID_FORMAT,
+  getCanvaGridFormat,
+  isCanvaGridFormatId,
+} from "../canvaGridFormats";
 import { recalculatePostDates } from "../dates";
 import {
   clearFactoryPlaceholderGem,
   createEmptyBrandGem,
 } from "../brandGemDefaults";
-import type { BrandGem, PlannedPost } from "../../types";
+import { normalizeCaptionGenerationParams } from "../captionParams";
+import type { BrandGem, CanvaGridPage, PlannedPost } from "../../types";
 import type { ClientMeta, ClientWorkspace } from "./types";
 
 const DEFAULT_START_DATE = "2026-05-24";
@@ -60,6 +66,15 @@ export function createDefaultCanvaPages() {
   ];
 }
 
+function resolveActivePageId(
+  pages: CanvaGridPage[],
+  savedId: string | undefined,
+  fallbackId: string
+): string {
+  if (savedId && pages.some((p) => p.id === savedId)) return savedId;
+  return getDefaultActiveCanvaPageId(pages) || fallbackId;
+}
+
 export function createClientMeta(id: string, name: string): ClientMeta {
   const now = new Date().toISOString();
   return {
@@ -83,6 +98,7 @@ export function createOrphanWorkspace(): ClientWorkspace {
 export function createEmptyWorkspace(meta: ClientMeta): ClientWorkspace {
   const startDate = DEFAULT_START_DATE;
   const posts = recalculatePostDates(startDate, createEmptyPosts());
+  const defaultPages = createDefaultCanvaPages();
   return {
     version: 1,
     brandGem: createBrandGemForClient(meta.id, meta.name),
@@ -90,10 +106,12 @@ export function createEmptyWorkspace(meta: ClientMeta): ClientWorkspace {
     posts,
     startDate,
     canva: {
-      pages: createDefaultCanvaPages(),
-      activePageId: "page_1",
+      pages: defaultPages,
+      activePageId: getDefaultActiveCanvaPageId(defaultPages),
       autoSync: true,
       reversed: true,
+      gridFormat: DEFAULT_CANVA_GRID_FORMAT,
+      gridMaxWidth: getCanvaGridFormat(DEFAULT_CANVA_GRID_FORMAT).defaultMaxWidth,
     },
     ui: {
       activeSection: "posts",
@@ -120,11 +138,26 @@ export function normalizeWorkspace(
           ...empty.brandGem.footer,
           ...(raw.brandGem.footer ?? {}),
           structure: raw.brandGem.footer?.structure ?? "",
+          customFields: Array.isArray(raw.brandGem.footer?.customFields)
+            ? raw.brandGem.footer.customFields
+            : empty.brandGem.footer.customFields,
         },
       }
     : { ...empty.brandGem, id: meta.id };
 
   brandGem = clearFactoryPlaceholderGem(brandGem, meta.name);
+
+  brandGem = {
+    ...brandGem,
+    captionParams: normalizeCaptionGenerationParams(
+      raw.brandGem?.captionParams ?? brandGem.captionParams
+    ),
+  };
+
+  const pages =
+    Array.isArray(raw.canva?.pages) && raw.canva.pages.length > 0
+      ? raw.canva.pages
+      : empty.canva.pages;
 
   return {
     version: 1,
@@ -133,13 +166,25 @@ export function normalizeWorkspace(
     posts: Array.isArray(raw.posts) && raw.posts.length > 0 ? raw.posts : empty.posts,
     startDate: typeof raw.startDate === "string" ? raw.startDate : empty.startDate,
     canva: {
-      pages:
-        Array.isArray(raw.canva?.pages) && raw.canva.pages.length > 0
-          ? raw.canva.pages
-          : empty.canva.pages,
-      activePageId: raw.canva?.activePageId ?? empty.canva.activePageId,
+      pages,
+      activePageId: resolveActivePageId(
+        pages,
+        raw.canva?.activePageId,
+        empty.canva.activePageId
+      ),
       autoSync: raw.canva?.autoSync ?? empty.canva.autoSync,
       reversed: raw.canva?.reversed ?? empty.canva.reversed,
+      gridFormat: isCanvaGridFormatId(raw.canva?.gridFormat)
+        ? raw.canva.gridFormat
+        : empty.canva.gridFormat,
+      gridMaxWidth:
+        typeof raw.canva?.gridMaxWidth === "number"
+          ? raw.canva.gridMaxWidth
+          : getCanvaGridFormat(
+              isCanvaGridFormatId(raw.canva?.gridFormat)
+                ? raw.canva.gridFormat
+                : DEFAULT_CANVA_GRID_FORMAT
+            ).defaultMaxWidth,
     },
     ui: { ...empty.ui, ...raw.ui },
   };

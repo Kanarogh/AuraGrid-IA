@@ -55,10 +55,14 @@ export function CatalogProfileModal({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
           <SummaryRow label="Tipo" value={profile.garmentType} />
           <SummaryRow label="Categoria" value={profile.category} />
+          <SummaryRow
+            label="Cor dominante"
+            value={profile.dominantColorFamily ?? colors}
+          />
           <SummaryRow label="Cores" value={colors} />
           <SummaryRow
             label="Estampa"
-            value={`${profile.pattern.type} — ${profile.pattern.description}`}
+            value={`${profile.pattern.type}${profile.printScale ? ` (${profile.printScale})` : ""} — ${profile.pattern.description}`}
           />
           <SummaryRow label="Decote" value={profile.neckline} />
           <SummaryRow label="Mangas" value={profile.sleeves} />
@@ -75,6 +79,25 @@ export function CatalogProfileModal({
             {profile.distinguishingFingerprint}
           </p>
         </div>
+
+        {profile.matchAnchors && profile.matchAnchors.length > 0 && (
+          <div>
+            <p className="text-[10px] font-mono uppercase text-ag-muted mb-1.5">
+              Âncoras de match
+            </p>
+            <ul className="text-xs text-ag-text space-y-1 list-disc pl-4">
+              {profile.matchAnchors.map((a) => (
+                <li key={a}>{a}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {profile.notToConfuseWith && (
+          <p className="text-xs text-ag-muted border-l-2 border-amber-500/50 pl-3">
+            {profile.notToConfuseWith}
+          </p>
+        )}
 
         {profile.distinctiveDetails.length > 0 && (
           <div className="flex flex-wrap gap-1.5">

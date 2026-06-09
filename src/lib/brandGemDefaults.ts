@@ -1,11 +1,12 @@
 import type { BrandGem, RepeatingText } from "../types";
+import { DEFAULT_CAPTION_GENERATION_PARAMS } from "./captionParams";
 
-export const EMPTY_REPEATING_TEXT: RepeatingText = {
-  structure: "",
+export const EMPTY_REPEATING_TEXT: RepeatingText = {  structure: "",
   address: "",
   contact: "",
   hashtags: "",
   extra: "",
+  customFields: [],
 };
 
 /** Gem vazio — você preenche e salva no workspace do cliente. */
@@ -15,6 +16,7 @@ export function createEmptyBrandGem(id: string, displayName = ""): BrandGem {
     name: displayName.trim(),
     description: "",
     instructions: "",
+    captionParams: { ...DEFAULT_CAPTION_GENERATION_PARAMS },
     footer: { ...EMPTY_REPEATING_TEXT },
   };
 }
