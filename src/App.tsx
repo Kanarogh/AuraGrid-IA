@@ -53,6 +53,7 @@ import {
   clearCatalogEnrichmentsApi,
   enrichCatalogApi,
   fetchEnrichStatusApi,
+  type CatalogEnrichProgress,
   fetchWorkspace,
   stopEnrichCatalogApi,
   uploadCatalogBatchApi,
@@ -142,6 +143,7 @@ import {
   isCatalogItemIndexed,
   isReferenceCatalogItem,
   normalizeCatalogItem,
+  prepareCatalogItemForEnrichment,
 } from "./lib/catalog";
 import {
   brandGemRequiredMessage,
@@ -278,6 +280,9 @@ export default function App() {
   /** Posts que apagaram legenda — próxima geração ignora cache e chama a IA de novo. */
   const captionCacheBypassRef = useRef(new Set<string>());
   const [isEnrichingCatalog, setIsEnrichingCatalog] = useState(false);
+  const [catalogEnrichProgress, setCatalogEnrichProgress] = useState<CatalogEnrichProgress | null>(
+    null
+  );
   const { connectionStatus, apiStatusLabel, health } = useAiSettings();
   
   const [selectedCanvaSlotId, setSelectedCanvaSlotId] = useState<string | null>(null);
@@ -1045,7 +1050,6 @@ export default function App() {
     const base64List: {
       image: string;
       label: string;
-      catId: string;
       imageAssetId: string | null;
     }[] = [];
     for (let i = 0; i < sortedFiles.length; i++) {
@@ -1066,11 +1070,9 @@ export default function App() {
           imageAssetId = persisted.imageAssetId;
         }
 
-        const slotRefId = `canva_${Date.now()}_${i}`;
         base64List.push({
           image,
           label,
-          catId: slotRefId,
           imageAssetId,
         });
       } catch (err) {
@@ -1104,7 +1106,7 @@ export default function App() {
             image: currentRef.image,
             imageAssetId: currentRef.imageAssetId,
             label: currentRef.label,
-            matchedCatalogId: currentRef.catId,
+            matchedCatalogId: null,
           };
         }
         return { ...page, slots };
@@ -1282,18 +1284,24 @@ export default function App() {
     setUiPrefs(ws.ui ?? {});
   };
 
+  const catalogEnrichProgressLabel = catalogEnrichProgress
+    ? `Indexando ${catalogEnrichProgress.index}/${catalogEnrichProgress.total} — ${catalogEnrichProgress.label} (um por vez)`
+    : "Indexando… (um por vez, aguarde)";
+
   const pollApiEnrichment = async () => {
     if (!useApiStorage || !activeClientId) return;
     setIsEnrichingCatalog(true);
     try {
       for (;;) {
-        const { enriching } = await fetchEnrichStatusApi(activeClientId);
+        const { enriching, progress } = await fetchEnrichStatusApi(activeClientId);
+        setCatalogEnrichProgress(progress ?? null);
         await reloadWorkspaceFromApi();
         if (!enriching) break;
         await new Promise((r) => setTimeout(r, 2000));
       }
     } finally {
       setIsEnrichingCatalog(false);
+      setCatalogEnrichProgress(null);
     }
   };
 
@@ -1301,24 +1309,34 @@ export default function App() {
     if (useApiStorage && activeClientId) {
       void stopEnrichCatalogApi(activeClientId).then(() => reloadWorkspaceFromApi());
       setIsEnrichingCatalog(false);
+      setCatalogEnrichProgress(null);
       return;
     }
     catalogEnrichAbortRef.current?.abort();
     catalogEnrichAbortRef.current = null;
     resetCatalogProcessingState();
     setIsEnrichingCatalog(false);
+    setCatalogEnrichProgress(null);
   };
 
   const runCatalogEnrichment = async (items: CatalogItem[]) => {
+    const prepared = items.map(prepareCatalogItemForEnrichment);
+
     if (useApiStorage && activeClientId) {
-      const ids = items.map((c) => c.id);
+      const ids = prepared.map((c) => c.id);
+      const idSet = new Set(ids);
+      setCatalog((prev) => {
+        const next = prev.map((c) => (idSet.has(c.id) ? prepareCatalogItemForEnrichment(c) : c));
+        catalogRef.current = next;
+        return next;
+      });
       setIsEnrichingCatalog(true);
       await enrichCatalogApi(activeClientId, ids.length ? ids : undefined);
       void pollApiEnrichment();
       return;
     }
 
-    const toIndex = items.filter(
+    const toIndex = prepared.filter(
       (c) => c.isReference !== false && c.enrichmentStatus !== "ready"
     );
     if (toIndex.length === 0) return;
@@ -1328,11 +1346,23 @@ export default function App() {
     catalogEnrichAbortRef.current = controller;
 
     setIsEnrichingCatalog(true);
+    setCatalogEnrichProgress({ index: 0, total: toIndex.length, itemId: "", label: "…" });
+    let localEnrichIndex = 0;
     try {
       await refreshAiSettings();
       const { cancelled, quotaExceeded } = await enrichCatalogItemsInQueue(
         toIndex,
-        (id) => patchCatalogItem(id, { enrichmentStatus: "processing", enrichmentError: undefined }),
+        (id) => {
+          localEnrichIndex += 1;
+          const current = catalogRef.current.find((c) => c.id === id);
+          setCatalogEnrichProgress({
+            index: localEnrichIndex,
+            total: toIndex.length,
+            itemId: id,
+            label: current?.label ?? id,
+          });
+          patchCatalogItem(id, { enrichmentStatus: "processing", enrichmentError: undefined });
+        },
         (id, profile: CatalogVisualProfile) =>
           patchCatalogItem(id, {
             visualProfile: profile,
@@ -1360,6 +1390,7 @@ export default function App() {
         catalogEnrichAbortRef.current = null;
       }
       setIsEnrichingCatalog(false);
+      setCatalogEnrichProgress(null);
     }
   };
 
@@ -1671,6 +1702,7 @@ export default function App() {
       const body: Record<string, unknown> = {
         postImage: processedPostImage,
         brandGem,
+        ...(useApiStorage && activeClientId ? { clientId: activeClientId } : {}),
         ...(options?.force || bypassCaptionCache ? { regenerateCaption: true } : {}),
         ...(imageOnly ? { captionFromImageOnly: true } : {}),
       };
@@ -2219,9 +2251,7 @@ export default function App() {
       alert("Nenhuma referência para reindexar.");
       return;
     }
-    await runCatalogEnrichment(
-      items.map((c) => ({ ...c, enrichmentStatus: "pending" as const }))
-    );
+    await runCatalogEnrichment(items);
   };
 
   const indexedCatalogCount = useMemo(
@@ -2235,7 +2265,7 @@ export default function App() {
   );
 
   const clearCatalogEnrichments = useCallback(
-    (ids: string[]) => {
+    async (ids: string[]) => {
       if (ids.length === 0) return;
       const message =
         ids.length === 1
@@ -2252,13 +2282,24 @@ export default function App() {
         return next;
       });
       setProfileViewItem((current) => (current && idSet.has(current.id) ? null : current));
+
+      if (useApiStorage && activeClientId) {
+        try {
+          await clearCatalogEnrichmentsApi(activeClientId, ids);
+          await reloadWorkspaceFromApi();
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          alert(`Não foi possível limpar as indexações no servidor:\n${msg}`);
+          await reloadWorkspaceFromApi();
+        }
+      }
     },
-    [setCatalog]
+    [setCatalog, useApiStorage, activeClientId]
   );
 
   const clearAllCatalogEnrichments = useCallback(() => {
     const ids = referenceCatalog.filter(hasCatalogEnrichmentData).map((c) => c.id);
-    clearCatalogEnrichments(ids);
+    void clearCatalogEnrichments(ids);
   }, [referenceCatalog, clearCatalogEnrichments]);
 
   const apiStatusTone =
@@ -2753,6 +2794,7 @@ export default function App() {
             onNavigateCatalog={() => setActiveSection("catalog")}
             onEnsureCatalogIndexed={ensureCatalogIndexedForMatch}
             onViewProfile={(item) => setProfileViewItem(item)}
+            clientId={useApiStorage ? activeClientId ?? undefined : undefined}
           />
         )}
 
@@ -2770,8 +2812,8 @@ export default function App() {
                 )}
                 {isEnrichingCatalog && (
                   <span className="flex items-center gap-2 mt-2 text-ag-accent text-xs">
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                    Indexando…
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin shrink-0" />
+                    <span className="min-w-0">{catalogEnrichProgressLabel}</span>
                     <button
                       type="button"
                       onClick={stopCatalogEnrichment}
@@ -2901,6 +2943,11 @@ export default function App() {
                   {referenceCatalog.filter((c) => c.enrichmentStatus === "ready").length} indexados ·{" "}
                   {referenceCatalog.filter((c) => c.enrichmentStatus === "failed").length} com erro ·{" "}
                   {referenceCatalog.filter((c) => c.enrichmentStatus !== "ready" && c.enrichmentStatus !== "failed").length} pendentes
+                  {isEnrichingCatalog && (
+                    <span className="block mt-1 text-ag-accent font-medium">
+                      {catalogEnrichProgressLabel}
+                    </span>
+                  )}
                 </span>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -2954,7 +3001,7 @@ export default function App() {
                     type="button"
                     disabled={isEnrichingCatalog}
                     onClick={() =>
-                      clearCatalogEnrichments(
+                      void clearCatalogEnrichments(
                         referenceCatalog.filter(isCatalogItemIndexed).map((c) => c.id)
                       )
                     }
@@ -3088,7 +3135,7 @@ export default function App() {
                         <button
                           type="button"
                           disabled={isEnrichingCatalog}
-                          onClick={() => clearCatalogEnrichments([item.id])}
+                          onClick={() => void clearCatalogEnrichments([item.id])}
                           className="w-full text-[10px] font-medium py-1 rounded-lg border border-transparent text-ag-muted hover:text-ag-danger hover:border-ag-danger/20 hover:bg-ag-danger/5 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1"
                           title="Apagar só o JSON de visão; a foto permanece"
                         >
@@ -3101,9 +3148,7 @@ export default function App() {
                           type="button"
                           disabled={isIndexingThis}
                           onClick={() =>
-                            void runCatalogEnrichment([
-                              { ...item, enrichmentStatus: "pending" },
-                            ])
+                            void runCatalogEnrichment([item])
                           }
                           className="w-full text-[10px] font-bold py-1.5 rounded-lg border border-ag-border bg-ag-surface-1 text-ag-muted hover:text-ag-text disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1"
                         >

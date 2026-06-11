@@ -10,64 +10,40 @@ export function getGeminiModel(): string {
 export const CATALOG_PROFILE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
-    version: { type: Type.NUMBER, description: "Always 1" },
+    version: { type: Type.NUMBER, description: "Always 2" },
     referenceLabel: { type: Type.STRING },
-    garmentType: { type: Type.STRING, description: "e.g. dress, saree, lehenga, top" },
-    category: { type: Type.STRING, description: "e.g. evening, casual, bridal" },
-    dominantColorFamily: { type: Type.STRING, description: "Specific dominant shade" },
-    colorTemperature: { type: Type.STRING, description: "warm, cool, or neutral" },
-    primaryColors: { type: Type.ARRAY, items: { type: Type.STRING } },
-    secondaryColors: { type: Type.ARRAY, items: { type: Type.STRING } },
-    pattern: {
+    garment: {
       type: Type.OBJECT,
       properties: {
-        type: { type: Type.STRING, description: "solid, floral, striped, lace, geometric, etc." },
-        description: { type: Type.STRING },
+        type: { type: Type.STRING },
+        colors: { type: Type.ARRAY, items: { type: Type.STRING } },
+        temp: { type: Type.STRING },
+        motif: { type: Type.STRING },
+        layout: { type: Type.STRING },
+        scale: { type: Type.STRING },
+        back: { type: Type.STRING },
+        neck: { type: Type.STRING },
+        sleeve: { type: Type.STRING },
+        len: { type: Type.STRING },
+        skirt: { type: Type.STRING },
+        sil: { type: Type.STRING },
+        anchors: { type: Type.ARRAY, items: { type: Type.STRING } },
+        not: { type: Type.ARRAY, items: { type: Type.STRING } },
       },
-      required: ["type", "description"],
+      required: ["type", "colors", "motif", "anchors"],
     },
-    printScale: { type: Type.STRING, description: "solid, micro, small, medium, large, all-over" },
-    neckline: { type: Type.STRING },
-    sleeves: { type: Type.STRING },
-    sleeveType: { type: Type.STRING },
-    dressLength: { type: Type.STRING },
-    lengthCategory: { type: Type.STRING, description: "mini, knee, midi, maxi, ankle, floor" },
-    silhouette: { type: Type.STRING },
-    fabricTexture: { type: Type.STRING },
-    embellishments: { type: Type.ARRAY, items: { type: Type.STRING } },
-    distinctiveDetails: { type: Type.ARRAY, items: { type: Type.STRING } },
-    matchAnchors: { type: Type.ARRAY, items: { type: Type.STRING } },
-    notToConfuseWith: { type: Type.STRING },
-    matchKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
-    visualSummary: { type: Type.STRING },
-    distinguishingFingerprint: { type: Type.STRING },
+    scene: {
+      type: Type.OBJECT,
+      properties: {
+        setting: { type: Type.STRING },
+        tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+        light: { type: Type.STRING },
+        mood: { type: Type.STRING },
+      },
+      required: ["setting", "tags", "light"],
+    },
   },
-  required: [
-    "version",
-    "referenceLabel",
-    "garmentType",
-    "category",
-    "dominantColorFamily",
-    "colorTemperature",
-    "primaryColors",
-    "secondaryColors",
-    "pattern",
-    "printScale",
-    "neckline",
-    "sleeves",
-    "sleeveType",
-    "dressLength",
-    "lengthCategory",
-    "silhouette",
-    "fabricTexture",
-    "embellishments",
-    "distinctiveDetails",
-    "matchAnchors",
-    "notToConfuseWith",
-    "matchKeywords",
-    "visualSummary",
-    "distinguishingFingerprint",
-  ],
+  required: ["version", "referenceLabel", "garment", "scene"],
 };
 
 export function parseRetrySeconds(error: unknown): number | null {
@@ -77,7 +53,6 @@ export function parseRetrySeconds(error: unknown): number | null {
   return null;
 }
 
-/** Cota diária/minuto zerada — retry só prolonga a espera sem chance de sucesso */
 export function isGeminiQuotaExhausted(error: unknown): boolean {
   const msg = error instanceof Error ? error.message : String(error);
   return (
@@ -96,7 +71,6 @@ export async function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Mensagem curta em português para exibir na UI do catálogo */
 export function formatGeminiError(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error);
   if (/429|quota|rate.?limit|RESOURCE_EXHAUSTED/i.test(raw)) {

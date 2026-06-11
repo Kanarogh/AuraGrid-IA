@@ -1,9 +1,14 @@
+import { getAiProviderId } from "../ai/config";
 import { runVisionWithFallback } from "../ai/fallbackChain";
+import { ensureRuntimeAiSettingsLoaded } from "../ai/runtimeSettings";
 import { resetCatalogVisionBatchCache } from "../ai/openrouterModels";
 import type { AiProviderId } from "../ai/types";
+import { isMatchEmbeddingEnabled } from "../ai/matchConfig";
+import { embedCatalogImage, isGeminiEmbeddingConfigured } from "../ai/geminiEmbeddings";
 import {
   getCatalogItem,
   listCatalogItems,
+  updateCatalogEmbedding,
   updateCatalogItem,
 } from "./catalogService";
 import { mediaAssetToDataUrl } from "./mediaService";
@@ -11,7 +16,17 @@ import { mediaAssetToDataUrl } from "./mediaService";
 const ENRICH_DELAY_MS = 5000;
 const ENRICH_RETRY_DELAY_MS = 5000;
 
-const queues = new Map<string, { running: boolean; abort: AbortController | null }>();
+export type EnrichProgress = {
+  index: number;
+  total: number;
+  itemId: string;
+  label: string;
+};
+
+const queues = new Map<
+  string,
+  { running: boolean; abort: AbortController | null; progress: EnrichProgress | null }
+>();
 
 function queueKey(clientId: string) {
   return clientId;
@@ -39,7 +54,11 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 export function stopCatalogEnrichment(clientId: string) {
   const q = queues.get(queueKey(clientId));
   if (q?.abort) q.abort.abort();
-  queues.set(queueKey(clientId), { running: false, abort: null });
+  queues.set(queueKey(clientId), { running: false, abort: null, progress: null });
+}
+
+export function getEnrichmentProgress(clientId: string): EnrichProgress | null {
+  return queues.get(queueKey(clientId))?.progress ?? null;
 }
 
 export async function runCatalogEnrichment(
@@ -51,10 +70,14 @@ export async function runCatalogEnrichment(
   stopCatalogEnrichment(clientId);
   resetCatalogVisionBatchCache();
   const abort = new AbortController();
-  queues.set(key, { running: true, abort });
+  queues.set(key, { running: true, abort, progress: null });
 
   let quotaExceeded = false;
   try {
+    await ensureRuntimeAiSettingsLoaded();
+    const activeProvider = providerId ?? getAiProviderId();
+    console.info(`[enrich] provedor=${activeProvider} (indexação JSON)`);
+
     const all = await listCatalogItems(clientId);
     const targets = itemIds?.length
       ? all.filter((c) => itemIds.includes(c.id) && c.isReference !== false)
@@ -64,12 +87,28 @@ export async function runCatalogEnrichment(
             (c.enrichmentStatus !== "ready" || !c.visualProfile)
         );
 
+    const withImage = targets.filter((c) => c.imageAssetId);
+    const total = withImage.length;
+
     for (let i = 0; i < targets.length; i++) {
       if (abort.signal.aborted) return { quotaExceeded, cancelled: true };
       const item = targets[i]!;
       if (!item.imageAssetId) continue;
 
+      const imageIndex = withImage.findIndex((c) => c.id === item.id) + 1;
+      queues.set(key, {
+        running: true,
+        abort,
+        progress: {
+          index: imageIndex,
+          total,
+          itemId: item.id,
+          label: item.label,
+        },
+      });
+
       await updateCatalogItem(clientId, item.id, {
+        visualProfile: null,
         enrichmentStatus: "processing",
         enrichmentError: null,
       });
@@ -81,7 +120,7 @@ export async function runCatalogEnrichment(
           const outcome = await runVisionWithFallback(
             "enrich-catalog-item",
             (provider) => provider.enrichCatalogItem({ image, label: item.label, id: item.id }),
-            providerId
+            activeProvider
           );
           profile = outcome.result;
         } catch (firstErr) {
@@ -99,7 +138,7 @@ export async function runCatalogEnrichment(
             const outcome = await runVisionWithFallback(
               "enrich-catalog-item",
               (provider) => provider.enrichCatalogItem({ image, label: item.label, id: item.id }),
-              providerId
+              activeProvider
             );
             profile = outcome.result;
           } else {
@@ -113,6 +152,21 @@ export async function runCatalogEnrichment(
           enrichedAt: new Date(),
           enrichmentError: null,
         });
+
+        if (isMatchEmbeddingEnabled() && isGeminiEmbeddingConfigured()) {
+          try {
+            const vector = await embedCatalogImage(image);
+            await updateCatalogEmbedding(clientId, item.id, vector);
+            console.info(`[enrich] embedding ok para ${item.id} (${vector.length}d)`);
+          } catch (embedErr) {
+            console.warn(
+              `[enrich] embedding falhou para ${item.id}:`,
+              embedErr instanceof Error ? embedErr.message : embedErr
+            );
+          }
+        } else if (isMatchEmbeddingEnabled()) {
+          console.warn(`[enrich] embedding ignorado — GEMINI_API_KEY ausente (${item.id})`);
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         await updateCatalogItem(clientId, item.id, {
@@ -131,7 +185,7 @@ export async function runCatalogEnrichment(
     }
     return { quotaExceeded, cancelled: abort.signal.aborted };
   } finally {
-    queues.set(key, { running: false, abort: null });
+    queues.set(key, { running: false, abort: null, progress: null });
   }
 }
 

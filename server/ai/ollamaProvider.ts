@@ -16,6 +16,10 @@ import {
   buildImageOnlyCaptionTask,
   buildImageOnlyResultInstructions,
   buildCaptionPromptOptions,
+  buildCaptionOnlyTask,
+  buildCaptionOnlyResultInstructions,
+  buildFingerprintMatchTask,
+  buildFingerprintMatchSection,
   isImageOnlyCaptionMode,
   MATCH_REFERENCE_RESPONSE_HINT,
   MATCH_RESPONSE_HINT,
@@ -29,7 +33,9 @@ import { buildPostFingerprintPrompt, normalizePostFingerprint } from "./postFing
 import { cleanBase64, withRetry } from "./shared";
 import type {
   AiProvider,
+  CaptionOnlyInput,
   CatalogEnrichInput,
+  MatchFromFingerprintInput,
   MatchGenerateInput,
   MatchGenerateResult,
 } from "./types";
@@ -232,7 +238,7 @@ async function ollamaChatCatalogJson(
     return finalizeCatalogProfile(parsed, label);
   } catch (err) {
     if (!(err instanceof IncompleteCatalogProfileError)) throw err;
-    return finalizeCatalogProfile(coerceCatalogProfile(parsed, label), label);
+    return coerceCatalogProfile(parsed, label) as unknown as Record<string, unknown>;
   }
 }
 
@@ -394,6 +400,73 @@ export const ollamaProvider: AiProvider = {
       reasoning: parsed.reasoning ?? "",
       caption: matchOnly ? "" : (parsed.caption ?? ""),
       matchMode: useTextCatalog ? "catalog_json" : "catalog_images",
+    };
+  },
+
+  async generateCaptionOnly(input: CaptionOnlyInput) {
+    const gem = resolveBrandGemFromBody(input);
+    const visionImage = await ollamaVisionImage(input.postImage);
+    const raw = await withRetry(
+      () =>
+        ollamaChat(
+          [
+            partsToOllamaMessage([
+              { type: "text", text: buildCaptionOnlyTask(input, gem) },
+              { type: "image", image: visionImage },
+              {
+                type: "text",
+                text: buildCaptionOnlyResultInstructions(
+                  gem,
+                  buildCaptionPromptOptions(input)
+                ),
+              },
+            ]),
+          ],
+          { jsonMode: true }
+        ),
+      "Ollama"
+    );
+    const parsed = JSON.parse(extractJson(raw)) as { caption?: string };
+    return { caption: parsed.caption ?? "" };
+  },
+
+  async matchFromFingerprint(input: MatchFromFingerprintInput): Promise<MatchGenerateResult> {
+    const gem = resolveBrandGemFromBody(input);
+    const profiles = input.catalogProfiles ?? [];
+    const matchOnly = !!input.matchOnly;
+    const hint = matchOnly ? MATCH_REFERENCE_RESPONSE_HINT : MATCH_RESPONSE_HINT;
+
+    const raw = await withRetry(
+      () =>
+        ollamaChat(
+          [
+            {
+              role: "user",
+              content: [
+                buildFingerprintMatchTask(matchOnly, gem),
+                buildFingerprintMatchSection(input.postFingerprint, profiles, {
+                  matchRankHint: input.matchRankHint,
+                  brief: true,
+                  ultraCompact: true,
+                }),
+                `${buildMatchResultInstructions(gem, matchOnly, buildCaptionPromptOptions(input, true))}\n\n${hint}`,
+              ].join("\n\n"),
+            },
+          ],
+          { jsonMode: true, maxTokens: 2048 }
+        ),
+      "Ollama"
+    );
+
+    const parsed = JSON.parse(extractJson(raw)) as Omit<MatchGenerateResult, "matchMode"> & {
+      caption?: string;
+    };
+    const candidateProfiles = profiles.map((p) => ({ id: p.id, label: p.label }));
+    return {
+      matchedId: resolveMatchedIdFromCandidates(parsed.matchedId, candidateProfiles),
+      reasoning: parsed.reasoning ?? "",
+      caption: matchOnly ? "" : (parsed.caption ?? ""),
+      matchMode: "catalog_json_fingerprint_text",
     };
   },
 

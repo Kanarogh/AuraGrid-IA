@@ -1,6 +1,7 @@
 import type { BrandGem, CatalogItem, PlannedPost } from "../../types";
 import type { ClientRegistry, ClientWorkspace } from "../clientWorkspace/types";
 import type { ClientMeta } from "../clientWorkspace/types";
+import { withAiHeaders } from "../aiFetch";
 import { apiFetch, getAccessToken, readApiJson } from "./apiClient";
 
 export type ApiRegistry = ClientRegistry;
@@ -136,10 +137,13 @@ export async function clearCatalogEnrichmentsApi(clientId: string, ids?: string[
 }
 
 export async function enrichCatalogApi(clientId: string, ids?: string[]) {
-  const res = await apiFetch(`/api/v1/clients/${clientId}/catalog/enrich`, {
-    method: "POST",
-    body: JSON.stringify({ ids }),
-  });
+  const res = await apiFetch(
+    `/api/v1/clients/${clientId}/catalog/enrich`,
+    withAiHeaders({
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    })
+  );
   return readApiJson(res);
 }
 
@@ -150,9 +154,16 @@ export async function stopEnrichCatalogApi(clientId: string) {
   return readApiJson(res);
 }
 
+export type CatalogEnrichProgress = {
+  index: number;
+  total: number;
+  itemId: string;
+  label: string;
+};
+
 export async function fetchEnrichStatusApi(clientId: string) {
   const res = await apiFetch(`/api/v1/clients/${clientId}/catalog/enrich/status`);
-  return readApiJson<{ enriching: boolean }>(res);
+  return readApiJson<{ enriching: boolean; progress?: CatalogEnrichProgress | null }>(res);
 }
 
 export async function migrateLocalStorageApi(payload: unknown) {

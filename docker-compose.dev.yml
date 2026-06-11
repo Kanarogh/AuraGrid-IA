@@ -1,7 +1,7 @@
 # Desenvolvimento local: só infra (Postgres + MinIO). App roda com `npm run dev`.
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: auragrid
       POSTGRES_PASSWORD: auragrid

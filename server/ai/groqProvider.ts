@@ -12,6 +12,10 @@ import {
   buildImageOnlyCaptionTask,
   buildImageOnlyResultInstructions,
   buildCaptionPromptOptions,
+  buildCaptionOnlyTask,
+  buildCaptionOnlyResultInstructions,
+  buildFingerprintMatchTask,
+  buildFingerprintMatchSection,
   isImageOnlyCaptionMode,
   normalizeMatchedId,
   resolveMatchedIdFromCandidates,
@@ -35,7 +39,9 @@ import {
 } from "./shared";
 import type {
   AiProvider,
+  CaptionOnlyInput,
   CatalogEnrichInput,
+  MatchFromFingerprintInput,
   MatchGenerateInput,
   MatchGenerateResult,
 } from "./types";
@@ -373,6 +379,100 @@ export const groqProvider: AiProvider = {
       reasoning: parsed.reasoning ?? "",
       caption: matchOnly ? "" : (parsed.caption ?? ""),
       matchMode: useTextCatalog ? "catalog_json" : "catalog_images",
+    };
+  },
+
+  async generateCaptionOnly(input: CaptionOnlyInput) {
+    const gem = resolveBrandGemFromBody(input);
+    const tier = GROQ_MATCH_TIERS[0]!;
+    const image = await groqVisionImage(input.postImage, tier);
+    const raw = await withRetry(
+      () =>
+        groqChat(
+          [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: buildCaptionOnlyTask(input, gem) },
+                { type: "image_url", image_url: { url: image } },
+                {
+                  type: "text",
+                  text: buildCaptionOnlyResultInstructions(
+                    gem,
+                    buildCaptionPromptOptions(input)
+                  ),
+                },
+              ],
+            },
+          ],
+          {
+            jsonSchema: {
+              name: "caption_only",
+              schema: {
+                type: "object",
+                properties: { caption: { type: "string" } },
+                required: ["caption"],
+              },
+            },
+          }
+        ),
+      "Groq"
+    );
+    const parsed = JSON.parse(raw) as { caption?: string };
+    return { caption: parsed.caption ?? "" };
+  },
+
+  async matchFromFingerprint(input: MatchFromFingerprintInput): Promise<MatchGenerateResult> {
+    const gem = resolveBrandGemFromBody(input);
+    const profiles = input.catalogProfiles ?? [];
+    const matchOnly = !!input.matchOnly;
+    const raw = await withRetry(
+      () =>
+        groqChat(
+          [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: buildFingerprintMatchTask(matchOnly, gem) },
+                {
+                  type: "text",
+                  text: buildFingerprintMatchSection(input.postFingerprint, profiles, {
+                    matchRankHint: input.matchRankHint,
+                    brief: true,
+                    ultraCompact: true,
+                  }),
+                },
+                {
+                  type: "text",
+                  text: buildMatchResultInstructions(
+                    gem,
+                    matchOnly,
+                    buildCaptionPromptOptions(input, true)
+                  ),
+                },
+              ],
+            },
+          ],
+          {
+            jsonSchema: {
+              name: matchOnly ? "match_reference" : "match_and_caption",
+              schema: (matchOnly
+                ? MATCH_REFERENCE_JSON_SCHEMA
+                : MATCH_RESULT_JSON_SCHEMA) as unknown as Record<string, unknown>,
+            },
+          }
+        ),
+      "Groq"
+    );
+    const parsed = JSON.parse(raw) as Omit<MatchGenerateResult, "matchMode"> & {
+      caption?: string;
+    };
+    const candidateProfiles = profiles.map((p) => ({ id: p.id, label: p.label }));
+    return {
+      matchedId: resolveMatchedIdFromCandidates(parsed.matchedId, candidateProfiles),
+      reasoning: parsed.reasoning ?? "",
+      caption: matchOnly ? "" : (parsed.caption ?? ""),
+      matchMode: "catalog_json_fingerprint_text",
     };
   },
 

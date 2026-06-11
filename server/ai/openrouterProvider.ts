@@ -22,6 +22,10 @@ import {
   buildImageOnlyCaptionTask,
   buildImageOnlyResultInstructions,
   buildCaptionPromptOptions,
+  buildCaptionOnlyTask,
+  buildCaptionOnlyResultInstructions,
+  buildFingerprintMatchTask,
+  buildFingerprintMatchSection,
   isImageOnlyCaptionMode,
   MATCH_REFERENCE_RESPONSE_HINT,
   MATCH_RESPONSE_HINT,
@@ -42,7 +46,9 @@ import {
 import { annotateErrorWithRetryAfter, toDataUrl, withRetry } from "./shared";
 import type {
   AiProvider,
+  CaptionOnlyInput,
   CatalogEnrichInput,
+  MatchFromFingerprintInput,
   MatchGenerateInput,
   MatchGenerateResult,
 } from "./types";
@@ -536,6 +542,85 @@ export const openrouterProvider: AiProvider = {
       reasoning: parsed.reasoning ?? "",
       caption: matchOnly ? "" : (parsed.caption ?? ""),
       matchMode: useTextCatalog ? "catalog_json" : "catalog_images",
+    };
+  },
+
+  async generateCaptionOnly(input: CaptionOnlyInput) {
+    const gem = resolveBrandGemFromBody(input);
+    const raw = await withRetry(
+      () =>
+        openrouterChat([
+          {
+            role: "user",
+            content: [
+              { type: "text", text: buildCaptionOnlyTask(input, gem) },
+              { type: "image_url", image_url: { url: toDataUrl(input.postImage) } },
+              {
+                type: "text",
+                text: buildCaptionOnlyResultInstructions(
+                  gem,
+                  buildCaptionPromptOptions(input)
+                ),
+              },
+            ],
+          },
+        ]),
+      "OpenRouter"
+    );
+    const parsed = parseModelJsonContent(raw) as { caption?: string };
+    return { caption: parsed.caption ?? "" };
+  },
+
+  async matchFromFingerprint(input: MatchFromFingerprintInput): Promise<MatchGenerateResult> {
+    const gem = resolveBrandGemFromBody(input);
+    const profiles = input.catalogProfiles ?? [];
+    const matchOnly = !!input.matchOnly;
+    const hint = matchOnly ? MATCH_REFERENCE_RESPONSE_HINT : MATCH_RESPONSE_HINT;
+
+    const raw = await withRetry(
+      () =>
+        openrouterChat(
+          [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: buildFingerprintMatchTask(matchOnly, gem) },
+                {
+                  type: "text",
+                  text: buildFingerprintMatchSection(input.postFingerprint, profiles, {
+                    matchRankHint: input.matchRankHint,
+                    brief: true,
+                    ultraCompact: true,
+                  }),
+                },
+                {
+                  type: "text",
+                  text: `${buildMatchResultInstructions(gem, matchOnly, buildCaptionPromptOptions(input, true))}\n\n${hint}`,
+                },
+              ],
+            },
+          ],
+          {
+            jsonSchema: {
+              name: matchOnly ? "match_reference" : "match_and_caption",
+              schema: (matchOnly
+                ? MATCH_REFERENCE_JSON_SCHEMA
+                : MATCH_RESULT_JSON_SCHEMA) as unknown as Record<string, unknown>,
+            },
+          }
+        ),
+      "OpenRouter"
+    );
+
+    const parsed = parseModelJsonContent(raw) as Omit<MatchGenerateResult, "matchMode"> & {
+      caption?: string;
+    };
+    const candidateProfiles = profiles.map((p) => ({ id: p.id, label: p.label }));
+    return {
+      matchedId: resolveMatchedIdFromCandidates(parsed.matchedId, candidateProfiles),
+      reasoning: parsed.reasoning ?? "",
+      caption: matchOnly ? "" : (parsed.caption ?? ""),
+      matchMode: "catalog_json_fingerprint_text",
     };
   },
 

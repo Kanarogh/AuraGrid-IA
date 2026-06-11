@@ -47,6 +47,23 @@ export interface GeminiSettings {
   models: GeminiModelOption[];
 }
 
+export interface OllamaModelOption {
+  id: string;
+  label: string;
+  description: string;
+  vision: boolean;
+  sizeBytes?: number;
+}
+
+export interface OllamaSettings {
+  activeModel: string;
+  envModel: string;
+  runtimeModel: string | null;
+  reachable: boolean;
+  fetchedAt: string | null;
+  models: OllamaModelOption[];
+}
+
 export type OpenRouterModelsFilter = "vision-text" | "vision-image" | "vision-any";
 
 export interface OpenRouterModelsListResponse {
@@ -67,6 +84,7 @@ export interface AiSettingsResponse {
   providers: AiProviderOption[];
   openrouter: OpenRouterSettings;
   gemini: GeminiSettings;
+  ollama: OllamaSettings;
 }
 
 export function providerDisplayName(id: AiProviderId): string {
@@ -133,5 +151,17 @@ export async function setGeminiModels(options: {
   });
   const data = (await res.json()) as AiSettingsResponse & { error?: string };
   if (!res.ok) throw new Error(data.error || "Falha ao trocar modelo Gemini.");
+  return data;
+}
+
+/** Passe `null` para voltar ao OLLAMA_MODEL do .env. */
+export async function setOllamaModel(model: string | null): Promise<AiSettingsResponse> {
+  const res = await fetch("/api/ai/ollama-model", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model }),
+  });
+  const data = (await res.json()) as AiSettingsResponse & { error?: string };
+  if (!res.ok) throw new Error(data.error || "Falha ao trocar modelo Ollama.");
   return data;
 }

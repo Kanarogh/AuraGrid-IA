@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { applyAiHeadersFromNextRequest } from "@/server/http/aiRequest";
 import { assertClientAccess, requireUser } from "@/server/http/auth";
 import { errorResponse } from "@/server/http/respond";
 import { runCatalogEnrichment } from "@/server/services/enrichQueue";
@@ -13,7 +14,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const { clientId } = await params;
     await assertClientAccess(user, clientId);
     const { ids } = (await req.json().catch(() => ({}))) as { ids?: string[] };
-    void runCatalogEnrichment(clientId, ids);
+    const providerId = await applyAiHeadersFromNextRequest(req);
+    void runCatalogEnrichment(clientId, ids, providerId);
     return NextResponse.json({ ok: true, enriching: true });
   } catch (err) {
     return errorResponse(err, 400);

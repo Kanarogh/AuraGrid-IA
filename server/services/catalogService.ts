@@ -1,5 +1,6 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
-import { getDb } from "../db/client";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { GEMINI_EMBEDDING_DIMENSIONS, getGeminiEmbeddingModel } from "../ai/matchConfig";
+import { getDb, getSqlClient } from "../db/client";
 import { catalogItems } from "../db/schema";
 import { mediaPublicUrl } from "./mediaService";
 
@@ -110,6 +111,87 @@ export async function clearCatalogEnrichments(clientId: string, ids?: string[]) 
       updatedAt: new Date(),
     })
     .where(where);
+
+  if (ids && ids.length > 0) {
+    await db.execute(sql`
+      UPDATE catalog_items
+      SET image_embedding = NULL, embedding_model = NULL, embedded_at = NULL
+      WHERE client_id = ${clientId} AND id IN (${sql.join(
+        ids.map((id) => sql`${id}`),
+        sql`, `
+      )})
+    `);
+  } else {
+    await db.execute(sql`
+      UPDATE catalog_items
+      SET image_embedding = NULL, embedding_model = NULL, embedded_at = NULL
+      WHERE client_id = ${clientId}
+    `);
+  }
+}
+
+function vectorLiteral(values: number[]): string {
+  return `[${values.map((v) => Number(v).toFixed(8)).join(",")}]`;
+}
+
+function sqlEscape(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+export async function updateCatalogEmbedding(
+  clientId: string,
+  id: string,
+  embedding: number[],
+  model?: string
+) {
+  if (embedding.length !== GEMINI_EMBEDDING_DIMENSIONS) {
+    throw new Error(
+      `embedding com ${embedding.length} dimensões (esperado ${GEMINI_EMBEDDING_DIMENSIONS})`
+    );
+  }
+  const lit = vectorLiteral(embedding);
+  const modelName = model ?? getGeminiEmbeddingModel();
+  const sql = getSqlClient();
+  await sql.unsafe(`
+    UPDATE catalog_items
+    SET
+      image_embedding = '${lit}'::vector,
+      embedding_model = '${sqlEscape(modelName)}',
+      embedded_at = NOW(),
+      updated_at = NOW()
+    WHERE client_id = '${sqlEscape(clientId)}' AND id = '${sqlEscape(id)}'
+  `);
+}
+
+export async function searchCatalogByEmbedding(
+  clientId: string,
+  queryEmbedding: number[],
+  limit: number
+): Promise<string[]> {
+  const lit = vectorLiteral(queryEmbedding);
+  const sql = getSqlClient();
+  const rows = await sql.unsafe<{ id: string }>(`
+    SELECT id
+    FROM catalog_items
+    WHERE client_id = '${sqlEscape(clientId)}'
+      AND is_reference = true
+      AND image_embedding IS NOT NULL
+    ORDER BY image_embedding <=> '${lit}'::vector
+    LIMIT ${Math.max(1, Math.min(limit, 80))}
+  `);
+  return rows.map((r) => r.id);
+}
+
+export async function countCatalogEmbeddings(clientId: string): Promise<number> {
+  const db = getDb();
+  const rows = await db.execute<{ count: string }>(sql`
+    SELECT COUNT(*)::text AS count
+    FROM catalog_items
+    WHERE client_id = ${clientId}
+      AND is_reference = true
+      AND image_embedding IS NOT NULL
+  `);
+  return Number.parseInt(rows[0]?.count ?? "0", 10);
 }
 
 export async function getCatalogItem(clientId: string, id: string) {

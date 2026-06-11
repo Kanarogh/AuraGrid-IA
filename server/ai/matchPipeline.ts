@@ -1,5 +1,16 @@
 import { runVisionWithFallback } from "./fallbackChain";
 import {
+  getMatchEmbeddingTopK,
+  isMatchEmbeddingEnabled,
+} from "./matchConfig";
+import { embedQueryImage, isGeminiEmbeddingConfigured } from "./geminiEmbeddings";
+import { validateMatchDecision } from "./matchValidation";
+import type { PostVisualFingerprint } from "./postFingerprint";
+import {
+  countCatalogEmbeddings,
+  searchCatalogByEmbedding,
+} from "../services/catalogService";
+import {
   MATCH_SHORTLIST_THRESHOLD,
   MATCH_SHORTLIST_TOP_K,
   OLLAMA_MATCH_SHORTLIST_THRESHOLD,
@@ -16,13 +27,32 @@ export type MatchShortlistMeta = {
   topScore: number;
   usedFingerprint: boolean;
   topCandidateId?: string;
+  usedEmbedding?: boolean;
 };
 
 export type PreparedMatchInput = {
   input: MatchGenerateInput;
   shortlist?: MatchShortlistMeta;
   matchRankHint?: MatchRankHint | null;
+  postFingerprint?: PostVisualFingerprint | null;
 };
+
+async function analyzePostFingerprint(
+  postImage: string,
+  providerId: AiProviderId
+): Promise<PostVisualFingerprint | null> {
+  try {
+    const outcome = await runVisionWithFallback(
+      "post-fingerprint",
+      (provider) => provider.analyzePostVisual({ postImage }),
+      providerId
+    );
+    return outcome.result;
+  } catch (error) {
+    console.warn("[match-pipeline] post-fingerprint falhou:", error);
+    return null;
+  }
+}
 
 export async function prepareMatchInput(
   sanitized: MatchGenerateInput,
@@ -32,92 +62,137 @@ export async function prepareMatchInput(
     return { input: sanitized };
   }
 
-  const profiles = sanitized.catalogProfiles;
+  let profiles = sanitized.catalogProfiles;
   if (!profiles?.length) {
     return { input: sanitized };
+  }
+
+  const totalBeforeEmbed = profiles.length;
+  let usedEmbedding = false;
+
+  if (
+    sanitized.clientId &&
+    isMatchEmbeddingEnabled() &&
+    isGeminiEmbeddingConfigured()
+  ) {
+    try {
+      const embeddedCount = await countCatalogEmbeddings(sanitized.clientId);
+      if (embeddedCount >= 3) {
+        const queryVec = await embedQueryImage(sanitized.postImage);
+        const topIds = await searchCatalogByEmbedding(
+          sanitized.clientId,
+          queryVec,
+          getMatchEmbeddingTopK()
+        );
+        if (topIds.length >= 3) {
+          const order = new Map(topIds.map((id, i) => [id, i]));
+          const filtered = profiles.filter((p) => order.has(p.id));
+          if (filtered.length >= 3) {
+            filtered.sort((a, b) => (order.get(a.id) ?? 999) - (order.get(b.id) ?? 999));
+            profiles = filtered;
+            usedEmbedding = true;
+            console.info(
+              `[match-pipeline] embedding shortlist ${filtered.length}/${totalBeforeEmbed}`
+            );
+          }
+        }
+      }
+    } catch (error) {
+      console.warn("[match-pipeline] embedding shortlist falhou:", error);
+    }
   }
 
   const threshold =
     providerId === "ollama" ? OLLAMA_MATCH_SHORTLIST_THRESHOLD : MATCH_SHORTLIST_THRESHOLD;
   const topK = providerId === "ollama" ? OLLAMA_MATCH_SHORTLIST_TOP_K : MATCH_SHORTLIST_TOP_K;
 
-  if (profiles.length <= threshold) {
-    return {
-      input: sanitized,
-      shortlist: {
-        total: profiles.length,
-        selected: profiles.length,
-        topScore: 0,
-        usedFingerprint: false,
-      },
-    };
-  }
+  const fingerprint = await analyzePostFingerprint(sanitized.postImage, providerId);
 
-  return shortlistProfiles(sanitized, profiles, providerId);
-}
-
-async function shortlistProfiles(
-  sanitized: MatchGenerateInput,
-  profiles: CatalogProfilePayload[],
-  providerId: AiProviderId
-): Promise<PreparedMatchInput> {
-  const topK = providerId === "ollama" ? OLLAMA_MATCH_SHORTLIST_TOP_K : MATCH_SHORTLIST_TOP_K;
-
-  try {
-    const fingerprintOutcome = await runVisionWithFallback(
-      "post-fingerprint",
-      (provider) => provider.analyzePostVisual({ postImage: sanitized.postImage }),
-      providerId
-    );
-
-    const { rankCatalogProfiles } = await import("./profileRanker");
-    const fingerprint = fingerprintOutcome.result;
-    const { ranked, scores, topHint } = rankCatalogProfiles(fingerprint, profiles, topK);
-
-    const topScore = Math.max(0, ...Array.from(scores.values()));
-
-    console.info(
-      `[match-pipeline] shortlist ${ranked.length}/${profiles.length} perfis (topScore=${topScore}${topHint ? `, top=${topHint.candidateId}` : ""})`
-    );
-
-    return {
-      input: {
-        ...sanitized,
-        catalogProfiles: ranked,
-        matchRankHint: topHint ?? undefined,
-      },
-      shortlist: {
-        total: profiles.length,
-        selected: ranked.length,
-        topScore,
-        usedFingerprint: true,
-        topCandidateId: topHint?.candidateId,
-      },
-      matchRankHint: topHint,
-    };
-  } catch (error) {
-    console.warn("[match-pipeline] fingerprint falhou — usando top perfis compactos:", error);
+  if (!fingerprint) {
+    if (profiles.length <= threshold) {
+      return {
+        input: sanitized,
+        shortlist: {
+          total: totalBeforeEmbed,
+          selected: profiles.length,
+          topScore: 0,
+          usedFingerprint: false,
+          usedEmbedding,
+        },
+        postFingerprint: null,
+      };
+    }
     const fallback = profiles.slice(0, topK);
     return {
-      input: {
-        ...sanitized,
-        catalogProfiles: fallback,
-      },
+      input: { ...sanitized, catalogProfiles: fallback },
       shortlist: {
-        total: profiles.length,
+        total: totalBeforeEmbed,
         selected: fallback.length,
         topScore: 0,
         usedFingerprint: false,
+        usedEmbedding,
       },
+      postFingerprint: null,
     };
   }
+
+  const { rankCatalogProfiles } = await import("./profileRanker");
+  const { ranked, scores, topHint } = rankCatalogProfiles(fingerprint, profiles, topK);
+  const topScore = Math.max(0, ...Array.from(scores.values()));
+
+  if (profiles.length <= threshold) {
+    console.info(
+      `[match-pipeline] catálogo completo ${profiles.length} perfis (topScore=${topScore}${topHint ? `, top=${topHint.candidateId}` : ""})`
+    );
+    return {
+      input: {
+        ...sanitized,
+        matchRankHint: topHint ?? undefined,
+        sceneContext: fingerprint?.scene ?? undefined,
+      },
+      shortlist: {
+        total: totalBeforeEmbed,
+        selected: profiles.length,
+        topScore,
+        usedFingerprint: true,
+        topCandidateId: topHint?.candidateId,
+        usedEmbedding,
+      },
+      matchRankHint: topHint,
+      postFingerprint: fingerprint,
+    };
+  }
+
+  console.info(
+    `[match-pipeline] shortlist ${ranked.length}/${profiles.length} perfis (topScore=${topScore}${topHint ? `, top=${topHint.candidateId}` : ""})`
+  );
+
+  return {
+    input: {
+      ...sanitized,
+      catalogProfiles: ranked as CatalogProfilePayload[],
+      matchRankHint: topHint ?? undefined,
+      sceneContext: fingerprint?.scene ?? undefined,
+    },
+    shortlist: {
+      total: totalBeforeEmbed,
+      selected: ranked.length,
+      topScore,
+      usedFingerprint: true,
+      topCandidateId: topHint?.candidateId,
+      usedEmbedding,
+    },
+    matchRankHint: topHint,
+    postFingerprint: fingerprint,
+  };
 }
 
-/** Se a IA retornou matchedId null mas o ranker visual passou no protocolo estrito (≥78, gap ≥15). */
+/** Se a IA retornou matchedId null mas o ranker visual passou no protocolo estrito. */
 export function applyStrictRankerMatchFallback(
   result: MatchGenerateResult,
   hint: MatchRankHint | null | undefined,
-  candidates: CatalogProfilePayload[]
+  candidates: CatalogProfilePayload[],
+  fingerprint?: PostVisualFingerprint | null
 ): MatchGenerateResult {
   if (result.matchedId || !hint) return result;
   if (hint.score < STRICT_RANKER_MIN_SCORE || hint.scoreGap < STRICT_RANKER_MIN_GAP) {
@@ -125,11 +200,7 @@ export function applyStrictRankerMatchFallback(
   }
   if (!candidates.some((c) => c.id === hint.candidateId)) return result;
 
-  console.info(
-    `[match-pipeline] matchedId strict ranker → ${hint.candidateId} (score=${hint.score}, gap=${hint.scoreGap})`
-  );
-
-  return {
+  const fallbackResult: MatchGenerateResult = {
     ...result,
     matchedId: hint.candidateId,
     reasoning: result.reasoning
@@ -140,6 +211,24 @@ export function applyStrictRankerMatchFallback(
         ? "catalog_json_ranker"
         : result.matchMode,
   };
+
+  return validateMatchDecision(fallbackResult, fingerprint, candidates);
+}
+
+export function finalizeMatchResult(
+  result: MatchGenerateResult,
+  prepared: PreparedMatchInput,
+  candidates: CatalogProfilePayload[]
+): MatchGenerateResult {
+  let finalized = applyShortlistToResult(result, prepared.shortlist);
+  finalized = applyStrictRankerMatchFallback(
+    finalized,
+    prepared.matchRankHint,
+    candidates,
+    prepared.postFingerprint
+  );
+  finalized = validateMatchDecision(finalized, prepared.postFingerprint, candidates);
+  return finalized;
 }
 
 export function applyShortlistToResult(
@@ -157,5 +246,5 @@ export function applyShortlistToResult(
 
 export function shortlistHeaderValue(shortlist?: MatchShortlistMeta): string | null {
   if (!shortlist) return null;
-  return `${shortlist.selected}/${shortlist.total}${shortlist.usedFingerprint ? "+fp" : ""}`;
+  return `${shortlist.selected}/${shortlist.total}${shortlist.usedFingerprint ? "+fp" : ""}${shortlist.usedEmbedding ? "+emb" : ""}`;
 }

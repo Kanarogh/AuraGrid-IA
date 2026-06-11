@@ -213,7 +213,7 @@ export function EditorialPostCard({
             disabled={!!post.captionFromImageOnly}
             onClick={(e) => e.stopPropagation()}
             className={cn(
-              "w-full text-sm rounded-lg px-3 py-2 border border-ag-border bg-ag-surface-1 text-ag-text outline-none focus:border-ag-accent",
+              "w-full text-[11px] leading-tight rounded-lg px-2 py-1.5 border border-ag-border bg-ag-surface-1 text-ag-text outline-none focus:border-ag-accent",
               post.captionFromImageOnly && "opacity-50 cursor-not-allowed"
             )}
             title={

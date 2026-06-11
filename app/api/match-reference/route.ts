@@ -1,11 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { formatAiError } from "@/server/ai/index";
-import { runVisionWithFallback } from "@/server/ai/fallbackChain";
-import {
-  applyShortlistToResult,
-  prepareMatchInput,
-  shortlistHeaderValue,
-} from "@/server/ai/matchPipeline";
+import { matchOperationHeaders, runMatchOperation } from "@/server/ai/matchOrchestrator";
 import { sanitizeMatchOperationInput } from "@/server/ai/operations";
 import { applyAiHeadersFromNextRequest, aiAttemptsHeaderValue } from "@/server/http/aiRequest";
 
@@ -15,7 +10,7 @@ export async function POST(req: NextRequest) {
   let providerId = await applyAiHeadersFromNextRequest(req);
   try {
     const body = await req.json();
-    const { postImage } = body;
+    const { postImage, clientId } = body;
 
     if (!postImage) {
       return NextResponse.json({ error: "No query image provided." }, { status: 400 });
@@ -23,34 +18,25 @@ export async function POST(req: NextRequest) {
 
     const sanitized = sanitizeMatchOperationInput("match-reference", {
       postImage,
+      clientId: typeof clientId === "string" ? clientId : undefined,
       catalogProfiles: body.catalogProfiles,
       catalogItems: body.catalogItems,
       matchOnly: true,
     });
 
-    const prepared = await prepareMatchInput(sanitized, providerId);
+    const operation = await runMatchOperation("match-reference", sanitized, providerId);
+    providerId = operation.providerUsed;
 
-    const outcome = await runVisionWithFallback(
-      "match-reference",
-      (provider) => provider.matchAndGenerate(prepared.input),
-      providerId
-    );
-
-    providerId = outcome.providerUsed;
-    const result = applyShortlistToResult(outcome.result, prepared.shortlist);
-    const headers = new Headers();
-    headers.set("X-AI-Provider-Used", outcome.providerUsed);
-    headers.set("X-AI-Match-Mode", result.matchMode);
-    headers.set("X-AI-Attempts", aiAttemptsHeaderValue(outcome.attempts));
-    const shortlistHeader = shortlistHeaderValue(prepared.shortlist);
-    if (shortlistHeader) headers.set("X-AI-Catalog-Shortlist", shortlistHeader);
+    const headers = new Headers(matchOperationHeaders(operation));
+    headers.set("X-AI-Provider-Used", operation.providerUsed);
+    headers.set("X-AI-Attempts", aiAttemptsHeaderValue(operation.attempts));
 
     return NextResponse.json(
       {
-        matchedId: result.matchedId,
-        reasoning: result.reasoning,
-        matchMode: result.matchMode,
-        providerUsed: outcome.providerUsed,
+        matchedId: operation.result.matchedId,
+        reasoning: operation.result.reasoning,
+        matchMode: operation.result.matchMode,
+        providerUsed: operation.providerUsed,
       },
       { headers }
     );

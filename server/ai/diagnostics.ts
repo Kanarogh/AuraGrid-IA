@@ -42,7 +42,11 @@ export function classifyAiFailure(error: unknown): AiFailureKind {
   if (/not_configured|não configurad/i.test(msg)) return "not_configured";
   if (isQuotaExhausted(error) || /limit:\s*0\b/i.test(msg)) return "quota_exhausted";
   if (/resposta vazia|empty response/i.test(msg)) return "empty_response";
-  if (/no endpoints found|indisponível no OpenRouter|provider returned error/i.test(msg)) {
+  if (
+    /no endpoints found|indisponível no OpenRouter|provider returned error|does not have access to model|model.*not found|invalid model/i.test(
+      msg
+    )
+  ) {
     return "model_unavailable";
   }
   if (/504|timeout|timed out|ETIMEDOUT|aborted/i.test(msg)) return "timeout";

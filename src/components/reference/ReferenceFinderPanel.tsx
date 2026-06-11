@@ -38,12 +38,15 @@ export function ReferenceFinderPanel({
   onNavigateCatalog,
   onEnsureCatalogIndexed,
   onViewProfile,
+  clientId,
 }: {
   referenceCatalog: CatalogItem[];
   isEnrichingCatalog: boolean;
   onNavigateCatalog: () => void;
   onEnsureCatalogIndexed: () => Promise<boolean>;
   onViewProfile?: (item: CatalogItem) => void;
+  /** Necessário para shortlist por embedding no servidor (API storage). */
+  clientId?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -117,7 +120,9 @@ export function ReferenceFinderPanel({
     resetResult();
 
     try {
-      const result = await matchReferenceOnServer(queryImage, referenceCatalog, controller.signal);
+      const result = await matchReferenceOnServer(queryImage, referenceCatalog, controller.signal, {
+        clientId,
+      });
       if (controller.signal.aborted) return;
       setMatchedId(result.matchedId);
       setReasoning(result.reasoning || null);

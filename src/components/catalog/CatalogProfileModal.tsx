@@ -2,6 +2,7 @@ import { Copy, Check } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { CatalogItem } from "../../types";
 import { normalizeVisualProfile } from "../../lib/catalog";
+import { catalogSceneFromProfile, isCatalogProfileV2 } from "../../lib/catalogProfileDisplay";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 
@@ -24,7 +25,16 @@ export function CatalogProfileModal({
 
   if (!item || !profile) return null;
 
-  const jsonText = JSON.stringify(profile, null, 2);
+  const rawProfile = item.visualProfile as Record<string, unknown> | undefined;
+  const scene = catalogSceneFromProfile(rawProfile);
+  const isV2 = isCatalogProfileV2(rawProfile);
+  const garment = isV2 ? rawProfile.garment : undefined;
+  const backDetail =
+    garment && typeof garment.back === "string" && garment.back.trim()
+      ? garment.back
+      : null;
+
+  const jsonText = JSON.stringify(rawProfile ?? profile, null, 2);
   const colors =
     profile.primaryColors.length > 0
       ? profile.primaryColors.join(", ")
@@ -68,7 +78,20 @@ export function CatalogProfileModal({
           <SummaryRow label="Mangas" value={profile.sleeves} />
           <SummaryRow label="Comprimento" value={profile.dressLength} />
           <SummaryRow label="Silhueta" value={profile.silhouette} />
+          {backDetail && <SummaryRow label="Costas" value={backDetail} />}
         </div>
+
+        {scene && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <SummaryRow label="Cenário" value={scene.setting} />
+            <SummaryRow
+              label="Ambiente"
+              value={scene.tags.length ? scene.tags.join(", ") : "—"}
+            />
+            {scene.light && <SummaryRow label="Luz" value={scene.light} />}
+            {scene.mood && <SummaryRow label="Mood" value={scene.mood} />}
+          </div>
+        )}
 
         <div className="text-xs space-y-2">
           <p className="text-ag-muted font-mono uppercase tracking-wider text-[10px]">

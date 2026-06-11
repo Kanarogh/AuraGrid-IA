@@ -7,7 +7,11 @@ import {
   isOllamaConfigured,
 } from "../ai/config";
 import { sanitizeOpenRouterModelId } from "../ai/openrouterModels";
-import { setRuntimeOpenRouterModel, setRuntimeProvider } from "../ai/runtimeSettings";
+import {
+  ensureRuntimeAiSettingsLoaded,
+  setRuntimeOpenRouterModel,
+  setRuntimeProvider,
+} from "../ai/runtimeSettings";
 import { sanitizeAiAttemptsForHeader, type AiAttemptHeader } from "../ai/httpHeaders";
 import { sanitizeForHttpHeader } from "../ai/httpHeaders";
 import type { AiProviderId } from "../ai/types";
@@ -26,6 +30,8 @@ function isProviderConfigured(id: AiProviderId): boolean {
 
 /** Sincroniza provedor/modelo enviados pelo frontend (headers) com o runtime do servidor. */
 export async function applyAiHeadersFromNextRequest(req: NextRequest): Promise<AiProviderId> {
+  await ensureRuntimeAiSettingsLoaded();
+
   const headerProvider = req.headers.get("x-ai-provider");
   if (headerProvider && isValidProvider(headerProvider) && isProviderConfigured(headerProvider)) {
     await setRuntimeProvider(headerProvider);

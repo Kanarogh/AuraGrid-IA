@@ -10,20 +10,24 @@ import {
   compactProfileForMatch,
   ultraCompactProfileForMatch,
 } from "./matchProfile";
-import type { MatchGenerateInput, MatchRankHint } from "./types";
+import { countSimilarSiblings } from "./profileRanker";
+import type { PostVisualFingerprint } from "./postFingerprint";
+import { compactProfileForMatchJson } from "./catalogProfileV2";
+import type { CaptionOnlyInput, MatchGenerateInput, MatchRankHint } from "./types";
 
 function brandLabel(gem?: BrandGemConfig): string {
   return gem?.name?.trim() || "the configured brand";
 }
 
 export function buildCaptionPromptOptions(
-  input: Pick<MatchGenerateInput, "regenerateCaption" | "recentHooks">,
+  input: Pick<MatchGenerateInput, "regenerateCaption" | "recentHooks" | "sceneContext">,
   brief?: boolean
 ): CaptionPromptOptions {
   return {
     regenerate: !!input.regenerateCaption,
     brief,
     recentHooks: input.recentHooks,
+    sceneContext: input.sceneContext,
   };
 }
 
@@ -39,15 +43,29 @@ type CatalogPromptOptions = {
   matchRankHint?: MatchRankHint;
 };
 
+function buildSimilarSiblingWarning(profiles: CatalogProfileCandidate[]): string {
+  const siblings = countSimilarSiblings(profiles);
+  if (siblings < 2) return "";
+
+  return `
+⚠️ SIMILAR SIBLINGS DETECTED (${siblings}+ candidates share color family + garment type):
+- Color and maxi length are NOT enough — you MUST match g.m (motif), g.l (layout), g.b (back).
+- Compare tie-dye vs geometric vs floral — different SKUs in the same color line.
+- Read g.not tokens for every top candidate.
+- If motif or back differs → reject even if color matches.
+- Require gap ≥22 and ≥6 confirmed g.a anchors before setting matchedId.
+- sc (scene) is NOT for SKU match — garment fields only.`;
+}
+
 export function buildMatchRankHintBlock(hint?: MatchRankHint): string {
   if (!hint) return "";
   return `
 FINGERPRINT PRE-RANK (starting point only — does NOT bypass strict protocol):
 - Automatic top candidate: id "${hint.candidateId}" → label "${hint.candidateLabel}"
 - Pre-rank score ${hint.score}/100, gap vs 2nd: ${hint.scoreGap}
-- You MUST still apply STRICT MATCHING PROTOCOL (score ≥78, gap ≥15, ≥4 matchAnchors, zero contradictions).
+- You MUST still apply STRICT MATCHING PROTOCOL (score ≥82, gap ≥20, patternMotif must match, zero contradictions).
 - Set matchedId ONLY if this candidate satisfies ALL Phase 3 decision rules after your own visual scoring.
-- Pre-rank below 78 means matchedId stays null unless your field-by-field score reaches ≥78.`;
+- Pre-rank below 82 means matchedId stays null unless your field-by-field score reaches ≥82 with clear print/back match.`;
 }
 
 /** Bloco JSON enviado à IA — comparação visual via perfis indexados (sem fotos do catálogo). */
@@ -59,6 +77,7 @@ export function buildCatalogProfilesPromptSection(
   const candidates = profiles.map((p) => toProfile(p.id, p.label, p.profile));
   const profilesJson = JSON.stringify(candidates);
   const rankHint = buildMatchRankHintBlock(options?.matchRankHint);
+  const siblingWarning = buildSimilarSiblingWarning(profiles);
 
   if (options?.brief) {
     const labelMap = profiles
@@ -66,22 +85,22 @@ export function buildCatalogProfilesPromptSection(
       .join("\n");
 
     return `${buildStrictMatchingRubric()}
-${rankHint}
+${rankHint}${siblingWarning}
 
-CANDIDATE PROFILES (${candidates.length}):
+CANDIDATE PROFILES (${candidates.length} — v2: g=garment, sc=scene):
 ${profilesJson}
 
 ID → LABEL MAP (matchedId = catalog id only; app adds "Referência: [label]" when matchedId is set):
 ${labelMap}
 
-Match conservatively (score ≥78, gap ≥15, ≥4 anchors). When you accept the match, matchedId MUST be the candidate id — if null, Referência will not appear. reasoning in Portuguese with top-2 scores.`;
+Match conservatively (score ≥82, gap ≥20, patternMotif + backDetail required). When you accept the match, matchedId MUST be the candidate id — if null, Referência will not appear. reasoning in Portuguese with top-2 scores.`;
   }
 
   const labelMap = profiles
     .map((p) => `  • id "${p.id}" → Referência label: "${p.label}"`)
     .join("\n");
 
-  return `${buildStrictMatchingRubric()}
+  return `${buildStrictMatchingRubric()}${siblingWarning}
 
 CANDIDATE CATALOG PROFILES (${candidates.length} items — compact discriminative JSON):
 
@@ -230,6 +249,108 @@ IMPORTANT:
 - matchedId MUST be null.
 
 TARGET POST IMAGE:`;
+}
+
+/** Legenda com imagem — sem match nem JSON de catálogo. */
+export function buildCaptionOnlyTask(input: CaptionOnlyInput, gem?: BrandGemConfig): string {
+  const refLine = input.matchedCatalogLabel
+    ? `\nMatched catalog reference (for tone/context only, do NOT write "Referência:" in caption): "${input.matchedCatalogLabel}"`
+    : "";
+
+  return `${buildBrandVoiceBlock(gem)}
+
+${buildCampaignContextBlock(gem)}
+
+You are an expert social media copywriter for "${brandLabel(gem)}".
+
+TASK — CAPTION ONLY (match already decided):
+1. Inspect the TARGET POST IMAGE.
+2. Write block 1 (main hook) per BRAND GEM rules below.
+3. Do NOT perform catalog matching — matchedId is not part of this step.${refLine}
+
+TARGET POST IMAGE:`;
+}
+
+export function buildCaptionOnlyResultInstructions(
+  gem: Parameters<typeof buildMatchCaptionInstructions>[0],
+  options?: CaptionPromptOptions
+): string {
+  return `${buildMatchCaptionInstructions(gem, options)}
+
+CAPTION-ONLY MODE:
+- Output JSON only: { "caption": string }
+- caption = block 1 (main hook) ONLY — no Referência, disclosure, address, ➡️ CTA, or hashtags.`;
+}
+
+function serializePostFingerprint(fp: PostVisualFingerprint): Record<string, unknown> {
+  return {
+    garment: fp.garment ?? {
+      type: fp.garmentType,
+      colors: fp.primaryColors,
+      motif: fp.patternMotif,
+      layout: fp.patternLayout,
+      scale: fp.printScale,
+      back: fp.backDetail,
+      neck: fp.neckline,
+      sleeve: fp.sleeves,
+      len: fp.dressLength,
+      skirt: fp.skirtConstruction,
+      sil: fp.silhouette,
+      anchors: fp.visibleAnchors,
+    },
+    scene: fp.scene,
+  };
+}
+
+export function buildFingerprintMatchSection(
+  fingerprint: PostVisualFingerprint,
+  profiles: CatalogProfileCandidate[],
+  options?: CatalogPromptOptions
+): string {
+  const toProfile = options?.ultraCompact ? ultraCompactProfileForMatch : compactProfileForMatch;
+  const candidates = profiles.map((p) => toProfile(p.id, p.label, p.profile));
+  const fpJson = JSON.stringify(serializePostFingerprint(fingerprint));
+  const profilesJson = JSON.stringify(candidates);
+  const rankHint = buildMatchRankHintBlock(options?.matchRankHint);
+  const siblingWarning = buildSimilarSiblingWarning(profiles);
+  const labelMap = profiles
+    .map((p) => `  • id "${p.id}" → Referência label: "${p.label}"`)
+    .join("\n");
+
+  return `${buildStrictMatchingRubric()}
+${rankHint}${siblingWarning}
+
+POST FINGERPRINT (from prior vision step — NO post image in this request):
+${fpJson}
+
+CANDIDATE CATALOG PROFILES (${candidates.length} — v2: g=garment, sc=scene):
+${profilesJson}
+
+ID → LABEL MAP:
+${labelMap}
+
+Compare fingerprint garment fields to each candidate g.* — scene (sc) is caption context only.`;
+}
+
+export function buildFingerprintMatchTask(matchOnly: boolean, gem?: BrandGemConfig): string {
+  const step = matchOnly
+    ? "Return ONLY the catalog match (no caption)."
+    : "After matching, write block 1 caption per GEM rules (no Referência line in caption).";
+
+  const gemPrefix = matchOnly
+    ? ""
+    : `${buildBrandVoiceBlock(gem)}
+
+`;
+
+  return `${gemPrefix}You are an expert fashion catalog matcher for "${brandLabel(gem)}".
+
+TASK (fingerprint JSON mode — TEXT ONLY, no post image):
+1. Use POST FINGERPRINT JSON as the visual ground truth for the target post.
+2. Apply STRICT MATCHING PROTOCOL when scoring candidates.
+3. ${step}
+
+OUTPUT: JSON only. reasoning in Portuguese with top-2 scores.`;
 }
 
 export function buildImageOnlyResultInstructions(

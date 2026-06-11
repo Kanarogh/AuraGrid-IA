@@ -10,6 +10,7 @@ import { Alert } from "../ui/Alert";
 import { Badge } from "../ui/Badge";
 import { FieldLabel } from "../ui/Input";
 import { GeminiModelPicker } from "./GeminiModelPicker";
+import { OllamaModelPicker } from "./OllamaModelPicker";
 
 export function AiProviderPanel() {
   const {
@@ -114,19 +115,15 @@ export function AiProviderPanel() {
           )}
 
           {settings?.activeProvider === "ollama" && (
-            <p className="text-xs text-ag-muted leading-relaxed rounded-lg border border-ag-border bg-ag-surface-1 px-3 py-2">
-              <strong className="text-ag-text">Ollama (local)</strong> — precisa de modelo{" "}
-              <strong className="text-ag-text">com visão</strong> (foto do post). Com os que você
-              tem instalados, use <code className="font-mono text-[10px] bg-ag-surface-2 px-1 rounded">gemma4</code>{" "}
-              no <code className="font-mono text-[10px]">.env</code> (
-              <code className="font-mono text-[10px]">OLLAMA_MODEL=gemma4</code>,{" "}
-              <code className="font-mono text-[10px]">OLLAMA_NUM_CTX=32768</code>). Modelos{" "}
-              <code className="font-mono text-[10px]">*:cloud</code> também funcionam se o Ollama
-              estiver logado.{" "}
-              <code className="font-mono text-[10px]">qwen3.6</code> é só texto — não serve para
-              match/legenda com foto. Opcional:{" "}
-              <code className="font-mono text-[10px]">ollama pull qwen2.5vl:7b</code> (visão).
-            </p>
+            <>
+              <OllamaModelPicker variant="settings" />
+              <p className="text-[10px] text-ag-muted leading-relaxed">
+                Só modelos <strong className="text-ag-text">instalados no disco</strong> aparecem
+                acima (sem <code className="font-mono">*:cloud</code>). Mantenha{" "}
+                <code className="font-mono">OLLAMA_NUM_CTX=32768</code> no .env. A 1ª foto pode
+                demorar 1–3 min enquanto o modelo carrega.
+              </p>
+            </>
           )}
 
           {settings?.activeProvider === "openrouter" && (

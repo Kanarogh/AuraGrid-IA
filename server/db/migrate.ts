@@ -1,9 +1,38 @@
+import "dotenv/config";
 import fs from "fs/promises";
 import path from "path";
 import postgres from "postgres";
 import { envString } from "../config/env";
 
-const MIGRATION_FILES = ["0000_initial", "0001_campaign_context", "0002_planned_posts_multi"] as const;
+const MIGRATION_FILES = [
+  "0000_initial",
+  "0001_campaign_context",
+  "0002_planned_posts_multi",
+  "0003_catalog_embeddings",
+] as const;
+
+async function waitForPostgres(url: string, attempts = 30, delayMs = 1000): Promise<void> {
+  for (let i = 1; i <= attempts; i++) {
+    const probe = postgres(url, { max: 1, connect_timeout: 3 });
+    try {
+      await probe`SELECT 1`;
+      await probe.end({ timeout: 2 });
+      return;
+    } catch (err) {
+      await probe.end({ timeout: 2 }).catch(() => undefined);
+      const starting =
+        err &&
+        typeof err === "object" &&
+        "code" in err &&
+        (err as { code?: string }).code === "57P03";
+      if (!starting && i === attempts) throw err;
+      if (i < attempts) {
+        console.info(`[AuraGrid] Postgres indisponível (${i}/${attempts}) — aguardando…`);
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+  }
+}
 
 export async function runMigrations(): Promise<void> {
   const url = envString("DATABASE_URL");
@@ -11,6 +40,8 @@ export async function runMigrations(): Promise<void> {
     console.warn("[AuraGrid] DATABASE_URL não definida — migrations ignoradas.");
     return;
   }
+
+  await waitForPostgres(url);
 
   const sql = postgres(url, { max: 1 });
   try {

@@ -348,6 +348,17 @@ function findPageForSlot(
   return slots.find((s) => s.id === slotId)?.pageId ?? "page_1";
 }
 
+/** FK catalog_items — ignora placeholders locais (canva_*) e ids inexistentes. */
+function sanitizeCatalogRefId(
+  raw: unknown,
+  validCatalogIds: Set<string>
+): string | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  if (raw.startsWith("canva_")) return null;
+  return validCatalogIds.has(raw) ? raw : null;
+}
+
 export async function saveBrandGem(
   userId: string,
   clientId: string,
@@ -417,6 +428,15 @@ export async function patchWorkspace(
       });
   }
 
+  const catalogIdRows =
+    patch.canva || Array.isArray(patch.posts)
+      ? await db
+          .select({ id: catalogItems.id })
+          .from(catalogItems)
+          .where(eq(catalogItems.clientId, clientId))
+      : [];
+  const validCatalogIds = new Set(catalogIdRows.map((r) => r.id));
+
   if (patch.canva && typeof patch.canva === "object") {
     const canva = patch.canva as Record<string, unknown>;
     await db
@@ -460,10 +480,10 @@ export async function patchWorkspace(
           if (typeof slot.id !== "string") continue;
           const label =
             typeof slot.label === "string" ? slot.label : `Look ${slotIndex + 1}`;
-          const matchedCatalogId =
-            slot.matchedCatalogId === null || typeof slot.matchedCatalogId === "string"
-              ? (slot.matchedCatalogId as string | null)
-              : null;
+          const matchedCatalogId = sanitizeCatalogRefId(
+            slot.matchedCatalogId,
+            validCatalogIds
+          );
           const imageAssetId =
             slot.imageAssetId === null || typeof slot.imageAssetId === "string"
               ? (slot.imageAssetId as string | null)
@@ -511,10 +531,10 @@ export async function patchWorkspace(
         typeof post.dayNumber === "number" ? post.dayNumber : parseInt(post.id.replace(/\D/g, ""), 10) || 1;
       const dateLabel =
         typeof post.dateLabel === "string" ? post.dateLabel : `Dia ${dayNumber}`;
-      const matchedCatalogId =
-        post.matchedCatalogId === null || typeof post.matchedCatalogId === "string"
-          ? (post.matchedCatalogId as string | null)
-          : null;
+      const matchedCatalogId = sanitizeCatalogRefId(
+        post.matchedCatalogId,
+        validCatalogIds
+      );
       const reasoning =
         post.reasoning === null || typeof post.reasoning === "string"
           ? (post.reasoning as string | null)

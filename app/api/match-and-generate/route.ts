@@ -1,16 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { formatAiError } from "@/server/ai/index";
-import { runVisionWithFallback } from "@/server/ai/fallbackChain";
 import {
   assertBrandGemReadyForCaptions,
   resolveBrandGemFromBody,
 } from "@/server/ai/brandContext";
-import {
-  applyShortlistToResult,
-  applyStrictRankerMatchFallback,
-  prepareMatchInput,
-  shortlistHeaderValue,
-} from "@/server/ai/matchPipeline";
+import { matchOperationHeaders, runMatchOperation } from "@/server/ai/matchOrchestrator";
 import { sanitizeMatchOperationInput } from "@/server/ai/operations";
 import { applyAiHeadersFromNextRequest, aiAttemptsHeaderValue } from "@/server/http/aiRequest";
 
@@ -28,6 +22,7 @@ export async function POST(req: NextRequest) {
       regenerateCaption,
       captionFromImageOnly,
       recentHooks,
+      clientId,
     } = body;
 
     if (!postImage) {
@@ -52,6 +47,7 @@ export async function POST(req: NextRequest) {
 
     const sanitized = sanitizeMatchOperationInput("match-and-generate", {
       postImage,
+      clientId: typeof clientId === "string" ? clientId : undefined,
       catalogProfiles: body.catalogProfiles,
       catalogItems: body.catalogItems,
       brandGem,
@@ -64,27 +60,15 @@ export async function POST(req: NextRequest) {
         : undefined,
     });
 
-    const prepared = await prepareMatchInput(sanitized, providerId);
+    const operation = await runMatchOperation("match-and-generate", sanitized, providerId);
+    providerId = operation.providerUsed;
 
-    const outcome = await runVisionWithFallback(
-      "match-and-generate",
-      (provider) => provider.matchAndGenerate(prepared.input),
-      providerId
-    );
-
-    providerId = outcome.providerUsed;
-    let result = applyShortlistToResult(outcome.result, prepared.shortlist);
-    const candidates = prepared.input.catalogProfiles ?? [];
-    result = applyStrictRankerMatchFallback(result, prepared.matchRankHint, candidates);
-    const headers = new Headers();
-    headers.set("X-AI-Provider-Used", outcome.providerUsed);
-    headers.set("X-AI-Match-Mode", result.matchMode);
-    headers.set("X-AI-Attempts", aiAttemptsHeaderValue(outcome.attempts));
-    const shortlistHeader = shortlistHeaderValue(prepared.shortlist);
-    if (shortlistHeader) headers.set("X-AI-Catalog-Shortlist", shortlistHeader);
+    const headers = new Headers(matchOperationHeaders(operation));
+    headers.set("X-AI-Provider-Used", operation.providerUsed);
+    headers.set("X-AI-Attempts", aiAttemptsHeaderValue(operation.attempts));
 
     return NextResponse.json(
-      { ...result, providerUsed: outcome.providerUsed },
+      { ...operation.result, providerUsed: operation.providerUsed },
       { headers }
     );
   } catch (error: unknown) {

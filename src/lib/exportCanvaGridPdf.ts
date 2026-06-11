@@ -6,13 +6,6 @@ import {
 } from "./buildCanvaGridPdfNative";
 import { fetchImageAsDataUrl, resolveMediaUrl } from "./api/workspaceApi";
 
-function readAccentHex(): string {
-  if (typeof document === "undefined") return "#0d9488";
-  const raw = getComputedStyle(document.documentElement).getPropertyValue("--ag-accent").trim();
-  if (/^#[0-9a-fA-F]{3,8}$/.test(raw)) return raw;
-  return "#0d9488";
-}
-
 async function resolveSlotImage(src: string): Promise<string | null> {
   const resolved = resolveMediaUrl(src) ?? src;
   if (!resolved) return null;
@@ -64,7 +57,6 @@ export async function exportCanvaGridPdf(options: {
   const pdf = await buildCanvaGridPdf({
     pages: selectedPages,
     brandName,
-    accentColor: readAccentHex(),
     formatMeta,
     imagesBySlotId,
   });

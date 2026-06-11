@@ -1,4 +1,5 @@
 import type { CatalogItem, CatalogVisualProfile } from "../types";
+import { catalogProfileV2ToDisplay, isCatalogProfileV2 } from "./catalogProfileDisplay";
 
 function asStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -15,6 +16,9 @@ export function normalizeVisualProfile(
   label?: string
 ): CatalogVisualProfile {
   const p = (raw ?? {}) as Record<string, unknown>;
+  if (isCatalogProfileV2(p)) {
+    return catalogProfileV2ToDisplay(p, label);
+  }
   const pattern =
     p.pattern && typeof p.pattern === "object" && !Array.isArray(p.pattern)
       ? (p.pattern as Record<string, unknown>)
@@ -71,12 +75,26 @@ export function wasAutoImported(item: CatalogItem): boolean {
   );
 }
 
+/** Remove perfil antigo quando o status não é "ready" (estado inconsistente). */
+export function sanitizeEnrichmentConsistency(item: CatalogItem): CatalogItem {
+  const next = { ...item };
+  if (next.enrichmentStatus !== "ready") {
+    if (next.visualProfile) next.visualProfile = undefined;
+    if (next.enrichmentStatus !== "failed") {
+      next.enrichedAt = undefined;
+    }
+  } else if (!next.visualProfile) {
+    next.enrichmentStatus = "pending";
+  }
+  return next;
+}
+
 export function normalizeCatalogItem(item: CatalogItem): CatalogItem {
   const isReference =
     item.isReference === true || item.isReference === false
       ? item.isReference
       : !wasAutoImported(item);
-  const next: CatalogItem = { ...item, isReference };
+  const next: CatalogItem = sanitizeEnrichmentConsistency({ ...item, isReference });
   if (next.visualProfile) {
     next.visualProfile = normalizeVisualProfile(next.visualProfile, next.label);
   }
@@ -117,10 +135,8 @@ export function isCatalogItemIndexed(item: CatalogItem): boolean {
 /** Referência com JSON de visão, erro de indexação ou status final — dá para limpar. */
 export function hasCatalogEnrichmentData(item: CatalogItem): boolean {
   return (
-    !!item.visualProfile ||
-    item.enrichmentStatus === "ready" ||
+    isCatalogItemIndexed(item) ||
     item.enrichmentStatus === "failed" ||
-    !!item.enrichedAt ||
     !!item.enrichmentError
   );
 }
@@ -137,4 +153,12 @@ export function clearCatalogEnrichmentPatch(): CatalogEnrichmentClearPatch {
     enrichedAt: undefined,
     enrichmentError: undefined,
   };
+}
+
+/** Zera indexação local antes de reindexar (evita "Ver perfil" com JSON antigo). */
+export function prepareCatalogItemForEnrichment(item: CatalogItem): CatalogItem {
+  return sanitizeEnrichmentConsistency({
+    ...item,
+    ...clearCatalogEnrichmentPatch(),
+  });
 }

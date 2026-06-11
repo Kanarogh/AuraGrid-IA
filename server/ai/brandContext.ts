@@ -1,3 +1,5 @@
+import { buildSceneCaptionBlock } from "./catalogProfileV2";
+
 /** Blocos de prompt derivados do Gem (estilo Gemini) + rodapé fixo das legendas */
 
 export type RepeatingTextConfig = {
@@ -236,6 +238,12 @@ export type CaptionPromptOptions = {
   regenerate?: boolean;
   brief?: boolean;
   recentHooks?: string[];
+  sceneContext?: {
+    setting?: string;
+    tags?: string[];
+    light?: string;
+    mood?: string;
+  };
 };
 
 function normalizeRecentHooks(raw?: string[]): string[] {
@@ -304,6 +312,7 @@ export function buildMatchCaptionInstructions(
   options?: CaptionPromptOptions
 ): string {
   const antiRepeat = buildAntiRepetitionBlock(options?.recentHooks);
+  const sceneBlock = buildSceneCaptionBlock(options?.sceneContext ?? null);
 
   if (options?.brief) {
     return `${buildBrandVoiceBlock(gem)}
@@ -311,7 +320,7 @@ export function buildMatchCaptionInstructions(
 ${buildCampaignContextBlock(gem)}
 
 ${buildCaptionParamsBlock(gem)}
-
+${sceneBlock ? `\n${sceneBlock}\n` : ""}
 ${buildCaptionFooterBlock(gem?.footer)}
 
 ${antiRepeat}
@@ -329,7 +338,7 @@ CAPTION TASK:
 ${buildCampaignContextBlock(gem)}
 
 ${buildCaptionParamsBlock(gem)}
-
+${sceneBlock ? `\n${sceneBlock}\n` : ""}
 ${buildCaptionStructureBlock(gem)}
 
 ${buildCaptionFooterBlock(gem?.footer)}

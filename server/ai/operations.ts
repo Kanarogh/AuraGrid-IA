@@ -22,8 +22,8 @@ export const OLLAMA_MATCH_SHORTLIST_THRESHOLD = 6;
 export const OLLAMA_MATCH_SHORTLIST_TOP_K = 10;
 
 /** Mesmos critérios do STRICT MATCHING PROTOCOL — fallback só com confiança alta. */
-export const STRICT_RANKER_MIN_SCORE = 78;
-export const STRICT_RANKER_MIN_GAP = 15;
+export const STRICT_RANKER_MIN_SCORE = 82;
+export const STRICT_RANKER_MIN_GAP = 20;
 
 export type CatalogProfilePayload = {
   id: string;
@@ -63,7 +63,7 @@ export function sanitizeMatchOperationInput(
       regenerateCaption: input.regenerateCaption,
       recentHooks: input.recentHooks,
       captionFromImageOnly: true,
-      matchOnly: operation === "match-reference",
+      matchOnly: false,
       catalogItems: undefined,
       catalogProfiles: undefined,
     };
@@ -88,7 +88,10 @@ export function sanitizeMatchOperationInput(
     ...input,
     catalogItems: undefined,
     catalogProfiles: profiles,
+    clientId: input.clientId,
     matchRankHint: undefined,
+    sceneContext: undefined,
+    postFingerprint: undefined,
     matchOnly: operation === "match-reference" ? true : input.matchOnly,
     captionFromImageOnly: imageOnly,
   };

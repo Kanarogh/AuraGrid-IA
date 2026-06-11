@@ -62,8 +62,12 @@ export type BrandGemPayload = {
 
 export interface MatchGenerateInput {
   postImage: string;
+  /** Só servidor — shortlist por embedding no Postgres */
+  clientId?: string;
   catalogItems?: { id: string; label: string; image: string }[];
   catalogProfiles?: { id: string; label: string; profile: Record<string, unknown> }[];
+  /** Só servidor — preenchido por prepareMatchInput */
+  postFingerprint?: PostVisualFingerprint;
   /** Só identifica referência no catálogo — sem legenda (endpoint /api/match-reference). */
   matchOnly?: boolean;
   /** Gem estilo Gemini (preferido) */
@@ -80,6 +84,13 @@ export interface MatchGenerateInput {
   recentHooks?: string[];
   /** Hint do ranker visual (fingerprint) — só servidor */
   matchRankHint?: MatchRankHint;
+  /** Cenário do post para legenda — só servidor */
+  sceneContext?: {
+    setting?: string;
+    tags?: string[];
+    light?: string;
+    mood?: string;
+  };
 }
 
 export type MatchRankHint = {
@@ -101,6 +112,9 @@ export interface MatchGenerateResult {
     | "catalog_json"
     | "catalog_json_shortlist"
     | "catalog_json_ranker"
+    | "catalog_json_ranker_fast"
+    | "catalog_json_fingerprint_text"
+    | "catalog_json_vision"
     | "catalog_images"
     | "image_only";
 }
@@ -108,7 +122,30 @@ export interface MatchGenerateResult {
 export interface MatchReferenceResult {
   matchedId: string | null;
   reasoning: string;
-  matchMode: "catalog_json" | "catalog_json_shortlist" | "catalog_images";
+  matchMode:
+    | "catalog_json"
+    | "catalog_json_shortlist"
+    | "catalog_json_ranker"
+    | "catalog_json_ranker_fast"
+    | "catalog_json_fingerprint_text"
+    | "catalog_json_vision"
+    | "catalog_images";
+}
+
+export interface CaptionOnlyInput {
+  postImage: string;
+  brandGem?: BrandGemPayload;
+  promptContext?: string;
+  repeatingText?: BrandGemPayload["footer"];
+  sceneContext?: MatchGenerateInput["sceneContext"];
+  matchedCatalogLabel?: string;
+  regenerateCaption?: boolean;
+  recentHooks?: string[];
+}
+
+export interface MatchFromFingerprintInput extends Omit<MatchGenerateInput, "postImage"> {
+  postFingerprint: PostVisualFingerprint;
+  postImage?: string;
 }
 
 export interface AiProvider {
@@ -119,6 +156,10 @@ export interface AiProvider {
   /** 1 imagem → JSON leve para ranquear o catálogo localmente (sem enviar todo o acervo à IA). */
   analyzePostVisual(input: PostVisualAnalyzeInput): Promise<PostVisualFingerprint>;
   matchAndGenerate(input: MatchGenerateInput): Promise<MatchGenerateResult>;
+  /** Match texto-only: fingerprint JSON × perfis (sem imagem do post). */
+  matchFromFingerprint(input: MatchFromFingerprintInput): Promise<MatchGenerateResult>;
+  /** Legenda com 1 imagem — sem JSON de catálogo. */
+  generateCaptionOnly(input: CaptionOnlyInput): Promise<{ caption: string }>;
   refineCaption(input: {
     currentCaption: string;
     instructions: string;

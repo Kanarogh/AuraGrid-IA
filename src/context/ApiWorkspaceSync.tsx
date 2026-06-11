@@ -40,6 +40,8 @@ function flushWorkspacePatch(clientId: string, ws: ClientWorkspace) {
     credentials: "include",
     body: JSON.stringify(buildWorkspacePatch(ws)),
     keepalive: true,
+  }).catch(() => {
+    // Falha esperada ao fechar/recarregar a aba — o browser aborta o request.
   });
 }
 
@@ -137,10 +139,10 @@ export function ApiWorkspaceSync() {
 
     const flushOnExit = () => {
       if (skipSaveRef.current || !activeClientId) return;
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = null;
-      }
+      // Só envia se ainda havia PATCH pendente no debounce (evita fetch ao sair sem mudanças).
+      if (!saveTimerRef.current) return;
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
       flushWorkspacePatch(activeClientId, workspaceRef.current);
     };
 

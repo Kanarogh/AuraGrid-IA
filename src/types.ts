@@ -49,7 +49,8 @@ export interface CatalogItem {
   description?: string; // Optional metadata
   /** true = look de roupa (match IA); false = peça de grid/atmosfera (não indexada) */
   isReference?: boolean;
-  visualProfile?: CatalogVisualProfile;
+  /** v1 legado ou v2 compacto ({ version: 2, garment, scene }) */
+  visualProfile?: CatalogVisualProfile | Record<string, unknown>;
   enrichmentStatus?: CatalogEnrichmentStatus;
   enrichedAt?: string;
   enrichmentError?: string;

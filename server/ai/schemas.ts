@@ -1,101 +1,77 @@
-/** JSON Schema (OpenAPI-style) usado por Groq e referência para prompts */
+/** JSON Schema v2 — catálogo compacto (Groq / OpenRouter). */
 export const CATALOG_PROFILE_JSON_SCHEMA = {
   type: "object",
   additionalProperties: false,
   properties: {
-    version: { type: "number", description: "Always 1" },
+    version: { type: "number", description: "Always 2" },
     referenceLabel: { type: "string" },
-    garmentType: { type: "string" },
-    category: { type: "string" },
-    dominantColorFamily: { type: "string", description: "Specific dominant shade e.g. dusty teal" },
-    colorTemperature: { type: "string", enum: ["warm", "cool", "neutral"] },
-    primaryColors: { type: "array", items: { type: "string" } },
-    secondaryColors: { type: "array", items: { type: "string" } },
-    pattern: {
+    garment: {
       type: "object",
+      additionalProperties: false,
       properties: {
         type: { type: "string" },
-        description: { type: "string" },
+        colors: { type: "array", items: { type: "string" } },
+        temp: { type: "string", enum: ["warm", "cool", "neutral"] },
+        motif: { type: "string" },
+        layout: {
+          type: "string",
+          enum: ["horizontal", "vertical", "radial", "placement", "all-over", "solid", "other"],
+        },
+        scale: {
+          type: "string",
+          enum: ["solid", "micro", "small", "medium", "large", "all-over", "other"],
+        },
+        back: { type: "string" },
+        neck: { type: "string" },
+        sleeve: { type: "string" },
+        len: {
+          type: "string",
+          enum: ["mini", "knee", "midi", "maxi", "ankle", "floor", "other"],
+        },
+        skirt: { type: "string" },
+        sil: { type: "string" },
+        anchors: { type: "array", items: { type: "string" } },
+        not: { type: "array", items: { type: "string" } },
       },
-      required: ["type", "description"],
+      required: ["type", "colors", "motif", "anchors"],
+    },
+    scene: {
+      type: "object",
       additionalProperties: false,
+      properties: {
+        setting: {
+          type: "string",
+          enum: ["studio", "beach", "street", "garden", "indoor", "urban", "nature", "cafe", "home", "other"],
+        },
+        tags: { type: "array", items: { type: "string" } },
+        light: {
+          type: "string",
+          enum: ["natural", "golden-hour", "overcast", "studio-flash", "shade", "other"],
+        },
+        mood: { type: "string" },
+      },
+      required: ["setting", "tags", "light"],
     },
-    printScale: {
-      type: "string",
-      description: "solid, micro, small, medium, large, all-over, other",
-    },
-    neckline: { type: "string" },
-    sleeves: { type: "string" },
-    sleeveType: { type: "string" },
-    dressLength: { type: "string" },
-    lengthCategory: {
-      type: "string",
-      description: "mini, knee, midi, maxi, ankle, floor, other",
-    },
-    silhouette: { type: "string" },
-    fabricTexture: { type: "string" },
-    embellishments: { type: "array", items: { type: "string" } },
-    distinctiveDetails: { type: "array", items: { type: "string" } },
-    matchAnchors: {
-      type: "array",
-      items: { type: "string" },
-      description: "5-8 verifiable visual facts for matching",
-    },
-    notToConfuseWith: { type: "string" },
-    matchKeywords: { type: "array", items: { type: "string" } },
-    visualSummary: { type: "string" },
-    distinguishingFingerprint: { type: "string" },
   },
-  required: [
-    "version",
-    "referenceLabel",
-    "garmentType",
-    "category",
-    "dominantColorFamily",
-    "colorTemperature",
-    "primaryColors",
-    "secondaryColors",
-    "pattern",
-    "printScale",
-    "neckline",
-    "sleeves",
-    "sleeveType",
-    "dressLength",
-    "lengthCategory",
-    "silhouette",
-    "fabricTexture",
-    "embellishments",
-    "distinctiveDetails",
-    "matchAnchors",
-    "notToConfuseWith",
-    "matchKeywords",
-    "visualSummary",
-    "distinguishingFingerprint",
-  ],
+  required: ["version", "referenceLabel", "garment", "scene"],
 } as const;
 
 export const MATCH_RESULT_JSON_SCHEMA = {
   type: "object",
   additionalProperties: false,
   properties: {
-    matchedId: {
-      type: "string",
-      description: "Exact catalog id, or empty string if no confident match",
-    },
+    matchedId: { type: ["string", "null"] },
     reasoning: { type: "string" },
     caption: { type: "string" },
   },
-  required: ["matchedId", "reasoning", "caption"],
+  required: ["matchedId", "reasoning"],
 } as const;
 
 export const MATCH_REFERENCE_JSON_SCHEMA = {
   type: "object",
   additionalProperties: false,
   properties: {
-    matchedId: {
-      type: "string",
-      description: "Exact catalog id, or empty string if no confident match",
-    },
+    matchedId: { type: ["string", "null"] },
     reasoning: { type: "string" },
   },
   required: ["matchedId", "reasoning"],

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { assertClientAccess, requireUser } from "@/server/http/auth";
 import { errorResponse } from "@/server/http/respond";
-import { isEnrichmentRunning } from "@/server/services/enrichQueue";
+import { getEnrichmentProgress, isEnrichmentRunning } from "@/server/services/enrichQueue";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,9 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     const user = requireUser(req);
     const { clientId } = await params;
     await assertClientAccess(user, clientId);
-    return NextResponse.json({ enriching: isEnrichmentRunning(clientId) });
+    const enriching = isEnrichmentRunning(clientId);
+    const progress = enriching ? getEnrichmentProgress(clientId) : null;
+    return NextResponse.json({ enriching, progress });
   } catch (err) {
     return errorResponse(err, 400);
   }

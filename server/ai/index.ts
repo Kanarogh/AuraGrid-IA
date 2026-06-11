@@ -1,227 +1,273 @@
-import {
-  getAiProviderId,
-  getEnvDefaultProviderId,
-  getEnvGeminiCatalogModel,
-  getEnvGeminiModel,
-  getGeminiCatalogModel,
-  getGeminiModel,
-  getGroqModel,
-  getOpenRouterModel,
-  getOllamaModel,
-  hasGeminiKey,
-  hasGroqKey,
-  hasOpenRouterKey,
-  isOllamaConfigured,
-  isAiFallbackAllowed,
-} from "./config";
-import {
-  getRuntimeOpenRouterModel,
-  getRuntimeGeminiModel,
-  getRuntimeGeminiCatalogModel,
-  setRuntimeOpenRouterModel,
-  setRuntimeGeminiModel,
-  setRuntimeGeminiCatalogModel,
-  setRuntimeProvider,
-} from "./runtimeSettings";
-import { OPENROUTER_MODELS, type OpenRouterModelOption } from "./openrouterModels";
-import { GEMINI_MODELS, type GeminiModelOption, sanitizeGeminiModelId } from "./geminiModels";
-import {
-  listLiveOpenRouterModels,
-  mergeOpenRouterModelsForUi,
-  clearOpenRouterModelsCache,
-  type OpenRouterModelsFilter,
-} from "./openrouterModelsLive";
-import { formatAiError } from "./shared";
-import { getCircuitBreakerSnapshot } from "./circuitBreaker";
-import { geminiProvider } from "./geminiProvider";
-import { groqProvider } from "./groqProvider";
-import { openrouterProvider } from "./openrouterProvider";
-import { ollamaProvider } from "./ollamaProvider";
-import type { AiHealthResponse, AiProvider, AiProviderId } from "./types";
-
-export type AiProviderOption = {
-  id: AiProviderId;
-  label: string;
-  model: string;
-  configured: boolean;
-};
-
-export type AiSettingsResponse = {
-  activeProvider: AiProviderId;
-  envDefaultProvider: AiProviderId;
-  providers: AiProviderOption[];
-  openrouter: {
-    activeModel: string;
-    runtimeOverride: string | null;
-    models: OpenRouterModelOption[];
-    liveFetchedAt: string | null;
-    liveCount: number;
-  };
-  gemini: {
-    activeModel: string;
-    activeCatalogModel: string;
-    envModel: string;
-    envCatalogModel: string;
-    runtimeModel: string | null;
-    runtimeCatalogModel: string | null;
-    models: GeminiModelOption[];
-  };
-};
-
-export type { OpenRouterModelsFilter };
-export { listLiveOpenRouterModels, clearOpenRouterModelsCache };
-
-export { formatAiError };
-export type { AiHealthResponse, AiProviderId };
-
-const PROVIDER_LABELS: Record<AiProviderId, string> = {
-  gemini: "Google Gemini",
-  groq: "Groq (Llama 4 Scout)",
-  openrouter: "OpenRouter (free vision)",
-  ollama: "Ollama (Gemma 4 local)",
-};
-
-export async function buildAiSettingsResponse(options?: {
-  refreshOpenRouter?: boolean;
-}): Promise<AiSettingsResponse> {
-  const activeProvider = getAiProviderId();
-
-  let openrouterModels: OpenRouterModelOption[] = OPENROUTER_MODELS.map((m) => ({
-    ...m,
-    availableNow: false,
-    source: "curated" as const,
-  }));
-  let liveFetchedAt: string | null = null;
-  let liveCount = 0;
-
-  if (hasOpenRouterKey()) {
-    const apiKey = process.env.OPENROUTER_API_KEY!.trim();
-    try {
-      const { models: live, fetchedAt } = await listLiveOpenRouterModels(apiKey, {
-        refresh: options?.refreshOpenRouter,
-        filter: "vision-text",
-      });
-      liveCount = live.length;
-      liveFetchedAt = fetchedAt;
-      openrouterModels = mergeOpenRouterModelsForUi(live, OPENROUTER_MODELS);
-    } catch (err) {
-      console.warn(
-        "[OpenRouter] Falha ao listar modelos live:",
-        err instanceof Error ? err.message : err
-      );
-    }
-  }
-
-  return {
-    activeProvider,
-    envDefaultProvider: getEnvDefaultProviderId(),
-    providers: (["gemini", "groq", "openrouter", "ollama"] as const).map((id) => ({
-      id,
-      label: PROVIDER_LABELS[id],
-      model: defaultModelFor(id),
-      configured: getProvider(id).isConfigured(),
-    })),
-    openrouter: {
-      activeModel: getOpenRouterModel(),
-      runtimeOverride: getRuntimeOpenRouterModel(),
-      models: openrouterModels,
-      liveFetchedAt,
-      liveCount,
-    },
-    gemini: {
-      activeModel: getGeminiModel(),
-      activeCatalogModel: getGeminiCatalogModel(),
-      envModel: getEnvGeminiModel(),
-      envCatalogModel: getEnvGeminiCatalogModel(),
-      runtimeModel: getRuntimeGeminiModel(),
-      runtimeCatalogModel: getRuntimeGeminiCatalogModel(),
-      models: GEMINI_MODELS,
-    },
-  };
-}
-
-export async function setOpenRouterModelOverride(model: string | null): Promise<void> {
-  await setRuntimeOpenRouterModel(model);
-}
-
-export async function setGeminiModelOverride(model: string | null): Promise<void> {
-  await setRuntimeGeminiModel(model ? sanitizeGeminiModelId(model) : null);
-}
-
-export async function setGeminiCatalogModelOverride(model: string | null): Promise<void> {
-  await setRuntimeGeminiCatalogModel(model ? sanitizeGeminiModelId(model) : null);
-}
-
-export async function setActiveAiProvider(provider: AiProviderId): Promise<void> {
-  const p = getProvider(provider);
-  if (!p.isConfigured()) {
-    throw new Error(
-      `Chave não configurada para ${PROVIDER_LABELS[provider]}. Adicione a API key no .env (reinicie o servidor só após mudar chaves).`
-    );
-  }
-  await setRuntimeProvider(provider);
-}
-
-export function getActiveProviderId(): AiProviderId {
-  return getAiProviderId();
-}
-
-export function getProvider(id: AiProviderId): AiProvider {
-  if (id === "groq") return groqProvider;
-  if (id === "openrouter") return openrouterProvider;
-  if (id === "ollama") return ollamaProvider;
-  return geminiProvider;
-}
-
-function defaultModelFor(id: AiProviderId): string {
-  if (id === "groq") return getGroqModel();
-  if (id === "openrouter") return getOpenRouterModel();
-  if (id === "ollama") return getOllamaModel();
-  return getGeminiModel();
-}
-
-function envKeyFor(id: AiProviderId): string {
-  if (id === "groq") return "GROQ_API_KEY";
-  if (id === "openrouter") return "OPENROUTER_API_KEY";
-  if (id === "ollama") return "OLLAMA (local)";
-  return "GEMINI_API_KEY";
-}
-
-export function getActiveProvider(): AiProvider {
-  const id = getActiveProviderId();
-  const provider = getProvider(id);
-
-  if (!provider.isConfigured()) {
-    throw new Error(
-      `AI_PROVIDER=${id} mas ${envKeyFor(id)} não está no .env. Configure a chave ou mude AI_PROVIDER.`
-    );
-  }
-
-  return provider;
-}
-
-export function buildHealthResponse(): AiHealthResponse {
-  const providerId = getActiveProviderId();
-  const active = getProvider(providerId);
-  const breaker = getCircuitBreakerSnapshot();
-
-  return {
-    status: "healthy",
-    provider: providerId,
-    model: active.isConfigured() ? active.getModel() : defaultModelFor(providerId),
-    keyConfigured: active.isConfigured(),
-    providers: {
-      gemini: { configured: hasGeminiKey(), model: getGeminiModel() },
-      groq: { configured: hasGroqKey(), model: getGroqModel() },
-      openrouter: { configured: hasOpenRouterKey(), model: getOpenRouterModel() },
-      ollama: { configured: isOllamaConfigured(), model: getOllamaModel() },
-    },
-    apiVersion: 6,
-    features: {
-      catalogEnrich: active.isConfigured(),
-      catalogJsonMatch: true,
-      fallbackChain: isAiFallbackAllowed(),
-    },
-    circuitBreaker: breaker,
-  };
-}
+import {
+  getAiProviderId,
+  getEnvDefaultProviderId,
+  getEnvGeminiCatalogModel,
+  getEnvGeminiModel,
+  getGeminiCatalogModel,
+  getGeminiModel,
+  getGroqModel,
+  getOpenRouterModel,
+  getOllamaModel,
+  getEnvOllamaModel,
+  hasGeminiKey,
+  hasGroqKey,
+  hasOpenRouterKey,
+  isOllamaConfigured,
+  isAiFallbackAllowed,
+} from "./config";
+import {
+  getRuntimeOpenRouterModel,
+  getRuntimeGeminiModel,
+  getRuntimeGeminiCatalogModel,
+  setRuntimeOpenRouterModel,
+  setRuntimeGeminiModel,
+  setRuntimeGeminiCatalogModel,
+  setRuntimeProvider,
+  getRuntimeOllamaModel,
+  setRuntimeOllamaModel,
+} from "./runtimeSettings";
+import {
+  listLocalOllamaModels,
+  resolveActiveOllamaModel,
+  type OllamaModelOption,
+  sanitizeOllamaModelId,
+} from "./ollamaModels";
+import { OPENROUTER_MODELS, type OpenRouterModelOption } from "./openrouterModels";
+import { GEMINI_MODELS, type GeminiModelOption, sanitizeGeminiModelId } from "./geminiModels";
+import {
+  listLiveOpenRouterModels,
+  mergeOpenRouterModelsForUi,
+  clearOpenRouterModelsCache,
+  type OpenRouterModelsFilter,
+} from "./openrouterModelsLive";
+import { formatAiError } from "./shared";
+import { getCircuitBreakerSnapshot } from "./circuitBreaker";
+import { geminiProvider } from "./geminiProvider";
+import { groqProvider } from "./groqProvider";
+import { openrouterProvider } from "./openrouterProvider";
+import { ollamaProvider } from "./ollamaProvider";
+import type { AiHealthResponse, AiProvider, AiProviderId } from "./types";
+
+export type AiProviderOption = {
+  id: AiProviderId;
+  label: string;
+  model: string;
+  configured: boolean;
+};
+
+export type AiSettingsResponse = {
+  activeProvider: AiProviderId;
+  envDefaultProvider: AiProviderId;
+  providers: AiProviderOption[];
+  openrouter: {
+    activeModel: string;
+    runtimeOverride: string | null;
+    models: OpenRouterModelOption[];
+    liveFetchedAt: string | null;
+    liveCount: number;
+  };
+  gemini: {
+    activeModel: string;
+    activeCatalogModel: string;
+    envModel: string;
+    envCatalogModel: string;
+    runtimeModel: string | null;
+    runtimeCatalogModel: string | null;
+    models: GeminiModelOption[];
+  };
+  ollama: {
+    activeModel: string;
+    envModel: string;
+    runtimeModel: string | null;
+    reachable: boolean;
+    fetchedAt: string | null;
+    models: OllamaModelOption[];
+  };
+};
+
+export type { OpenRouterModelsFilter };
+export { listLiveOpenRouterModels, clearOpenRouterModelsCache };
+
+export { formatAiError };
+export type { AiHealthResponse, AiProviderId };
+
+const PROVIDER_LABELS: Record<AiProviderId, string> = {
+  gemini: "Google Gemini",
+  groq: "Groq (Llama 4 Scout)",
+  openrouter: "OpenRouter (free vision)",
+  ollama: "Ollama (Gemma 4 local)",
+};
+
+export async function buildAiSettingsResponse(options?: {
+  refreshOpenRouter?: boolean;
+}): Promise<AiSettingsResponse> {
+  const activeProvider = getAiProviderId();
+
+  let openrouterModels: OpenRouterModelOption[] = OPENROUTER_MODELS.map((m) => ({
+    ...m,
+    availableNow: false,
+    source: "curated" as const,
+  }));
+  let liveFetchedAt: string | null = null;
+  let liveCount = 0;
+
+  let ollamaLocal = { models: [] as OllamaModelOption[], reachable: false, fetchedAt: "" };
+  if (isOllamaConfigured()) {
+    try {
+      ollamaLocal = await listLocalOllamaModels();
+    } catch (err) {
+      console.warn(
+        "[Ollama] Falha ao listar modelos locais:",
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+
+  if (hasOpenRouterKey()) {
+    const apiKey = process.env.OPENROUTER_API_KEY!.trim();
+    try {
+      const { models: live, fetchedAt } = await listLiveOpenRouterModels(apiKey, {
+        refresh: options?.refreshOpenRouter,
+        filter: "vision-text",
+      });
+      liveCount = live.length;
+      liveFetchedAt = fetchedAt;
+      openrouterModels = mergeOpenRouterModelsForUi(live, OPENROUTER_MODELS);
+    } catch (err) {
+      console.warn(
+        "[OpenRouter] Falha ao listar modelos live:",
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+
+  return {
+    activeProvider,
+    envDefaultProvider: getEnvDefaultProviderId(),
+    providers: (["gemini", "groq", "openrouter", "ollama"] as const).map((id) => ({
+      id,
+      label: PROVIDER_LABELS[id],
+      model: defaultModelFor(id),
+      configured: getProvider(id).isConfigured(),
+    })),
+    openrouter: {
+      activeModel: getOpenRouterModel(),
+      runtimeOverride: getRuntimeOpenRouterModel(),
+      models: openrouterModels,
+      liveFetchedAt,
+      liveCount,
+    },
+    gemini: {
+      activeModel: getGeminiModel(),
+      activeCatalogModel: getGeminiCatalogModel(),
+      envModel: getEnvGeminiModel(),
+      envCatalogModel: getEnvGeminiCatalogModel(),
+      runtimeModel: getRuntimeGeminiModel(),
+      runtimeCatalogModel: getRuntimeGeminiCatalogModel(),
+      models: GEMINI_MODELS,
+    },
+    ollama: {
+      activeModel: resolveActiveOllamaModel(
+        ollamaLocal.models,
+        getRuntimeOllamaModel(),
+        getEnvOllamaModel()
+      ),
+      envModel: getEnvOllamaModel(),
+      runtimeModel: getRuntimeOllamaModel(),
+      reachable: ollamaLocal.reachable,
+      fetchedAt: ollamaLocal.fetchedAt || null,
+      models: ollamaLocal.models,
+    },
+  };
+}
+
+export async function setOpenRouterModelOverride(model: string | null): Promise<void> {
+  await setRuntimeOpenRouterModel(model);
+}
+
+export async function setGeminiModelOverride(model: string | null): Promise<void> {
+  await setRuntimeGeminiModel(model ? sanitizeGeminiModelId(model) : null);
+}
+
+export async function setGeminiCatalogModelOverride(model: string | null): Promise<void> {
+  await setRuntimeGeminiCatalogModel(model ? sanitizeGeminiModelId(model) : null);
+}
+
+export async function setOllamaModelOverride(model: string | null): Promise<void> {
+  await setRuntimeOllamaModel(model ? sanitizeOllamaModelId(model) : null);
+}
+
+export async function setActiveAiProvider(provider: AiProviderId): Promise<void> {
+  const p = getProvider(provider);
+  if (!p.isConfigured()) {
+    throw new Error(
+      `Chave não configurada para ${PROVIDER_LABELS[provider]}. Adicione a API key no .env (reinicie o servidor só após mudar chaves).`
+    );
+  }
+  await setRuntimeProvider(provider);
+}
+
+export function getActiveProviderId(): AiProviderId {
+  return getAiProviderId();
+}
+
+export function getProvider(id: AiProviderId): AiProvider {
+  if (id === "groq") return groqProvider;
+  if (id === "openrouter") return openrouterProvider;
+  if (id === "ollama") return ollamaProvider;
+  return geminiProvider;
+}
+
+function defaultModelFor(id: AiProviderId): string {
+  if (id === "groq") return getGroqModel();
+  if (id === "openrouter") return getOpenRouterModel();
+  if (id === "ollama") return getOllamaModel();
+  return getGeminiModel();
+}
+
+function envKeyFor(id: AiProviderId): string {
+  if (id === "groq") return "GROQ_API_KEY";
+  if (id === "openrouter") return "OPENROUTER_API_KEY";
+  if (id === "ollama") return "OLLAMA (local)";
+  return "GEMINI_API_KEY";
+}
+
+export function getActiveProvider(): AiProvider {
+  const id = getActiveProviderId();
+  const provider = getProvider(id);
+
+  if (!provider.isConfigured()) {
+    throw new Error(
+      `AI_PROVIDER=${id} mas ${envKeyFor(id)} não está no .env. Configure a chave ou mude AI_PROVIDER.`
+    );
+  }
+
+  return provider;
+}
+
+export function buildHealthResponse(): AiHealthResponse {
+  const providerId = getActiveProviderId();
+  const active = getProvider(providerId);
+  const breaker = getCircuitBreakerSnapshot();
+
+  return {
+    status: "healthy",
+    provider: providerId,
+    model: active.isConfigured() ? active.getModel() : defaultModelFor(providerId),
+    keyConfigured: active.isConfigured(),
+    providers: {
+      gemini: { configured: hasGeminiKey(), model: getGeminiModel() },
+      groq: { configured: hasGroqKey(), model: getGroqModel() },
+      openrouter: { configured: hasOpenRouterKey(), model: getOpenRouterModel() },
+      ollama: { configured: isOllamaConfigured(), model: getOllamaModel() },
+    },
+    apiVersion: 6,
+    features: {
+      catalogEnrich: active.isConfigured(),
+      catalogJsonMatch: true,
+      fallbackChain: isAiFallbackAllowed(),
+    },
+    circuitBreaker: breaker,
+  };
+}
+

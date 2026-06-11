@@ -5,6 +5,7 @@ import {
   changeOpenRouterModel,
   changeGeminiModel,
   changeGeminiCatalogModel,
+  changeOllamaModel,
   getActiveModelLabel,
   getActiveProviderOption,
   getApiStatusLabel,
@@ -31,6 +32,7 @@ export function useAiSettings() {
     setOpenRouterModel: changeOpenRouterModel,
     setGeminiModel: changeGeminiModel,
     setGeminiCatalogModel: changeGeminiCatalogModel,
+    setOllamaModel: changeOllamaModel,
   };
 }
 

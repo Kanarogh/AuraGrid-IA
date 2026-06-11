@@ -14,7 +14,8 @@ export type MatchReferenceResult = {
 
 export async function buildMatchReferenceBody(
   queryImageDataUrl: string,
-  catalog: CatalogItem[]
+  catalog: CatalogItem[],
+  options?: { clientId?: string }
 ): Promise<{ body: Record<string, unknown>; useJsonMatch: boolean }> {
   const refs = getReferenceCatalog(catalog);
   const ready = refs.filter((c) => c.enrichmentStatus === "ready" && c.visualProfile);
@@ -22,6 +23,7 @@ export async function buildMatchReferenceBody(
 
   const body: Record<string, unknown> = {
     postImage: queryImageDataUrl,
+    ...(options?.clientId ? { clientId: options.clientId } : {}),
   };
 
   if (!useJsonMatch && refs.length > 0) {
@@ -44,10 +46,11 @@ export async function buildMatchReferenceBody(
 export async function matchReferenceOnServer(
   queryImageDataUrl: string,
   catalog: CatalogItem[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: { clientId?: string }
 ): Promise<MatchReferenceResult> {
   const processed = await resizeForAi(await convertSvgToDataUrl(queryImageDataUrl));
-  const { body } = await buildMatchReferenceBody(processed, catalog);
+  const { body } = await buildMatchReferenceBody(processed, catalog, options);
 
   const response = await aiQueue.enqueue("Buscar referência", () =>
     aiFetch("/api/match-reference", {

@@ -21,6 +21,12 @@ export function getDb() {
   return db;
 }
 
+/** Cliente postgres.js — use para pgvector (drizzle sql.raw falha em vetores grandes). */
+export function getSqlClient() {
+  getDb();
+  return sqlClient!;
+}
+
 export async function checkDatabaseConnection(): Promise<boolean> {
   if (!isDatabaseConfigured()) return false;
   try {

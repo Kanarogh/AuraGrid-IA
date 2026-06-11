@@ -12,6 +12,7 @@ import { useAiSettings } from "../../hooks/useAiSettings";
 import { aiQueue, type AiQueueState } from "../../lib/aiQueue";
 import { getCaptionCacheStats } from "../../lib/captionCache";
 import { GeminiModelPicker } from "./GeminiModelPicker";
+import { OllamaModelPicker } from "./OllamaModelPicker";
 import { geminiModelDisplayLabel } from "../../lib/geminiModelDisplay";
 import { useEffect, useState } from "react";
 
@@ -145,7 +146,8 @@ export function AiUsagePanel() {
                   })}
                 </div>
                 {settings.activeProvider !== "openrouter" &&
-                  settings.activeProvider !== "gemini" && (
+                  settings.activeProvider !== "gemini" &&
+                  settings.activeProvider !== "ollama" && (
                   <p className="text-[10px] text-ag-muted leading-snug">
                     Com <strong>{providerDisplayName(settings.activeProvider)}</strong> ativo, só
                     esse provedor é usado (padrão). Para cair em Groq/OpenRouter ao esgotar cota,
@@ -186,6 +188,10 @@ export function AiUsagePanel() {
 
             {settings?.activeProvider === "gemini" && (
               <GeminiModelPicker variant="popover" disabled={savingModel || saving} />
+            )}
+
+            {settings?.activeProvider === "ollama" && (
+              <OllamaModelPicker variant="popover" disabled={savingModel || saving} />
             )}
 
             {pending > 0 && (

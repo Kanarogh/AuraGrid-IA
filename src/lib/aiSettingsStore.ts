@@ -5,6 +5,7 @@ import {
   setAiProvider,
   setOpenRouterModel,
   setGeminiModels,
+  setOllamaModel,
   type AiProviderId,
   type AiSettingsResponse,
   type OpenRouterModelsFilter,
@@ -202,6 +203,21 @@ export async function changeGeminiCatalogModel(catalogModel: string | null): Pro
   }
 }
 
+export async function changeOllamaModel(model: string | null): Promise<void> {
+  setState({ saving: true, error: null });
+  try {
+    const settings = await setOllamaModel(model);
+    const health = await fetchHealth();
+    setState({ settings, health, saving: false });
+  } catch (err) {
+    setState({
+      saving: false,
+      error: err instanceof Error ? err.message : "Falha ao trocar modelo Ollama.",
+    });
+    throw err;
+  }
+}
+
 export function noteLastProviderUsed(provider: string | null | undefined) {
   if (
     provider === "gemini" ||
@@ -231,6 +247,11 @@ export function getActiveModelLabel(): string {
   }
   if (settings.activeProvider === "gemini") {
     return geminiModelDisplayLabel(settings.gemini);
+  }
+  if (settings.activeProvider === "ollama") {
+    const id = settings.ollama.activeModel;
+    const known = settings.ollama.models.find((m) => m.id === id);
+    return known?.label.replace(/\s*\(.*\)$/, "") ?? id;
   }
   const active = getActiveProviderOption();
   return active?.model ?? "—";

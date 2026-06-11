@@ -11,6 +11,10 @@ import {
   buildImageOnlyCaptionTask,
   buildImageOnlyResultInstructions,
   buildCaptionPromptOptions,
+  buildCaptionOnlyTask,
+  buildCaptionOnlyResultInstructions,
+  buildFingerprintMatchTask,
+  buildFingerprintMatchSection,
   isImageOnlyCaptionMode,
   normalizeMatchedId,
   resolveMatchedIdFromCandidates,
@@ -25,7 +29,9 @@ import {
 import { cleanBase64, withRetry } from "./shared";
 import type {
   AiProvider,
+  CaptionOnlyInput,
   CatalogEnrichInput,
+  MatchFromFingerprintInput,
   MatchGenerateInput,
   MatchGenerateResult,
 } from "./types";
@@ -240,6 +246,102 @@ export const geminiProvider: AiProvider = {
       reasoning: parsed.reasoning ?? "",
       caption: matchOnly ? "" : (parsed.caption ?? ""),
       matchMode: useTextCatalog ? "catalog_json" : "catalog_images",
+    };
+  },
+
+  async generateCaptionOnly(input: CaptionOnlyInput) {
+    const gem = resolveBrandGemFromBody(input);
+    const ai = getClient();
+    const model = getGeminiModel();
+    const response = await withRetry(
+      () =>
+        ai.models.generateContent({
+          model,
+          contents: [
+            { text: buildCaptionOnlyTask(input, gem) },
+            { inlineData: cleanBase64(input.postImage) },
+            {
+              text: buildCaptionOnlyResultInstructions(
+                gem,
+                buildCaptionPromptOptions(input)
+              ),
+            },
+          ],
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: { caption: { type: Type.STRING } },
+              required: ["caption"],
+            },
+          },
+        }),
+      "Gemini"
+    );
+    const parsed = JSON.parse(response.text || "{}") as { caption?: string };
+    return { caption: parsed.caption ?? "" };
+  },
+
+  async matchFromFingerprint(input: MatchFromFingerprintInput): Promise<MatchGenerateResult> {
+    const ai = getClient();
+    const model = getGeminiModel();
+    const { postFingerprint, matchOnly } = input;
+    const gem = resolveBrandGemFromBody(input);
+    const profiles = input.catalogProfiles ?? [];
+
+    const response = await withRetry(
+      () =>
+        ai.models.generateContent({
+          model,
+          contents: [
+            { text: buildFingerprintMatchTask(!!matchOnly, gem) },
+            {
+              text: buildFingerprintMatchSection(postFingerprint, profiles, {
+                matchRankHint: input.matchRankHint,
+              }),
+            },
+            {
+              text: buildMatchResultInstructions(
+                gem,
+                !!matchOnly,
+                buildCaptionPromptOptions(input)
+              ),
+            },
+          ],
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: matchOnly
+              ? {
+                  type: Type.OBJECT,
+                  properties: {
+                    matchedId: { type: Type.STRING },
+                    reasoning: { type: Type.STRING },
+                  },
+                  required: ["matchedId", "reasoning"],
+                }
+              : {
+                  type: Type.OBJECT,
+                  properties: {
+                    matchedId: { type: Type.STRING },
+                    reasoning: { type: Type.STRING },
+                    caption: { type: Type.STRING },
+                  },
+                  required: ["matchedId", "reasoning", "caption"],
+                },
+          },
+        }),
+      "Gemini"
+    );
+
+    const parsed = JSON.parse(response.text || "{}") as Omit<MatchGenerateResult, "matchMode"> & {
+      caption?: string;
+    };
+    const candidateProfiles = profiles.map((p) => ({ id: p.id, label: p.label }));
+    return {
+      matchedId: resolveMatchedIdFromCandidates(parsed.matchedId, candidateProfiles),
+      reasoning: parsed.reasoning ?? "",
+      caption: matchOnly ? "" : (parsed.caption ?? ""),
+      matchMode: "catalog_json_fingerprint_text",
     };
   },
 
