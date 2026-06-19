@@ -2712,7 +2712,8 @@ export default function App() {
     ]
   );
 
-  const activePost = posts.find(p => p.id === activePreviewId) || posts[0];
+  const activePost =
+    posts.find((p) => p?.id === activePreviewId) ?? posts.find((p) => !!p?.id) ?? null;
 
   const orderedEditorialPosts = useMemo(
     () =>
@@ -2860,9 +2861,11 @@ export default function App() {
               compact={viewMode === "split"}
             />
 
-            {viewMode === "split" ? (
+            {viewMode === "split" && activePost ? (
               <PostDayStudio
-                cardRef={(el) => (dayCardRefs.current[activePost.id] = el)}
+                cardRef={(el) => {
+                  dayCardRefs.current[activePost.id] = el;
+                }}
                 post={activePost}
                 position={activeEditorialIndex + 1}
                 total={orderedEditorialPosts.length}
@@ -2903,6 +2906,10 @@ export default function App() {
                 }
                 onRefine={(instruction) => void handleRefineCaption(activePost.id, instruction)}
               />
+            ) : viewMode === "split" ? (
+              <div className="ag-card p-8 text-center text-sm text-ag-muted">
+                Nenhum post no roteiro. Adicione um dia ou sincronize pelo Grid Canva.
+              </div>
             ) : (
               <EditorialGridView
                 posts={posts}
@@ -2942,7 +2949,7 @@ export default function App() {
           </>
         )}
 
-        {hasActiveClient && activeSection === "canva_grid" && (
+        {hasActiveClient && activeSection === "canva_grid" && activeCanvaPage && (
           <StudioSection
             title="Grid Canva"
             eyebrow="Produção visual"
@@ -3025,7 +3032,7 @@ export default function App() {
           >
             <CanvaGridWorkspace
               pages={canvaPages}
-              activePage={activeCanvaPage!}
+              activePage={activeCanvaPage}
               activePageId={activeCanvaPageId}
               selectedSlotId={selectedCanvaSlotId}
               selectedSlotNumber={selectedCanvaSlotNumber}

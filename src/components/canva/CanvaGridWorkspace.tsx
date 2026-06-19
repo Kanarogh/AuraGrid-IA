@@ -11,7 +11,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import type { CanvaGridPage, CanvaGridSlot, CatalogItem } from "../../types";
+import type { CanvaGridPage, CanvaGridSlot as CanvaSlot, CatalogItem } from "../../types";
 import type { CanvaGridFormat } from "../../lib/canvaGridFormats";
 import { isCanvaSlotFilled } from "../../lib/canva";
 import { cn } from "../../lib/cn";
@@ -89,7 +89,7 @@ export function CanvaGridWorkspace({
   onDropOnSlot: (slotId: string, dataTransfer: DataTransfer) => void;
   onSlotDragOver: (slotId: string) => void;
   onSlotDragLeave: (slotId: string) => void;
-  onOpenLightbox: (slot: CanvaGridSlot, slotNumber: number) => void;
+  onOpenLightbox: (slot: CanvaSlot, slotNumber: number) => void;
   onFormatChange: (format: CanvaGridFormatId) => void;
   onZoomChange: (width: number) => void;
   onAssignWardrobeItem: (item: CatalogItem) => void;
@@ -107,7 +107,7 @@ export function CanvaGridWorkspace({
   const [swapSourceSlotId, setSwapSourceSlotId] = useState<string | null>(null);
   const batchInputRef = useRef<HTMLInputElement>(null);
 
-  const filledCount = activePage.slots.filter(isCanvaSlotFilled).length;
+  const filledCount = (activePage.slots ?? []).filter(isCanvaSlotFilled).length;
 
   const clearSelection = () => {
     setSwapSourceSlotId(null);
@@ -279,7 +279,8 @@ export function CanvaGridWorkspace({
               style={{ width: canvaGridMaxWidth, maxWidth: "100%" }}
             >
               <div className="grid grid-cols-3 gap-px bg-ag-border p-px">
-                {activePage.slots.map((slot, index) => {
+                {(activePage.slots ?? []).map((slot, index) => {
+                  if (!slot) return null;
                   const slotNumber = index + 1;
                   return (
                     <div

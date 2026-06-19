@@ -83,7 +83,7 @@ export function CanvaPageStrip({
       <div className="flex gap-2 overflow-x-auto pb-1 ag-scrollbar-thin">
         {pages.map((page, pageIndex) => {
           const isActive = page.id === activePageId;
-          const filled = page.slots.filter(isCanvaSlotFilled).length;
+          const filled = (page.slots ?? []).filter(isCanvaSlotFilled).length;
           const isDragging = dragFromIndex === pageIndex;
           const isDropTarget = dropTargetIndex === pageIndex;
 
@@ -113,9 +113,9 @@ export function CanvaPageStrip({
                 )}
               >
                 <div className="grid grid-cols-3 gap-0.5 rounded-lg bg-ag-surface-3 p-1 mb-2">
-                  {page.slots.map((s, i) => (
+                  {(page.slots ?? []).map((s, i) => (
                     <div
-                      key={i}
+                      key={s?.id ?? i}
                       className={cn(
                         "h-1 rounded-[2px]",
                         isCanvaSlotFilled(s) ? "bg-ag-accent" : "bg-ag-muted/25"

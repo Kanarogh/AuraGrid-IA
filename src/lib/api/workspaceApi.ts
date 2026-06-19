@@ -1,3 +1,4 @@
+import { normalizeCanvaPages } from "../canva";
 import type { BrandGem, CatalogItem, PlannedPost } from "../../types";
 import type { ClientRegistry, ClientWorkspace } from "../clientWorkspace/types";
 import type { ClientMeta } from "../clientWorkspace/types";
@@ -18,33 +19,41 @@ export type ApiWorkspaceResponse = {
 };
 
 export function apiWorkspaceToClientWorkspace(dto: ApiWorkspaceResponse): ClientWorkspace {
+  const normalizedPages = normalizeCanvaPages(
+    dto.canva.pages.map((page) => ({
+      ...page,
+      slots: (page.slots ?? []).filter(Boolean).map((slot) => {
+        const imageFromDto =
+          typeof slot.image === "string" ? resolveMediaUrl(slot.image) : null;
+        const image =
+          imageFromDto ??
+          (slot.imageAssetId
+            ? resolveMediaUrl(`/api/v1/media/${slot.imageAssetId}`)
+            : null);
+        return { ...slot, image };
+      }),
+    }))
+  );
+
   return {
     version: 1,
     brandGem: dto.brandGem,
-    catalog: dto.catalog.map((c) => ({
-      ...c,
-      image: resolveCatalogItemImage(c),
-    })),
-    posts: dto.posts.map((p) => ({
-      ...p,
-      image: resolveMediaUrl(typeof p.image === "string" ? p.image : null),
-    })),
+    catalog: dto.catalog
+      .filter((c): c is CatalogItem => !!c?.id)
+      .map((c) => ({
+        ...c,
+        image: resolveCatalogItemImage(c),
+      })),
+    posts: dto.posts
+      .filter((p): p is PlannedPost => !!p?.id)
+      .map((p) => ({
+        ...p,
+        image: resolveMediaUrl(typeof p.image === "string" ? p.image : null),
+      })),
     startDate: dto.startDate,
     canva: {
       ...dto.canva,
-      pages: dto.canva.pages.map((page) => ({
-        ...page,
-        slots: page.slots.map((slot) => {
-          const imageFromDto =
-            typeof slot.image === "string" ? resolveMediaUrl(slot.image) : null;
-          const image =
-            imageFromDto ??
-            (slot.imageAssetId
-              ? resolveMediaUrl(`/api/v1/media/${slot.imageAssetId}`)
-              : null);
-          return { ...slot, image };
-        }),
-      })),
+      pages: normalizedPages,
     },
     ui: dto.ui,
   };
@@ -215,8 +224,9 @@ export function resolveMediaUrl(src: string | null | undefined): string | null {
 
 /** URL exibível para item do catálogo (API blob ou data URL). */
 export function resolveCatalogItemImage(
-  item: Pick<CatalogItem, "image" | "imageUrl" | "imageAssetId">
+  item: Pick<CatalogItem, "image" | "imageUrl" | "imageAssetId"> | null | undefined
 ): string | null {
+  if (!item) return null;
   if (item.image?.startsWith("data:")) return item.image;
   if (item.imageAssetId) {
     return resolveMediaUrl(`/api/v1/media/${item.imageAssetId}`);

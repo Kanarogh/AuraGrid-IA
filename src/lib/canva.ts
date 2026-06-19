@@ -31,7 +31,8 @@ export function resolveActiveCanvaPage(
 }
 
 /** URL exibível do slot (imagem inline ou mídia na API). */
-export function resolveSlotImage(slot: CanvaGridSlot): string | null {
+export function resolveSlotImage(slot: CanvaGridSlot | null | undefined): string | null {
+  if (!slot) return null;
   if (slot.image?.startsWith("data:") || slot.image?.startsWith("http")) {
     return slot.image;
   }
@@ -44,6 +45,49 @@ export function resolveSlotImage(slot: CanvaGridSlot): string | null {
   return null;
 }
 
-export function isCanvaSlotFilled(slot: CanvaGridSlot): boolean {
+export function isCanvaSlotFilled(slot: CanvaGridSlot | null | undefined): boolean {
+  if (!slot) return false;
   return !!resolveSlotImage(slot) || !!slot.matchedCatalogId;
+}
+
+const SLOTS_PER_PAGE = 12;
+
+/** Garante 12 slots por página (dados antigos ou API incompleta). */
+export function normalizeCanvaPageSlots(
+  pageId: string,
+  slots: Array<CanvaGridSlot | null | undefined> | null | undefined
+): CanvaGridSlot[] {
+  const safe = (slots ?? []).filter((s): s is CanvaGridSlot => !!s?.id);
+  const byIndex = new Map<number, CanvaGridSlot>();
+  for (const slot of safe) {
+    const match = /_(\d+)$/.exec(slot.id);
+    const idx = match ? Number.parseInt(match[1]!, 10) : byIndex.size;
+    if (idx >= 0 && idx < SLOTS_PER_PAGE) byIndex.set(idx, slot);
+  }
+  return Array.from({ length: SLOTS_PER_PAGE }, (_, i) => {
+    const existing = byIndex.get(i);
+    if (existing) {
+      return {
+        ...existing,
+        image: existing.image ?? null,
+        matchedCatalogId: existing.matchedCatalogId ?? null,
+      };
+    }
+    return {
+      id: `slot_${pageId}_${i}`,
+      image: null,
+      label: `Look ${i + 1}`,
+      matchedCatalogId: null,
+    };
+  });
+}
+
+export function normalizeCanvaPages(pages: CanvaGridPage[] | null | undefined): CanvaGridPage[] {
+  if (!Array.isArray(pages) || pages.length === 0) {
+    return [createEmptyCanvaPage("Página 1", "page_1")];
+  }
+  return pages.map((page) => ({
+    ...page,
+    slots: normalizeCanvaPageSlots(page.id, page.slots),
+  }));
 }

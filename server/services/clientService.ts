@@ -257,36 +257,34 @@ export async function loadWorkspaceDto(userId: string, clientId: string) {
     enrichmentError: c.enrichmentError ?? undefined,
   }));
 
-  const slotDtos = slots.map((s) => ({
-    id: s.id,
-    image: s.imageAssetId ? mediaPublicUrl(s.imageAssetId) : null,
-    imageAssetId: s.imageAssetId,
-    label: s.label,
-    matchedCatalogId: s.matchedCatalogId,
-  }));
+  // Fix page slots grouping — sempre 12 slots por página
+  const pagesWithSlots = (pages.length > 0 ? pages : defaultCanvaPages(clientId).pages).map(
+    (p) => ({
+      id: p.id,
+      name: p.name,
+      slots: Array.from({ length: 12 }, (_, i) => {
+        const row = slots.find((s) => s.pageId === p.id && s.slotIndex === i);
+        if (row) {
+          return {
+            id: row.id,
+            image: row.imageAssetId ? mediaPublicUrl(row.imageAssetId) : null,
+            imageAssetId: row.imageAssetId,
+            label: row.label,
+            matchedCatalogId: row.matchedCatalogId,
+          };
+        }
+        return {
+          id: `slot_${p.id}_${i}`,
+          image: null,
+          imageAssetId: null,
+          label: `Look ${i + 1}`,
+          matchedCatalogId: null,
+        };
+      }),
+    })
+  );
 
-  const pageDtos = pages.map((p) => ({
-    id: p.id,
-    name: p.name,
-    slots: slotDtos.filter((s) => slots.find((row) => row.id === s.id && row.pageId === p.id)),
-  }));
-
-  // Fix page slots grouping
-  const pagesWithSlots = pages.map((p) => ({
-    id: p.id,
-    name: p.name,
-    slots: slots
-      .filter((s) => s.pageId === p.id)
-      .map((s) => ({
-        id: s.id,
-        image: s.imageAssetId ? mediaPublicUrl(s.imageAssetId) : null,
-        imageAssetId: s.imageAssetId,
-        label: s.label,
-        matchedCatalogId: s.matchedCatalogId,
-      })),
-  }));
-
-  const postsDto = posts.map((p) => ({
+  const postsDto = (posts.length > 0 ? posts : defaultPosts(clientId)).map((p) => ({
     id: p.id,
     dayNumber: p.dayNumber,
     dateLabel: p.dateLabel,

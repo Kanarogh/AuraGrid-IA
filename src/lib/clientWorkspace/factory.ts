@@ -1,4 +1,4 @@
-import { createEmptyCanvaPage, getDefaultActiveCanvaPageId } from "../canva";
+import { createEmptyCanvaPage, getDefaultActiveCanvaPageId, normalizeCanvaPages } from "../canva";
 import {
   DEFAULT_CANVA_GRID_FORMAT,
   getCanvaGridFormat,
@@ -154,10 +154,11 @@ export function normalizeWorkspace(
     ),
   };
 
-  const pages =
+  const pages = normalizeCanvaPages(
     Array.isArray(raw.canva?.pages) && raw.canva.pages.length > 0
       ? raw.canva.pages
-      : empty.canva.pages;
+      : empty.canva.pages
+  );
 
   return {
     version: 1,

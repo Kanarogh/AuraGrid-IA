@@ -20,18 +20,19 @@ export function getCaptionBatchStats(
   posts: PlannedPost[],
   catalog: CatalogItem[]
 ): CaptionBatchStats {
-  const refs = getReferenceCatalog(catalog);
-  const withImage = posts.filter((p) => !!p.image);
+  const safePosts = posts.filter((p): p is PlannedPost => !!p?.id);
+  const refs = getReferenceCatalog(catalog.filter((c): c is CatalogItem => !!c?.id));
+  const withImage = safePosts.filter((p) => !!p.image);
 
   return {
-    total: posts.length,
+    total: safePosts.length,
     withImage: withImage.length,
-    withoutImage: posts.length - withImage.length,
-    pending: posts.filter((p) => p.image && !p.isGenerated && !p.isGenerating).length,
-    generated: posts.filter((p) => p.isGenerated && !!p.caption).length,
-    confirmed: posts.filter((p) => p.isConfirmed).length,
-    errors: posts.filter((p) => !!p.error).length,
-    generating: posts.filter((p) => p.isGenerating).length,
+    withoutImage: safePosts.length - withImage.length,
+    pending: safePosts.filter((p) => p.image && !p.isGenerated && !p.isGenerating).length,
+    generated: safePosts.filter((p) => p.isGenerated && !!p.caption).length,
+    confirmed: safePosts.filter((p) => p.isConfirmed).length,
+    errors: safePosts.filter((p) => !!p.error).length,
+    generating: safePosts.filter((p) => p.isGenerating).length,
     catalogTotal: refs.length,
     catalogIndexed: refs.filter((c) => c.enrichmentStatus === "ready" && c.visualProfile).length,
     catalogReady: catalogReadyForTextMatch(refs),

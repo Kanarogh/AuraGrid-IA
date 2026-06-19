@@ -6,8 +6,8 @@ export interface PostStatusStyle {
   dot: string;
 }
 
-export function getPostStatus(post: PlannedPost): PostStatusStyle {
-  if (!post.image) {
+export function getPostStatus(post: PlannedPost | null | undefined): PostStatusStyle {
+  if (!post || !post.image) {
     return {
       label: "Sem imagem",
       badge: "bg-ag-muted/10 text-ag-muted border-ag-border",

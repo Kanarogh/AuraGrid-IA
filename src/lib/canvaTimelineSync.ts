@@ -9,6 +9,7 @@ export function gatherCanvaSlots(pages: CanvaGridPage[]): CanvaSlotWithPage[] {
   for (const page of pages || []) {
     if (!page?.slots) continue;
     for (const slot of page.slots) {
+      if (!slot) continue;
       all.push({ ...slot, pageId: page.id });
     }
   }
@@ -16,7 +17,7 @@ export function gatherCanvaSlots(pages: CanvaGridPage[]): CanvaSlotWithPage[] {
 }
 
 export function countCanvaImages(pages: CanvaGridPage[]): number {
-  return gatherCanvaSlots(pages).filter((s) => s.image !== null).length;
+  return gatherCanvaSlots(pages).filter((s) => s?.image != null).length;
 }
 
 function shouldPreserveSyncedPost(
@@ -52,7 +53,7 @@ export function syncCanvaPagesToPosts(
   startDate: string,
   options: { reversed: boolean }
 ): PlannedPost[] {
-  const validSlots = gatherCanvaSlots(pages).filter((s) => s.image !== null);
+  const validSlots = gatherCanvaSlots(pages).filter((s) => s?.image != null);
   if (validSlots.length === 0) return existingPosts;
 
   let orderedSlots = [...validSlots];
