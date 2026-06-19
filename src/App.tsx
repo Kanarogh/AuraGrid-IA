@@ -56,7 +56,6 @@ import {
   type CatalogEnrichProgress,
   fetchWorkspace,
   stopEnrichCatalogApi,
-  uploadCatalogBatchApi,
   uploadMediaApi,
   apiWorkspaceToClientWorkspace,
   fetchImageAsDataUrl,
@@ -159,6 +158,16 @@ import {
   pickFilesFromFolder,
   prepareCatalogUploadCandidates,
 } from "./lib/catalogImageUpload";
+import {
+  createInitialUploadProgress,
+  uploadCatalogCandidatesSequential,
+  type CatalogUploadProgressState,
+} from "./lib/catalogUploadProgress";
+import {
+  computeOverallUploadPercent,
+  estimateUploadEtaSeconds,
+} from "./lib/uploadProgress";
+import { CatalogUploadProgressPanel } from "./components/catalog/CatalogUploadProgressPanel";
 
 
 export default function App() {
@@ -288,7 +297,13 @@ export default function App() {
   /** Posts que apagaram legenda — próxima geração ignora cache e chama a IA de novo. */
   const captionCacheBypassRef = useRef(new Set<string>());
   const [isEnrichingCatalog, setIsEnrichingCatalog] = useState(false);
-  const [isUploadingCatalog, setIsUploadingCatalog] = useState(false);
+  const [catalogUploadProgress, setCatalogUploadProgress] =
+    useState<CatalogUploadProgressState | null>(null);
+  const catalogUploadAbortRef = useRef<AbortController | null>(null);
+  const catalogUploadDismissRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isUploadingCatalog =
+    catalogUploadProgress?.phase === "processing" ||
+    catalogUploadProgress?.phase === "uploading";
   const [catalogEnrichProgress, setCatalogEnrichProgress] = useState<CatalogEnrichProgress | null>(
     null
   );
@@ -446,6 +461,13 @@ export default function App() {
 
   useEffect(() => {
     initAiSettingsStore();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      catalogUploadAbortRef.current?.abort();
+      if (catalogUploadDismissRef.current) clearTimeout(catalogUploadDismissRef.current);
+    };
   }, []);
 
   const bindFolderUploadInput = useCallback((el: HTMLInputElement | null) => {
@@ -1382,6 +1404,25 @@ export default function App() {
   };
 
   // Importa imagens para o guarda-roupa de referências (aba Catálogo)
+  const scheduleCatalogUploadDismiss = useCallback(() => {
+    if (catalogUploadDismissRef.current) clearTimeout(catalogUploadDismissRef.current);
+    catalogUploadDismissRef.current = setTimeout(() => {
+      setCatalogUploadProgress(null);
+      catalogUploadDismissRef.current = null;
+    }, 5000);
+  }, []);
+
+  const cancelCatalogUpload = useCallback(() => {
+    catalogUploadAbortRef.current?.abort();
+    catalogUploadAbortRef.current = null;
+    if (catalogUploadDismissRef.current) {
+      clearTimeout(catalogUploadDismissRef.current);
+      catalogUploadDismissRef.current = null;
+    }
+    setCatalogUploadProgress(null);
+    toast.info("Envio cancelado.");
+  }, []);
+
   const handleBatchImages = async (
     fileList: FileList | File[],
     options?: { asReference?: boolean }
@@ -1407,33 +1448,86 @@ export default function App() {
       return;
     }
 
-    setIsUploadingCatalog(true);
+    catalogUploadAbortRef.current?.abort();
+    const controller = new AbortController();
+    catalogUploadAbortRef.current = controller;
+
+    const total = candidates.length;
+    const startedAt = Date.now();
+    setCatalogUploadProgress(createInitialUploadProgress(total));
+
     try {
       if (useApiStorage && activeClientId) {
-        const { items } = await uploadCatalogBatchApi(
+        const { items, errors, cancelled } = await uploadCatalogCandidatesSequential(
           activeClientId,
-          candidates.map((c) => c.file),
+          candidates,
           {
             isReference: asReference,
-            labels: candidates.map((c) => c.label),
+            signal: controller.signal,
+            onProgress: setCatalogUploadProgress,
           }
         );
-        setCatalog((prev) => [
-          ...items.map((c) => ({ ...c, image: resolveCatalogItemImage(c) })),
-          ...prev,
-        ]);
+
+        if (items.length > 0) {
+          setCatalog((prev) => [
+            ...items.map((c) => ({ ...c, image: resolveCatalogItemImage(c) })),
+            ...prev,
+          ]);
+        }
+
+        if (cancelled || controller.signal.aborted) {
+          if (items.length > 0) {
+            toast.info(
+              `Envio interrompido. ${items.length} arquivo(s) já foram salvos no catálogo.`
+            );
+          }
+          setCatalogUploadProgress(null);
+          return;
+        }
+
         const skipped = allFiles.length - candidates.length;
-        toast.success(
-          asReference
-            ? `Sucesso! ${items.length} referência(s) adicionada(s).` +
-                (skipped > 0 ? ` (${skipped} arquivo(s) ignorados)` : "")
-            : `Sucesso! ${items.length} peça(s) de grid adicionada(s).` +
-                (skipped > 0 ? ` (${skipped} arquivo(s) ignorados)` : "")
-        );
+        const succeeded = items.length;
+        const failed = errors.length;
+
+        setCatalogUploadProgress({
+          phase: "done",
+          current: total,
+          total,
+          fileName: "",
+          label: "",
+          filePercent: 100,
+          overallPercent: 100,
+          bytesLoaded: 0,
+          bytesTotal: 0,
+          startedAt,
+          succeeded,
+          failed,
+          etaSeconds: 0,
+          statusMessage:
+            asReference
+              ? `${succeeded} referência${succeeded !== 1 ? "s" : ""} enviada${succeeded !== 1 ? "s" : ""}` +
+                (skipped > 0 ? ` · ${skipped} ignorado${skipped !== 1 ? "s" : ""}` : "")
+              : `${succeeded} peça${succeeded !== 1 ? "s" : ""} de grid enviada${succeeded !== 1 ? "s" : ""}`,
+        });
+
+        if (succeeded > 0) {
+          toast.success(
+            asReference
+              ? `${succeeded} referência(s) adicionada(s).`
+              : `${succeeded} peça(s) de grid adicionada(s).`
+          );
+        }
+        if (failed > 0) {
+          toast.error(
+            `${failed} arquivo(s) falharam no envio.${errors[0] ? `\n${errors[0].fileName}: ${errors[0].message}` : ""}`
+          );
+        }
+        scheduleCatalogUploadDismiss();
         return;
       }
 
       if (storageMode !== "local") {
+        setCatalogUploadProgress(null);
         toast.warning("Entre na sua conta para enviar imagens. Os dados ficam salvos na nuvem.");
         return;
       }
@@ -1441,9 +1535,34 @@ export default function App() {
       const newItems: CatalogItem[] = [];
       let failedCount = 0;
 
-      for (const { file, label } of candidates) {
+      for (let i = 0; i < candidates.length; i++) {
+        if (controller.signal.aborted) return;
+
+        const { file, label } = candidates[i]!;
+        const index = i + 1;
+        const fileSize = file.size || 0;
+
+        setCatalogUploadProgress({
+          phase: "processing",
+          current: index,
+          total,
+          fileName: file.name,
+          label,
+          filePercent: 10,
+          overallPercent: computeOverallUploadPercent(total, index, 10),
+          bytesLoaded: 0,
+          bytesTotal: fileSize,
+          startedAt,
+          succeeded: newItems.length,
+          failed: failedCount,
+          etaSeconds: estimateUploadEtaSeconds(startedAt, total, index, 10),
+          statusMessage: `Processando ${index} de ${total}…`,
+        });
+
         try {
           const base64Str = await fileToCatalogImageDataUrl(file);
+          if (controller.signal.aborted) return;
+
           newItems.push({
             id: "cat_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9),
             label,
@@ -1453,6 +1572,24 @@ export default function App() {
               : `Peça de grid importada em ${new Date().toLocaleDateString("pt-BR")} do arquivo '${file.name}' — não usada como referência de look`,
             isReference: asReference,
             enrichmentStatus: asReference ? "pending" : undefined,
+          });
+
+          setCatalogUploadProgress({
+            phase: "processing",
+            current: index,
+            total,
+            fileName: file.name,
+            label,
+            filePercent: 100,
+            overallPercent: computeOverallUploadPercent(total, index, 100),
+            bytesLoaded: fileSize,
+            bytesTotal: fileSize,
+            startedAt,
+            succeeded: newItems.length,
+            failed: failedCount,
+            etaSeconds: estimateUploadEtaSeconds(startedAt, total, index, 100),
+            statusMessage:
+              index < total ? `Salvo ${index} de ${total}` : "Finalizando…",
           });
         } catch (err) {
           failedCount++;
@@ -1474,15 +1611,58 @@ export default function App() {
       } else if (failedCount > 0) {
         toast.error("Não foi possível processar imagens do lote selecionado.");
       }
+
+      setCatalogUploadProgress({
+        phase: failedCount > 0 && newItems.length === 0 ? "error" : "done",
+        current: total,
+        total,
+        fileName: "",
+        label: "",
+        filePercent: 100,
+        overallPercent: 100,
+        bytesLoaded: 0,
+        bytesTotal: 0,
+        startedAt,
+        succeeded: newItems.length,
+        failed: failedCount,
+        etaSeconds: 0,
+        statusMessage:
+          newItems.length > 0
+            ? `${newItems.length} imagem(ns) salva(s) no navegador`
+            : "Nenhuma imagem foi processada",
+      });
+      scheduleCatalogUploadDismiss();
     } catch (err) {
+      if (controller.signal.aborted || isAbortError(err)) {
+        setCatalogUploadProgress(null);
+        return;
+      }
       const message = err instanceof Error ? err.message : "Falha ao enviar imagens.";
       console.error("[AuraGrid] upload catálogo:", err);
+      setCatalogUploadProgress({
+        phase: "error",
+        current: 0,
+        total,
+        fileName: "",
+        label: "",
+        filePercent: 0,
+        overallPercent: 0,
+        bytesLoaded: 0,
+        bytesTotal: 0,
+        startedAt,
+        succeeded: 0,
+        failed: total,
+        etaSeconds: null,
+        statusMessage: message,
+      });
       toast.error(
         `Não foi possível enviar as imagens.\n\n${message}\n\n` +
           "Confira: login ativo, SQUARECLOUD_BLOB_API_KEY (ou MINIO_*), e os logs da aplicação."
       );
     } finally {
-      setIsUploadingCatalog(false);
+      if (catalogUploadAbortRef.current === controller) {
+        catalogUploadAbortRef.current = null;
+      }
     }
   };
 
@@ -2935,12 +3115,6 @@ export default function App() {
               </div>
 
               <div className="flex flex-wrap items-center justify-center gap-3 mt-2">
-                {isUploadingCatalog && (
-                  <p className="w-full text-xs text-ag-accent font-medium flex items-center justify-center gap-2">
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                    Enviando imagens… (pode levar ~1s por foto na nuvem)
-                  </p>
-                )}
                 {/* Single or Multiple File Trigger */}
                 <button
                   type="button"
@@ -3380,6 +3554,18 @@ export default function App() {
         )}
 
       </AppShell>
+
+      <CatalogUploadProgressPanel
+        progress={catalogUploadProgress}
+        onCancel={isUploadingCatalog ? cancelCatalogUpload : undefined}
+        onDismiss={() => {
+          if (catalogUploadDismissRef.current) {
+            clearTimeout(catalogUploadDismissRef.current);
+            catalogUploadDismissRef.current = null;
+          }
+          setCatalogUploadProgress(null);
+        }}
+      />
 
       <CatalogProfileModal
         item={profileViewItem}
