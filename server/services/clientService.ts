@@ -525,8 +525,12 @@ export async function patchWorkspace(
   }
 
   if (Array.isArray(patch.posts)) {
-    for (const post of patch.posts as Array<Record<string, unknown>>) {
+    const sentPostIds = new Set<string>();
+    const postsArr = patch.posts as Array<Record<string, unknown>>;
+
+    for (const post of postsArr) {
       if (typeof post.id !== "string") continue;
+      sentPostIds.add(post.id);
       const dayNumber =
         typeof post.dayNumber === "number" ? post.dayNumber : parseInt(post.id.replace(/\D/g, ""), 10) || 1;
       const dateLabel =
@@ -595,6 +599,18 @@ export async function patchWorkspace(
             canvaSlotId,
           },
         });
+    }
+
+    const existingPosts = await db
+      .select({ id: plannedPosts.id })
+      .from(plannedPosts)
+      .where(eq(plannedPosts.clientId, clientId));
+    for (const row of existingPosts) {
+      if (!sentPostIds.has(row.id)) {
+        await db
+          .delete(plannedPosts)
+          .where(and(eq(plannedPosts.clientId, clientId), eq(plannedPosts.id, row.id)));
+      }
     }
   }
 

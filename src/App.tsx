@@ -51,6 +51,8 @@ import { useClientWorkspace } from "./context/ClientWorkspaceContext";
 import {
   clearCatalogApi,
   clearCatalogEnrichmentsApi,
+  clearGridCatalogApi,
+  deleteCatalogItemApi,
   enrichCatalogApi,
   fetchEnrichStatusApi,
   type CatalogEnrichProgress,
@@ -194,10 +196,19 @@ export default function App() {
     resetActiveClient,
     useApiStorage,
     persistWorkspaceNow,
+    workspaceHydrated,
   } = useClientWorkspace();
 
   const activeClientIdRef = useRef(activeClientId);
   activeClientIdRef.current = activeClientId;
+
+  const saveWorkspaceNow = useCallback(async () => {
+    try {
+      await persistWorkspaceNow();
+    } catch {
+      /* toast em persistWorkspaceNow */
+    }
+  }, [persistWorkspaceNow]);
 
   const catalog = workspace.catalog;
   const posts = workspace.posts;
@@ -542,9 +553,8 @@ export default function App() {
   // Update starting planning date
   const handleStartDateChange = (newDate: string) => {
     setStartDate(newDate);
-    setPosts(prev => {
-      return recalculatePostDates(newDate, prev);
-    });
+    setPosts((prev) => recalculatePostDates(newDate, prev));
+    void saveWorkspaceNow();
   };
 
   // Add manually a single planning Day at the end of the timeline
@@ -646,10 +656,12 @@ export default function App() {
       return;
     }
 
-    setPosts(prev => {
-      const filtered = prev.filter(p => p.id !== postId);
+    setPosts((prev) => {
+      const filtered = prev.filter((p) => p.id !== postId);
       return recalculatePostDates(startDate, filtered);
     });
+
+    await saveWorkspaceNow();
     
     setTimeout(() => {
       setPosts(current => {
@@ -867,12 +879,8 @@ export default function App() {
   // ==========================================
 
   const saveCanvaGridNow = useCallback(async () => {
-    try {
-      await persistWorkspaceNow();
-    } catch {
-      /* toast exibido em persistWorkspaceNow */
-    }
-  }, [persistWorkspaceNow]);
+    await saveWorkspaceNow();
+  }, [saveWorkspaceNow]);
 
   // Set item from wardrobe catalog into slot
   const handleAssignCatalogToCanvaSlot = async (
@@ -1762,36 +1770,59 @@ export default function App() {
     ) {
       return;
     }
+    if (useApiStorage && activeClientId) {
+      try {
+        await clearGridCatalogApi(activeClientId);
+        await reloadWorkspaceFromApi();
+      } catch (err) {
+        console.error("Erro ao limpar peças de grid:", err);
+        toast.error("Não foi possível remover as peças de grid na nuvem.");
+      }
+      return;
+    }
+
     const gridIds = new Set(gridCatalog.map((c) => c.id));
     setCatalog((prev) => prev.filter((c) => !gridIds.has(c.id)));
-  }, [gridCatalog, setCatalog]);
+  }, [gridCatalog, setCatalog, useApiStorage, activeClientId]);
 
   // Upload Look image for a planned sequence day
   const handlePostPhotoUpload = async (postId: string, file: File) => {
-    const base64 = await processImageFile(file);
-    let image: string | null = base64;
-    let imageAssetId: string | null = null;
-    if (useApiStorage && activeClientId) {
-      const persisted = await ensurePersistedImage(activeClientId, base64, "posts");
-      image = persisted.image;
-      imageAssetId = persisted.imageAssetId;
+    const clientAtStart = activeClientIdRef.current;
+    try {
+      const base64 = await processImageFile(file);
+      let image: string | null = base64;
+      let imageAssetId: string | null = null;
+      if (useApiStorage && clientAtStart) {
+        const persisted = await ensurePersistedImage(clientAtStart, base64, "posts");
+        if (clientAtStart !== activeClientIdRef.current) return;
+        image = persisted.image;
+        imageAssetId = persisted.imageAssetId;
+        if (!imageAssetId) {
+          toast.error("Não foi possível enviar a foto para a nuvem.");
+          return;
+        }
+      }
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === postId
+            ? {
+                ...p,
+                image,
+                imageAssetId,
+                isGenerated: false,
+                isConfirmed: false,
+                matchedCatalogId: null,
+                reasoning: null,
+                caption: "",
+              }
+            : p
+        )
+      );
+      await saveWorkspaceNow();
+    } catch (err) {
+      console.error("Erro ao enviar foto do post:", err);
+      toast.error("Não foi possível salvar a foto neste dia.");
     }
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? {
-              ...p,
-              image,
-              imageAssetId,
-              isGenerated: false,
-              isConfirmed: false,
-              matchedCatalogId: null,
-              reasoning: null,
-              caption: "",
-            }
-          : p
-      )
-    );
   };
 
   const isQuotaErrorMessage = (message: string) =>
@@ -2456,6 +2487,18 @@ export default function App() {
       return;
     }
 
+    if (useApiStorage && activeClientId) {
+      try {
+        await deleteCatalogItemApi(activeClientId, id);
+        await reloadWorkspaceFromApi();
+        setProfileViewItem((current) => (current?.id === id ? null : current));
+      } catch (err) {
+        console.error("Erro ao excluir item do catálogo:", err);
+        toast.error("Não foi possível excluir esta referência na nuvem.");
+      }
+      return;
+    }
+
     setCatalog((prev) => prev.filter((item) => item.id !== id));
     setPosts((prev) =>
       prev.map((p) =>
@@ -2693,6 +2736,15 @@ export default function App() {
     },
     [activeEditorialIndex, orderedEditorialPosts]
   );
+
+  if (useApiStorage && !workspaceHydrated) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-ag-bg text-ag-muted">
+        <Loader2 className="h-8 w-8 animate-spin text-ag-accent" />
+        <p className="text-sm">Carregando workspace na nuvem…</p>
+      </div>
+    );
+  }
 
   return (
     <>

@@ -17,6 +17,7 @@ import {
 } from "../lib/api/workspaceApi";
 import type { ClientRegistry, ClientWorkspace } from "../lib/clientWorkspace";
 import { createEmptyRegistry, createOrphanWorkspace } from "../lib/clientWorkspace";
+import { emitCloudSaveStatus } from "../lib/cloudSaveStatus";
 
 const SAVE_DEBOUNCE_MS = 400;
 
@@ -107,6 +108,15 @@ export function ApiWorkspaceSync() {
         }, 100);
       } catch (err) {
         console.error("[AuraGrid] Falha ao carregar workspace da API:", err);
+        if (!cancelled) {
+          window.dispatchEvent(
+            new CustomEvent("auragrid:api-registry", {
+              detail: { registry: createEmptyRegistry(), workspace: createOrphanWorkspace() },
+            })
+          );
+          loadedRef.current = true;
+          skipSaveRef.current = false;
+        }
       }
     })();
 
@@ -123,9 +133,13 @@ export function ApiWorkspaceSync() {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       const ws = workspaceRef.current;
-      void patchWorkspaceApi(activeClientId, buildWorkspacePatch(ws)).catch((err) =>
-        console.error("[AuraGrid] Falha ao salvar workspace:", err)
-      );
+      emitCloudSaveStatus("saving");
+      void patchWorkspaceApi(activeClientId, buildWorkspacePatch(ws))
+        .then(() => emitCloudSaveStatus("saved"))
+        .catch((err) => {
+          console.error("[AuraGrid] Falha ao salvar workspace:", err);
+          emitCloudSaveStatus("error");
+        });
     }, SAVE_DEBOUNCE_MS);
 
     return () => {
@@ -164,7 +178,14 @@ export function ApiWorkspaceSync() {
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
       }
-      await patchWorkspaceApi(activeClientId, buildWorkspacePatch(ws));
+      emitCloudSaveStatus("saving");
+      try {
+        await patchWorkspaceApi(activeClientId, buildWorkspacePatch(ws));
+        emitCloudSaveStatus("saved");
+      } catch (err) {
+        emitCloudSaveStatus("error");
+        throw err;
+      }
     };
 
     const api = {

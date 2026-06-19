@@ -94,6 +94,13 @@ export async function clearCatalog(clientId: string) {
   await db.delete(catalogItems).where(eq(catalogItems.clientId, clientId));
 }
 
+export async function clearGridCatalog(clientId: string) {
+  const db = getDb();
+  await db
+    .delete(catalogItems)
+    .where(and(eq(catalogItems.clientId, clientId), eq(catalogItems.isReference, false)));
+}
+
 export async function clearCatalogEnrichments(clientId: string, ids?: string[]) {
   const db = getDb();
   const where =

@@ -41,6 +41,7 @@ import { toast } from "../lib/toast";
 import type { BrandGem, CanvaGridPage, CatalogItem, PlannedPost } from "../types";
 import { useAuth } from "./AuthContext";
 import { getApiHelpers, type ApiRegistryEvent } from "./ApiWorkspaceSync";
+import { fetchRegistry, renameClientApi } from "../lib/api/workspaceApi";
 
 type ClientWorkspaceContextValue = {
   registry: ClientRegistry;
@@ -68,6 +69,7 @@ type ClientWorkspaceContextValue = {
   resetActiveClient: () => void;
   persistWorkspaceNow: () => Promise<void>;
   useApiStorage: boolean;
+  workspaceHydrated: boolean;
 };
 
 const ClientWorkspaceContext = createContext<ClientWorkspaceContextValue | null>(null);
@@ -94,6 +96,15 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
   const [workspace, setWorkspace] = useState<ClientWorkspace>(() =>
     initialWorkspace(ensureClientRegistry())
   );
+  const [workspaceHydrated, setWorkspaceHydrated] = useState(() => storageMode !== "postgresql");
+
+  useEffect(() => {
+    if (!useApiStorage) {
+      setWorkspaceHydrated(true);
+      return;
+    }
+    setWorkspaceHydrated(false);
+  }, [useApiStorage, user?.id]);
 
   useEffect(() => {
     if (!useApiStorage) return;
@@ -102,6 +113,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       setRegistry(reg);
       setWorkspace(ws);
       workspaceRef.current = ws;
+      setWorkspaceHydrated(true);
     };
     window.addEventListener("auragrid:api-registry", onApiRegistry);
     return () => window.removeEventListener("auragrid:api-registry", onApiRegistry);
@@ -212,7 +224,8 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
           const api = getApiHelpers();
           if (!api) return;
           if (registry.activeClientId) {
-            await api.patchWorkspace(registry.activeClientId, workspaceRef.current);
+            const flush = api.flushWorkspaceNow;
+            if (flush) await flush(workspaceRef.current);
           }
           aiQueue.cancelPending();
           await api.activateClient(clientId);
@@ -264,17 +277,25 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
   );
 
   const setPosts: Dispatch<SetStateAction<PlannedPost[]>> = useCallback((action) => {
-    setWorkspace((prev) => ({
-      ...prev,
-      posts: typeof action === "function" ? action(prev.posts) : action,
-    }));
+    setWorkspace((prev) => {
+      const next: ClientWorkspace = {
+        ...prev,
+        posts: typeof action === "function" ? action(prev.posts) : action,
+      };
+      workspaceRef.current = next;
+      return next;
+    });
   }, []);
 
   const setStartDate: Dispatch<SetStateAction<string>> = useCallback((action) => {
-    setWorkspace((prev) => ({
-      ...prev,
-      startDate: typeof action === "function" ? action(prev.startDate) : action,
-    }));
+    setWorkspace((prev) => {
+      const next: ClientWorkspace = {
+        ...prev,
+        startDate: typeof action === "function" ? action(prev.startDate) : action,
+      };
+      workspaceRef.current = next;
+      return next;
+    });
   }, []);
 
   const setBrandGem: Dispatch<SetStateAction<BrandGem>> = useCallback((action) => {
@@ -405,7 +426,8 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
           const api = getApiHelpers();
           if (!api) return;
           if (registry.activeClientId) {
-            await api.patchWorkspace(registry.activeClientId, workspaceRef.current);
+            const flush = api.flushWorkspaceNow;
+            if (flush) await flush(workspaceRef.current);
           }
           aiQueue.cancelPending();
           const created = await api.createClient(name, slug);
@@ -446,6 +468,22 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
     (clientId: string, name: string) => {
       const trimmed = name.trim();
       if (!trimmed) return;
+      if (useApiStorage) {
+        void (async () => {
+          try {
+            await renameClientApi(clientId, trimmed);
+            const reg = await fetchRegistry();
+            setRegistry(reg);
+            if (clientId === activeClientId) {
+              setBrandGem((g) => ({ ...g, name: trimmed }));
+            }
+          } catch (err) {
+            console.error("[AuraGrid] Falha ao renomear cliente:", err);
+            toast.error("Não foi possível renomear o cliente na nuvem.");
+          }
+        })();
+        return;
+      }
       const nextClients = registry.clients.map((c) =>
         c.id === clientId ? touchMeta({ ...c, name: trimmed }) : c
       );
@@ -460,7 +498,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [registry, activeClientId, persistRegistry, setBrandGem]
+    [registry, activeClientId, persistRegistry, setBrandGem, useApiStorage]
   );
 
   const deleteClient = useCallback(
@@ -559,6 +597,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       resetActiveClient,
       persistWorkspaceNow,
       useApiStorage,
+      workspaceHydrated,
     }),
     [
       registry,
@@ -585,6 +624,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       resetActiveClient,
       persistWorkspaceNow,
       useApiStorage,
+      workspaceHydrated,
     ]
   );
 

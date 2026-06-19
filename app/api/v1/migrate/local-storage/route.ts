@@ -45,6 +45,94 @@ function dataUrlToBuffer(dataUrl: string): { buffer: Buffer; mimeType: string } 
   return { mimeType: match[1]!, buffer: Buffer.from(match[2]!, "base64") };
 }
 
+const MEDIA_ID_RE = /\/api\/v1\/media\/([0-9a-f-]{36})/i;
+
+async function persistLegacyImageAsset(
+  clientId: string,
+  userId: string,
+  image: unknown,
+  kind: "canva" | "posts" | "catalog",
+  fileName: string,
+  existingAssetId?: unknown
+): Promise<string | null> {
+  if (typeof existingAssetId === "string" && existingAssetId.trim()) {
+    return existingAssetId;
+  }
+  if (typeof image !== "string" || !image) return null;
+  const fromUrl = image.match(MEDIA_ID_RE);
+  if (fromUrl) return fromUrl[1]!;
+  const parsed = dataUrlToBuffer(image);
+  if (!parsed) return null;
+  const media = await uploadMediaBuffer({
+    clientId,
+    userId,
+    buffer: parsed.buffer,
+    mimeType: parsed.mimeType,
+    kind,
+    fileName,
+  });
+  return media.id;
+}
+
+async function hydrateLegacyCanvaImages(
+  clientId: string,
+  userId: string,
+  canva: Record<string, unknown> | undefined
+): Promise<Record<string, unknown> | undefined> {
+  if (!canva || !Array.isArray(canva.pages)) return canva;
+  const pages = await Promise.all(
+    (canva.pages as Array<Record<string, unknown>>).map(async (page) => {
+      if (!Array.isArray(page.slots)) return page;
+      const slots = await Promise.all(
+        (page.slots as Array<Record<string, unknown>>).map(async (slot, idx) => {
+          const imageAssetId = await persistLegacyImageAsset(
+            clientId,
+            userId,
+            slot.image,
+            "canva",
+            `slot_${String(slot.id ?? idx)}.jpg`,
+            slot.imageAssetId
+          );
+          return {
+            ...slot,
+            image: null,
+            imageAssetId: imageAssetId ?? slot.imageAssetId ?? null,
+          };
+        })
+      );
+      return { ...page, slots };
+    })
+  );
+  return { ...canva, pages };
+}
+
+async function hydrateLegacyPostImages(
+  clientId: string,
+  userId: string,
+  posts: unknown
+): Promise<unknown> {
+  if (!Array.isArray(posts)) return posts;
+  return Promise.all(
+    posts.map(async (post) => {
+      if (!post || typeof post !== "object") return post;
+      const row = post as Record<string, unknown>;
+      const imageAssetId = await persistLegacyImageAsset(
+        clientId,
+        userId,
+        row.image,
+        "posts",
+        `${String(row.id ?? "post")}.jpg`,
+        row.imageAssetId
+      );
+      return {
+        ...row,
+        image: null,
+        imageAssetId: imageAssetId ?? row.imageAssetId ?? null,
+      };
+    })
+  );
+}
+
 export async function POST(req: NextRequest) {
   try {
     const user = requireUser(req);
@@ -107,8 +195,8 @@ export async function POST(req: NextRequest) {
       await patchWorkspace(userId, clientId, {
         startDate: ws.startDate,
         ui: ws.ui,
-        canva: ws.canva,
-        posts: ws.posts,
+        canva: await hydrateLegacyCanvaImages(clientId, userId, ws.canva as Record<string, unknown>),
+        posts: await hydrateLegacyPostImages(clientId, userId, ws.posts),
       });
 
       imported.push(clientId);

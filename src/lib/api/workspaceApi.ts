@@ -135,6 +135,28 @@ export async function clearCatalogApi(clientId: string) {
   return readApiJson(res);
 }
 
+export async function deleteCatalogItemApi(clientId: string, itemId: string) {
+  const res = await apiFetch(`/api/v1/clients/${clientId}/catalog/${itemId}`, {
+    method: "DELETE",
+  });
+  return readApiJson(res);
+}
+
+export async function clearGridCatalogApi(clientId: string) {
+  const res = await apiFetch(`/api/v1/clients/${clientId}/catalog/clear-grid`, {
+    method: "POST",
+  });
+  return readApiJson(res);
+}
+
+export async function renameClientApi(clientId: string, name: string) {
+  const res = await apiFetch(`/api/v1/clients/${clientId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+  return readApiJson(res);
+}
+
 export async function clearCatalogEnrichmentsApi(clientId: string, ids?: string[]) {
   const res = await apiFetch(`/api/v1/clients/${clientId}/catalog/clear-enrichments`, {
     method: "POST",
