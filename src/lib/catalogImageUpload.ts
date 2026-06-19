@@ -172,7 +172,76 @@ export async function collectFilesFromDataTransfer(dt: DataTransfer): Promise<Fi
 
 export function enableFolderPickerInput(input: HTMLInputElement | null) {
   if (!input) return;
+  input.type = "file";
+  input.multiple = true;
+  input.removeAttribute("accept");
+  const el = input as HTMLInputElement & { webkitdirectory?: boolean; mozdirectory?: boolean };
+  el.webkitdirectory = true;
+  el.mozdirectory = true;
   input.setAttribute("webkitdirectory", "");
   input.setAttribute("directory", "");
-  input.multiple = true;
+}
+
+async function readDirectoryHandle(
+  dir: FileSystemDirectoryHandle,
+  basePath: string
+): Promise<File[]> {
+  const files: File[] = [];
+  for await (const [name, handle] of dir.entries()) {
+    const path = basePath ? `${basePath}/${name}` : name;
+    if (handle.kind === "file") {
+      const file = await handle.getFile();
+      try {
+        Object.defineProperty(file, "webkitRelativePath", {
+          value: path,
+          configurable: true,
+        });
+      } catch {
+        /* ignora se o browser não permitir */
+      }
+      files.push(file);
+    } else if (handle.kind === "directory") {
+      files.push(...(await readDirectoryHandle(handle, path)));
+    }
+  }
+  return files;
+}
+
+function supportsDirectoryPicker(): boolean {
+  return typeof window !== "undefined" && "showDirectoryPicker" in window;
+}
+
+/**
+ * Abre o seletor de PASTA (não de arquivos).
+ * Chrome/Edge: diálogo nativo «Selecionar pasta».
+ * Fallback: input com webkitdirectory (atributo aplicado na hora do clique).
+ */
+export async function pickFilesFromFolder(
+  legacyInput?: HTMLInputElement | null
+): Promise<File[] | null> {
+  if (supportsDirectoryPicker()) {
+    try {
+      const handle = await window.showDirectoryPicker({ mode: "read" });
+      const files = await readDirectoryHandle(handle, handle.name);
+      return files;
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return null;
+      console.warn("[AuraGrid] showDirectoryPicker falhou, usando input legado:", err);
+    }
+  }
+
+  if (!legacyInput) return null;
+
+  enableFolderPickerInput(legacyInput);
+
+  return new Promise((resolve) => {
+    const onChange = () => {
+      legacyInput.removeEventListener("change", onChange);
+      const picked = legacyInput.files ? Array.from(legacyInput.files) : [];
+      legacyInput.value = "";
+      resolve(picked);
+    };
+    legacyInput.addEventListener("change", onChange);
+    legacyInput.click();
+  });
 }

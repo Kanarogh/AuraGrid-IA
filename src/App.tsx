@@ -156,6 +156,7 @@ import { confirmDialog } from "./lib/confirmDialog";
 import {
   collectFilesFromDataTransfer,
   enableFolderPickerInput,
+  pickFilesFromFolder,
   prepareCatalogUploadCandidates,
 } from "./lib/catalogImageUpload";
 
@@ -447,9 +448,14 @@ export default function App() {
     initAiSettingsStore();
   }, []);
 
-  useEffect(() => {
-    enableFolderPickerInput(folderUploadInputRef.current);
-    enableFolderPickerInput(gridFolderUploadInputRef.current);
+  const bindFolderUploadInput = useCallback((el: HTMLInputElement | null) => {
+    folderUploadInputRef.current = el;
+    enableFolderPickerInput(el);
+  }, []);
+
+  const bindGridFolderUploadInput = useCallback((el: HTMLInputElement | null) => {
+    gridFolderUploadInputRef.current = el;
+    enableFolderPickerInput(el);
   }, []);
 
   useEffect(() => {
@@ -1480,23 +1486,29 @@ export default function App() {
     }
   };
 
-  const handleFolderUploadChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      void handleBatchImages(e.target.files, { asReference: true });
+  const openReferenceFolderPicker = async () => {
+    const files = await pickFilesFromFolder(folderUploadInputRef.current);
+    if (files === null) return;
+    if (files.length === 0) {
+      toast.warning("A pasta está vazia ou não contém arquivos acessíveis.");
+      return;
     }
-    e.target.value = "";
+    await handleBatchImages(files, { asReference: true });
+  };
+
+  const openGridFolderPicker = async () => {
+    const files = await pickFilesFromFolder(gridFolderUploadInputRef.current);
+    if (files === null) return;
+    if (files.length === 0) {
+      toast.warning("A pasta está vazia ou não contém arquivos acessíveis.");
+      return;
+    }
+    await handleBatchImages(files, { asReference: false });
   };
 
   const handleFilesUploadChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       void handleBatchImages(e.target.files, { asReference: true });
-    }
-    e.target.value = "";
-  };
-
-  const handleGridFolderUploadChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      void handleBatchImages(e.target.files, { asReference: false });
     }
     e.target.value = "";
   };
@@ -2944,7 +2956,7 @@ export default function App() {
                 <button
                   type="button"
                   disabled={isUploadingCatalog || isEnrichingCatalog}
-                  onClick={() => folderUploadInputRef.current?.click()}
+                  onClick={() => void openReferenceFolderPicker()}
                   className="bg-ag-surface-3 hover:bg-ag-surface-3/80 border border-ag-border text-ag-text text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer shadow-sm transition-colors disabled:opacity-50"
                 >
                   <FolderOpen className="h-4 w-4 text-ag-accent" />
@@ -2952,6 +2964,11 @@ export default function App() {
                 </button>
 
               </div>
+
+              <p className="text-[10.5px] text-ag-muted max-w-md mx-auto -mt-2 leading-relaxed">
+                Selecione a pasta <strong className="text-ag-text font-medium">Fotos(6)</strong> inteira e clique em{" "}
+                <strong className="text-ag-text font-medium">Selecionar pasta</strong> — não entre nas subpastas.
+              </p>
 
               {/* Hidden Inputs of batch triggers */}
               <input
@@ -2968,9 +2985,10 @@ export default function App() {
                 type="file"
                 id="batch-folder-picker"
                 multiple
-                ref={folderUploadInputRef}
+                ref={bindFolderUploadInput}
                 className="hidden"
-                onChange={handleFolderUploadChange}
+                tabIndex={-1}
+                aria-hidden
               />
 
             </div>
@@ -3272,7 +3290,7 @@ export default function App() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => gridFolderUploadInputRef.current?.click()}
+                    onClick={() => void openGridFolderPicker()}
                     className="bg-ag-surface-3 hover:bg-ag-surface-3/80 border border-ag-border text-ag-text text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-2 cursor-pointer"
                   >
                     <FolderOpen className="h-4 w-4 text-ag-accent" />
@@ -3290,9 +3308,10 @@ export default function App() {
                 <input
                   type="file"
                   multiple
-                  ref={gridFolderUploadInputRef}
+                  ref={bindGridFolderUploadInput}
                   className="hidden"
-                  onChange={handleGridFolderUploadChange}
+                  tabIndex={-1}
+                  aria-hidden
                 />
               </div>
 
