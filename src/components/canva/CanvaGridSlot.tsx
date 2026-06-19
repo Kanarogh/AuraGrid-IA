@@ -1,7 +1,9 @@
 import { useRef } from "react";
 import { ImagePlus, Upload, ZoomIn, X } from "lucide-react";
 import type { CanvaGridSlot as SlotType } from "../../types";
+import { resolveSlotImage } from "../../lib/canva";
 import { cn } from "../../lib/cn";
+import { CatalogThumbnail } from "../ui/CatalogThumbnail";
 import { IconButton } from "../ui/IconButton";
 
 export function CanvaGridSlot({
@@ -32,7 +34,8 @@ export function CanvaGridSlot({
   onZoom: () => void;
   onStartSwap: () => void;
 }) {
-  const hasImage = !!slot.image;
+  const displayImage = resolveSlotImage(slot);
+  const hasImage = !!displayImage;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -65,12 +68,10 @@ export function CanvaGridSlot({
     >
       {hasImage ? (
         <>
-          <img
-            src={slot.image!}
+          <CatalogThumbnail
+            src={displayImage}
             alt={slot.label || `Look ${slotNumber}`}
-            referrerPolicy="no-referrer"
-            className="h-full w-full object-cover"
-            draggable={false}
+            imgClassName="object-cover"
           />
           {slot.matchedCatalogId && slot.label && (
             <div className="absolute bottom-0 inset-x-0 bg-black/55 backdrop-blur-[2px] text-[8px] font-medium text-white text-center py-1 px-1 truncate pointer-events-none">

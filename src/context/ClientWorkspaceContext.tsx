@@ -37,6 +37,7 @@ import {
   type ClientWorkspace,
 } from "../lib/clientWorkspace";
 import { notifyStorageSaveFailure } from "../lib/clientWorkspace/saveNotify";
+import { toast } from "../lib/toast";
 import type { BrandGem, CanvaGridPage, CatalogItem, PlannedPost } from "../types";
 import { useAuth } from "./AuthContext";
 import { getApiHelpers, type ApiRegistryEvent } from "./ApiWorkspaceSync";
@@ -65,7 +66,7 @@ type ClientWorkspaceContextValue = {
   renameClient: (clientId: string, name: string) => void;
   deleteClient: (clientId: string) => boolean;
   resetActiveClient: () => void;
-  persistWorkspaceNow: () => void;
+  persistWorkspaceNow: () => Promise<void>;
   useApiStorage: boolean;
 };
 
@@ -128,14 +129,22 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
     void saveWorkspaceResilient(clientId, ws).then(notifyStorageSaveFailure);
   }, []);
 
-  const persistWorkspaceNow = useCallback(() => {
+  const persistWorkspaceNow = useCallback(async () => {
     if (!activeClientId) return;
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
     if (useApiStorage) {
-      void getApiHelpers()?.patchWorkspace(activeClientId, workspaceRef.current);
+      const flush = getApiHelpers()?.flushWorkspaceNow;
+      if (!flush) return;
+      try {
+        await flush(workspaceRef.current);
+      } catch (err) {
+        console.error("[AuraGrid] Falha ao salvar workspace:", err);
+        toast.error("Não foi possível salvar o grid na nuvem.");
+        throw err;
+      }
       return;
     }
     flushSave(activeClientId, workspaceRef.current);
@@ -277,27 +286,35 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
 
   const setCanvaPages: Dispatch<SetStateAction<CanvaGridPage[]>> = useCallback(
     (action) => {
-      setWorkspace((prev) => ({
-        ...prev,
-        canva: {
-          ...prev.canva,
-          pages: typeof action === "function" ? action(prev.canva.pages) : action,
-        },
-      }));
+      setWorkspace((prev) => {
+        const next: ClientWorkspace = {
+          ...prev,
+          canva: {
+            ...prev.canva,
+            pages: typeof action === "function" ? action(prev.canva.pages) : action,
+          },
+        };
+        workspaceRef.current = next;
+        return next;
+      });
     },
     []
   );
 
   const setActiveCanvaPageId: Dispatch<SetStateAction<string>> = useCallback(
     (action) => {
-      setWorkspace((prev) => ({
-        ...prev,
-        canva: {
-          ...prev.canva,
-          activePageId:
-            typeof action === "function" ? action(prev.canva.activePageId) : action,
-        },
-      }));
+      setWorkspace((prev) => {
+        const next: ClientWorkspace = {
+          ...prev,
+          canva: {
+            ...prev.canva,
+            activePageId:
+              typeof action === "function" ? action(prev.canva.activePageId) : action,
+          },
+        };
+        workspaceRef.current = next;
+        return next;
+      });
     },
     []
   );

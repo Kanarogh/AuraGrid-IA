@@ -89,7 +89,7 @@ import { finalizeCaption, extractMainCaptionText, resolveCatalogLabel, sanitizeR
 import { normalizeCaptionGenerationParams } from "./lib/captionParams";
 import { syncCanvaPagesToPosts } from "./lib/canvaTimelineSync";
 import { recalculatePostDates } from "./lib/dates";
-import { createEmptyCanvaPage, resolveActiveCanvaPage } from "./lib/canva";
+import { createEmptyCanvaPage, resolveActiveCanvaPage, resolveSlotImage } from "./lib/canva";
 import { getPostStatus } from "./lib/postStatus";
 
 function captionQueueLabel(postId: string, dayNumber: number): string {
@@ -112,6 +112,7 @@ import { EditorialGridView } from "./components/posts/EditorialGridView";
 import { PostsWorkspaceToolbar } from "./components/posts/PostsWorkspaceToolbar";
 import { StudioSection } from "./components/ui/StudioSection";
 import { Button } from "./components/ui/Button";
+import { CatalogThumbnail } from "./components/ui/CatalogThumbnail";
 import { EmptyState } from "./components/ui/EmptyState";
 import { FeedInstagramPreview } from "./components/feed/FeedInstagramPreview";
 import { getCaptionBatchStats, getPendingCaptionPosts } from "./lib/captionBatch";
@@ -192,7 +193,11 @@ export default function App() {
     setUiPrefs,
     resetActiveClient,
     useApiStorage,
+    persistWorkspaceNow,
   } = useClientWorkspace();
+
+  const activeClientIdRef = useRef(activeClientId);
+  activeClientIdRef.current = activeClientId;
 
   const catalog = workspace.catalog;
   const posts = workspace.posts;
@@ -861,43 +866,60 @@ export default function App() {
   // CANVA GRID MULTI-PAGE SYSTEM HANDLERS
   // ==========================================
 
+  const saveCanvaGridNow = useCallback(async () => {
+    try {
+      await persistWorkspaceNow();
+    } catch {
+      /* toast exibido em persistWorkspaceNow */
+    }
+  }, [persistWorkspaceNow]);
+
   // Set item from wardrobe catalog into slot
   const handleAssignCatalogToCanvaSlot = async (
     pageId: string,
     slotId: string,
     item: CatalogItem | null
   ) => {
+    const clientAtStart = activeClientId;
     try {
       let image = item?.image ?? null;
       let imageAssetId = item?.imageAssetId ?? extractMediaAssetId(image);
-      if (useApiStorage && activeClientId && image) {
+      if (useApiStorage && clientAtStart && item && image) {
         const persisted = await ensurePersistedImage(
-          activeClientId,
+          clientAtStart,
           image,
           "canva",
           imageAssetId
         );
+        if (clientAtStart !== activeClientIdRef.current) return;
         image = persisted.image;
         imageAssetId = persisted.imageAssetId;
+        if (!imageAssetId) {
+          toast.error(
+            "Não foi possível vincular a imagem deste look. Tente reenviar a foto pelo Catálogo."
+          );
+          return;
+        }
       }
 
       setCanvaPages((prev) =>
-      prev.map((page) => {
-        if (page.id !== pageId) return page;
-        const slots = page.slots.map((slot) => {
-          if (slot.id !== slotId) return slot;
-          return {
-            ...slot,
-            image: item ? image : null,
-            imageAssetId: item ? imageAssetId : null,
-            label: item ? item.label : `Look ${slot.id.split("_").pop()}`,
-            matchedCatalogId: item ? item.id : null,
-          };
-        });
-        return { ...page, slots };
-      })
+        prev.map((page) => {
+          if (page.id !== pageId) return page;
+          const slots = page.slots.map((slot) => {
+            if (slot.id !== slotId) return slot;
+            return {
+              ...slot,
+              image: item ? image : null,
+              imageAssetId: item ? imageAssetId : null,
+              label: item ? item.label : `Look ${slot.id.split("_").pop()}`,
+              matchedCatalogId: item ? item.id : null,
+            };
+          });
+          return { ...page, slots };
+        })
       );
       setSelectedCanvaSlotId(null);
+      await saveCanvaGridNow();
     } catch (err) {
       console.error("Erro ao atribuir look ao slot:", err);
       toast.error(
@@ -908,15 +930,15 @@ export default function App() {
 
   // Click-to-swap slots or normal swap position within same page
   const handleSwapCanvaSlots = (pageId: string, slotIdA: string, slotIdB: string) => {
-    setCanvaPages(prev => {
-      return prev.map(page => {
+    setCanvaPages((prev) => {
+      return prev.map((page) => {
         if (page.id !== pageId) return page;
-        
+
         const slots = [...page.slots];
-        const idxA = slots.findIndex(s => s.id === slotIdA);
-        const idxB = slots.findIndex(s => s.id === slotIdB);
+        const idxA = slots.findIndex((s) => s.id === slotIdA);
+        const idxB = slots.findIndex((s) => s.id === slotIdB);
         if (idxA === -1 || idxB === -1) return page;
-        
+
         const temp = { ...slots[idxA] };
         slots[idxA] = {
           ...slots[idxA],
@@ -932,15 +954,17 @@ export default function App() {
           label: temp.label,
           matchedCatalogId: temp.matchedCatalogId,
         };
-        
+
         return { ...page, slots };
       });
     });
     setSelectedCanvaSlotId(null);
+    void saveCanvaGridNow();
   };
 
   // Upload file directly into Canva slot & replicate to reference catalog
   const handleUploadImageToCanvaSlot = async (pageId: string, slotId: string, file: File) => {
+    const clientAtStart = activeClientId;
     try {
       const base64Str = await processImageFileForCanvaGrid(file);
       let label = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").trim();
@@ -948,10 +972,15 @@ export default function App() {
 
       let image: string | null = base64Str;
       let imageAssetId: string | null = null;
-      if (useApiStorage && activeClientId) {
-        const persisted = await ensurePersistedImage(activeClientId, base64Str, "canva");
+      if (useApiStorage && clientAtStart) {
+        const persisted = await ensurePersistedImage(clientAtStart, base64Str, "canva");
+        if (clientAtStart !== activeClientIdRef.current) return;
         image = persisted.image;
         imageAssetId = persisted.imageAssetId;
+        if (!imageAssetId) {
+          toast.error("Não foi possível enviar a imagem para a nuvem.");
+          return;
+        }
       }
 
       setCanvaPages((prev) =>
@@ -970,8 +999,10 @@ export default function App() {
           return { ...page, slots };
         })
       );
+      await saveCanvaGridNow();
     } catch (err) {
       console.error("Erro no processamento da imagem do slot Canva:", err);
+      toast.error("Não foi possível salvar a imagem neste slot.");
     }
   };
 
@@ -983,7 +1014,7 @@ export default function App() {
     const catalogId = dt.getData(CATALOG_DRAG_MIME);
     if (catalogId) {
       const item = canvaCatalog.find((c) => c.id === catalogId) ?? null;
-      handleAssignCatalogToCanvaSlot(pageId, slotId, item);
+      await handleAssignCatalogToCanvaSlot(pageId, slotId, item);
       return;
     }
     const file = await getImageFileFromDataTransfer(dt);
@@ -1033,14 +1064,15 @@ export default function App() {
       }))
     };
 
-    setCanvaPages(prev => {
-      const idx = prev.findIndex(p => p.id === pageId);
+    setCanvaPages((prev) => {
+      const idx = prev.findIndex((p) => p.id === pageId);
       if (idx === -1) return [...prev, duplicatedPage];
       const copy = [...prev];
       copy.splice(idx + 1, 0, duplicatedPage);
       return copy;
     });
     setActiveCanvaPageId(newId);
+    void saveCanvaGridNow();
   };
 
   // Add a blank Canva Page
@@ -1050,6 +1082,18 @@ export default function App() {
     const newPage = createEmptyCanvaPage(`Página ${newNum}`, newId);
     setCanvaPages((prev) => [newPage, ...prev]);
     setActiveCanvaPageId(newId);
+    void saveCanvaGridNow();
+  };
+
+  const handleReorderCanvaPages = (fromIndex: number, toIndex: number) => {
+    setCanvaPages((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      if (!moved) return prev;
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+    void saveCanvaGridNow();
   };
 
   // Delete a Canva Page
@@ -1074,6 +1118,7 @@ export default function App() {
       const nextIdx = Math.min(Math.max(deletedIdx, 0), remainingPages.length - 1);
       setActiveCanvaPageId(remainingPages[nextIdx]!.id);
     }
+    void saveCanvaGridNow();
   };
 
   // Clear slots of a Canva page
@@ -1093,6 +1138,7 @@ export default function App() {
         return createEmptyCanvaPage(p.name, p.id);
       })
     );
+    void saveCanvaGridNow();
   };
 
   // Batch upload specific to Canva Grid (re-sequences numerically & rolls over page capacity)
@@ -1148,15 +1194,15 @@ export default function App() {
     }
 
     // Fill the slots starting from active page (sem registrar no guarda-roupa) (Instagram logic: bottom slot 12 triggers first, so we fill from index 11 down to 0)
-    setCanvaPages(prev => {
+    setCanvaPages((prev) => {
       let listIndex = 0;
-      const activePageIndex = prev.findIndex(p => p.id === activeCanvaPageId);
+      const activePageIndex = prev.findIndex((p) => p.id === activeCanvaPageId);
       if (activePageIndex === -1) return prev;
-      
+
       return prev.map((page, pIdx) => {
         if (pIdx < activePageIndex) return page;
         if (listIndex >= base64List.length) return page;
-        
+
         // Clone the slots of this page and fill them backwards from index 11 to 0
         const slots = [...page.slots];
         for (let sIdx = 11; sIdx >= 0; sIdx--) {
@@ -1174,6 +1220,8 @@ export default function App() {
         return { ...page, slots };
       });
     });
+
+    await saveCanvaGridNow();
 
     toast.success(`${base64List.length} fotos carregadas e organizadas sequencialmente na página ativa do Canva Grid (e transbordadas para as páginas seguintes se o limite foi excedido!).`);
   };
@@ -2935,6 +2983,7 @@ export default function App() {
               canvaGridMaxWidth={canvaGridMaxWidth}
               wardrobeItems={canvaCatalog}
               catalogUsageOnActivePage={catalogUsageOnActivePage}
+              cloudSave={useApiStorage}
               onSelectPage={(id) => {
                 setActiveCanvaPageId(id);
                 setSelectedCanvaSlotId(null);
@@ -2943,6 +2992,7 @@ export default function App() {
               onDeletePage={handleDeleteCanvaPage}
               onDuplicatePage={handleDuplicateCanvaPage}
               onClearPage={handleClearCanvaPage}
+              onReorderPages={handleReorderCanvaPages}
               onBatchUpload={handleBatchUploadToCanva}
               onSelectSlot={setSelectedCanvaSlotId}
               onClearSlotSelection={() => setSelectedCanvaSlotId(null)}
@@ -2961,9 +3011,12 @@ export default function App() {
               onSlotDragLeave={(id) =>
                 setCanvaSlotDragOver((prev) => (prev === id ? null : prev))
               }
-              onOpenLightbox={(slot, num) =>
-                setCanvaLightbox({ image: slot.image!, label: slot.label, slotNumber: num })
-              }
+              onOpenLightbox={(slot, num) => {
+                const image = resolveSlotImage(slot);
+                if (image) {
+                  setCanvaLightbox({ image, label: slot.label, slotNumber: num });
+                }
+              }}
               onFormatChange={setCanvaGridFormat}
               onZoomChange={setCanvaGridMaxWidth}
               onAssignWardrobeItem={(item) => {
@@ -3296,11 +3349,10 @@ export default function App() {
                         className="w-full h-full flex items-center justify-center p-1.5 cursor-zoom-in disabled:cursor-default focus:outline-none focus-visible:ring-2 focus-visible:ring-ag-accent/50 rounded-xl"
                         title="Ampliar imagem"
                       >
-                        <img
+                        <CatalogThumbnail
                           src={item.image}
                           alt={item.label}
-                          referrerPolicy="no-referrer"
-                          className="w-full h-full object-contain pointer-events-none"
+                          imgClassName="object-contain pointer-events-none"
                         />
                         {item.image && (
                           <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover/img:bg-black/35 transition-colors opacity-0 group-hover/img:opacity-100 pointer-events-none">
@@ -3515,11 +3567,10 @@ export default function App() {
                           className="w-full h-full flex items-center justify-center p-1.5 cursor-zoom-in disabled:cursor-default focus:outline-none focus-visible:ring-2 focus-visible:ring-ag-accent/50 rounded-xl"
                           title="Ampliar imagem"
                         >
-                          <img
-                            src={item.image ?? undefined}
+                          <CatalogThumbnail
+                            src={item.image}
                             alt={item.label}
-                            referrerPolicy="no-referrer"
-                            className="w-full h-full object-contain pointer-events-none"
+                            imgClassName="object-contain pointer-events-none"
                           />
                           {item.image && (
                             <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover/img:bg-black/35 transition-colors opacity-0 group-hover/img:opacity-100 pointer-events-none">

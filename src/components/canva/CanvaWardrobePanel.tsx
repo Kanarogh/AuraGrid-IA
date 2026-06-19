@@ -3,6 +3,7 @@ import { CheckCircle2, GripVertical, LayoutGrid, ShoppingBag, Sparkles, ZoomIn, 
 import type { CatalogItem } from "../../types";
 import { cn } from "../../lib/cn";
 import { CATALOG_DRAG_MIME } from "../../lib/clipboardImage";
+import { CatalogThumbnail } from "../ui/CatalogThumbnail";
 import { EmptyState } from "../ui/EmptyState";
 import { IconButton } from "../ui/IconButton";
 import { SegmentedControl } from "../ui/SegmentedControl";
@@ -233,12 +234,11 @@ export function CanvaWardrobePanel({
                     className="rounded-lg overflow-hidden bg-ag-surface-3 relative mb-1.5 w-full"
                     style={{ aspectRatio: gridAspectRatio }}
                   >
-                    <img
-                      src={item.image ?? undefined}
+                    <CatalogThumbnail
+                      src={item.image}
                       alt={item.label}
-                      referrerPolicy="no-referrer"
-                      draggable={false}
-                      className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-200"
+                      fallbackLabel={item.label}
+                      imgClassName="group-hover:scale-[1.02] transition-transform duration-200"
                     />
                     {isInGrid && (
                       <span className="absolute top-1 left-1 flex items-center gap-0.5 text-[8px] font-bold font-mono px-1.5 py-0.5 rounded-md bg-ag-success text-white shadow-sm">

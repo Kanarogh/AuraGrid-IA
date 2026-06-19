@@ -158,6 +158,15 @@ export function ApiWorkspaceSync() {
   useEffect(() => {
     if (storageMode !== "postgresql") return;
 
+    const flushWorkspaceNow = async (ws: ClientWorkspace): Promise<void> => {
+      if (skipSaveRef.current || !activeClientId || !loadedRef.current) return;
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      await patchWorkspaceApi(activeClientId, buildWorkspacePatch(ws));
+    };
+
     const api = {
       fetchRegistry,
       fetchWorkspace,
@@ -167,13 +176,14 @@ export function ApiWorkspaceSync() {
       resetClient: resetClientApi,
       saveBrandGem: saveBrandGemApi,
       patchWorkspace: patchWorkspaceApi,
+      flushWorkspaceNow,
       toWorkspace: apiWorkspaceToClientWorkspace,
     };
     (window as unknown as { __auragridApi?: typeof api }).__auragridApi = api;
     return () => {
       delete (window as unknown as { __auragridApi?: typeof api }).__auragridApi;
     };
-  }, [storageMode]);
+  }, [storageMode, activeClientId]);
 
   void setCatalog;
   void setPosts;
@@ -201,6 +211,7 @@ export function getApiHelpers() {
       resetClient: typeof resetClientApi;
       saveBrandGem: typeof saveBrandGemApi;
       patchWorkspace: typeof patchWorkspaceApi;
+      flushWorkspaceNow: (ws: ClientWorkspace) => Promise<void>;
       toWorkspace: typeof apiWorkspaceToClientWorkspace;
     };
   }).__auragridApi;

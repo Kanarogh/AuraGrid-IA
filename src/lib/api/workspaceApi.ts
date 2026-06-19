@@ -2,7 +2,7 @@ import type { BrandGem, CatalogItem, PlannedPost } from "../../types";
 import type { ClientRegistry, ClientWorkspace } from "../clientWorkspace/types";
 import type { ClientMeta } from "../clientWorkspace/types";
 import { withAiHeaders } from "../aiFetch";
-import { apiFetch, getAccessToken, readApiJson } from "./apiClient";
+import { apiFetch, readApiJson } from "./apiClient";
 
 export type ApiRegistry = ClientRegistry;
 
@@ -34,10 +34,16 @@ export function apiWorkspaceToClientWorkspace(dto: ApiWorkspaceResponse): Client
       ...dto.canva,
       pages: dto.canva.pages.map((page) => ({
         ...page,
-        slots: page.slots.map((slot) => ({
-          ...slot,
-          image: resolveMediaUrl(typeof slot.image === "string" ? slot.image : null),
-        })),
+        slots: page.slots.map((slot) => {
+          const imageFromDto =
+            typeof slot.image === "string" ? resolveMediaUrl(slot.image) : null;
+          const image =
+            imageFromDto ??
+            (slot.imageAssetId
+              ? resolveMediaUrl(`/api/v1/media/${slot.imageAssetId}`)
+              : null);
+          return { ...slot, image };
+        }),
       })),
     },
     ui: dto.ui,
@@ -179,9 +185,7 @@ export function resolveMediaUrl(src: string | null | undefined): string | null {
   if (!src) return null;
   if (src.startsWith("data:") || src.startsWith("http")) return src;
   if (src.startsWith("/api/v1/media/")) {
-    const token = getAccessToken();
-    if (token) return `${src.split("?")[0]}?token=${encodeURIComponent(token)}`;
-    return src.split("?")[0] ?? src;
+    return src.split("?")[0]!;
   }
   if (src.startsWith("/api/")) return src;
   return src;
@@ -191,11 +195,11 @@ export function resolveMediaUrl(src: string | null | undefined): string | null {
 export function resolveCatalogItemImage(
   item: Pick<CatalogItem, "image" | "imageUrl" | "imageAssetId">
 ): string | null {
-  const raw =
-    item.image ??
-    item.imageUrl ??
-    (item.imageAssetId ? `/api/v1/media/${item.imageAssetId}` : null);
-  return resolveMediaUrl(raw);
+  if (item.image?.startsWith("data:")) return item.image;
+  if (item.imageAssetId) {
+    return resolveMediaUrl(`/api/v1/media/${item.imageAssetId}`);
+  }
+  return resolveMediaUrl(item.imageUrl ?? item.image);
 }
 
 /** Converte URL da API em data URL para envio à IA (quando necessário no client). */

@@ -1,8 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { eq } from "drizzle-orm";
-import { assertClientAccess, getOptionalUser } from "@/server/http/auth";
+import { assertClientAccess, getOptionalUser, getOptionalUserFromRequest } from "@/server/http/auth";
 import { errorResponse } from "@/server/http/respond";
-import { verifyAccessToken, type AuthUser } from "@/server/services/authService";
 import { getMediaBuffer } from "@/server/services/mediaService";
 import { getDb } from "@/server/db/client";
 import { mediaAssets } from "@/server/db/schema";
@@ -14,17 +13,7 @@ type Ctx = { params: Promise<{ assetId: string }> };
 export async function GET(req: NextRequest, { params }: Ctx) {
   try {
     const { assetId } = await params;
-    let user: AuthUser | null = getOptionalUser(req);
-    if (!user) {
-      const token = req.nextUrl.searchParams.get("token");
-      if (token) {
-        try {
-          user = verifyAccessToken(token);
-        } catch {
-          user = null;
-        }
-      }
-    }
+    const user = await getOptionalUserFromRequest(req);
     if (!user) {
       return NextResponse.json({ error: "Autenticação necessária." }, { status: 401 });
     }

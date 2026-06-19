@@ -2,7 +2,12 @@ import type { NextRequest } from "next/server";
 import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "../db/client";
 import { clients } from "../db/schema";
-import { verifyAccessToken, type AuthUser } from "../services/authService";
+import {
+  getUserFromRefreshToken,
+  verifyAccessToken,
+  type AuthUser,
+} from "../services/authService";
+import { REFRESH_COOKIE } from "./cookies";
 import { HttpError } from "./respond";
 
 /** Lê o usuário do header Authorization: Bearer, sem lançar erro. */
@@ -15,6 +20,28 @@ export function getOptionalUser(req: NextRequest): AuthUser | null {
       return null;
     }
   }
+  return null;
+}
+
+/** Bearer, `?token=` ou cookie de refresh — para rotas acessadas por `<img>` no mesmo domínio. */
+export async function getOptionalUserFromRequest(req: NextRequest): Promise<AuthUser | null> {
+  const fromHeader = getOptionalUser(req);
+  if (fromHeader) return fromHeader;
+
+  const token = req.nextUrl.searchParams.get("token");
+  if (token) {
+    try {
+      return verifyAccessToken(token);
+    } catch {
+      /* continua para cookie */
+    }
+  }
+
+  const refreshToken = req.cookies.get(REFRESH_COOKIE)?.value;
+  if (refreshToken) {
+    return getUserFromRefreshToken(refreshToken);
+  }
+
   return null;
 }
 

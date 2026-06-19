@@ -144,6 +144,33 @@ export async function refreshSession(refreshToken: string): Promise<{
   return { user, tokens };
 }
 
+/** Valida refresh token sem rotacionar — seguro para `<img>` e outras requisições GET frequentes. */
+export async function getUserFromRefreshToken(refreshToken: string): Promise<AuthUser | null> {
+  const db = getDb();
+  const tokenHash = hashToken(refreshToken);
+  const [row] = await db
+    .select()
+    .from(refreshTokens)
+    .where(
+      and(
+        eq(refreshTokens.tokenHash, tokenHash),
+        isNull(refreshTokens.revokedAt)
+      )
+    )
+    .limit(1);
+
+  if (!row || row.expiresAt.getTime() < Date.now()) return null;
+
+  const [userRow] = await db.select().from(users).where(eq(users.id, row.userId)).limit(1);
+  if (!userRow) return null;
+
+  return {
+    id: userRow.id,
+    email: userRow.email,
+    displayName: userRow.displayName,
+  };
+}
+
 export async function revokeRefreshToken(refreshToken: string): Promise<void> {
   const db = getDb();
   await db

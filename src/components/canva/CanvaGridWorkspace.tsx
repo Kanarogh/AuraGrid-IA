@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import type { CanvaGridPage, CanvaGridSlot, CatalogItem } from "../../types";
 import type { CanvaGridFormat } from "../../lib/canvaGridFormats";
-import { cn } from "../../lib/cn";
+import { isCanvaSlotFilled } from "../../lib/canva";
 import { useCanvaWardrobePanelWidth } from "../../hooks/useCanvaWardrobePanelWidth";
 import { Button } from "../ui/Button";
 import { CanvaGridCanvasToolbar } from "./CanvaGridCanvasToolbar";
@@ -46,6 +46,7 @@ export function CanvaGridWorkspace({
   onDeletePage,
   onDuplicatePage,
   onClearPage,
+  onReorderPages,
   onBatchUpload,
   onSelectSlot,
   onClearSlotSelection,
@@ -59,6 +60,7 @@ export function CanvaGridWorkspace({
   onFormatChange,
   onZoomChange,
   onAssignWardrobeItem,
+  cloudSave,
 }: {
   pages: CanvaGridPage[];
   activePage: CanvaGridPage;
@@ -76,6 +78,7 @@ export function CanvaGridWorkspace({
   onDeletePage: (pageId: string) => void;
   onDuplicatePage: (pageId: string) => void;
   onClearPage: (pageId: string) => void;
+  onReorderPages: (fromIndex: number, toIndex: number) => void;
   onBatchUpload: (files: FileList) => void;
   onSelectSlot: (slotId: string) => void;
   onClearSlotSelection: () => void;
@@ -89,6 +92,7 @@ export function CanvaGridWorkspace({
   onFormatChange: (format: CanvaGridFormatId) => void;
   onZoomChange: (width: number) => void;
   onAssignWardrobeItem: (item: CatalogItem) => void;
+  cloudSave?: boolean;
 }) {
   const [tipsOpen, setTipsOpen] = useState(false);
   const {
@@ -102,7 +106,7 @@ export function CanvaGridWorkspace({
   const [swapSourceSlotId, setSwapSourceSlotId] = useState<string | null>(null);
   const batchInputRef = useRef<HTMLInputElement>(null);
 
-  const filledCount = activePage.slots.filter((s) => s.image).length;
+  const filledCount = activePage.slots.filter(isCanvaSlotFilled).length;
 
   const clearSelection = () => {
     setSwapSourceSlotId(null);
@@ -183,9 +187,11 @@ export function CanvaGridWorkspace({
           <CanvaPageStrip
             pages={pages}
             activePageId={activePageId}
+            cloudSave={cloudSave}
             onSelectPage={handleSelectPage}
             onAddPage={onAddPage}
             onDeletePage={onDeletePage}
+            onReorderPages={onReorderPages}
           />
 
           {/* Page toolbar */}
