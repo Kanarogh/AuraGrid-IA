@@ -1,5 +1,6 @@
 import { getAiProviderId } from "../ai/config";
 import { runVisionWithFallback } from "../ai/fallbackChain";
+import { withUserAiContext } from "../ai/userAiContext";
 import { ensureRuntimeAiSettingsLoaded } from "../ai/runtimeSettings";
 import { resetCatalogVisionBatchCache } from "../ai/openrouterModels";
 import type { AiProviderId } from "../ai/types";
@@ -63,6 +64,17 @@ export function getEnrichmentProgress(clientId: string): EnrichProgress | null {
 }
 
 export async function runCatalogEnrichment(
+  clientId: string,
+  itemIds?: string[],
+  providerId?: AiProviderId,
+  userId?: string
+): Promise<{ quotaExceeded: boolean; cancelled: boolean }> {
+  const execute = () => runCatalogEnrichmentInner(clientId, itemIds, providerId);
+  if (userId) return withUserAiContext(userId, execute);
+  return execute();
+}
+
+async function runCatalogEnrichmentInner(
   clientId: string,
   itemIds?: string[],
   providerId?: AiProviderId

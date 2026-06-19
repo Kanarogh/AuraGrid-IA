@@ -12,9 +12,12 @@ import {
   setRuntimeOpenRouterModel,
   setRuntimeProvider,
 } from "../ai/runtimeSettings";
+import { withUserAiContext } from "../ai/userAiContext";
 import { sanitizeAiAttemptsForHeader, type AiAttemptHeader } from "../ai/httpHeaders";
 import { sanitizeForHttpHeader } from "../ai/httpHeaders";
 import type { AiProviderId } from "../ai/types";
+import { isDatabaseConfigured } from "../db/client";
+import { getOptionalUserFromRequest } from "./auth";
 
 function isValidProvider(value: unknown): value is AiProviderId {
   return value === "gemini" || value === "groq" || value === "openrouter" || value === "ollama";
@@ -28,7 +31,7 @@ function isProviderConfigured(id: AiProviderId): boolean {
   return false;
 }
 
-/** Sincroniza provedor/modelo enviados pelo frontend (headers) com o runtime do servidor. */
+/** Aplica headers x-ai-* ao runtime (usuário autenticado ou arquivo global). */
 export async function applyAiHeadersFromNextRequest(req: NextRequest): Promise<AiProviderId> {
   await ensureRuntimeAiSettingsLoaded();
 
@@ -44,6 +47,23 @@ export async function applyAiHeadersFromNextRequest(req: NextRequest): Promise<A
   }
 
   return getAiProviderId();
+}
+
+/** Envolve handler com preferências de IA do usuário (PostgreSQL) quando autenticado. */
+export async function withUserAiFromRequest<T>(
+  req: NextRequest,
+  handler: () => Promise<T>
+): Promise<T> {
+  await ensureRuntimeAiSettingsLoaded();
+  const user = await getOptionalUserFromRequest(req);
+  if (user && isDatabaseConfigured()) {
+    return withUserAiContext(user.id, async () => {
+      await applyAiHeadersFromNextRequest(req);
+      return handler();
+    });
+  }
+  await applyAiHeadersFromNextRequest(req);
+  return handler();
 }
 
 /** Valor do header X-AI-Attempts para anexar à resposta. */

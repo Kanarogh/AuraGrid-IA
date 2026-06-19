@@ -91,7 +91,7 @@ import { finalizeCaption, extractMainCaptionText, resolveCatalogLabel, sanitizeR
 import { normalizeCaptionGenerationParams } from "./lib/captionParams";
 import { syncCanvaPagesToPosts } from "./lib/canvaTimelineSync";
 import { recalculatePostDates } from "./lib/dates";
-import { createEmptyCanvaPage, resolveActiveCanvaPage, resolveSlotImage } from "./lib/canva";
+import { createEmptyCanvaPage, prependCanvaPage, resolveActiveCanvaPage, resolveSlotImage } from "./lib/canva";
 import { getPostStatus } from "./lib/postStatus";
 
 function captionQueueLabel(postId: string, dayNumber: number): string {
@@ -1083,12 +1083,10 @@ export default function App() {
     void saveCanvaGridNow();
   };
 
-  // Add a blank Canva Page
+  // Add a blank Canva Page (nova = Página 1; as antigas sobem de número)
   const handleAddCanvaPage = () => {
-    const newNum = canvaPages.length + 1;
     const newId = `page_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-    const newPage = createEmptyCanvaPage(`Página ${newNum}`, newId);
-    setCanvaPages((prev) => [newPage, ...prev]);
+    setCanvaPages((prev) => prependCanvaPage(prev, newId));
     setActiveCanvaPageId(newId);
     void saveCanvaGridNow();
   };

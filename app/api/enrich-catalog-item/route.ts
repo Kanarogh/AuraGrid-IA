@@ -1,13 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { formatAiError } from "@/server/ai/index";
+import { formatAiError, getActiveProviderId } from "@/server/ai/index";
 import { runVisionWithFallback } from "@/server/ai/fallbackChain";
-import { applyAiHeadersFromNextRequest, aiAttemptsHeaderValue } from "@/server/http/aiRequest";
+import { aiAttemptsHeaderValue, withUserAiFromRequest } from "@/server/http/aiRequest";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  let providerId = await applyAiHeadersFromNextRequest(req);
-  try {
+  return withUserAiFromRequest(req, async () => {
+    let providerId = getActiveProviderId();
+    try {
     const { image, label, id } = await req.json();
     if (!image) {
       return NextResponse.json({ error: "No catalog image provided." }, { status: 400 });
@@ -37,5 +38,6 @@ export async function POST(req: NextRequest) {
     console.error("Error enriching catalog item:", error);
     const status = /429|quota|RESOURCE_EXHAUSTED|rate.?limit/i.test(String(error)) ? 429 : 500;
     return NextResponse.json({ error: formatAiError(error, providerId) }, { status });
-  }
+    }
+  });
 }

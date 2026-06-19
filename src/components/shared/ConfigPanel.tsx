@@ -75,13 +75,14 @@ export function ConfigPanel({
   clientName: string;
   brandGem: BrandGem;
   brandGemSavedAt?: string | null;
-  onSaveBrandGem: (gem: BrandGem) => string | null;
+  onSaveBrandGem: (gem: BrandGem) => Promise<string | null>;
 }) {
   const { storageMode } = useAuth();
   const [footerOpen, setFooterOpen] = useState(true);
   const [captionParamsOpen, setCaptionParamsOpen] = useState(true);
   const [draftGem, setDraftGem] = useState<BrandGem>(brandGem);
   const [justSaved, setJustSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setDraftGem(brandGem);
@@ -151,11 +152,16 @@ export function ConfigPanel({
     });
   };
 
-  const handleSave = () => {
-    const savedAt = onSaveBrandGem(draftGem);
-    if (savedAt) {
-      setJustSaved(true);
-      window.setTimeout(() => setJustSaved(false), 2500);
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const savedAt = await onSaveBrandGem(draftGem);
+      if (savedAt) {
+        setJustSaved(true);
+        window.setTimeout(() => setJustSaved(false), 2500);
+      }
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -185,7 +191,7 @@ export function ConfigPanel({
           ) : justSaved ? (
             <span className="text-ag-success font-medium inline-flex items-center gap-1">
               <Check className="h-3.5 w-3.5" />
-              Gem salvo neste dispositivo
+              {storageMode === "postgresql" ? "Gem salvo na nuvem" : "Gem salvo neste dispositivo"}
             </span>
           ) : savedLabel ? (
             <span className="text-ag-muted">
@@ -202,11 +208,16 @@ export function ConfigPanel({
         type="button"
         variant="accent"
         size="md"
-        onClick={handleSave}
-        disabled={!isDirty}
+        onClick={() => void handleSave()}
+        disabled={!isDirty || saving}
         className="shrink-0 w-full sm:w-auto"
       >
-        {justSaved ? (
+        {saving ? (
+          <>
+            <Save className="h-4 w-4 animate-pulse" />
+            Salvando…
+          </>
+        ) : justSaved ? (
           <>
             <Check className="h-4 w-4" />
             Salvo

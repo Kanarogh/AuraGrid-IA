@@ -1,3 +1,5 @@
+import { apiFetch, readApiJson } from "./api/apiClient";
+
 export type AiProviderId = "gemini" | "groq" | "openrouter" | "ollama";
 
 export interface AiProviderOption {
@@ -96,9 +98,8 @@ export function providerDisplayName(id: AiProviderId): string {
 
 export async function fetchAiSettings(refreshOpenRouter = false): Promise<AiSettingsResponse> {
   const q = refreshOpenRouter ? "?refresh=1" : "";
-  const res = await fetch(`/api/ai/settings${q}`);
-  if (!res.ok) throw new Error("Não foi possível carregar configurações de IA.");
-  return res.json() as Promise<AiSettingsResponse>;
+  const res = await apiFetch(`/api/ai/settings${q}`);
+  return readApiJson(res);
 }
 
 /** Lista modelos free com visão conforme filtros do site OpenRouter. */
@@ -108,35 +109,27 @@ export async function fetchOpenRouterModelsList(
 ): Promise<OpenRouterModelsListResponse> {
   const params = new URLSearchParams({ filter });
   if (refresh) params.set("refresh", "1");
-  const res = await fetch(`/api/ai/openrouter-models?${params}`);
-  const data = (await res.json()) as OpenRouterModelsListResponse;
-  if (!res.ok) throw new Error(data.error || "Falha ao listar modelos OpenRouter.");
-  return data;
+  const res = await apiFetch(`/api/ai/openrouter-models?${params}`);
+  return readApiJson(res);
 }
 
 export async function setAiProvider(provider: AiProviderId): Promise<AiSettingsResponse> {
-  const res = await fetch("/api/ai/settings", {
+  const res = await apiFetch("/api/ai/settings", {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ provider }),
   });
-  const data = (await res.json()) as AiSettingsResponse & { error?: string };
-  if (!res.ok) throw new Error(data.error || "Falha ao trocar provedor de IA.");
-  return data;
+  return readApiJson(res);
 }
 
 /** Passe `null` para voltar ao modelo do .env (DEFAULT_OPENROUTER_MODEL). */
 export async function setOpenRouterModel(
   model: string | null
 ): Promise<AiSettingsResponse> {
-  const res = await fetch("/api/ai/openrouter-model", {
+  const res = await apiFetch("/api/ai/openrouter-model", {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model }),
   });
-  const data = (await res.json()) as AiSettingsResponse & { error?: string };
-  if (!res.ok) throw new Error(data.error || "Falha ao trocar modelo OpenRouter.");
-  return data;
+  return readApiJson(res);
 }
 
 /** Passe `null` em model/catalogModel para voltar ao .env. */
@@ -144,24 +137,18 @@ export async function setGeminiModels(options: {
   model?: string | null;
   catalogModel?: string | null;
 }): Promise<AiSettingsResponse> {
-  const res = await fetch("/api/ai/gemini-model", {
+  const res = await apiFetch("/api/ai/gemini-model", {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(options),
   });
-  const data = (await res.json()) as AiSettingsResponse & { error?: string };
-  if (!res.ok) throw new Error(data.error || "Falha ao trocar modelo Gemini.");
-  return data;
+  return readApiJson(res);
 }
 
 /** Passe `null` para voltar ao OLLAMA_MODEL do .env. */
 export async function setOllamaModel(model: string | null): Promise<AiSettingsResponse> {
-  const res = await fetch("/api/ai/ollama-model", {
+  const res = await apiFetch("/api/ai/ollama-model", {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model }),
   });
-  const data = (await res.json()) as AiSettingsResponse & { error?: string };
-  if (!res.ok) throw new Error(data.error || "Falha ao trocar modelo Ollama.");
-  return data;
+  return readApiJson(res);
 }

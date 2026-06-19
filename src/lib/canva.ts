@@ -14,6 +14,20 @@ export function createEmptyCanvaPage(pageName: string, id: string): CanvaGridPag
   return { id, name: pageName, slots };
 }
 
+export function canvaPageNumberedName(n: number): string {
+  return `Página ${n}`;
+}
+
+/** Nova página no início como Página 1; as demais sobem de número (2, 3, …). */
+export function prependCanvaPage(pages: CanvaGridPage[], newPageId: string): CanvaGridPage[] {
+  const newPage = createEmptyCanvaPage(canvaPageNumberedName(1), newPageId);
+  const shifted = pages.map((p, i) => ({
+    ...p,
+    name: canvaPageNumberedName(i + 2),
+  }));
+  return [newPage, ...shifted];
+}
+
 /** Página ativa padrão: a última do array (fluxo Canva — página mais recente). */
 export function getDefaultActiveCanvaPageId(pages: CanvaGridPage[]): string {
   if (pages.length === 0) return "page_1";

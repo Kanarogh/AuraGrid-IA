@@ -1,14 +1,38 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { buildAiSettingsResponse, setActiveAiProvider } from "@/server/ai/index";
+import { withUserAiContext } from "@/server/ai/userAiContext";
 import { isLocalAiAllowed } from "@/server/config/deploy";
+import { isDatabaseConfigured } from "@/server/db/client";
+import { getOptionalUserFromRequest, requireUser } from "@/server/http/auth";
+import { errorResponse } from "@/server/http/respond";
 import type { AiProviderId } from "@/server/ai/types";
 
 export const dynamic = "force-dynamic";
 
+async function runWithAiUser<T>(
+  req: NextRequest,
+  handler: () => Promise<T>
+): Promise<T> {
+  if (isDatabaseConfigured()) {
+    const user = requireUser(req);
+    return withUserAiContext(user.id, handler);
+  }
+  const user = await getOptionalUserFromRequest(req);
+  if (user) return withUserAiContext(user.id, handler);
+  return handler();
+}
+
 export async function GET(req: NextRequest) {
-  const refreshParam = req.nextUrl.searchParams.get("refresh");
-  const refresh = refreshParam === "1" || refreshParam === "true";
-  return NextResponse.json(await buildAiSettingsResponse({ refreshOpenRouter: refresh }));
+  try {
+    const refreshParam = req.nextUrl.searchParams.get("refresh");
+    const refresh = refreshParam === "1" || refreshParam === "true";
+    const data = await runWithAiUser(req, () =>
+      buildAiSettingsResponse({ refreshOpenRouter: refresh })
+    );
+    return NextResponse.json(data);
+  } catch (err) {
+    return errorResponse(err, 401);
+  }
 }
 
 export async function PUT(req: NextRequest) {
@@ -31,10 +55,12 @@ export async function PUT(req: NextRequest) {
         { status: 400 }
       );
     }
-    await setActiveAiProvider(provider as AiProviderId);
-    return NextResponse.json(await buildAiSettingsResponse());
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Falha ao trocar provedor.";
-    return NextResponse.json({ error: message }, { status: 400 });
+    const data = await runWithAiUser(req, async () => {
+      await setActiveAiProvider(provider as AiProviderId);
+      return buildAiSettingsResponse();
+    });
+    return NextResponse.json(data);
+  } catch (err) {
+    return errorResponse(err, 400);
   }
 }

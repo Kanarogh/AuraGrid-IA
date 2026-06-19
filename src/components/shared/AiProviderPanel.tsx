@@ -44,7 +44,7 @@ export function AiProviderPanel() {
           </h3>
           <p className="text-xs text-ag-muted mt-0.5">
             Escolha qual API usar para indexar catálogo e gerar legendas. A escolha fica salva na
-            plataforma — <strong className="text-ag-text">só esse provedor/modelo</strong> é usado;
+            sua conta — <strong className="text-ag-text">só esse provedor/modelo</strong> é usado;
             se falhar, o erro é desse modelo (sem troca automática).
           </p>
         </div>

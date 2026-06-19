@@ -5,6 +5,9 @@ import { isLocalAiAllowed } from "../config/deploy";
 import { sanitizeOpenRouterModelId } from "./openrouterModels";
 import { sanitizeGeminiModelId } from "./geminiModels";
 import { sanitizeOllamaModelId } from "./ollamaModels";
+import { getUserAiContext, patchUserAiContext } from "./userAiContext";
+import { saveUserAiRuntimeSettings } from "../services/userAiPreferencesService";
+import { isDatabaseConfigured } from "../db/client";
 
 const SETTINGS_FILE = path.join(process.cwd(), ".auragrid-ai.json");
 
@@ -109,20 +112,20 @@ export async function loadRuntimeAiSettings(): Promise<void> {
       "openaiCatalogModel" in data;
 
     if (legacy || (savedProvider === "ollama" && !provider)) {
-      await persist();
+      await persistFile();
     }
 
     if (rawModel && openrouterModel && rawModel !== openrouterModel) {
-      await persist();
+      await persistFile();
     }
     if (rawGemini && geminiModel && rawGemini !== geminiModel) {
-      await persist();
+      await persistFile();
     }
     if (rawGeminiCatalog && geminiCatalogModel && rawGeminiCatalog !== geminiCatalogModel) {
-      await persist();
+      await persistFile();
     }
     if (rawOllama && ollamaModel && rawOllama !== ollamaModel) {
-      await persist();
+      await persistFile();
     }
   } catch {
     runtime = {
@@ -136,26 +139,57 @@ export async function loadRuntimeAiSettings(): Promise<void> {
 }
 
 export function getRuntimeProviderOverride(): AiProviderId | null {
+  const userCtx = getUserAiContext();
+  if (userCtx) return userCtx.provider;
   return runtime.provider;
 }
 
 export function getRuntimeOpenRouterModel(): string | null {
+  const userCtx = getUserAiContext();
+  if (userCtx) return userCtx.openrouterModel;
   return runtime.openrouterModel;
 }
 
 export function getRuntimeGeminiModel(): string | null {
+  const userCtx = getUserAiContext();
+  if (userCtx) return userCtx.geminiModel;
   return runtime.geminiModel;
 }
 
 export function getRuntimeGeminiCatalogModel(): string | null {
+  const userCtx = getUserAiContext();
+  if (userCtx) return userCtx.geminiCatalogModel;
   return runtime.geminiCatalogModel;
 }
 
 export function getRuntimeOllamaModel(): string | null {
+  const userCtx = getUserAiContext();
+  if (userCtx) return userCtx.ollamaModel;
   return runtime.ollamaModel;
 }
 
-async function persist(): Promise<void> {
+async function persistUserOrFile(patch: {
+  provider?: AiProviderId | null;
+  openrouterModel?: string | null;
+  geminiModel?: string | null;
+  geminiCatalogModel?: string | null;
+  ollamaModel?: string | null;
+}): Promise<void> {
+  const userCtx = getUserAiContext();
+  if (userCtx && isDatabaseConfigured()) {
+    await saveUserAiRuntimeSettings(userCtx.userId, patch);
+    patchUserAiContext(patch);
+    return;
+  }
+  if (patch.provider !== undefined) runtime.provider = patch.provider;
+  if (patch.openrouterModel !== undefined) runtime.openrouterModel = patch.openrouterModel;
+  if (patch.geminiModel !== undefined) runtime.geminiModel = patch.geminiModel;
+  if (patch.geminiCatalogModel !== undefined) runtime.geminiCatalogModel = patch.geminiCatalogModel;
+  if (patch.ollamaModel !== undefined) runtime.ollamaModel = patch.ollamaModel;
+  await persistFile();
+}
+
+async function persistFile(): Promise<void> {
   await fs.writeFile(
     SETTINGS_FILE,
     JSON.stringify(
@@ -174,27 +208,30 @@ async function persist(): Promise<void> {
 }
 
 export async function setRuntimeProvider(provider: AiProviderId): Promise<void> {
-  runtime.provider = provider;
-  await persist();
+  await persistUserOrFile({ provider });
 }
 
 export async function setRuntimeOpenRouterModel(model: string | null): Promise<void> {
-  runtime.openrouterModel = model && model.trim() ? model.trim() : null;
-  await persist();
+  await persistUserOrFile({
+    openrouterModel: model && model.trim() ? model.trim() : null,
+  });
 }
 
 export async function setRuntimeGeminiModel(model: string | null): Promise<void> {
-  runtime.geminiModel = model ? sanitizeGeminiModelId(model) : null;
-  await persist();
+  await persistUserOrFile({
+    geminiModel: model ? sanitizeGeminiModelId(model) : null,
+  });
 }
 
 export async function setRuntimeGeminiCatalogModel(model: string | null): Promise<void> {
-  runtime.geminiCatalogModel = model ? sanitizeGeminiModelId(model) : null;
-  await persist();
+  await persistUserOrFile({
+    geminiCatalogModel: model ? sanitizeGeminiModelId(model) : null,
+  });
 }
 
 export async function setRuntimeOllamaModel(model: string | null): Promise<void> {
-  runtime.ollamaModel = model ? sanitizeOllamaModelId(model) : null;
-  await persist();
+  await persistUserOrFile({
+    ollamaModel: model ? sanitizeOllamaModelId(model) : null,
+  });
 }
 

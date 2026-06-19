@@ -371,10 +371,13 @@ export async function saveBrandGem(
 ) {
   const db = getDb();
   const savedAt = new Date();
+  const trimmedName = gem.name.trim() || clientId;
+
   await db
-    .update(brandGems)
-    .set({
-      name: gem.name,
+    .insert(brandGems)
+    .values({
+      clientId,
+      name: trimmedName,
       description: gem.description,
       instructions: gem.instructions,
       campaignContext: gem.campaignContext ?? "",
@@ -382,8 +385,24 @@ export async function saveBrandGem(
       footer: gem.footer ?? {},
       savedAt,
     })
-    .where(eq(brandGems.clientId, clientId));
-  await db.update(clients).set({ updatedAt: new Date() }).where(eq(clients.id, clientId));
+    .onConflictDoUpdate({
+      target: brandGems.clientId,
+      set: {
+        name: trimmedName,
+        description: gem.description,
+        instructions: gem.instructions,
+        campaignContext: gem.campaignContext ?? "",
+        captionParams: gem.captionParams ?? {},
+        footer: gem.footer ?? {},
+        savedAt,
+      },
+    });
+
+  await db
+    .update(clients)
+    .set({ name: trimmedName, updatedAt: new Date() })
+    .where(and(eq(clients.id, clientId), eq(clients.ownerUserId, userId)));
+
   return savedAt.toISOString();
 }
 

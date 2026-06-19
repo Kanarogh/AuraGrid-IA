@@ -1,8 +1,22 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { buildAiSettingsResponse, setOllamaModelOverride } from "@/server/ai/index";
 import { listLocalOllamaModels, sanitizeOllamaModelId } from "@/server/ai/ollamaModels";
+import { withUserAiContext } from "@/server/ai/userAiContext";
+import { isDatabaseConfigured } from "@/server/db/client";
+import { getOptionalUserFromRequest, requireUser } from "@/server/http/auth";
+import { errorResponse } from "@/server/http/respond";
 
 export const dynamic = "force-dynamic";
+
+async function runWithAiUser<T>(req: NextRequest, handler: () => Promise<T>): Promise<T> {
+  if (isDatabaseConfigured()) {
+    const user = requireUser(req);
+    return withUserAiContext(user.id, handler);
+  }
+  const user = await getOptionalUserFromRequest(req);
+  if (user) return withUserAiContext(user.id, handler);
+  return handler();
+}
 
 export async function PUT(req: NextRequest) {
   try {
@@ -17,35 +31,30 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "model deve ser string ou null." }, { status: 400 });
     }
 
-    if (model) {
-      const sanitized = sanitizeOllamaModelId(model);
-      if (!sanitized) {
-        return NextResponse.json({ error: "ID de modelo Ollama inválido." }, { status: 400 });
+    const data = await runWithAiUser(req, async () => {
+      if (model) {
+        const sanitized = sanitizeOllamaModelId(model);
+        if (!sanitized) {
+          throw new Error("ID de modelo Ollama inválido.");
+        }
+        const { models, reachable } = await listLocalOllamaModels();
+        if (!reachable) {
+          throw new Error("Ollama não está acessível. Abra o app Ollama e tente de novo.");
+        }
+        const installed = models.some((m) => m.id === sanitized);
+        if (!installed) {
+          throw new Error(
+            `Modelo "${sanitized}" não está instalado localmente. Use: ollama pull ${sanitized.replace(/:.*$/, "")}`
+          );
+        }
+        await setOllamaModelOverride(sanitized);
+      } else {
+        await setOllamaModelOverride(null);
       }
-      const { models, reachable } = await listLocalOllamaModels();
-      if (!reachable) {
-        return NextResponse.json(
-          { error: "Ollama não está acessível. Abra o app Ollama e tente de novo." },
-          { status: 400 }
-        );
-      }
-      const installed = models.some((m) => m.id === sanitized);
-      if (!installed) {
-        return NextResponse.json(
-          {
-            error: `Modelo "${sanitized}" não está instalado localmente. Use: ollama pull ${sanitized.replace(/:.*$/, "")}`,
-          },
-          { status: 400 }
-        );
-      }
-      await setOllamaModelOverride(sanitized);
-    } else {
-      await setOllamaModelOverride(null);
-    }
-
-    return NextResponse.json(await buildAiSettingsResponse());
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Falha ao trocar modelo Ollama.";
-    return NextResponse.json({ error: message }, { status: 400 });
+      return buildAiSettingsResponse();
+    });
+    return NextResponse.json(data);
+  } catch (err) {
+    return errorResponse(err, 400);
   }
 }

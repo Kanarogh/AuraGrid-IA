@@ -1,18 +1,19 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { formatAiError } from "@/server/ai/index";
+import { formatAiError, getActiveProviderId } from "@/server/ai/index";
 import {
   assertBrandGemReadyForCaptions,
   resolveBrandGemFromBody,
 } from "@/server/ai/brandContext";
 import { matchOperationHeaders, runMatchOperation } from "@/server/ai/matchOrchestrator";
 import { sanitizeMatchOperationInput } from "@/server/ai/operations";
-import { applyAiHeadersFromNextRequest, aiAttemptsHeaderValue } from "@/server/http/aiRequest";
+import { aiAttemptsHeaderValue, withUserAiFromRequest } from "@/server/http/aiRequest";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  let providerId = await applyAiHeadersFromNextRequest(req);
-  try {
+  return withUserAiFromRequest(req, async () => {
+    let providerId = getActiveProviderId();
+    try {
     const body = await req.json();
     const {
       postImage,
@@ -75,5 +76,6 @@ export async function POST(req: NextRequest) {
     console.error("Error matching post & generating caption:", error);
     const status = /429|quota|RESOURCE_EXHAUSTED|rate.?limit/i.test(String(error)) ? 429 : 500;
     return NextResponse.json({ error: formatAiError(error, providerId) }, { status });
-  }
+    }
+  });
 }

@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getActiveProviderId } from "@/server/ai/index";
+import { withUserAiContext } from "@/server/ai/userAiContext";
 import { applyAiHeadersFromNextRequest } from "@/server/http/aiRequest";
 import { assertClientAccess, requireUser } from "@/server/http/auth";
 import { errorResponse } from "@/server/http/respond";
@@ -14,8 +16,11 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const { clientId } = await params;
     await assertClientAccess(user, clientId);
     const { ids } = (await req.json().catch(() => ({}))) as { ids?: string[] };
-    const providerId = await applyAiHeadersFromNextRequest(req);
-    void runCatalogEnrichment(clientId, ids, providerId);
+    const providerId = await withUserAiContext(user.id, async () => {
+      await applyAiHeadersFromNextRequest(req);
+      return getActiveProviderId();
+    });
+    void runCatalogEnrichment(clientId, ids, providerId, user.id);
     return NextResponse.json({ ok: true, enriching: true });
   } catch (err) {
     return errorResponse(err, 400);

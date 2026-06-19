@@ -41,7 +41,7 @@ import { toast } from "../lib/toast";
 import type { BrandGem, CanvaGridPage, CatalogItem, PlannedPost } from "../types";
 import { useAuth } from "./AuthContext";
 import { getApiHelpers, type ApiRegistryEvent } from "./ApiWorkspaceSync";
-import { fetchRegistry, renameClientApi } from "../lib/api/workspaceApi";
+import { fetchRegistry, renameClientApi, saveBrandGemApi } from "../lib/api/workspaceApi";
 
 type ClientWorkspaceContextValue = {
   registry: ClientRegistry;
@@ -61,7 +61,7 @@ type ClientWorkspaceContextValue = {
   setCanvaGridFormat: (format: CanvaGridFormatId) => void;
   setCanvaGridMaxWidth: (width: number) => void;
   setUiPrefs: (partial: NonNullable<ClientWorkspace["ui"]>) => void;
-  saveBrandGem: (gem: BrandGem) => string | null;
+  saveBrandGem: (gem: BrandGem) => Promise<string | null>;
   switchClient: (clientId: string) => void;
   createClient: (name: string, slug?: string) => string;
   renameClient: (clientId: string, name: string) => void;
@@ -394,26 +394,56 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const saveBrandGem = useCallback(
-    (gem: BrandGem): string | null => {
+    async (gem: BrandGem): Promise<string | null> => {
       if (!activeClientId) return null;
-      const savedAt = new Date().toISOString();
       const normalized: BrandGem = { ...gem, id: activeClientId };
-      setWorkspace((prev) => {
-        const next: ClientWorkspace = {
-          ...prev,
-          brandGem: normalized,
-          ui: { ...prev.ui, brandGemSavedAt: savedAt },
-        };
-        workspaceRef.current = next;
-        if (!useApiStorage) {
+      const trimmedName = normalized.name.trim() || activeClientId;
+
+      if (!useApiStorage) {
+        const savedAt = new Date().toISOString();
+        setWorkspace((prev) => {
+          const next: ClientWorkspace = {
+            ...prev,
+            brandGem: normalized,
+            ui: { ...prev.ui, brandGemSavedAt: savedAt },
+          };
+          workspaceRef.current = next;
           if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
           saveWorkspace(activeClientId, next);
-        } else {
-          void getApiHelpers()?.saveBrandGem(activeClientId, normalized);
-        }
-        return next;
-      });
-      return savedAt;
+          return next;
+        });
+        setRegistry((prev) => ({
+          ...prev,
+          clients: prev.clients.map((c) =>
+            c.id === activeClientId ? touchMeta({ ...c, name: trimmedName }) : c
+          ),
+        }));
+        return savedAt;
+      }
+
+      try {
+        const { savedAt } = await saveBrandGemApi(activeClientId, normalized);
+        setWorkspace((prev) => {
+          const next: ClientWorkspace = {
+            ...prev,
+            brandGem: normalized,
+            ui: { ...prev.ui, brandGemSavedAt: savedAt },
+          };
+          workspaceRef.current = next;
+          return next;
+        });
+        setRegistry((prev) => ({
+          ...prev,
+          clients: prev.clients.map((c) =>
+            c.id === activeClientId ? touchMeta({ ...c, name: trimmedName }) : c
+          ),
+        }));
+        return savedAt;
+      } catch (err) {
+        console.error("[AuraGrid] Falha ao salvar Gem na nuvem:", err);
+        toast.error("Não foi possível salvar o Gem na nuvem. Tente novamente.");
+        return null;
+      }
     },
     [activeClientId, useApiStorage]
   );
@@ -553,12 +583,18 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
     if (!hasActiveClient) return;
     if (useApiStorage) {
       void (async () => {
-        const api = getApiHelpers();
-        if (!api) return;
-        const dto = await api.resetClient(activeClientId);
-        const ws = api.toWorkspace(dto);
-        setWorkspace(ws);
-        workspaceRef.current = ws;
+        try {
+          const api = getApiHelpers();
+          if (!api) return;
+          const dto = await api.resetClient(activeClientId);
+          const ws = api.toWorkspace(dto);
+          setWorkspace(ws);
+          workspaceRef.current = ws;
+          toast.success("Cliente resetado na nuvem.");
+        } catch (err) {
+          console.error("[AuraGrid] Falha ao resetar cliente:", err);
+          toast.error("Não foi possível resetar o cliente na nuvem.");
+        }
       })();
       return;
     }

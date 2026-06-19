@@ -1,17 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { formatAiError, getActiveProvider } from "@/server/ai/index";
+import { formatAiError, getActiveProvider, getActiveProviderId } from "@/server/ai/index";
 import {
   assertBrandGemReadyForCaptions,
   resolveBrandGemFromBody,
 } from "@/server/ai/brandContext";
 import { sanitizeRefinedCaptionOutput } from "@/server/ai/shared";
-import { applyAiHeadersFromNextRequest } from "@/server/http/aiRequest";
+import { withUserAiFromRequest } from "@/server/http/aiRequest";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  const providerId = await applyAiHeadersFromNextRequest(req);
-  try {
+  return withUserAiFromRequest(req, async () => {
+    const providerId = getActiveProviderId();
+    try {
     const { currentCaption, instructions, brandGem, promptContext, repeatingText } =
       await req.json();
     if (!currentCaption) {
@@ -54,5 +55,6 @@ export async function POST(req: NextRequest) {
     console.error("Error refining caption:", error);
     const status = /429|quota|RESOURCE_EXHAUSTED|rate.?limit/i.test(String(error)) ? 429 : 500;
     return NextResponse.json({ error: formatAiError(error, providerId) }, { status });
-  }
+    }
+  });
 }

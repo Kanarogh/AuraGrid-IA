@@ -4,9 +4,23 @@ import {
   setGeminiCatalogModelOverride,
   setGeminiModelOverride,
 } from "@/server/ai/index";
+import { withUserAiContext } from "@/server/ai/userAiContext";
 import { sanitizeGeminiModelId } from "@/server/ai/geminiModels";
+import { isDatabaseConfigured } from "@/server/db/client";
+import { getOptionalUserFromRequest, requireUser } from "@/server/http/auth";
+import { errorResponse } from "@/server/http/respond";
 
 export const dynamic = "force-dynamic";
+
+async function runWithAiUser<T>(req: NextRequest, handler: () => Promise<T>): Promise<T> {
+  if (isDatabaseConfigured()) {
+    const user = requireUser(req);
+    return withUserAiContext(user.id, handler);
+  }
+  const user = await getOptionalUserFromRequest(req);
+  if (user) return withUserAiContext(user.id, handler);
+  return handler();
+}
 
 export async function PUT(req: NextRequest) {
   try {
@@ -23,7 +37,6 @@ export async function PUT(req: NextRequest) {
       if (model && !sanitizeGeminiModelId(model)) {
         return NextResponse.json({ error: "ID de modelo Gemini inválido." }, { status: 400 });
       }
-      await setGeminiModelOverride(model);
     }
 
     if ("catalogModel" in body) {
@@ -37,7 +50,6 @@ export async function PUT(req: NextRequest) {
       if (catalogModel && !sanitizeGeminiModelId(catalogModel)) {
         return NextResponse.json({ error: "ID de modelo catálogo inválido." }, { status: 400 });
       }
-      await setGeminiCatalogModelOverride(catalogModel);
     }
 
     if (!("model" in body) && !("catalogModel" in body)) {
@@ -47,9 +59,17 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    return NextResponse.json(await buildAiSettingsResponse());
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Falha ao trocar modelo.";
-    return NextResponse.json({ error: message }, { status: 400 });
+    const data = await runWithAiUser(req, async () => {
+      if ("model" in body) {
+        await setGeminiModelOverride(body.model ?? null);
+      }
+      if ("catalogModel" in body) {
+        await setGeminiCatalogModelOverride(body.catalogModel ?? null);
+      }
+      return buildAiSettingsResponse();
+    });
+    return NextResponse.json(data);
+  } catch (err) {
+    return errorResponse(err, 400);
   }
 }
