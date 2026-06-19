@@ -439,7 +439,10 @@ export default function App() {
   const dayCardRefs = useRef<{ [postId: string]: HTMLDivElement | null }>({});
 
   // Synchronize Canva Grid state changes into Roteiros automatically
-  const syncCanvaGridToTimeline = (pagesList: CanvaGridPage[], showAlert: boolean = false) => {
+  const syncCanvaGridToTimeline = async (
+    pagesList: CanvaGridPage[],
+    showAlert: boolean = false
+  ) => {
     const validCount = pagesList
       .flatMap((p) => p?.slots ?? [])
       .filter((s) => s?.image).length;
@@ -469,6 +472,7 @@ export default function App() {
     });
 
     if (showAlert) {
+      await saveWorkspaceNow();
       toast.success(
         `Sequência do Canva sincronizada com sucesso no Roteiro de 30 Dias!\n- ${validCount} looks organizados sequencialmente.\n- Legendas e aprovações existentes nos dias foram preservadas.`
       );
@@ -805,6 +809,8 @@ export default function App() {
     // Choose active post
     const firstWithImg = finalizedList.find(p => p.image !== null) || finalizedList[0];
     setActivePreviewId(firstWithImg.id);
+    
+    await saveWorkspaceNow();
     
     toast.success(`Planejamento de 30 Dias Gerado!\n\nAs ${N} fotos foram distribuídas esteticamente:\n- Cada dia tem postagem obrigatória.\n- Foram colocados múltiplos posts por dia nos primeiros dias para organizar o excedente de fotos.\n- Data inicial do calendário definida para: ${startDate}.`);
   };
@@ -1166,6 +1172,7 @@ export default function App() {
       label: string;
       imageAssetId: string | null;
     }[] = [];
+    let uploadFailures = 0;
     for (let i = 0; i < sortedFiles.length; i++) {
       const file = sortedFiles[i];
       if (!file.type.startsWith("image/") && !file.name.match(/\.(jpg|jpeg|png|webp|gif|svg)$/i)) {
@@ -1182,6 +1189,11 @@ export default function App() {
           const persisted = await ensurePersistedImage(activeClientId, base64Str, "canva");
           image = persisted.image ?? base64Str;
           imageAssetId = persisted.imageAssetId;
+          if (!imageAssetId) {
+            uploadFailures++;
+            toast.error(`Não foi possível enviar "${file.name}" para a nuvem.`);
+            continue;
+          }
         }
 
         base64List.push({
@@ -1191,11 +1203,16 @@ export default function App() {
         });
       } catch (err) {
         console.error(err);
+        uploadFailures++;
       }
     }
 
     if (base64List.length === 0) {
-      toast.warning("Nenhuma imagem válida para carregar.");
+      toast.warning(
+        uploadFailures > 0
+          ? "Nenhuma imagem foi enviada para a nuvem. Verifique a conexão e tente novamente."
+          : "Nenhuma imagem válida para carregar."
+      );
       return;
     }
 
@@ -1230,6 +1247,11 @@ export default function App() {
     await saveCanvaGridNow();
 
     toast.success(`${base64List.length} fotos carregadas e organizadas sequencialmente na página ativa do Canva Grid (e transbordadas para as páginas seguintes se o limite foi excedido!).`);
+    if (uploadFailures > 0) {
+      toast.warning(
+        `${uploadFailures} arquivo(s) não foram enviados para a nuvem e foram ignorados.`
+      );
+    }
   };
 
   // Plan 30 Days based on Canva layouts sequence
@@ -1301,6 +1323,8 @@ export default function App() {
     updated[sourceIdx] = {
       ...sourcePost,
       image: destPost.image,
+      imageAssetId: destPost.imageAssetId ?? null,
+      canvaSlotRef: destPost.canvaSlotRef ?? null,
       matchedCatalogId: destPost.matchedCatalogId,
       reasoning: destPost.reasoning,
       caption: destPost.caption,
@@ -1312,6 +1336,8 @@ export default function App() {
     updated[destIdx] = {
       ...destPost,
       image: sourcePost.image,
+      imageAssetId: sourcePost.imageAssetId ?? null,
+      canvaSlotRef: sourcePost.canvaSlotRef ?? null,
       matchedCatalogId: sourcePost.matchedCatalogId,
       reasoning: sourcePost.reasoning,
       caption: sourcePost.caption,
@@ -1321,6 +1347,7 @@ export default function App() {
     };
 
     setPosts(updated);
+    void saveWorkspaceNow();
     setSwapSourceId("");
     toast.success(`Sequência modificada! Os conteúdos de "${sourcePost.dateLabel}" e "${destPost.dateLabel}" foram invertidos para harmonização visual.`);
   };
@@ -1400,6 +1427,13 @@ export default function App() {
     setUiPrefs(ws.ui ?? {});
   };
 
+  const reloadCatalogFromApi = async () => {
+    if (!useApiStorage || !activeClientId) return;
+    const dto = await fetchWorkspace(activeClientId);
+    const ws = apiWorkspaceToClientWorkspace(dto);
+    setCatalog(ws.catalog);
+  };
+
   const catalogEnrichProgressLabel = catalogEnrichProgress
     ? `Indexando ${catalogEnrichProgress.index}/${catalogEnrichProgress.total} — ${catalogEnrichProgress.label} (um por vez)`
     : "Indexando… (um por vez, aguarde)";
@@ -1411,7 +1445,7 @@ export default function App() {
       for (;;) {
         const { enriching, progress } = await fetchEnrichStatusApi(activeClientId);
         setCatalogEnrichProgress(progress ?? null);
-        await reloadWorkspaceFromApi();
+        await reloadCatalogFromApi();
         if (!enriching) break;
         await new Promise((r) => setTimeout(r, 2000));
       }
@@ -2032,6 +2066,7 @@ export default function App() {
                 : p
             )
           );
+          await saveWorkspaceNow();
           return { quotaExceeded: false };
         }
       }
@@ -2108,6 +2143,7 @@ export default function App() {
         )
       );
       captionCacheBypassRef.current.delete(postId);
+      await saveWorkspaceNow();
       return { quotaExceeded: false };
     } catch (error: unknown) {
       if (isAbortError(error) || controller.signal.aborted) {
@@ -2188,6 +2224,7 @@ export default function App() {
       }
       setIsProcessingAll(false);
       setCaptionBatchProgress(null);
+      await saveWorkspaceNow();
     }
   };
 
@@ -2291,6 +2328,7 @@ export default function App() {
       )
     );
     setRefineInstructions((prev) => ({ ...prev, [postId]: "" }));
+    await saveWorkspaceNow();
   };
 
 
@@ -2369,6 +2407,7 @@ export default function App() {
       );
 
       setRefineInstructions((prev) => ({ ...prev, [postId]: "" }));
+      await saveWorkspaceNow();
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e);
       toast.error("Falha ao ajustar a legenda: " + message);
@@ -2394,6 +2433,8 @@ export default function App() {
           ? {
               ...p,
               image: null,
+              imageAssetId: null,
+              canvaSlotRef: null,
               matchedCatalogId: null,
               reasoning: null,
               caption: "",
@@ -2404,6 +2445,7 @@ export default function App() {
           : p
       )
     );
+    await saveWorkspaceNow();
   };
 
   // Single look reference creation

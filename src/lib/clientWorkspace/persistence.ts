@@ -22,7 +22,7 @@ function findSlotByImage(pages: CanvaGridPage[], image: string) {
   return null;
 }
 
-function stripTransientPostFields(post: PlannedPost): PlannedPost {
+export function stripTransientPostFields(post: PlannedPost): PlannedPost {
   return {
     ...post,
     isGenerating: false,

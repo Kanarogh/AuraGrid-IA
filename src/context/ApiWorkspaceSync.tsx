@@ -16,6 +16,7 @@ import {
   saveBrandGemApi,
 } from "../lib/api/workspaceApi";
 import type { ClientRegistry, ClientWorkspace } from "../lib/clientWorkspace";
+import { stripTransientPostFields } from "../lib/clientWorkspace/persistence";
 import { createEmptyRegistry, createOrphanWorkspace } from "../lib/clientWorkspace";
 import { emitCloudSaveStatus } from "../lib/cloudSaveStatus";
 
@@ -25,7 +26,7 @@ function buildWorkspacePatch(ws: ClientWorkspace) {
   return {
     brandGem: ws.brandGem,
     startDate: ws.startDate,
-    posts: ws.posts,
+    posts: ws.posts.map(stripTransientPostFields),
     canva: ws.canva,
     ui: ws.ui,
   };
