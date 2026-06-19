@@ -91,7 +91,7 @@ import { finalizeCaption, extractMainCaptionText, resolveCatalogLabel, sanitizeR
 import { normalizeCaptionGenerationParams } from "./lib/captionParams";
 import { syncCanvaPagesToPosts } from "./lib/canvaTimelineSync";
 import { recalculatePostDates } from "./lib/dates";
-import { createEmptyCanvaPage, prependCanvaPage, resolveActiveCanvaPage, resolveSlotImage } from "./lib/canva";
+import { createEmptyCanvaPage, prependCanvaPage, renumberCanvaPages, resolveActiveCanvaPage, resolveSlotImage } from "./lib/canva";
 import { getPostStatus } from "./lib/postStatus";
 
 function captionQueueLabel(postId: string, dayNumber: number): string {
@@ -1074,10 +1074,10 @@ export default function App() {
 
     setCanvaPages((prev) => {
       const idx = prev.findIndex((p) => p.id === pageId);
-      if (idx === -1) return [...prev, duplicatedPage];
+      if (idx === -1) return renumberCanvaPages([...prev, duplicatedPage]);
       const copy = [...prev];
       copy.splice(idx + 1, 0, duplicatedPage);
-      return copy;
+      return renumberCanvaPages(copy);
     });
     setActiveCanvaPageId(newId);
     void saveCanvaGridNow();
@@ -1097,7 +1097,7 @@ export default function App() {
       const [moved] = next.splice(fromIndex, 1);
       if (!moved) return prev;
       next.splice(toIndex, 0, moved);
-      return next;
+      return renumberCanvaPages(next);
     });
     void saveCanvaGridNow();
   };
@@ -1118,7 +1118,7 @@ export default function App() {
       return;
     }
     const deletedIdx = canvaPages.findIndex((p) => p.id === pageId);
-    const remainingPages = canvaPages.filter((p) => p.id !== pageId);
+    const remainingPages = renumberCanvaPages(canvaPages.filter((p) => p.id !== pageId));
     setCanvaPages(remainingPages);
     if (activeCanvaPageId === pageId && remainingPages.length > 0) {
       const nextIdx = Math.min(Math.max(deletedIdx, 0), remainingPages.length - 1);

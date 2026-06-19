@@ -18,14 +18,18 @@ export function canvaPageNumberedName(n: number): string {
   return `Página ${n}`;
 }
 
-/** Nova página no início como Página 1; as demais sobem de número (2, 3, …). */
+/** Renumera páginas na ordem do array: Página 1, 2, 3… */
+export function renumberCanvaPages(pages: CanvaGridPage[]): CanvaGridPage[] {
+  return pages.map((page, index) => ({
+    ...page,
+    name: canvaPageNumberedName(index + 1),
+  }));
+}
+
+/** Nova página no início; todas renumeradas em sequência. */
 export function prependCanvaPage(pages: CanvaGridPage[], newPageId: string): CanvaGridPage[] {
   const newPage = createEmptyCanvaPage(canvaPageNumberedName(1), newPageId);
-  const shifted = pages.map((p, i) => ({
-    ...p,
-    name: canvaPageNumberedName(i + 2),
-  }));
-  return [newPage, ...shifted];
+  return renumberCanvaPages([newPage, ...pages]);
 }
 
 /** Página ativa padrão: a última do array (fluxo Canva — página mais recente). */
@@ -100,8 +104,10 @@ export function normalizeCanvaPages(pages: CanvaGridPage[] | null | undefined): 
   if (!Array.isArray(pages) || pages.length === 0) {
     return [createEmptyCanvaPage("Página 1", "page_1")];
   }
-  return pages.map((page) => ({
-    ...page,
-    slots: normalizeCanvaPageSlots(page.id, page.slots),
-  }));
+  return renumberCanvaPages(
+    pages.map((page) => ({
+      ...page,
+      slots: normalizeCanvaPageSlots(page.id, page.slots),
+    }))
+  );
 }
