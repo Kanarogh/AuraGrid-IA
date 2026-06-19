@@ -153,6 +153,11 @@ import {
 } from "./lib/brandGemValidation";
 import { toast } from "./lib/toast";
 import { confirmDialog } from "./lib/confirmDialog";
+import {
+  collectFilesFromDataTransfer,
+  enableFolderPickerInput,
+  prepareCatalogUploadCandidates,
+} from "./lib/catalogImageUpload";
 
 
 export default function App() {
@@ -440,6 +445,11 @@ export default function App() {
 
   useEffect(() => {
     initAiSettingsStore();
+  }, []);
+
+  useEffect(() => {
+    enableFolderPickerInput(folderUploadInputRef.current);
+    enableFolderPickerInput(gridFolderUploadInputRef.current);
   }, []);
 
   useEffect(() => {
@@ -1366,8 +1376,13 @@ export default function App() {
   };
 
   // Importa imagens para o guarda-roupa de referências (aba Catálogo)
-  const handleBatchImages = async (files: FileList, options?: { asReference?: boolean }) => {
+  const handleBatchImages = async (
+    fileList: FileList | File[],
+    options?: { asReference?: boolean }
+  ) => {
     const asReference = options?.asReference ?? true;
+    const allFiles = Array.from(fileList);
+    const candidates = prepareCatalogUploadCandidates(allFiles, { asReference });
 
     if (useApiStorage && !activeClientId) {
       toast.warning("Crie ou selecione um cliente na barra lateral antes de enviar imagens.");
@@ -1376,31 +1391,38 @@ export default function App() {
 
     if (isUploadingCatalog) return;
 
+    if (candidates.length === 0) {
+      const total = allFiles.length;
+      toast.warning(
+        total > 0
+          ? `Nenhuma imagem válida encontrada entre ${total} arquivo(s).\n\nUse JPG, PNG ou WebP dentro das subpastas (ex.: Fotos(6)/#00874/foto.jpg).`
+          : "Nenhum arquivo encontrado na pasta selecionada."
+      );
+      return;
+    }
+
     setIsUploadingCatalog(true);
     try {
       if (useApiStorage && activeClientId) {
-        const sortedFiles = Array.from(files).sort((a, b) =>
-          a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" })
+        const { items } = await uploadCatalogBatchApi(
+          activeClientId,
+          candidates.map((c) => c.file),
+          {
+            isReference: asReference,
+            labels: candidates.map((c) => c.label),
+          }
         );
-        const imageFiles = sortedFiles.filter(
-          (f) => f.type.startsWith("image/") || f.name.match(/\.(jpg|jpeg|png|webp|gif|svg)$/i)
-        );
-        if (imageFiles.length === 0) {
-          toast.warning("Nenhum arquivo de imagem válido encontrado na seleção/pasta.");
-          return;
-        }
-
-        const { items } = await uploadCatalogBatchApi(activeClientId, imageFiles, {
-          isReference: asReference,
-        });
         setCatalog((prev) => [
           ...items.map((c) => ({ ...c, image: resolveCatalogItemImage(c) })),
           ...prev,
         ]);
+        const skipped = allFiles.length - candidates.length;
         toast.success(
           asReference
-            ? `Sucesso! ${items.length} referência(s) adicionada(s).`
-            : `Sucesso! ${items.length} peça(s) de grid adicionada(s).`
+            ? `Sucesso! ${items.length} referência(s) adicionada(s).` +
+                (skipped > 0 ? ` (${skipped} arquivo(s) ignorados)` : "")
+            : `Sucesso! ${items.length} peça(s) de grid adicionada(s).` +
+                (skipped > 0 ? ` (${skipped} arquivo(s) ignorados)` : "")
         );
         return;
       }
@@ -1411,38 +1433,14 @@ export default function App() {
       }
 
       const newItems: CatalogItem[] = [];
-      let imageCount = 0;
+      let failedCount = 0;
 
-      const sortedFiles = Array.from(files).sort((a, b) => {
-        const matchA = a.name.match(/\d+/);
-        const matchB = b.name.match(/\d+/);
-        const numA = matchA ? parseInt(matchA[0], 10) : NaN;
-        const numB = matchB ? parseInt(matchB[0], 10) : NaN;
-
-        if (!isNaN(numA) && !isNaN(numB)) {
-          if (numA !== numB) return numA - numB;
-        }
-        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
-      });
-
-      for (let i = 0; i < sortedFiles.length; i++) {
-        const file = sortedFiles[i];
-        if (!file.type.startsWith("image/") && !file.name.match(/\.(jpg|jpeg|png|webp|gif|svg)$/i)) {
-          continue;
-        }
-
-        imageCount++;
-        let label = file.name
-          .replace(/\.[^/.]+$/, "")
-          .replace(/[_-]/g, " ")
-          .trim();
-        label = label.replace(/\b\w/g, (char) => char.toUpperCase());
-
+      for (const { file, label } of candidates) {
         try {
           const base64Str = await fileToCatalogImageDataUrl(file);
           newItems.push({
             id: "cat_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9),
-            label: label,
+            label,
             image: base64Str,
             description: asReference
               ? `Importado em ${new Date().toLocaleDateString("pt-BR")} do arquivo original '${file.name}'`
@@ -1451,6 +1449,7 @@ export default function App() {
             enrichmentStatus: asReference ? "pending" : undefined,
           });
         } catch (err) {
+          failedCount++;
           console.error("Erro ao converter arquivo de lote:", file.name, err);
         }
       }
@@ -1466,10 +1465,8 @@ export default function App() {
             ? `Sucesso! ${newItems.length} referência(s) adicionada(s).`
             : `Sucesso! ${newItems.length} peça(s) de grid adicionada(s).`
         );
-      } else if (imageCount > 0) {
+      } else if (failedCount > 0) {
         toast.error("Não foi possível processar imagens do lote selecionado.");
-      } else {
-        toast.warning("Nenhum arquivo de imagem válido encontrado na seleção/pasta.");
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Falha ao enviar imagens.";
@@ -2901,9 +2898,13 @@ export default function App() {
               onDrop={async (e) => {
                 e.preventDefault();
                 setCatalogDragOver(false);
-                const files = e.dataTransfer.files;
-                if (files && files.length > 0) {
+                const files = await collectFilesFromDataTransfer(e.dataTransfer);
+                if (files.length > 0) {
                   await handleBatchImages(files, { asReference: true });
+                } else {
+                  toast.warning(
+                    "Não foi possível ler a pasta arrastada. Use o botão «Subir Pasta de Referências» ou arraste arquivos de imagem."
+                  );
                 }
               }}
             >
@@ -2917,7 +2918,7 @@ export default function App() {
                   Importar Pasta de Ativos ou Seleção de Imagens em Lote
                 </h3>
                 <p className="text-xs text-ag-muted max-w-md mx-auto mt-1 leading-relaxed">
-                  Arraste pasta ou arquivos. Cada look vira um código (ex: <code>9146 Pink</code>) e um JSON detalhado para match nos roteiros sem reler a foto do catálogo.
+                  Arraste pasta ou arquivos. Cada subpasta vira um código (ex: <code>#00874</code>, <code>PLK 8016</code>) — uma foto por pasta.
                 </p>
               </div>
 
@@ -2966,8 +2967,6 @@ export default function App() {
               <input
                 type="file"
                 id="batch-folder-picker"
-                webkitdirectory="true"
-                directory="true"
                 multiple
                 ref={folderUploadInputRef}
                 className="hidden"
@@ -3252,8 +3251,8 @@ export default function App() {
                 onDrop={async (e) => {
                   e.preventDefault();
                   setGridCatalogDragOver(false);
-                  const files = e.dataTransfer.files;
-                  if (files?.length) await handleBatchImages(files, { asReference: false });
+                  const files = await collectFilesFromDataTransfer(e.dataTransfer);
+                  if (files.length) await handleBatchImages(files, { asReference: false });
                 }}
               >
                 <div className="p-3 bg-ag-accent-soft rounded-full text-ag-accent">
@@ -3293,7 +3292,6 @@ export default function App() {
                   multiple
                   ref={gridFolderUploadInputRef}
                   className="hidden"
-                  {...({ webkitdirectory: "true", directory: "true" } as React.InputHTMLAttributes<HTMLInputElement>)}
                   onChange={handleGridFolderUploadChange}
                 />
               </div>

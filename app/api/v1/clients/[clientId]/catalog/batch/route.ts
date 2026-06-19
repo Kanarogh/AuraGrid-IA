@@ -24,6 +24,19 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const isReferenceRaw = String(form.get("isReference") ?? "").trim().toLowerCase();
     const isReference = isReferenceRaw !== "false" && isReferenceRaw !== "0";
 
+    let labels: string[] = [];
+    const labelsRaw = form.get("labels");
+    if (typeof labelsRaw === "string" && labelsRaw.trim()) {
+      try {
+        const parsed = JSON.parse(labelsRaw) as unknown;
+        if (Array.isArray(parsed)) {
+          labels = parsed.map((v) => String(v ?? "").trim());
+        }
+      } catch {
+        /* usa rótulo do nome do arquivo */
+      }
+    }
+
     const created = [];
     for (let i = 0; i < files.length; i++) {
       const file = files[i]!;
@@ -31,11 +44,14 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       const ext = mimeType.split("/")[1] || "jpg";
       const id = `cat_${Date.now()}_${i}_${randomBytes(4).toString("hex")}`;
       const originalName = file.name || `${id}.${ext}`;
-      let label = originalName
-        .replace(/\.[^/.]+$/, "")
-        .replace(/[_-]/g, " ")
-        .trim()
-        .replace(/\b\w/g, (c) => c.toUpperCase());
+      const labelFromClient = labels[i]?.trim();
+      let label = labelFromClient
+        ? labelFromClient
+        : originalName
+            .replace(/\.[^/.]+$/, "")
+            .replace(/[_-]/g, " ")
+            .trim()
+            .replace(/\b\w/g, (c) => c.toUpperCase());
       if (!label) label = id;
 
       const buffer = Buffer.from(await file.arrayBuffer());

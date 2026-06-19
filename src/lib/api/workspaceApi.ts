@@ -111,11 +111,12 @@ export async function uploadMediaApi(
 export async function uploadCatalogBatchApi(
   clientId: string,
   files: File[],
-  options?: { isReference?: boolean }
+  options?: { isReference?: boolean; labels?: string[] }
 ) {
   const form = new FormData();
   for (const f of files) form.append("files", f);
   if (options?.isReference === false) form.append("isReference", "false");
+  if (options?.labels?.length) form.append("labels", JSON.stringify(options.labels));
   const res = await apiFetch(`/api/v1/clients/${clientId}/catalog/batch`, {
     method: "POST",
     body: form,
