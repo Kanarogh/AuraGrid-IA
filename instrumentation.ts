@@ -2,6 +2,7 @@ export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
   const { isDatabaseConfigured } = await import("./server/db/client");
+  const { isOfflineStorageAllowed } = await import("./server/config/deploy");
   const { runMigrations } = await import("./server/db/migrate");
   const { loadRuntimeAiSettings } = await import("./server/ai/runtimeSettings");
 
@@ -12,8 +13,12 @@ export async function register() {
     } catch (err) {
       console.error("[AuraGrid] Falha ao conectar/migrar PostgreSQL:", err);
     }
+  } else if (isOfflineStorageAllowed()) {
+    console.warn("[AuraGrid] DATABASE_URL ausente — persistência local no navegador (somente dev).");
   } else {
-    console.warn("[AuraGrid] DATABASE_URL ausente — persistência local no navegador.");
+    console.error(
+      "[AuraGrid] DATABASE_URL ausente em produção. Configure PostgreSQL (Neon, Supabase, etc.) na Vercel."
+    );
   }
 
   try {

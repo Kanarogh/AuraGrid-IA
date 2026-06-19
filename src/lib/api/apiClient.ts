@@ -130,18 +130,22 @@ export async function fetchMe(): Promise<AuthUser | null> {
 }
 
 export type StorageHealth = {
-  storage?: { mode?: string; database?: { ok?: boolean } };
+  storage?: { mode?: string; database?: { ok?: boolean; configured?: boolean } };
+  deploy?: { offlineStorageAllowed?: boolean };
 };
 
 export async function fetchStorageMode(): Promise<"postgresql" | "local"> {
   try {
     const res = await fetch("/api/health");
-    if (!res.ok) return "local";
+    if (!res.ok) {
+      return process.env.NODE_ENV === "production" ? "postgresql" : "local";
+    }
     const data = (await res.json()) as StorageHealth;
+    if (data.deploy?.offlineStorageAllowed === false) return "postgresql";
     return data.storage?.mode === "postgresql" && data.storage.database?.ok
       ? "postgresql"
       : "local";
   } catch {
-    return "local";
+    return process.env.NODE_ENV === "production" ? "postgresql" : "local";
   }
 }

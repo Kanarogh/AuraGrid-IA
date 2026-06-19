@@ -46,7 +46,7 @@ import {
   CanvaGridPage,
   CanvaGridSlot,
 } from "./types";
-import { enrichCatalogItemsInQueue, isAbortError, catalogReadyForTextMatch } from "./lib/catalogEnrichment";
+import { isAbortError, catalogReadyForTextMatch } from "./lib/catalogEnrichment";
 import { useClientWorkspace } from "./context/ClientWorkspaceContext";
 import {
   clearCatalogApi,
@@ -155,7 +155,7 @@ import {
 
 export default function App() {
   const { isDark, toggleTheme } = useTheme();
-  const { user: authUser } = useAuth();
+  const { user: authUser, storageMode } = useAuth();
 
   const {
     hasActiveClient,
@@ -1322,76 +1322,23 @@ export default function App() {
   const runCatalogEnrichment = async (items: CatalogItem[]) => {
     const prepared = items.map(prepareCatalogItemForEnrichment);
 
-    if (useApiStorage && activeClientId) {
-      const ids = prepared.map((c) => c.id);
-      const idSet = new Set(ids);
-      setCatalog((prev) => {
-        const next = prev.map((c) => (idSet.has(c.id) ? prepareCatalogItemForEnrichment(c) : c));
-        catalogRef.current = next;
-        return next;
-      });
-      setIsEnrichingCatalog(true);
-      await enrichCatalogApi(activeClientId, ids.length ? ids : undefined);
-      void pollApiEnrichment();
+    if (!useApiStorage || !activeClientId) {
+      if (storageMode !== "local") {
+        alert("Entre na sua conta para indexar o catálogo. Os dados ficam salvos na nuvem.");
+      }
       return;
     }
 
-    const toIndex = prepared.filter(
-      (c) => c.isReference !== false && c.enrichmentStatus !== "ready"
-    );
-    if (toIndex.length === 0) return;
-
-    catalogEnrichAbortRef.current?.abort();
-    const controller = new AbortController();
-    catalogEnrichAbortRef.current = controller;
-
+    const ids = prepared.map((c) => c.id);
+    const idSet = new Set(ids);
+    setCatalog((prev) => {
+      const next = prev.map((c) => (idSet.has(c.id) ? prepareCatalogItemForEnrichment(c) : c));
+      catalogRef.current = next;
+      return next;
+    });
     setIsEnrichingCatalog(true);
-    setCatalogEnrichProgress({ index: 0, total: toIndex.length, itemId: "", label: "…" });
-    let localEnrichIndex = 0;
-    try {
-      await refreshAiSettings();
-      const { cancelled, quotaExceeded } = await enrichCatalogItemsInQueue(
-        toIndex,
-        (id) => {
-          localEnrichIndex += 1;
-          const current = catalogRef.current.find((c) => c.id === id);
-          setCatalogEnrichProgress({
-            index: localEnrichIndex,
-            total: toIndex.length,
-            itemId: id,
-            label: current?.label ?? id,
-          });
-          patchCatalogItem(id, { enrichmentStatus: "processing", enrichmentError: undefined });
-        },
-        (id, profile: CatalogVisualProfile) =>
-          patchCatalogItem(id, {
-            visualProfile: profile,
-            enrichmentStatus: "ready",
-            enrichedAt: new Date().toISOString(),
-            enrichmentError: undefined,
-          }),
-        (id, error) =>
-          patchCatalogItem(id, { enrichmentStatus: "failed", enrichmentError: error }),
-        { signal: controller.signal }
-      );
-      if (cancelled) resetCatalogProcessingState();
-      if (quotaExceeded) {
-        resetCatalogProcessingState();
-        alert(
-          "Cota de visão esgotada — a indexação parou para não gastar mais chamadas.\n\n" +
-            "• Groq free: ~500k tokens/dia (no log: TPD). Volta amanhã ou use outra chave.\n" +
-            "• Gemini free: cota diária também pode zerar.\n" +
-            "• Com Ollama ativo, confira se o app Ollama está aberto.\n\n" +
-            "No painel IA (Configurações), use OpenRouter + «Gemma 4 31B» ou Ollama local."
-        );
-      }
-    } finally {
-      if (catalogEnrichAbortRef.current === controller) {
-        catalogEnrichAbortRef.current = null;
-      }
-      setIsEnrichingCatalog(false);
-      setCatalogEnrichProgress(null);
-    }
+    await enrichCatalogApi(activeClientId, ids.length ? ids : undefined);
+    void pollApiEnrichment();
   };
 
   // Importa imagens para o guarda-roupa de referências (aba Catálogo)
@@ -1421,6 +1368,11 @@ export default function App() {
           ? `Sucesso! ${items.length} referência(s) adicionada(s).`
           : `Sucesso! ${items.length} peça(s) de grid adicionada(s).`
       );
+      return;
+    }
+
+    if (storageMode !== "local") {
+      alert("Entre na sua conta para enviar imagens. Os dados ficam salvos na nuvem.");
       return;
     }
 

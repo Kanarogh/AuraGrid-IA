@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { buildAiSettingsResponse, setActiveAiProvider } from "@/server/ai/index";
+import { isLocalAiAllowed } from "@/server/config/deploy";
 import type { AiProviderId } from "@/server/ai/types";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,12 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const { provider } = (await req.json()) as { provider?: string };
+    if (provider === "ollama" && !isLocalAiAllowed()) {
+      return NextResponse.json(
+        { error: "Ollama local não está disponível em produção." },
+        { status: 400 }
+      );
+    }
     if (
       provider !== "gemini" &&
       provider !== "groq" &&
@@ -20,7 +27,7 @@ export async function PUT(req: NextRequest) {
       provider !== "ollama"
     ) {
       return NextResponse.json(
-        { error: "Provedor inválido. Use: gemini, groq, openrouter ou ollama." },
+        { error: "Provedor inválido. Use: gemini, groq ou openrouter." },
         { status: 400 }
       );
     }

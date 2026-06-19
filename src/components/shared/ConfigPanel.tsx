@@ -175,8 +175,8 @@ export function ConfigPanel({
         </p>
         <p className="text-[11px] text-ag-muted mt-0.5 font-mono truncate">
           {storageMode === "postgresql"
-            ? `PostgreSQL + MinIO → cliente ${brandGem.id}`
-            : `localStorage → auragrid_ws:${brandGem.id}`}
+            ? `PostgreSQL + mídia na nuvem → cliente ${brandGem.id}`
+            : `localStorage (dev) → auragrid_ws:${brandGem.id}`}
         </p>
         <p className="text-xs mt-1.5">
           {isDirty ? (
@@ -698,10 +698,10 @@ export function ConfigPanel({
         <div className="text-xs text-ag-muted pt-6 border-t border-ag-border mt-6 space-y-3">
           <p>
             {storageMode === "postgresql"
-              ? "Dados persistidos no PostgreSQL (metadados) e MinIO (fotos)."
-              : "Cada cliente tem workspace próprio no navegador. Troque de marca na barra lateral."}
+              ? "Dados persistidos no PostgreSQL (metadados) e armazenamento de mídia na nuvem."
+              : "Modo dev: cada cliente tem workspace próprio no navegador."}
           </p>
-          {storageMode === "postgresql" && (
+          {storageMode === "postgresql" && process.env.NODE_ENV !== "production" && (
             <Button
               type="button"
               variant="secondary"

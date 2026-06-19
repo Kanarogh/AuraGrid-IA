@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import type { AiProviderId } from "./types";
+import { isLocalAiAllowed } from "../config/deploy";
 import { sanitizeOpenRouterModelId } from "./openrouterModels";
 import { sanitizeGeminiModelId } from "./geminiModels";
 import { sanitizeOllamaModelId } from "./ollamaModels";
@@ -89,9 +90,11 @@ export async function loadRuntimeAiSettings(): Promise<void> {
     const ollamaModel = rawOllama ? sanitizeOllamaModelId(rawOllama) : null;
 
     const savedProvider = normalizeLegacyProvider(data.provider);
+    const provider =
+      savedProvider === "ollama" && !isLocalAiAllowed() ? null : savedProvider;
 
     runtime = {
-      provider: savedProvider,
+      provider,
       openrouterModel,
       geminiModel,
       geminiCatalogModel,
@@ -105,7 +108,7 @@ export async function loadRuntimeAiSettings(): Promise<void> {
       "openaiModel" in data ||
       "openaiCatalogModel" in data;
 
-    if (legacy) {
+    if (legacy || (savedProvider === "ollama" && !provider)) {
       await persist();
     }
 
@@ -194,4 +197,4 @@ export async function setRuntimeOllamaModel(model: string | null): Promise<void>
   runtime.ollamaModel = model ? sanitizeOllamaModelId(model) : null;
   await persist();
 }
-
+

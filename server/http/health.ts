@@ -1,4 +1,5 @@
 import { checkDatabaseConnection, isDatabaseConfigured } from "../db/client";
+import { isOfflineStorageAllowed, resolveStorageMode } from "../config/deploy";
 import { checkMinioConnection, isMinioConfigured } from "../services/mediaService";
 import { buildHealthResponse } from "../ai/index";
 
@@ -13,8 +14,11 @@ export async function buildExtendedHealth() {
 
   return {
     ...ai,
+    deploy: {
+      offlineStorageAllowed: isOfflineStorageAllowed(),
+    },
     storage: {
-      mode: dbConfigured && dbOk ? "postgresql" : "local",
+      mode: resolveStorageMode(dbConfigured, dbOk),
       database: { configured: dbConfigured, ok: dbOk },
       minio: { configured: minioConfigured, ok: minioOk },
     },
