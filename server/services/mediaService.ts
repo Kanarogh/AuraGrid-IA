@@ -1,9 +1,11 @@
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { eq } from "drizzle-orm";
 import { createHash } from "crypto";
 import {
   getMediaStorageProvider,
@@ -19,9 +21,10 @@ import {
   MINIO_USE_SSL,
 } from "../config/env";
 import { getDb, isDatabaseConfigured } from "../db/client";
-import { mediaAssets } from "../db/schema";
+import { canvaSlots, catalogItems, mediaAssets, plannedPosts } from "../db/schema";
 import {
   checkSquareBlobConnection,
+  deleteSquareBlobObject,
   downloadSquareBlobObject,
   uploadSquareBlobObject,
 } from "./squareBlobStorage";
@@ -188,4 +191,81 @@ export async function mediaAssetToDataUrl(assetId: string): Promise<string> {
 
 export function mediaPublicUrl(assetId: string): string {
   return `/api/v1/media/${assetId}`;
+}
+
+async function isMediaAssetReferenced(assetId: string): Promise<boolean> {
+  const db = getDb();
+  const [catalog] = await db
+    .select({ id: catalogItems.id })
+    .from(catalogItems)
+    .where(eq(catalogItems.imageAssetId, assetId))
+    .limit(1);
+  if (catalog) return true;
+
+  const [slot] = await db
+    .select({ id: canvaSlots.id })
+    .from(canvaSlots)
+    .where(eq(canvaSlots.imageAssetId, assetId))
+    .limit(1);
+  if (slot) return true;
+
+  const [post] = await db
+    .select({ id: plannedPosts.id })
+    .from(plannedPosts)
+    .where(eq(plannedPosts.imageAssetId, assetId))
+    .limit(1);
+  return !!post;
+}
+
+async function deleteStorageObject(bucket: string, objectKey: string): Promise<void> {
+  if (bucket === SQUARE_BLOB_BUCKET) {
+    await deleteSquareBlobObject(objectKey);
+    return;
+  }
+  if (!isMediaStorageConfigured()) return;
+  await getS3().send(new DeleteObjectCommand({ Bucket: bucket, Key: objectKey }));
+}
+
+export async function deleteMediaAsset(assetId: string): Promise<void> {
+  const db = getDb();
+  const [row] = await db
+    .select()
+    .from(mediaAssets)
+    .where(eq(mediaAssets.id, assetId))
+    .limit(1);
+  if (!row) return;
+
+  try {
+    await deleteStorageObject(row.bucket, row.objectKey);
+  } catch {
+    // Blob/objeto pode já ter sido removido manualmente; segue com a linha no banco.
+  }
+
+  await db.delete(mediaAssets).where(eq(mediaAssets.id, assetId));
+}
+
+export async function deleteMediaAssetsIfUnreferenced(assetIds: string[]): Promise<void> {
+  const unique = [...new Set(assetIds.filter(Boolean))];
+  for (const assetId of unique) {
+    if (!(await isMediaAssetReferenced(assetId))) {
+      await deleteMediaAsset(assetId);
+    }
+  }
+}
+
+export async function purgeUnreferencedMediaAssets(clientId: string): Promise<number> {
+  const db = getDb();
+  const rows = await db
+    .select({ id: mediaAssets.id })
+    .from(mediaAssets)
+    .where(eq(mediaAssets.clientId, clientId));
+
+  let removed = 0;
+  for (const row of rows) {
+    if (!(await isMediaAssetReferenced(row.id))) {
+      await deleteMediaAsset(row.id);
+      removed += 1;
+    }
+  }
+  return removed;
 }

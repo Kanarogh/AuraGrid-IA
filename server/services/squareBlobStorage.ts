@@ -127,3 +127,24 @@ export async function downloadSquareBlobObject(blobId: string): Promise<Buffer> 
   }
   return Buffer.from(await res.arrayBuffer());
 }
+
+export async function deleteSquareBlobObject(blobId: string): Promise<void> {
+  const apiKey = getSquareBlobApiKey();
+  if (!apiKey) return;
+
+  const res = await fetch(`${BLOB_API}/objects`, {
+    method: "DELETE",
+    headers: {
+      Authorization: apiKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ object: blobId }),
+  });
+
+  const data = (await res.json()) as { status?: string; code?: string };
+  if (data.status === "success" || data.code === "OBJECT_NOT_FOUND") return;
+  if (data.code === "INVALID_OBJECT") return;
+  throw new Error(
+    data.code ? `Square Blob delete falhou (${data.code}).` : "Square Blob delete falhou."
+  );
+}

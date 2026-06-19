@@ -14,6 +14,7 @@ import {
 import type { CanvaGridPage, CanvaGridSlot, CatalogItem } from "../../types";
 import type { CanvaGridFormat } from "../../lib/canvaGridFormats";
 import { isCanvaSlotFilled } from "../../lib/canva";
+import { cn } from "../../lib/cn";
 import { useCanvaWardrobePanelWidth } from "../../hooks/useCanvaWardrobePanelWidth";
 import { Button } from "../ui/Button";
 import { CanvaGridCanvasToolbar } from "./CanvaGridCanvasToolbar";

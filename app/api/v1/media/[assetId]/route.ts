@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { eq } from "drizzle-orm";
 import { assertClientAccess, getOptionalUser, getOptionalUserFromRequest } from "@/server/http/auth";
 import { errorResponse } from "@/server/http/respond";
-import { getMediaBuffer } from "@/server/services/mediaService";
+import { getMediaBuffer, deleteMediaAsset } from "@/server/services/mediaService";
 import { getDb } from "@/server/db/client";
 import { mediaAssets } from "@/server/db/schema";
 
@@ -48,7 +48,7 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
       .limit(1);
     if (!row) return NextResponse.json({ error: "Mídia não encontrada." }, { status: 404 });
     await assertClientAccess(user, row.clientId);
-    await db.delete(mediaAssets).where(eq(mediaAssets.id, assetId));
+    await deleteMediaAsset(assetId);
     return NextResponse.json({ ok: true });
   } catch (err) {
     return errorResponse(err, 400);

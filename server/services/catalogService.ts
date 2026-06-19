@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { GEMINI_EMBEDDING_DIMENSIONS, getGeminiEmbeddingModel } from "../ai/matchConfig";
 import { getDb, getSqlClient } from "../db/client";
 import { catalogItems } from "../db/schema";
-import { mediaPublicUrl } from "./mediaService";
+import { mediaPublicUrl, deleteMediaAssetsIfUnreferenced } from "./mediaService";
 
 export async function listCatalogItems(clientId: string) {
   const db = getDb();
@@ -84,21 +84,57 @@ export async function updateCatalogItem(
 
 export async function deleteCatalogItem(clientId: string, id: string) {
   const db = getDb();
+  const [item] = await db
+    .select({ imageAssetId: catalogItems.imageAssetId })
+    .from(catalogItems)
+    .where(and(eq(catalogItems.clientId, clientId), eq(catalogItems.id, id)))
+    .limit(1);
+
   await db
     .delete(catalogItems)
     .where(and(eq(catalogItems.clientId, clientId), eq(catalogItems.id, id)));
+
+  if (item?.imageAssetId) {
+    await deleteMediaAssetsIfUnreferenced([item.imageAssetId]);
+  }
 }
 
 export async function clearCatalog(clientId: string) {
   const db = getDb();
+  const rows = await db
+    .select({ imageAssetId: catalogItems.imageAssetId })
+    .from(catalogItems)
+    .where(eq(catalogItems.clientId, clientId));
+
+  const assetIds = rows
+    .map((r) => r.imageAssetId)
+    .filter((id): id is string => !!id);
+
   await db.delete(catalogItems).where(eq(catalogItems.clientId, clientId));
+
+  if (assetIds.length > 0) {
+    await deleteMediaAssetsIfUnreferenced(assetIds);
+  }
 }
 
 export async function clearGridCatalog(clientId: string) {
   const db = getDb();
+  const rows = await db
+    .select({ imageAssetId: catalogItems.imageAssetId })
+    .from(catalogItems)
+    .where(and(eq(catalogItems.clientId, clientId), eq(catalogItems.isReference, false)));
+
+  const assetIds = rows
+    .map((r) => r.imageAssetId)
+    .filter((id): id is string => !!id);
+
   await db
     .delete(catalogItems)
     .where(and(eq(catalogItems.clientId, clientId), eq(catalogItems.isReference, false)));
+
+  if (assetIds.length > 0) {
+    await deleteMediaAssetsIfUnreferenced(assetIds);
+  }
 }
 
 export async function clearCatalogEnrichments(clientId: string, ids?: string[]) {
