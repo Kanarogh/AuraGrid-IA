@@ -2930,7 +2930,7 @@ export default function App() {
                   Importar Pasta de Ativos ou Seleção de Imagens em Lote
                 </h3>
                 <p className="text-xs text-ag-muted max-w-md mx-auto mt-1 leading-relaxed">
-                  Arraste pasta ou arquivos. Cada subpasta vira um código (ex: <code>#00874</code>, <code>PLK 8016</code>) — uma foto por pasta.
+                  Arraste pasta ou arquivos. Cada subpasta é um código (ex: <code>#00874</code>) e <strong className="text-ag-text font-medium">todas as fotos</strong> dentro dela viram referências.
                 </p>
               </div>
 

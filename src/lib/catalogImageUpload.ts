@@ -39,8 +39,41 @@ export function labelFromCatalogImageFile(file: File): string {
   return formatCatalogLabel(parts[0] ?? file.name);
 }
 
-function pickBestImageFile(files: File[]): File {
-  return [...files].sort((a, b) => b.size - a.size)[0]!;
+function fileStemName(file: File): string {
+  return file.name.replace(/\.[^/.]+$/, "");
+}
+
+function isGenericPhotoName(stem: string): boolean {
+  return /^(img|dsc|image|foto|photo|capture|pic)[\s_-]?\d*$/i.test(stem.trim());
+}
+
+/**
+ * Código da pasta + detalhe do arquivo quando o nome da foto também traz referência.
+ * Ex.: Fotos(6)/#00874/9146-pink-front.jpg → "#00874 9146 Pink Front"
+ */
+export function referenceLabelFromFolderAndFile(file: File): string {
+  const rel = getFileRelativePath(file);
+  const parts = rel.split("/").filter(Boolean);
+  const fileStem = formatCatalogLabel(fileStemName(file));
+
+  if (parts.length < 2) {
+    return fileStem;
+  }
+
+  const folderRef = formatCatalogLabel(parts[parts.length - 2]!);
+  const stemRaw = fileStemName(file);
+  const folderNorm = folderRef.toLowerCase().replace(/[\s#_-]/g, "");
+  const stemNorm = stemRaw.toLowerCase().replace(/[\s#_-]/g, "");
+
+  if (!stemRaw || stemNorm === folderNorm || stemNorm.includes(folderNorm)) {
+    return folderRef;
+  }
+
+  if (isGenericPhotoName(stemRaw)) {
+    return folderRef;
+  }
+
+  return `${folderRef} ${fileStem}`;
 }
 
 export type CatalogUploadCandidate = {
@@ -49,8 +82,8 @@ export type CatalogUploadCandidate = {
 };
 
 /**
- * Pastas de referência costumam ser: Raiz/#00874/foto.jpg — uma pasta = um look.
- * Agrupa por pasta pai e escolhe a melhor imagem quando há várias no mesmo código.
+ * Importa todas as imagens das subpastas.
+ * O rótulo combina código da pasta + nome da foto quando ambos trazem referência.
  */
 export function prepareCatalogUploadCandidates(
   files: File[],
@@ -61,48 +94,21 @@ export function prepareCatalogUploadCandidates(
 
   const hasNestedPaths = images.some((f) => getFileRelativePath(f).includes("/"));
 
-  if (!options.asReference || !hasNestedPaths) {
-    return images.map((file) => ({
-      file,
-      label: labelFromCatalogImageFile(file),
-    }));
-  }
+  const candidates = images.map((file) => ({
+    file,
+    label:
+      options.asReference && hasNestedPaths
+        ? referenceLabelFromFolderAndFile(file)
+        : labelFromCatalogImageFile(file),
+  }));
 
-  const groups = new Map<string, File[]>();
-
-  for (const file of images) {
-    const parts = getFileRelativePath(file).split("/").filter(Boolean);
-    if (parts.length < 2) {
-      const key = `__root__:${file.name}`;
-      const list = groups.get(key) ?? [];
-      list.push(file);
-      groups.set(key, list);
-      continue;
-    }
-
-    const parentFolder = parts[parts.length - 2]!;
-    const list = groups.get(parentFolder) ?? [];
-    list.push(file);
-    groups.set(parentFolder, list);
-  }
-
-  const candidates: CatalogUploadCandidate[] = [];
-
-  for (const [key, groupFiles] of groups) {
-    if (key.startsWith("__root__:")) {
-      const file = pickBestImageFile(groupFiles);
-      candidates.push({ file, label: labelFromCatalogImageFile(file) });
-      continue;
-    }
-
-    const file = pickBestImageFile(groupFiles);
-    candidates.push({
-      file,
-      label: formatCatalogLabel(key),
-    });
-  }
-
-  return candidates.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+  return candidates.sort((a, b) => {
+    const pathA = getFileRelativePath(a.file);
+    const pathB = getFileRelativePath(b.file);
+    const byPath = pathA.localeCompare(pathB, undefined, { numeric: true, sensitivity: "base" });
+    if (byPath !== 0) return byPath;
+    return a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" });
+  });
 }
 
 async function readDirectoryEntries(
