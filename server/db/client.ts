@@ -1,6 +1,7 @@
 import { sql as drizzleSql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import { postgresConnectOptions } from "./postgresOptions";
 import * as schema from "./schema";
 
 let sqlClient: ReturnType<typeof postgres> | null = null;
@@ -15,7 +16,7 @@ export function getDb() {
     throw new Error("DATABASE_URL não configurada.");
   }
   if (!sqlClient || !db) {
-    sqlClient = postgres(process.env.DATABASE_URL!.trim(), { max: 10 });
+    sqlClient = postgres(process.env.DATABASE_URL!.trim(), postgresConnectOptions({ max: 10 }));
     db = drizzle(sqlClient, { schema });
   }
   return db;

@@ -3,6 +3,7 @@ import fs from "fs/promises";
 import path from "path";
 import postgres from "postgres";
 import { envString } from "../config/env";
+import { postgresConnectOptions } from "./postgresOptions";
 
 const MIGRATION_FILES = [
   "0000_initial",
@@ -13,7 +14,7 @@ const MIGRATION_FILES = [
 
 async function waitForPostgres(url: string, attempts = 30, delayMs = 1000): Promise<void> {
   for (let i = 1; i <= attempts; i++) {
-    const probe = postgres(url, { max: 1, connect_timeout: 3 });
+    const probe = postgres(url, postgresConnectOptions({ max: 1, connect_timeout: 3 }));
     try {
       await probe`SELECT 1`;
       await probe.end({ timeout: 2 });
@@ -43,7 +44,7 @@ export async function runMigrations(): Promise<void> {
 
   await waitForPostgres(url);
 
-  const sql = postgres(url, { max: 1 });
+  const sql = postgres(url, postgresConnectOptions({ max: 1 }));
   try {
     await sql.unsafe(`
       CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
