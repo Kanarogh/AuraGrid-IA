@@ -17,6 +17,7 @@ import {
   Palette,
 } from "lucide-react";
 import { cn } from "../../lib/cn";
+import { toast } from "../../lib/toast";
 import { gemInitial } from "../../lib/brandGem";
 import { brandGemSignature } from "../../lib/brandGemSignature";
 import {
@@ -710,7 +711,7 @@ export function ConfigPanel({
                 try {
                   const rawReg = localStorage.getItem(REGISTRY_KEY);
                   if (!rawReg) {
-                    alert("Nenhum dado local encontrado para importar.");
+                    toast.warning("Nenhum dado local encontrado para importar.");
                     return;
                   }
                   const registry = JSON.parse(rawReg);
@@ -723,9 +724,9 @@ export function ConfigPanel({
                     if (raw) workspaces[id] = JSON.parse(raw);
                   }
                   await migrateLocalStorageApi({ registry, workspaces });
-                  alert("Importação concluída! Recarregue a página.");
+                  toast.success("Importação concluída! Recarregue a página.");
                 } catch (err) {
-                  alert(err instanceof Error ? err.message : "Falha na importação.");
+                  toast.error(err instanceof Error ? err.message : "Falha na importação.");
                 }
               }}
             >

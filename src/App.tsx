@@ -151,6 +151,8 @@ import {
   getMissingBrandGemFields,
   isBrandGemReadyForCaptions,
 } from "./lib/brandGemValidation";
+import { toast } from "./lib/toast";
+import { confirmDialog } from "./lib/confirmDialog";
 
 
 export default function App() {
@@ -280,6 +282,7 @@ export default function App() {
   /** Posts que apagaram legenda — próxima geração ignora cache e chama a IA de novo. */
   const captionCacheBypassRef = useRef(new Set<string>());
   const [isEnrichingCatalog, setIsEnrichingCatalog] = useState(false);
+  const [isUploadingCatalog, setIsUploadingCatalog] = useState(false);
   const [catalogEnrichProgress, setCatalogEnrichProgress] = useState<CatalogEnrichProgress | null>(
     null
   );
@@ -406,7 +409,7 @@ export default function App() {
 
     if (validCount === 0) {
       if (showAlert) {
-        alert("Nenhum look com foto foi encontrado no Canva Grid para sincronizar!");
+        toast.warning("Nenhum look com foto foi encontrado no Canva Grid para sincronizar!");
       }
       return;
     }
@@ -429,7 +432,7 @@ export default function App() {
     });
 
     if (showAlert) {
-      alert(
+      toast.success(
         `Sequência do Canva sincronizada com sucesso no Roteiro de 30 Dias!\n- ${validCount} looks organizados sequencialmente.\n- Legendas e aprovações existentes nos dias foram preservadas.`
       );
     }
@@ -476,18 +479,21 @@ export default function App() {
   };
 
   // Reset demo showroom variables
-  const handleResetPresets = () => {
+  const handleResetPresets = async () => {
     if (!hasActiveClient) return;
     if (
-      confirm(
-        `Resetar o cliente «${activeClient.name}»? Catálogo, roteiro, Canva e Gem voltam ao estado vazio. Outros clientes não são afetados.`
-      )
+      !(await confirmDialog({
+        message: `Resetar o cliente «${activeClient.name}»? Catálogo, roteiro, Canva e Gem voltam ao estado vazio. Outros clientes não são afetados.`,
+        variant: "danger",
+        confirmLabel: "Resetar",
+      }))
     ) {
-      resetActiveClient();
-      setActiveSection("posts");
-      setActivePreviewId("post_day1");
-      alert(`Cliente «${activeClient.name}» foi resetado.`);
+      return;
     }
+    resetActiveClient();
+    setActiveSection("posts");
+    setActivePreviewId("post_day1");
+    toast.success(`Cliente «${activeClient.name}» foi resetado.`);
   };
 
   // Update starting planning date
@@ -580,9 +586,9 @@ export default function App() {
   };
 
   // Remove a post slot completely from planning
-  const handleRemovePost = (postId: string) => {
+  const handleRemovePost = async (postId: string) => {
     if (posts.length <= 1) {
-      alert("Você precisa manter pelo menos um post no seu planejamento.");
+      toast.warning("Você precisa manter pelo menos um post no seu planejamento.");
       return;
     }
     
@@ -593,21 +599,23 @@ export default function App() {
       ? `Deseja mesmo remover o post do Dia ${postToDelete.dayNumber}? A imagem e legenda correspondente serão perdidas.`
       : `Deseja remover este slot de post do Dia ${postToDelete.dayNumber}?`;
       
-    if (confirm(confirmMessage)) {
-      setPosts(prev => {
-        const filtered = prev.filter(p => p.id !== postId);
-        return recalculatePostDates(startDate, filtered);
-      });
-      
-      setTimeout(() => {
-        setPosts(current => {
-          if (current.length > 0) {
-            setActivePreviewId(current[0].id);
-          }
-          return current;
-        });
-      }, 100);
+    if (!(await confirmDialog({ message: confirmMessage, variant: "danger", confirmLabel: "Remover" }))) {
+      return;
     }
+
+    setPosts(prev => {
+      const filtered = prev.filter(p => p.id !== postId);
+      return recalculatePostDates(startDate, filtered);
+    });
+    
+    setTimeout(() => {
+      setPosts(current => {
+        if (current.length > 0) {
+          setActivePreviewId(current[0].id);
+        }
+        return current;
+      });
+    }, 100);
   };
 
   // Automatically arrange and distribute photos/images into exactly 30 days starting from Start Date
@@ -622,7 +630,7 @@ export default function App() {
     const validItems = itemsToSchedule.filter(item => item.image !== null);
     
     if (validItems.length === 0) {
-      alert("Nenhuma imagem válida com foto para distribuir! Por favor, adicione fotos ao acervo primeiro.");
+      toast.warning("Nenhuma imagem válida com foto para distribuir! Por favor, adicione fotos ao acervo primeiro.");
       return;
     }
 
@@ -743,7 +751,7 @@ export default function App() {
     const firstWithImg = finalizedList.find(p => p.image !== null) || finalizedList[0];
     setActivePreviewId(firstWithImg.id);
     
-    alert(`Planejamento de 30 Dias Gerado!\n\nAs ${N} fotos foram distribuídas esteticamente:\n- Cada dia tem postagem obrigatória.\n- Foram colocados múltiplos posts por dia nos primeiros dias para organizar o excedente de fotos.\n- Data inicial do calendário definida para: ${startDate}.`);
+    toast.success(`Planejamento de 30 Dias Gerado!\n\nAs ${N} fotos foram distribuídas esteticamente:\n- Cada dia tem postagem obrigatória.\n- Foram colocados múltiplos posts por dia nos primeiros dias para organizar o excedente de fotos.\n- Data inicial do calendário definida para: ${startDate}.`);
   };
 
   // Upload a batch of files specifically to be instantly scheduled across 30 days!
@@ -793,7 +801,7 @@ export default function App() {
       // Agenda nos roteiros sem poluir o guarda-roupa de referências
       await handleAutoDistribute(scheduleItems);
     } else {
-      alert("Nenhuma imagem válida encontrada no lote selecionado.");
+      toast.warning("Nenhuma imagem válida encontrada no lote selecionado.");
     }
   };
 
@@ -854,7 +862,7 @@ export default function App() {
       setSelectedCanvaSlotId(null);
     } catch (err) {
       console.error("Erro ao atribuir look ao slot:", err);
-      alert(
+      toast.error(
         "Não foi possível salvar o look neste slot. Verifique sua conexão e tente novamente."
       );
     }
@@ -945,7 +953,7 @@ export default function App() {
       await handleUploadImageToCanvaSlot(pageId, slotId, file);
       return;
     }
-    alert(
+    toast.warning(
       "Não foi possível colar esta imagem aqui. Exporte do Canva (PNG/JPG) ou arraste o arquivo da pasta Downloads."
     );
   };
@@ -1007,30 +1015,46 @@ export default function App() {
   };
 
   // Delete a Canva Page
-  const handleDeleteCanvaPage = (pageId: string) => {
+  const handleDeleteCanvaPage = async (pageId: string) => {
     if (canvaPages.length <= 1) {
-      alert("Sua área de trabalho precisa ter pelo menos uma página de planejamento.");
+      toast.warning("Sua área de trabalho precisa ter pelo menos uma página de planejamento.");
       return;
     }
-    if (confirm("Tem certeza que deseja apagar esta página do Canva Grid?")) {
-      const deletedIdx = canvaPages.findIndex((p) => p.id === pageId);
-      const remainingPages = canvaPages.filter((p) => p.id !== pageId);
-      setCanvaPages(remainingPages);
-      if (activeCanvaPageId === pageId && remainingPages.length > 0) {
-        const nextIdx = Math.min(Math.max(deletedIdx, 0), remainingPages.length - 1);
-        setActiveCanvaPageId(remainingPages[nextIdx]!.id);
-      }
+    if (
+      !(await confirmDialog({
+        message: "Tem certeza que deseja apagar esta página do Canva Grid?",
+        variant: "danger",
+        confirmLabel: "Apagar",
+      }))
+    ) {
+      return;
+    }
+    const deletedIdx = canvaPages.findIndex((p) => p.id === pageId);
+    const remainingPages = canvaPages.filter((p) => p.id !== pageId);
+    setCanvaPages(remainingPages);
+    if (activeCanvaPageId === pageId && remainingPages.length > 0) {
+      const nextIdx = Math.min(Math.max(deletedIdx, 0), remainingPages.length - 1);
+      setActiveCanvaPageId(remainingPages[nextIdx]!.id);
     }
   };
 
   // Clear slots of a Canva page
-  const handleClearCanvaPage = (pageId: string) => {
-    if (confirm("Deseja mesmo zerar todas as fotos desta página?")) {
-      setCanvaPages(prev => prev.map(p => {
+  const handleClearCanvaPage = async (pageId: string) => {
+    if (
+      !(await confirmDialog({
+        message: "Deseja mesmo zerar todas as fotos desta página?",
+        variant: "danger",
+        confirmLabel: "Zerar",
+      }))
+    ) {
+      return;
+    }
+    setCanvaPages((prev) =>
+      prev.map((p) => {
         if (p.id !== pageId) return p;
         return createEmptyCanvaPage(p.name, p.id);
-      }));
-    }
+      })
+    );
   };
 
   // Batch upload specific to Canva Grid (re-sequences numerically & rolls over page capacity)
@@ -1081,7 +1105,7 @@ export default function App() {
     }
 
     if (base64List.length === 0) {
-      alert("Nenhuma imagem válida para carregar.");
+      toast.warning("Nenhuma imagem válida para carregar.");
       return;
     }
 
@@ -1113,7 +1137,7 @@ export default function App() {
       });
     });
 
-    alert(`${base64List.length} fotos carregadas e organizadas sequencialmente na página ativa do Canva Grid (e transbordadas para as páginas seguintes se o limite foi excedido!).`);
+    toast.success(`${base64List.length} fotos carregadas e organizadas sequencialmente na página ativa do Canva Grid (e transbordadas para as páginas seguintes se o limite foi excedido!).`);
   };
 
   // Plan 30 Days based on Canva layouts sequence
@@ -1137,7 +1161,7 @@ export default function App() {
     let validSlots = allSlots.filter(s => s && s.image !== null);
     
     if (validSlots.length === 0) {
-      alert("A página está sem imagens! Adicione fotos no Canva Grid primeiro para usá-las no agendamento.");
+      toast.warning("A página está sem imagens! Adicione fotos no Canva Grid primeiro para usá-las no agendamento.");
       return;
     }
 
@@ -1206,7 +1230,7 @@ export default function App() {
 
     setPosts(updated);
     setSwapSourceId("");
-    alert(`Sequência modificada! Os conteúdos de "${sourcePost.dateLabel}" e "${destPost.dateLabel}" foram invertidos para harmonização visual.`);
+    toast.success(`Sequência modificada! Os conteúdos de "${sourcePost.dateLabel}" e "${destPost.dateLabel}" foram invertidos para harmonização visual.`);
   };
 
   // Process uploaded image file into lightweight base64
@@ -1324,7 +1348,7 @@ export default function App() {
 
     if (!useApiStorage || !activeClientId) {
       if (storageMode !== "local") {
-        alert("Entre na sua conta para indexar o catálogo. Os dados ficam salvos na nuvem.");
+        toast.warning("Entre na sua conta para indexar o catálogo. Os dados ficam salvos na nuvem.");
       }
       return;
     }
@@ -1345,138 +1369,159 @@ export default function App() {
   const handleBatchImages = async (files: FileList, options?: { asReference?: boolean }) => {
     const asReference = options?.asReference ?? true;
 
-    if (useApiStorage && activeClientId) {
-      const sortedFiles = Array.from(files).sort((a, b) =>
-        a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" })
-      );
-      const imageFiles = sortedFiles.filter(
-        (f) => f.type.startsWith("image/") || f.name.match(/\.(jpg|jpeg|png|webp|gif|svg)$/i)
-      );
-      if (imageFiles.length === 0) {
-        alert("Nenhum arquivo de imagem válido encontrado na seleção/pasta.");
+    if (useApiStorage && !activeClientId) {
+      toast.warning("Crie ou selecione um cliente na barra lateral antes de enviar imagens.");
+      return;
+    }
+
+    if (isUploadingCatalog) return;
+
+    setIsUploadingCatalog(true);
+    try {
+      if (useApiStorage && activeClientId) {
+        const sortedFiles = Array.from(files).sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" })
+        );
+        const imageFiles = sortedFiles.filter(
+          (f) => f.type.startsWith("image/") || f.name.match(/\.(jpg|jpeg|png|webp|gif|svg)$/i)
+        );
+        if (imageFiles.length === 0) {
+          toast.warning("Nenhum arquivo de imagem válido encontrado na seleção/pasta.");
+          return;
+        }
+
+        const { items } = await uploadCatalogBatchApi(activeClientId, imageFiles, {
+          isReference: asReference,
+        });
+        setCatalog((prev) => [
+          ...items.map((c) => ({ ...c, image: resolveCatalogItemImage(c) })),
+          ...prev,
+        ]);
+        toast.success(
+          asReference
+            ? `Sucesso! ${items.length} referência(s) adicionada(s).`
+            : `Sucesso! ${items.length} peça(s) de grid adicionada(s).`
+        );
         return;
       }
-      const { items } = await uploadCatalogBatchApi(activeClientId, imageFiles, {
-        isReference: asReference,
+
+      if (storageMode !== "local") {
+        toast.warning("Entre na sua conta para enviar imagens. Os dados ficam salvos na nuvem.");
+        return;
+      }
+
+      const newItems: CatalogItem[] = [];
+      let imageCount = 0;
+
+      const sortedFiles = Array.from(files).sort((a, b) => {
+        const matchA = a.name.match(/\d+/);
+        const matchB = b.name.match(/\d+/);
+        const numA = matchA ? parseInt(matchA[0], 10) : NaN;
+        const numB = matchB ? parseInt(matchB[0], 10) : NaN;
+
+        if (!isNaN(numA) && !isNaN(numB)) {
+          if (numA !== numB) return numA - numB;
+        }
+        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
       });
-      setCatalog((prev) => [
-        ...items.map((c) => ({ ...c, image: resolveCatalogItemImage(c) })),
-        ...prev,
-      ]);
-      alert(
-        asReference
-          ? `Sucesso! ${items.length} referência(s) adicionada(s).`
-          : `Sucesso! ${items.length} peça(s) de grid adicionada(s).`
-      );
-      return;
-    }
 
-    if (storageMode !== "local") {
-      alert("Entre na sua conta para enviar imagens. Os dados ficam salvos na nuvem.");
-      return;
-    }
+      for (let i = 0; i < sortedFiles.length; i++) {
+        const file = sortedFiles[i];
+        if (!file.type.startsWith("image/") && !file.name.match(/\.(jpg|jpeg|png|webp|gif|svg)$/i)) {
+          continue;
+        }
 
-    const newItems: CatalogItem[] = [];
-    let imageCount = 0;
-    
-    // Sort files numerically by filename sequence (e.g. 1.jpg, 2.jpg... up to 34.jpg)
-    const sortedFiles = Array.from(files).sort((a, b) => {
-      const matchA = a.name.match(/\d+/);
-      const matchB = b.name.match(/\d+/);
-      const numA = matchA ? parseInt(matchA[0], 10) : NaN;
-      const numB = matchB ? parseInt(matchB[0], 10) : NaN;
-      
-      if (!isNaN(numA) && !isNaN(numB)) {
-        if (numA !== numB) return numA - numB;
+        imageCount++;
+        let label = file.name
+          .replace(/\.[^/.]+$/, "")
+          .replace(/[_-]/g, " ")
+          .trim();
+        label = label.replace(/\b\w/g, (char) => char.toUpperCase());
+
+        try {
+          const base64Str = await fileToCatalogImageDataUrl(file);
+          newItems.push({
+            id: "cat_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9),
+            label: label,
+            image: base64Str,
+            description: asReference
+              ? `Importado em ${new Date().toLocaleDateString("pt-BR")} do arquivo original '${file.name}'`
+              : `Peça de grid importada em ${new Date().toLocaleDateString("pt-BR")} do arquivo '${file.name}' — não usada como referência de look`,
+            isReference: asReference,
+            enrichmentStatus: asReference ? "pending" : undefined,
+          });
+        } catch (err) {
+          console.error("Erro ao converter arquivo de lote:", file.name, err);
+        }
       }
-      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
-    });
-    
-    for (let i = 0; i < sortedFiles.length; i++) {
-      const file = sortedFiles[i];
-      // Filter non-images and hidden system files (like macOS .DS_Store or Thumbs.db)
-      if (!file.type.startsWith("image/") && !file.name.match(/\.(jpg|jpeg|png|webp|gif|svg)$/i)) {
-        continue;
-      }
-      
-      imageCount++;
-      // Extract code reference automatically by formatting filename
-      let label = file.name
-        .replace(/\.[^/.]+$/, "") // strip extension
-        .replace(/[_-]/g, " ")    // replace visual splitters with space
-        .trim();
-        
-      // Capitalize first letters of each block for boutique elegance
-      label = label.replace(/\b\w/g, char => char.toUpperCase());
- 
-      try {
-        const base64Str = await fileToCatalogImageDataUrl(file);
-        newItems.push({
-          id: "cat_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9),
-          label: label,
-          image: base64Str,
-          description: asReference
-            ? `Importado em ${new Date().toLocaleDateString("pt-BR")} do arquivo original '${file.name}'`
-            : `Peça de grid importada em ${new Date().toLocaleDateString("pt-BR")} do arquivo '${file.name}' — não usada como referência de look`,
-          isReference: asReference,
-          enrichmentStatus: asReference ? "pending" : undefined,
+
+      if (newItems.length > 0) {
+        setCatalog((prev) => {
+          const next = [...newItems, ...prev];
+          catalogRef.current = next;
+          return next;
         });
-      } catch (err) {
-        console.error("Erro ao converter arquivo de lote:", file.name, err);
+        toast.success(
+          asReference
+            ? `Sucesso! ${newItems.length} referência(s) adicionada(s).`
+            : `Sucesso! ${newItems.length} peça(s) de grid adicionada(s).`
+        );
+      } else if (imageCount > 0) {
+        toast.error("Não foi possível processar imagens do lote selecionado.");
+      } else {
+        toast.warning("Nenhum arquivo de imagem válido encontrado na seleção/pasta.");
       }
-    }
-
-    if (newItems.length > 0) {
-      setCatalog((prev) => {
-        const next = [...newItems, ...prev];
-        catalogRef.current = next;
-        return next;
-      });
-      alert(
-        asReference
-          ? `Sucesso! ${newItems.length} referência(s) adicionada(s).`
-          : `Sucesso! ${newItems.length} peça(s) de grid adicionada(s).`
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Falha ao enviar imagens.";
+      console.error("[AuraGrid] upload catálogo:", err);
+      toast.error(
+        `Não foi possível enviar as imagens.\n\n${message}\n\n` +
+          "Confira: login ativo, SQUARECLOUD_BLOB_API_KEY (ou MINIO_*), e os logs da aplicação."
       );
-    } else if (imageCount > 0) {
-      alert("Não foi possível processar imagens do lote selecionado.");
-    } else {
-      alert("Nenhum arquivo de imagem válido encontrado na seleção/pasta.");
+    } finally {
+      setIsUploadingCatalog(false);
     }
   };
 
   const handleFolderUploadChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      handleBatchImages(e.target.files, { asReference: true });
+      void handleBatchImages(e.target.files, { asReference: true });
     }
+    e.target.value = "";
   };
 
   const handleFilesUploadChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      handleBatchImages(e.target.files, { asReference: true });
+      void handleBatchImages(e.target.files, { asReference: true });
     }
+    e.target.value = "";
   };
 
   const handleGridFolderUploadChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      handleBatchImages(e.target.files, { asReference: false });
+      void handleBatchImages(e.target.files, { asReference: false });
     }
+    e.target.value = "";
   };
 
   const handleGridFilesUploadChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      handleBatchImages(e.target.files, { asReference: false });
+      void handleBatchImages(e.target.files, { asReference: false });
     }
+    e.target.value = "";
   };
 
-  const clearGridCatalog = useCallback(() => {
+  const clearGridCatalog = useCallback(async () => {
     if (gridCatalog.length === 0) {
-      alert("Não há peças de grid no acervo.");
+      toast.info("Não há peças de grid no acervo.");
       return;
     }
     if (
-      !confirm(
-        `Remover todas as ${gridCatalog.length} peça(s) de grid?\n\nAs referências de looks permanecem intactas.`
-      )
+      !(await confirmDialog({
+        message: `Remover todas as ${gridCatalog.length} peça(s) de grid?\n\nAs referências de looks permanecem intactas.`,
+        variant: "danger",
+        confirmLabel: "Remover",
+      }))
     ) {
       return;
     }
@@ -1521,17 +1566,19 @@ export default function App() {
     if (catalogReadyForTextMatch(refs)) return true;
 
     const notReady = refs.filter((c) => c.enrichmentStatus !== "ready" || !c.visualProfile);
-    const indexNow = confirm(
-      `${notReady.length} referência(s) do catálogo ainda não estão indexadas (JSON).\n\n` +
+    const indexNow = await confirmDialog({
+      message:
+        `${notReady.length} referência(s) do catálogo ainda não estão indexadas (JSON).\n\n` +
         `A geração de legendas compara a foto do post com os perfis JSON das referências — todas precisam estar indexadas.\n\n` +
-        `Indexar agora? (1 chamada por foto, com pausa automática.)`
-    );
+        `Indexar agora? (1 chamada por foto, com pausa automática.)`,
+      confirmLabel: "Indexar",
+    });
     if (!indexNow) return false;
 
     await runCatalogEnrichment(notReady);
     const after = getReferenceCatalog(catalogRef.current);
     if (!catalogReadyForTextMatch(after)) {
-      alert(
+      toast.warning(
         "Ainda há referências sem índice JSON. Conclua a indexação no painel de referências antes de gerar legendas."
       );
       return false;
@@ -1563,7 +1610,7 @@ export default function App() {
   // Match visual + legenda (tom e rodapé vêm do Gem configurado)
   const ensureBrandGemConfigured = useCallback((): boolean => {
     if (isBrandGemReadyForCaptions(brandGem)) return true;
-    alert(brandGemRequiredMessage(brandGem));
+    toast.warning(brandGemRequiredMessage(brandGem));
     setActiveSection("settings");
     return false;
   }, [brandGem]);
@@ -1580,7 +1627,7 @@ export default function App() {
     const post = posts.find((p) => p.id === postId);
     if (!post) return {};
     if (!post.image) {
-      alert("Carregue a foto do post antes de gerar a legenda.");
+      toast.warning("Carregue a foto do post antes de gerar a legenda.");
       return {};
     }
     if (!ensureBrandGemConfigured()) return {};
@@ -1637,7 +1684,7 @@ export default function App() {
         refs.length > 0 &&
         !catalogReadyForTextMatch(refs)
       ) {
-        alert(
+        toast.warning(
           "Todas as referências do catálogo precisam estar indexadas (JSON) antes de gerar a legenda."
         );
         setPosts((prev) =>
@@ -1861,7 +1908,7 @@ export default function App() {
         if (controller.signal.aborted) break;
 
         if (quotaExceeded) {
-          alert(
+          toast.error(
             "Cota da API esgotada. A geração em lote foi interrompida. Tente mais tarde ou troque o provedor no painel IA (ícone ✨ no topo)."
           );
           break;
@@ -1878,24 +1925,26 @@ export default function App() {
     }
   };
 
-  const handleRunAllMatching = () => {
+  const handleRunAllMatching = async () => {
     if (!ensureBrandGemConfigured()) return;
 
     const pending = getPendingCaptionPosts(posts);
     if (pending.length === 0) {
-      alert("Não há posts com foto aguardando legenda. Carregue as imagens ou use “Tentar novamente” nos erros.");
+      toast.info("Não há posts com foto aguardando legenda. Carregue as imagens ou use “Tentar novamente” nos erros.");
       return;
     }
 
     if (pending.length >= 5) {
       const minutes = Math.max(1, Math.ceil((pending.length * 4) / 60));
-      const ok = window.confirm(
-        `Gerar ${pending.length} legendas em lote.\n\n` +
+      const ok = await confirmDialog({
+        message:
+          `Gerar ${pending.length} legendas em lote.\n\n` +
           `• Tempo estimado: ~${minutes} min (1 chamada por vez, gap de 1,5s)\n` +
           `• Cache local evita repetir fotos já processadas\n` +
           `• Se um provedor estourar a cota, a fila tenta o próximo automaticamente\n\n` +
-          `Continuar?`
-      );
+          `Continuar?`,
+        confirmLabel: "Gerar legendas",
+      });
       if (!ok) return;
     }
 
@@ -2056,26 +2105,39 @@ export default function App() {
       setRefineInstructions((prev) => ({ ...prev, [postId]: "" }));
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e);
-      alert("Falha ao ajustar a legenda: " + message);
+      toast.error("Falha ao ajustar a legenda: " + message);
     } finally {
       setIsRefining((prev) => ({ ...prev, [postId]: false }));
     }
   };
 
   // Clear single post look image
-  const handleClearPostImage = (postId: string) => {
-    if (confirm("Remover imagem deste dia do planejamento?")) {
-      setPosts(prev => prev.map(p => p.id === postId ? {
-        ...p,
-        image: null,
-        matchedCatalogId: null,
-        reasoning: null,
-        caption: "",
-        isGenerated: false,
-        isConfirmed: false,
-        error: null
-      } : p));
+  const handleClearPostImage = async (postId: string) => {
+    if (
+      !(await confirmDialog({
+        message: "Remover imagem deste dia do planejamento?",
+        variant: "danger",
+        confirmLabel: "Remover",
+      }))
+    ) {
+      return;
     }
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === postId
+          ? {
+              ...p,
+              image: null,
+              matchedCatalogId: null,
+              reasoning: null,
+              caption: "",
+              isGenerated: false,
+              isConfirmed: false,
+              error: null,
+            }
+          : p
+      )
+    );
   };
 
   // Single look reference creation
@@ -2093,11 +2155,11 @@ export default function App() {
 
   const createCatalogItem = async () => {
     if (!newCatalogLabel.trim()) {
-      alert("Por favor escreva um código de referência.");
+      toast.warning("Por favor escreva um código de referência.");
       return;
     }
     if (!newCatalogImage) {
-      alert("Por favor envie a foto do look correspondente.");
+      toast.warning("Por favor envie a foto do look correspondente.");
       return;
     }
 
@@ -2146,8 +2208,16 @@ export default function App() {
     setShowCatalogModal(false);
   };
 
-  const removeCatalogItem = (id: string) => {
-    if (!confirm("Deseja realmente excluir esta referência do acervo cadastrado?")) return;
+  const removeCatalogItem = async (id: string) => {
+    if (
+      !(await confirmDialog({
+        message: "Deseja realmente excluir esta referência do acervo cadastrado?",
+        variant: "danger",
+        confirmLabel: "Excluir",
+      }))
+    ) {
+      return;
+    }
 
     setCatalog((prev) => prev.filter((item) => item.id !== id));
     setPosts((prev) =>
@@ -2160,15 +2230,17 @@ export default function App() {
 
   const clearEntireCatalog = useCallback(async () => {
     if (referenceCatalog.length === 0) {
-      alert("O catálogo já está vazio.");
+      toast.info("O catálogo já está vazio.");
       return;
     }
 
     const count = referenceCatalog.length;
     if (
-      !confirm(
-        `Excluir todo o catálogo (${count} referência${count === 1 ? "" : "s"})?\n\nTodas as fotos e indexações serão removidas. Vínculos de referência nos roteiros também serão desfeitos.\n\nEsta ação não pode ser desfeita.`
-      )
+      !(await confirmDialog({
+        message: `Excluir todo o catálogo (${count} referência${count === 1 ? "" : "s"})?\n\nTodas as fotos e indexações serão removidas. Vínculos de referência nos roteiros também serão desfeitos.\n\nEsta ação não pode ser desfeita.`,
+        variant: "danger",
+        confirmLabel: "Excluir tudo",
+      }))
     ) {
       return;
     }
@@ -2200,7 +2272,7 @@ export default function App() {
       return c.enrichmentStatus !== "ready" || !c.visualProfile;
     });
     if (items.length === 0) {
-      alert("Nenhuma referência para reindexar.");
+      toast.info("Nenhuma referência para reindexar.");
       return;
     }
     await runCatalogEnrichment(items);
@@ -2223,7 +2295,7 @@ export default function App() {
         ids.length === 1
           ? "Remover a indexação desta referência?\n\nA foto permanece no acervo; só o JSON de visão será apagado."
           : `Remover a indexação de ${ids.length} referências?\n\nAs fotos permanecem; você poderá indexar de novo depois.`;
-      if (!confirm(message)) return;
+      if (!(await confirmDialog({ message, variant: "danger", confirmLabel: "Remover indexação" }))) return;
 
       const idSet = new Set(ids);
       setCatalog((prev) => {
@@ -2241,7 +2313,7 @@ export default function App() {
           await reloadWorkspaceFromApi();
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          alert(`Não foi possível limpar as indexações no servidor:\n${msg}`);
+          toast.error(`Não foi possível limpar as indexações no servidor:\n${msg}`);
           await reloadWorkspaceFromApi();
         }
       }
@@ -2327,7 +2399,7 @@ export default function App() {
         clientSlug: activeClient!.id,
       });
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Não foi possível gerar o PDF.");
+      toast.error(err instanceof Error ? err.message : "Não foi possível gerar o PDF.");
     } finally {
       setIsExportingPdf(false);
     }
@@ -2346,7 +2418,7 @@ export default function App() {
           formatMeta: canvaGridFormatMeta,
         });
       } catch (err) {
-        alert(err instanceof Error ? err.message : "Não foi possível gerar o PDF do grid.");
+        toast.error(err instanceof Error ? err.message : "Não foi possível gerar o PDF do grid.");
       } finally {
         setIsExportingCanvaPdf(false);
       }
@@ -2478,7 +2550,7 @@ export default function App() {
                       handleSwapDays(swapSourceId, id);
                     } else {
                       setSwapSourceId(id);
-                      alert("Origem selecionada! Escolha outro post para inverter os conteúdos.");
+                      toast.info("Origem selecionada! Escolha outro post para inverter os conteúdos.");
                     }
                   }}
                 />
@@ -2619,15 +2691,19 @@ export default function App() {
                   variant="accent"
                   size="sm"
                   onClick={() => {
-                    if (
-                      confirm(
-                        "Aplicar a sequência desta página ao calendário de 30 dias?"
-                      )
-                    ) {
+                    void (async () => {
+                      if (
+                        !(await confirmDialog({
+                          message: "Aplicar a sequência desta página ao calendário de 30 dias?",
+                          confirmLabel: "Aplicar",
+                        }))
+                      ) {
+                        return;
+                      }
                       handlePlanFromCanva("active", true);
-                      alert("Calendário atualizado com o bloco ativo.");
+                      toast.success("Calendário atualizado com o bloco ativo.");
                       setActiveSection("posts");
-                    }
+                    })();
                   }}
                 >
                   <Sparkles className="h-3.5 w-3.5" />
@@ -2637,11 +2713,19 @@ export default function App() {
                   variant="secondary"
                   size="sm"
                   onClick={() => {
-                    if (confirm("Aplicar todas as páginas ao cronograma de 30 dias?")) {
+                    void (async () => {
+                      if (
+                        !(await confirmDialog({
+                          message: "Aplicar todas as páginas ao cronograma de 30 dias?",
+                          confirmLabel: "Aplicar",
+                        }))
+                      ) {
+                        return;
+                      }
                       handlePlanFromCanva("all", true);
-                      alert("Calendário atualizado com todas as páginas.");
+                      toast.success("Calendário atualizado com todas as páginas.");
                       setActiveSection("posts");
-                    }
+                    })();
                   }}
                 >
                   <CalendarDays className="h-3.5 w-3.5" />
@@ -2703,7 +2787,7 @@ export default function App() {
                 if (firstEmptySlot) {
                   handleAssignCatalogToCanvaSlot(page.id, firstEmptySlot.id, item);
                 } else {
-                  alert(
+                  toast.warning(
                     "Não há espaços vazios nesta página! Selecione um slot para substituir."
                   );
                 }
@@ -2838,12 +2922,18 @@ export default function App() {
               </div>
 
               <div className="flex flex-wrap items-center justify-center gap-3 mt-2">
-                
+                {isUploadingCatalog && (
+                  <p className="w-full text-xs text-ag-accent font-medium flex items-center justify-center gap-2">
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    Enviando imagens… (pode levar ~1s por foto na nuvem)
+                  </p>
+                )}
                 {/* Single or Multiple File Trigger */}
                 <button
                   type="button"
+                  disabled={isUploadingCatalog || isEnrichingCatalog}
                   onClick={() => filesUploadInputRef.current?.click()}
-                  className="bg-ag-surface-3 hover:bg-ag-surface-3/80 border border-ag-border text-ag-text text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer shadow-sm transition-colors"
+                  className="bg-ag-surface-3 hover:bg-ag-surface-3/80 border border-ag-border text-ag-text text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer shadow-sm transition-colors disabled:opacity-50"
                 >
                   <ImageIcon className="h-4 w-4 text-ag-accent" />
                   <span>Selecionar Vários Arquivos</span>
@@ -2852,8 +2942,9 @@ export default function App() {
                 {/* Directory Upload Trigger */}
                 <button
                   type="button"
+                  disabled={isUploadingCatalog || isEnrichingCatalog}
                   onClick={() => folderUploadInputRef.current?.click()}
-                  className="bg-ag-surface-3 hover:bg-ag-surface-3/80 border border-ag-border text-ag-text text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer shadow-sm transition-colors"
+                  className="bg-ag-surface-3 hover:bg-ag-surface-3/80 border border-ag-border text-ag-text text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer shadow-sm transition-colors disabled:opacity-50"
                 >
                   <FolderOpen className="h-4 w-4 text-ag-accent" />
                   <span>Subir Pasta de Referências</span>

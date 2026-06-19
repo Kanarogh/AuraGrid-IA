@@ -88,7 +88,7 @@ export function ModalActions({
   onConfirm: () => void;
   confirmLabel?: string;
   cancelLabel?: string;
-  confirmVariant?: "primary" | "accent";
+  confirmVariant?: "primary" | "accent" | "danger";
 }) {
   return (
     <>

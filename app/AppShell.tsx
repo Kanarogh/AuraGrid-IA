@@ -7,6 +7,7 @@ import { AuthProvider } from "../src/context/AuthContext";
 import { ApiWorkspaceSync } from "../src/context/ApiWorkspaceSync";
 import { ClientWorkspaceProvider } from "../src/context/ClientWorkspaceContext";
 import { AuthGate } from "../src/components/auth/AuthGate";
+import { NotificationProvider } from "../src/components/ui/NotificationProvider";
 import { initTheme } from "../src/hooks/useTheme";
 import { initAccent } from "../src/hooks/useAccent";
 
@@ -18,14 +19,16 @@ export default function AppShell() {
 
   return (
     <AppErrorBoundary>
-      <AuthProvider>
-        <ClientWorkspaceProvider>
-          <ApiWorkspaceSync />
-          <AuthGate>
-            <App />
-          </AuthGate>
-        </ClientWorkspaceProvider>
-      </AuthProvider>
+      <NotificationProvider>
+        <AuthProvider>
+          <ClientWorkspaceProvider>
+            <ApiWorkspaceSync />
+            <AuthGate>
+              <App />
+            </AuthGate>
+          </ClientWorkspaceProvider>
+        </AuthProvider>
+      </NotificationProvider>
     </AppErrorBoundary>
   );
 }

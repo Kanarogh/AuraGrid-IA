@@ -25,10 +25,11 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const isReference = isReferenceRaw !== "false" && isReferenceRaw !== "0";
 
     const created = [];
-    for (const file of files) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]!;
       const mimeType = file.type || "image/jpeg";
       const ext = mimeType.split("/")[1] || "jpg";
-      const id = `cat_${Date.now()}_${randomBytes(4).toString("hex")}`;
+      const id = `cat_${Date.now()}_${i}_${randomBytes(4).toString("hex")}`;
       const originalName = file.name || `${id}.${ext}`;
       let label = originalName
         .replace(/\.[^/.]+$/, "")
