@@ -68,6 +68,8 @@ type ClientWorkspaceContextValue = {
   deleteClient: (clientId: string) => boolean;
   resetActiveClient: () => void;
   persistWorkspaceNow: () => Promise<void>;
+  /** Leitura síncrona dos posts — evita closure desatualizado em lotes de legenda. */
+  getPostsSnapshot: () => PlannedPost[];
   useApiStorage: boolean;
   workspaceHydrated: boolean;
 };
@@ -148,8 +150,17 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       saveTimerRef.current = null;
     }
     if (useApiStorage) {
-      const flush = getApiHelpers()?.flushWorkspaceNow;
-      if (!flush) return;
+      const deadline = Date.now() + 2500;
+      let flush = getApiHelpers()?.flushWorkspaceNow;
+      while (!flush && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 50));
+        flush = getApiHelpers()?.flushWorkspaceNow;
+      }
+      if (!flush) {
+        console.warn("[AuraGrid] API de persistência ainda não disponível.");
+        toast.error("Não foi possível salvar na nuvem. Aguarde o carregamento e tente novamente.");
+        return;
+      }
       try {
         await flush(workspaceRef.current);
       } catch (err) {
@@ -285,6 +296,10 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       workspaceRef.current = next;
       return next;
     });
+  }, []);
+
+  const getPostsSnapshot = useCallback((): PlannedPost[] => {
+    return workspaceRef.current.posts;
   }, []);
 
   const setStartDate: Dispatch<SetStateAction<string>> = useCallback((action) => {
@@ -632,6 +647,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       deleteClient,
       resetActiveClient,
       persistWorkspaceNow,
+      getPostsSnapshot,
       useApiStorage,
       workspaceHydrated,
     }),
@@ -659,6 +675,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       deleteClient,
       resetActiveClient,
       persistWorkspaceNow,
+      getPostsSnapshot,
       useApiStorage,
       workspaceHydrated,
     ]

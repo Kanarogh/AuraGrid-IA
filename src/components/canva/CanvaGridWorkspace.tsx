@@ -209,6 +209,12 @@ export function CanvaGridWorkspace({
                   {filledCount} de 12 slots preenchidos · {canvaGridFormatMeta.ratioLabel} (
                   {canvaGridFormatMeta.dimensions}px)
                 </p>
+                {cloudSave && (
+                  <p className="text-[10.5px] text-ag-muted mt-1 leading-relaxed">
+                    Cada foto no grid é salva na nuvem ao ser colocada. O catálogo é um acervo
+                    separado — arraste looks para os slots para montar o feed.
+                  </p>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-2 shrink-0">

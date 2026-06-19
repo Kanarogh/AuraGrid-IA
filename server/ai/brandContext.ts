@@ -224,10 +224,16 @@ export function buildCaptionParamsBlock(gem?: BrandGemConfig): string {
 - Prices: ${p.avoidPriceMention ? "Do NOT mention prices, discounts, or currency in the hook." : "Prices allowed if relevant to INSTRUCTIONS."}`;
 }
 
-export function buildRegenerationBlock(regenerate?: boolean): string {
-  if (!regenerate) return "";
+export function buildRegenerationBlock(
+  regenerate?: boolean,
+  diverseBatch?: boolean
+): string {
+  if (!regenerate && !diverseBatch) return "";
+  const header = regenerate
+    ? `REGENERATION REQUEST (user clicked "Regenerate"):`
+    : `BATCH DIVERSITY (multiple captions in the same session):`;
   return `
-REGENERATION REQUEST (user clicked "Regenerate"):
+${header}
 - Write a COMPLETELY NEW main hook (block 1) — different wording, fresh angle, new adjectives.
 - Do NOT reuse the same opening sentence or phrasing as a typical previous caption.
 - Keep matchedId consistent if the garment match is still valid.
@@ -236,6 +242,7 @@ REGENERATION REQUEST (user clicked "Regenerate"):
 
 export type CaptionPromptOptions = {
   regenerate?: boolean;
+  diverseBatch?: boolean;
   brief?: boolean;
   recentHooks?: string[];
   sceneContext?: {
@@ -246,36 +253,67 @@ export type CaptionPromptOptions = {
   };
 };
 
-function normalizeRecentHooks(raw?: string[]): string[] {
-  if (!raw?.length) return [];
-  const out: string[] = [];
+function isOpenerSignal(text: string): boolean {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  return words.length >= 4 && words.length <= 8 && text.length < 90;
+}
+
+function normalizeRecentHooks(raw?: string[]): { full: string[]; openers: string[] } {
+  if (!raw?.length) return { full: [], openers: [] };
+  const full: string[] = [];
+  const openers: string[] = [];
+
   for (const hook of raw) {
     const trimmed = hook.trim();
+    const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
+    if (wordCount < 4) continue;
+
+    if (isOpenerSignal(trimmed)) {
+      if (!openers.some((o) => o.toLowerCase() === trimmed.toLowerCase())) {
+        openers.push(trimmed);
+      }
+      continue;
+    }
+
     if (trimmed.length < 12) continue;
-    if (out.some((h) => h.toLowerCase() === trimmed.toLowerCase())) continue;
-    out.push(trimmed);
-    if (out.length >= 8) break;
+    if (full.some((h) => h.toLowerCase() === trimmed.toLowerCase())) continue;
+    full.push(trimmed);
+    if (full.length >= 15) break;
   }
-  return out;
+
+  return { full: full.slice(-15), openers: openers.slice(-10) };
 }
 
 /** Evita ganchos repetidos dentro do post e entre posts do roteiro. */
 export function buildAntiRepetitionBlock(recentHooks?: string[]): string {
-  const hooks = normalizeRecentHooks(recentHooks);
-  const recentBlock =
-    hooks.length > 0
-      ? `
+  const { full, openers } = normalizeRecentHooks(recentHooks);
 
-RECENT HOOKS ALREADY USED IN THIS ROTEIRO (do NOT copy — new opening, new angle, new vocabulary):
-${hooks
+  const fullBlock =
+    full.length > 0
+      ? `
+FULL HOOKS ALREADY USED (do NOT copy — new opening, new angle, new vocabulary):
+${full
   .map((hook, index) => {
-    const preview = hook.length > 140 ? `${hook.slice(0, 140).trim()}…` : hook;
+    const preview = hook.length > 200 ? `${hook.slice(0, 200).trim()}…` : hook;
     return `${index + 1}. """${preview}"""`;
   })
-  .join("\n")}
-- Do not reuse these opening lines, sentence starters, or key adjective clusters.
-- If a phrase above starts with "O luxo", "Descubra", "Aposte", etc., pick a different starter.`
+  .join("\n")}`
       : "";
+
+  const openerBlock =
+    openers.length > 0
+      ? `
+FORBIDDEN OPENERS / STARTERS (already used — pick a different first line):
+${openers.map((opener, index) => `${index + 1}. "${opener}"`).join("\n")}
+- Do not reuse these sentence starters or near-identical paraphrases.`
+      : "";
+
+  const hasRecent = full.length > 0 || openers.length > 0;
+  const recentBlock = hasRecent
+    ? `${fullBlock}${openerBlock}
+- Do not reuse opening lines, sentence starters, or key adjective clusters listed above.
+- Avoid template structures already present (e.g. "O X encontra o Y", "Descubra o poder de", "Aposte no", "O luxo encontra") if similar starters are listed.`
+    : "";
 
   return `ANTI-REPETITION RULES (mandatory — block 1 / main hook only):
 - Write copy unique to THIS image and garment — not a generic template.
@@ -325,7 +363,7 @@ ${buildCaptionFooterBlock(gem?.footer)}
 
 ${antiRepeat}
 
-${buildRegenerationBlock(options?.regenerate)}
+${buildRegenerationBlock(options?.regenerate, options?.diverseBatch)}
 
 CAPTION TASK:
 - JSON "caption" = block 1 (main hook) ONLY.
@@ -345,7 +383,7 @@ ${buildCaptionFooterBlock(gem?.footer)}
 
 ${antiRepeat}
 
-${buildRegenerationBlock(options?.regenerate)}
+${buildRegenerationBlock(options?.regenerate, options?.diverseBatch)}
 
 CAPTION TASK (after JSON catalog match):
 - JSON "caption" = block 1 (main hook) ONLY — never include Referência, disclosure, address, ➡️ CTA, or hashtags.

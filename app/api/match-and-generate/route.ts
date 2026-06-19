@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
       regenerateCaption,
       captionFromImageOnly,
       recentHooks,
+      diverseBatch,
       clientId,
     } = body;
 
@@ -59,6 +60,7 @@ export async function POST(req: NextRequest) {
       recentHooks: Array.isArray(recentHooks)
         ? recentHooks.filter((h): h is string => typeof h === "string")
         : undefined,
+      diverseBatch: !!diverseBatch,
     });
 
     const operation = await runMatchOperation("match-and-generate", sanitized, providerId);

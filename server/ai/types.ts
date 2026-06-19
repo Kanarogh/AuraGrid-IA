@@ -82,6 +82,8 @@ export interface MatchGenerateInput {
   captionFromImageOnly?: boolean;
   /** Ganchos já usados no roteiro — a IA deve variar abertura e vocabulário */
   recentHooks?: string[];
+  /** Lote em curso com vários ganchos — pedir ângulo novo mesmo na 1ª geração */
+  diverseBatch?: boolean;
   /** Hint do ranker visual (fingerprint) — só servidor */
   matchRankHint?: MatchRankHint;
   /** Cenário do post para legenda — só servidor */

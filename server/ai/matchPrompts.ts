@@ -20,11 +20,15 @@ function brandLabel(gem?: BrandGemConfig): string {
 }
 
 export function buildCaptionPromptOptions(
-  input: Pick<MatchGenerateInput, "regenerateCaption" | "recentHooks" | "sceneContext">,
+  input: Pick<
+    MatchGenerateInput,
+    "regenerateCaption" | "recentHooks" | "sceneContext" | "diverseBatch"
+  >,
   brief?: boolean
 ): CaptionPromptOptions {
   return {
     regenerate: !!input.regenerateCaption,
+    diverseBatch: !!input.diverseBatch,
     brief,
     recentHooks: input.recentHooks,
     sceneContext: input.sceneContext,

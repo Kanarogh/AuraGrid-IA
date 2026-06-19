@@ -16,7 +16,10 @@ import {
   saveBrandGemApi,
 } from "../lib/api/workspaceApi";
 import type { ClientRegistry, ClientWorkspace } from "../lib/clientWorkspace";
-import { stripTransientPostFields } from "../lib/clientWorkspace/persistence";
+import {
+  compactCanvaForApiPatch,
+  stripTransientPostFields,
+} from "../lib/clientWorkspace/persistence";
 import { createEmptyRegistry, createOrphanWorkspace } from "../lib/clientWorkspace";
 import { emitCloudSaveStatus } from "../lib/cloudSaveStatus";
 
@@ -27,7 +30,7 @@ function buildWorkspacePatch(ws: ClientWorkspace) {
     brandGem: ws.brandGem,
     startDate: ws.startDate,
     posts: ws.posts.map(stripTransientPostFields),
-    canva: ws.canva,
+    canva: compactCanvaForApiPatch(ws.canva),
     ui: ws.ui,
   };
 }
@@ -173,8 +176,22 @@ export function ApiWorkspaceSync() {
   useEffect(() => {
     if (storageMode !== "postgresql") return;
 
-    const flushWorkspaceNow = async (ws: ClientWorkspace): Promise<void> => {
-      if (skipSaveRef.current || !activeClientId || !loadedRef.current) return;
+    const flushWorkspaceNow = async (
+      ws: ClientWorkspace,
+      allowRetry = true
+    ): Promise<void> => {
+      if (!activeClientId) return;
+
+      if (skipSaveRef.current || !loadedRef.current) {
+        if (allowRetry) {
+          await new Promise((r) => setTimeout(r, 150));
+          return flushWorkspaceNow(ws, false);
+        }
+        console.warn("[AuraGrid] Flush do workspace ignorado (bootstrap em andamento).");
+        emitCloudSaveStatus("error");
+        return;
+      }
+
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;

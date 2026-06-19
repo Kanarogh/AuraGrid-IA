@@ -257,6 +257,12 @@ export async function loadWorkspaceDto(userId: string, clientId: string) {
     enrichmentError: c.enrichmentError ?? undefined,
   }));
 
+  const catalogAssetById = new Map(
+    catalog
+      .filter((c) => c.imageAssetId)
+      .map((c) => [c.id, c.imageAssetId as string])
+  );
+
   // Fix page slots grouping — sempre 12 slots por página
   const pagesWithSlots = (pages.length > 0 ? pages : defaultCanvaPages(clientId).pages).map(
     (p) => ({
@@ -265,10 +271,15 @@ export async function loadWorkspaceDto(userId: string, clientId: string) {
       slots: Array.from({ length: 12 }, (_, i) => {
         const row = slots.find((s) => s.pageId === p.id && s.slotIndex === i);
         if (row) {
+          const resolvedAssetId =
+            row.imageAssetId ??
+            (row.matchedCatalogId
+              ? (catalogAssetById.get(row.matchedCatalogId) ?? null)
+              : null);
           return {
             id: row.id,
-            image: row.imageAssetId ? mediaPublicUrl(row.imageAssetId) : null,
-            imageAssetId: row.imageAssetId,
+            image: resolvedAssetId ? mediaPublicUrl(resolvedAssetId) : null,
+            imageAssetId: resolvedAssetId,
             label: row.label,
             matchedCatalogId: row.matchedCatalogId,
           };

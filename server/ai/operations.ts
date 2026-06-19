@@ -62,6 +62,7 @@ export function sanitizeMatchOperationInput(
       repeatingText: input.repeatingText,
       regenerateCaption: input.regenerateCaption,
       recentHooks: input.recentHooks,
+      diverseBatch: input.diverseBatch,
       captionFromImageOnly: true,
       matchOnly: false,
       catalogItems: undefined,

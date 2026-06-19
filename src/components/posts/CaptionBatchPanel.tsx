@@ -95,6 +95,10 @@ export function CaptionBatchPanel({
           <p className="text-xs text-ag-muted mt-1 max-w-xl">
             Fotos → catálogo indexado → legendas → revisão. Configure tom e rodapé no Gem (Configurações).
           </p>
+          <p className="text-[10px] text-ag-muted/90 mt-1.5 max-w-xl">
+            O rodapé (endereço, hashtags, CTA) é igual em todos os posts por configuração do Gem. O texto
+            criativo (gancho) é que varia entre os dias.
+          </p>
         </div>
         <Button variant="secondary" size="sm" onClick={onReviewAll} type="button">
           Revisar todas

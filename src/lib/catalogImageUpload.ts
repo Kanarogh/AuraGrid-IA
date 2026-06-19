@@ -219,35 +219,39 @@ function supportsDirectoryPicker(): boolean {
 
 /**
  * Abre o seletor de PASTA (não de arquivos).
- * Chrome/Edge: diálogo nativo «Selecionar pasta».
- * Fallback: input com webkitdirectory (atributo aplicado na hora do clique).
+ * Preferimos input webkitdirectory: um único fluxo no Chrome/Brave.
+ * showDirectoryPicker fica só como fallback se o input não existir.
  */
 export async function pickFilesFromFolder(
   legacyInput?: HTMLInputElement | null
 ): Promise<File[] | null> {
-  if (supportsDirectoryPicker()) {
-    try {
-      const handle = await window.showDirectoryPicker({ mode: "read" });
-      const files = await readDirectoryHandle(handle, handle.name);
-      return files;
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return null;
-      console.warn("[AuraGrid] showDirectoryPicker falhou, usando input legado:", err);
+  if (legacyInput) {
+    enableFolderPickerInput(legacyInput);
+
+    const fromInput = await new Promise<File[] | null>((resolve) => {
+      const onChange = () => {
+        legacyInput.removeEventListener("change", onChange);
+        const picked = legacyInput.files ? Array.from(legacyInput.files) : [];
+        legacyInput.value = "";
+        resolve(picked);
+      };
+      legacyInput.addEventListener("change", onChange);
+      legacyInput.click();
+    });
+
+    if (fromInput !== null) {
+      return fromInput;
     }
   }
 
-  if (!legacyInput) return null;
+  if (!supportsDirectoryPicker()) return null;
 
-  enableFolderPickerInput(legacyInput);
-
-  return new Promise((resolve) => {
-    const onChange = () => {
-      legacyInput.removeEventListener("change", onChange);
-      const picked = legacyInput.files ? Array.from(legacyInput.files) : [];
-      legacyInput.value = "";
-      resolve(picked);
-    };
-    legacyInput.addEventListener("change", onChange);
-    legacyInput.click();
-  });
+  try {
+    const handle = await window.showDirectoryPicker({ mode: "read" });
+    return await readDirectoryHandle(handle, handle.name);
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") return null;
+    console.warn("[AuraGrid] showDirectoryPicker falhou:", err);
+    return null;
+  }
 }

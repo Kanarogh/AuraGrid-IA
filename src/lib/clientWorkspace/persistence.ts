@@ -2,6 +2,13 @@ import { countCanvaImages, syncCanvaPagesToPosts } from "../canvaTimelineSync";
 import type { CanvaGridPage, PlannedPost } from "../../types";
 import type { ClientWorkspace } from "./types";
 
+export type CanvaSlotApiPatch = {
+  id: string;
+  label: string | null;
+  matchedCatalogId: string | null;
+  imageAssetId: string | null;
+};
+
 function findCanvaSlot(
   pages: CanvaGridPage[],
   pageId: string,
@@ -27,6 +34,29 @@ export function stripTransientPostFields(post: PlannedPost): PlannedPost {
     ...post,
     isGenerating: false,
     error: post.error && post.isGenerated ? post.error : null,
+  };
+}
+
+/** PATCH na nuvem: só metadados do slot (imagem via imageAssetId). */
+export function compactCanvaForApiPatch(canva: ClientWorkspace["canva"]) {
+  return {
+    activePageId: canva.activePageId,
+    autoSync: canva.autoSync,
+    reversed: canva.reversed,
+    gridFormat: canva.gridFormat,
+    gridMaxWidth: canva.gridMaxWidth,
+    pages: canva.pages.map((page) => ({
+      id: page.id,
+      name: page.name,
+      slots: page.slots.map(
+        (slot): CanvaSlotApiPatch => ({
+          id: slot.id,
+          label: slot.label,
+          matchedCatalogId: slot.matchedCatalogId,
+          imageAssetId: slot.imageAssetId ?? null,
+        })
+      ),
+    })),
   };
 }
 

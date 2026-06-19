@@ -118,7 +118,8 @@ import { CatalogThumbnail } from "./components/ui/CatalogThumbnail";
 import { EmptyState } from "./components/ui/EmptyState";
 import { FeedInstagramPreview } from "./components/feed/FeedInstagramPreview";
 import { getCaptionBatchStats, getPendingCaptionPosts } from "./lib/captionBatch";
-import { collectRecentCaptionHooks } from "./lib/recentCaptionHooks";
+import { mergeRecentCaptionSignals } from "./lib/recentCaptionHooks";
+import { isHookTooSimilar } from "./lib/captionSimilarity";
 import { readJsonResponse } from "./lib/apiResponse";
 import { CatalogModal } from "./components/catalog/CatalogModal";
 import { CatalogProfileModal } from "./components/catalog/CatalogProfileModal";
@@ -196,6 +197,7 @@ export default function App() {
     resetActiveClient,
     useApiStorage,
     persistWorkspaceNow,
+    getPostsSnapshot,
     workspaceHydrated,
   } = useClientWorkspace();
 
@@ -309,6 +311,7 @@ export default function App() {
   );
   const captionBatchAbortRef = useRef<AbortController | null>(null);
   const captionGenerateAbortRef = useRef<AbortController | null>(null);
+  const batchCaptionHooksRef = useRef<string[]>([]);
   const captionGeneratePostIdRef = useRef<string | null>(null);
   /** Posts que apagaram legenda — próxima geração ignora cache e chama a IA de novo. */
   const captionCacheBypassRef = useRef(new Set<string>());
@@ -888,6 +891,46 @@ export default function App() {
     await saveWorkspaceNow();
   }, [saveWorkspaceNow]);
 
+  const applyCanvaSlotPatch = useCallback(
+    async (
+      pageId: string,
+      slotId: string,
+      patch: Pick<CanvaGridSlot, "image" | "imageAssetId" | "label" | "matchedCatalogId">
+    ) => {
+      setCanvaPages((prev) =>
+        prev.map((page) => {
+          if (page.id !== pageId) return page;
+          return {
+            ...page,
+            slots: page.slots.map((slot) =>
+              slot.id === slotId ? { ...slot, ...patch } : slot
+            ),
+          };
+        })
+      );
+      await saveCanvaGridNow();
+    },
+    [saveCanvaGridNow, setCanvaPages]
+  );
+
+  const getCanvaBatchFillTargets = useCallback(
+    (pages: CanvaGridPage[], activePageId: string) => {
+      const activePageIndex = pages.findIndex((p) => p.id === activePageId);
+      if (activePageIndex === -1) return [];
+      const targets: { pageId: string; slotId: string }[] = [];
+      for (let pIdx = activePageIndex; pIdx < pages.length; pIdx++) {
+        const page = pages[pIdx];
+        if (!page?.slots) continue;
+        for (let sIdx = 11; sIdx >= 0; sIdx--) {
+          const slot = page.slots[sIdx];
+          if (slot) targets.push({ pageId: page.id, slotId: slot.id });
+        }
+      }
+      return targets;
+    },
+    []
+  );
+
   // Set item from wardrobe catalog into slot
   const handleAssignCatalogToCanvaSlot = async (
     pageId: string,
@@ -916,24 +959,13 @@ export default function App() {
         }
       }
 
-      setCanvaPages((prev) =>
-        prev.map((page) => {
-          if (page.id !== pageId) return page;
-          const slots = page.slots.map((slot) => {
-            if (slot.id !== slotId) return slot;
-            return {
-              ...slot,
-              image: item ? image : null,
-              imageAssetId: item ? imageAssetId : null,
-              label: item ? item.label : `Look ${slot.id.split("_").pop()}`,
-              matchedCatalogId: item ? item.id : null,
-            };
-          });
-          return { ...page, slots };
-        })
-      );
+      await applyCanvaSlotPatch(pageId, slotId, {
+        image: item ? image : null,
+        imageAssetId: item ? imageAssetId : null,
+        label: item ? item.label : `Look ${slotId.split("_").pop()}`,
+        matchedCatalogId: item ? item.id : null,
+      });
       setSelectedCanvaSlotId(null);
-      await saveCanvaGridNow();
     } catch (err) {
       console.error("Erro ao atribuir look ao slot:", err);
       toast.error(
@@ -943,7 +975,7 @@ export default function App() {
   };
 
   // Click-to-swap slots or normal swap position within same page
-  const handleSwapCanvaSlots = (pageId: string, slotIdA: string, slotIdB: string) => {
+  const handleSwapCanvaSlots = async (pageId: string, slotIdA: string, slotIdB: string) => {
     setCanvaPages((prev) => {
       return prev.map((page) => {
         if (page.id !== pageId) return page;
@@ -973,7 +1005,7 @@ export default function App() {
       });
     });
     setSelectedCanvaSlotId(null);
-    void saveCanvaGridNow();
+    await saveCanvaGridNow();
   };
 
   // Upload file directly into Canva slot & replicate to reference catalog
@@ -997,23 +1029,12 @@ export default function App() {
         }
       }
 
-      setCanvaPages((prev) =>
-        prev.map((page) => {
-          if (page.id !== pageId) return page;
-          const slots = page.slots.map((slot) => {
-            if (slot.id !== slotId) return slot;
-            return {
-              ...slot,
-              image,
-              imageAssetId,
-              label,
-              matchedCatalogId: null,
-            };
-          });
-          return { ...page, slots };
-        })
-      );
-      await saveCanvaGridNow();
+      await applyCanvaSlotPatch(pageId, slotId, {
+        image,
+        imageAssetId,
+        label,
+        matchedCatalogId: null,
+      });
     } catch (err) {
       console.error("Erro no processamento da imagem do slot Canva:", err);
       toast.error("Não foi possível salvar a imagem neste slot.");
@@ -1061,7 +1082,7 @@ export default function App() {
   }, [activeSection, selectedCanvaSlotId, activeCanvaPageId, canvaPages]);
 
   // Duplicate an entire Canva Page
-  const handleDuplicateCanvaPage = (pageId: string) => {
+  const handleDuplicateCanvaPage = async (pageId: string) => {
     const targetPage = canvaPages.find(p => p.id === pageId);
     if (!targetPage) return;
     
@@ -1086,18 +1107,18 @@ export default function App() {
       return renumberCanvaPages(copy);
     });
     setActiveCanvaPageId(newId);
-    void saveCanvaGridNow();
+    await saveCanvaGridNow();
   };
 
   // Add a blank Canva Page (nova = Página 1; as antigas sobem de número)
-  const handleAddCanvaPage = () => {
+  const handleAddCanvaPage = async () => {
     const newId = `page_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     setCanvaPages((prev) => prependCanvaPage(prev, newId));
     setActiveCanvaPageId(newId);
-    void saveCanvaGridNow();
+    await saveCanvaGridNow();
   };
 
-  const handleReorderCanvaPages = (fromIndex: number, toIndex: number) => {
+  const handleReorderCanvaPages = async (fromIndex: number, toIndex: number) => {
     setCanvaPages((prev) => {
       const next = [...prev];
       const [moved] = next.splice(fromIndex, 1);
@@ -1105,7 +1126,7 @@ export default function App() {
       next.splice(toIndex, 0, moved);
       return renumberCanvaPages(next);
     });
-    void saveCanvaGridNow();
+    await saveCanvaGridNow();
   };
 
   // Delete a Canva Page
@@ -1130,7 +1151,7 @@ export default function App() {
       const nextIdx = Math.min(Math.max(deletedIdx, 0), remainingPages.length - 1);
       setActiveCanvaPageId(remainingPages[nextIdx]!.id);
     }
-    void saveCanvaGridNow();
+    await saveCanvaGridNow();
   };
 
   // Clear slots of a Canva page
@@ -1150,7 +1171,7 @@ export default function App() {
         return createEmptyCanvaPage(p.name, p.id);
       })
     );
-    void saveCanvaGridNow();
+    await saveCanvaGridNow();
   };
 
   // Batch upload specific to Canva Grid (re-sequences numerically & rolls over page capacity)
@@ -1167,17 +1188,23 @@ export default function App() {
       return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
     });
 
-    const base64List: {
-      image: string;
-      label: string;
-      imageAssetId: string | null;
-    }[] = [];
+    const fillTargets = getCanvaBatchFillTargets(canvaPages, activeCanvaPageId);
+    if (fillTargets.length === 0) {
+      toast.warning("Nenhuma página ativa no grid para receber as imagens.");
+      return;
+    }
+
+    let savedCount = 0;
     let uploadFailures = 0;
+    let targetIndex = 0;
+
     for (let i = 0; i < sortedFiles.length; i++) {
       const file = sortedFiles[i];
       if (!file.type.startsWith("image/") && !file.name.match(/\.(jpg|jpeg|png|webp|gif|svg)$/i)) {
         continue;
       }
+      if (targetIndex >= fillTargets.length) break;
+
       try {
         const base64Str = await processImageFileForCanvaGrid(file);
         let label = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").trim();
@@ -1196,18 +1223,22 @@ export default function App() {
           }
         }
 
-        base64List.push({
+        const target = fillTargets[targetIndex]!;
+        targetIndex++;
+        await applyCanvaSlotPatch(target.pageId, target.slotId, {
           image,
-          label,
           imageAssetId,
+          label,
+          matchedCatalogId: null,
         });
+        savedCount++;
       } catch (err) {
         console.error(err);
         uploadFailures++;
       }
     }
 
-    if (base64List.length === 0) {
+    if (savedCount === 0) {
       toast.warning(
         uploadFailures > 0
           ? "Nenhuma imagem foi enviada para a nuvem. Verifique a conexão e tente novamente."
@@ -1216,40 +1247,17 @@ export default function App() {
       return;
     }
 
-    // Fill the slots starting from active page (sem registrar no guarda-roupa) (Instagram logic: bottom slot 12 triggers first, so we fill from index 11 down to 0)
-    setCanvaPages((prev) => {
-      let listIndex = 0;
-      const activePageIndex = prev.findIndex((p) => p.id === activeCanvaPageId);
-      if (activePageIndex === -1) return prev;
-
-      return prev.map((page, pIdx) => {
-        if (pIdx < activePageIndex) return page;
-        if (listIndex >= base64List.length) return page;
-
-        // Clone the slots of this page and fill them backwards from index 11 to 0
-        const slots = [...page.slots];
-        for (let sIdx = 11; sIdx >= 0; sIdx--) {
-          if (listIndex >= base64List.length) break;
-          const currentRef = base64List[listIndex];
-          listIndex++;
-          slots[sIdx] = {
-            ...slots[sIdx],
-            image: currentRef.image,
-            imageAssetId: currentRef.imageAssetId,
-            label: currentRef.label,
-            matchedCatalogId: null,
-          };
-        }
-        return { ...page, slots };
-      });
-    });
-
-    await saveCanvaGridNow();
-
-    toast.success(`${base64List.length} fotos carregadas e organizadas sequencialmente na página ativa do Canva Grid (e transbordadas para as páginas seguintes se o limite foi excedido!).`);
+    toast.success(
+      `${savedCount} foto(s) salvas no grid${savedCount > fillTargets.length ? "" : " (página ativa e seguintes)"}.`
+    );
     if (uploadFailures > 0) {
       toast.warning(
         `${uploadFailures} arquivo(s) não foram enviados para a nuvem e foram ignorados.`
+      );
+    }
+    if (sortedFiles.length > savedCount + uploadFailures) {
+      toast.info(
+        `Só há ${fillTargets.length} slot(s) disponíveis a partir da página ativa; imagens excedentes foram ignoradas.`
       );
     }
   };
@@ -1754,7 +1762,23 @@ export default function App() {
     }
   };
 
+  const confirmBrowserFolderImport = async (context: "reference" | "grid") => {
+    const noun =
+      context === "reference" ? "referências do catálogo" : "peças de grid";
+    return confirmDialog({
+      title: "Importar pasta",
+      message:
+        `O navegador (Chrome/Brave) vai pedir permissão para ler os arquivos da pasta — ` +
+        `na janela «Fazer upload de X arquivos», clique em Fazer upload. ` +
+        `Isso é proteção do navegador; o AuraGrid não controla essa tela.\n\n` +
+        `Dica: arrastar a pasta para a área tracejada costuma ser mais rápido e evita um passo.\n\n` +
+        `Continuar para selecionar a pasta de ${noun}?`,
+      confirmLabel: "Selecionar pasta",
+    });
+  };
+
   const openReferenceFolderPicker = async () => {
+    if (!(await confirmBrowserFolderImport("reference"))) return;
     const files = await pickFilesFromFolder(folderUploadInputRef.current);
     if (files === null) return;
     if (files.length === 0) {
@@ -1765,6 +1789,7 @@ export default function App() {
   };
 
   const openGridFolderPicker = async () => {
+    if (!(await confirmBrowserFolderImport("grid"))) return;
     const files = await pickFilesFromFolder(gridFolderUploadInputRef.current);
     if (files === null) return;
     if (files.length === 0) {
@@ -1924,7 +1949,7 @@ export default function App() {
       signal?: AbortSignal;
     }
   ): Promise<{ quotaExceeded?: boolean }> => {
-    const post = posts.find((p) => p.id === postId);
+    const post = getPostsSnapshot().find((p) => p.id === postId);
     if (!post) return {};
     if (!post.image) {
       toast.warning("Carregue a foto do post antes de gerar a legenda.");
@@ -1933,6 +1958,28 @@ export default function App() {
     if (!ensureBrandGemConfigured()) return {};
 
     if (post.isGenerating) return {};
+
+    const recordBatchCaptionHook = (caption: string) => {
+      const hook = extractMainCaptionText(caption, brandGem.footer).trim();
+      if (!hook) return;
+      if (
+        batchCaptionHooksRef.current.some(
+          (h) => h.toLowerCase() === hook.toLowerCase()
+        )
+      ) {
+        return;
+      }
+      batchCaptionHooksRef.current.push(hook);
+    };
+
+    const buildRecentHooks = (extraBatchHooks: string[] = []) =>
+      mergeRecentCaptionSignals(
+        getPostsSnapshot(),
+        [...extraBatchHooks, ...batchCaptionHooksRef.current],
+        postId,
+        brandGem.footer,
+        15
+      );
 
     captionGenerateAbortRef.current?.abort();
     const controller = new AbortController();
@@ -1998,36 +2045,42 @@ export default function App() {
         options?.skipCache ||
         captionCacheBypassRef.current.has(postId);
 
-      const body: Record<string, unknown> = {
-        postImage: processedPostImage,
-        brandGem,
-        ...(useApiStorage && activeClientId ? { clientId: activeClientId } : {}),
-        ...(options?.force || bypassCaptionCache ? { regenerateCaption: true } : {}),
-        ...(imageOnly ? { captionFromImageOnly: true } : {}),
-      };
-
-      let recentHooks = collectRecentCaptionHooks(posts, postId, brandGem.footer, 8);
+      const extraAvoidHooks: string[] = [];
       if (options?.force && post.caption?.trim()) {
         const avoidHook = extractMainCaptionText(post.caption, brandGem.footer).trim();
-        if (
-          avoidHook &&
-          !recentHooks.some((hook) => hook.toLowerCase() === avoidHook.toLowerCase())
-        ) {
-          recentHooks = [avoidHook, ...recentHooks].slice(0, 8);
+        if (avoidHook) extraAvoidHooks.push(avoidHook);
+      }
+
+      let recentHooks = buildRecentHooks(extraAvoidHooks);
+
+      const buildRequestBody = (regenerate = false, hooks = recentHooks) => {
+        const body: Record<string, unknown> = {
+          postImage: processedPostImage,
+          brandGem,
+          ...(useApiStorage && activeClientId ? { clientId: activeClientId } : {}),
+          ...(regenerate || options?.force || bypassCaptionCache
+            ? { regenerateCaption: true }
+            : {}),
+          ...(imageOnly ? { captionFromImageOnly: true } : {}),
+        };
+        if (hooks.length > 0) {
+          body.recentHooks = hooks;
+          if (hooks.length >= 3) {
+            body.diverseBatch = true;
+          }
         }
-      }
-      if (recentHooks.length > 0) {
-        body.recentHooks = recentHooks;
-      }
+        if (!imageOnly && refs.length > 0) {
+          body.catalogProfiles = refs.map((c) => ({
+            id: c.id,
+            label: c.label,
+            profile: c.visualProfile,
+          }));
+        }
+        return body;
+      };
 
       let catalogIdsForCache: string[] = [];
-
       if (!imageOnly && refs.length > 0) {
-        body.catalogProfiles = refs.map((c) => ({
-          id: c.id,
-          label: c.label,
-          profile: c.visualProfile,
-        }));
         catalogIdsForCache = refs.map((c) => c.id);
       }
 
@@ -2039,111 +2092,167 @@ export default function App() {
         captionFromImageOnly: imageOnly,
       });
 
+      const applyCaptionResult = async (
+        caption: string,
+        matchedId: string | null,
+        reasoning: string | null,
+        providerUsed?: string,
+        matchMode?: string
+      ) => {
+        setPosts((prev) =>
+          prev.map((p) =>
+            p.id === postId
+              ? {
+                  ...p,
+                  matchedCatalogId: matchedId,
+                  reasoning,
+                  caption,
+                  isGenerating: false,
+                  isGenerated: true,
+                  error: null,
+                }
+              : p
+          )
+        );
+        recordBatchCaptionHook(caption);
+        captionCacheBypassRef.current.delete(postId);
+        await saveWorkspaceNow();
+      };
+
       if (!bypassCaptionCache) {
         const cached = useApiStorage
           ? await getCachedCaptionAsync(cacheKey)
           : getCachedCaption(cacheKey);
         if (cached) {
-          const effectiveMatchedId = imageOnly ? null : cached.matchedId;
-          const cachedCaption = finalizeCaption(cached.caption, {
-            matchedCatalogId: effectiveMatchedId,
-            matchedLabel: resolveCatalogLabel(refs, effectiveMatchedId),
-            footer: brandGem.footer,
-            captionParams: brandGem.captionParams,
-          });
-          setPosts((prev) =>
-            prev.map((p) =>
-              p.id === postId
-                ? {
-                    ...p,
-                    matchedCatalogId: effectiveMatchedId,
-                    reasoning: cached.reasoning,
-                    caption: cachedCaption,
-                    isGenerating: false,
-                    isGenerated: true,
-                    error: null,
-                  }
-                : p
-            )
-          );
-          await saveWorkspaceNow();
-          return { quotaExceeded: false };
+          const cachedHook = extractMainCaptionText(cached.caption, brandGem.footer).trim();
+          if (!cachedHook || !isHookTooSimilar(cachedHook, recentHooks)) {
+            const effectiveMatchedId = imageOnly ? null : cached.matchedId;
+            const cachedCaption = finalizeCaption(cached.caption, {
+              matchedCatalogId: effectiveMatchedId,
+              matchedLabel: resolveCatalogLabel(refs, effectiveMatchedId),
+              footer: brandGem.footer,
+              captionParams: brandGem.captionParams,
+            });
+            setPosts((prev) =>
+              prev.map((p) =>
+                p.id === postId
+                  ? {
+                      ...p,
+                      matchedCatalogId: effectiveMatchedId,
+                      reasoning: cached.reasoning,
+                      caption: cachedCaption,
+                      isGenerating: false,
+                      isGenerated: true,
+                      error: null,
+                    }
+                  : p
+              )
+            );
+            recordBatchCaptionHook(cachedCaption);
+            await saveWorkspaceNow();
+            return { quotaExceeded: false };
+          }
         }
       }
 
-      const response = await aiQueue.enqueue(
-        captionQueueLabel(postId, post.dayNumber),
-        () =>
-          aiFetch("/api/match-and-generate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-            signal: controller.signal,
-          })
-      );
+      const callMatchAndGenerate = async (
+        body: Record<string, unknown>
+      ): Promise<{
+        matchedId: string | null;
+        reasoning: string | null;
+        caption: string;
+        providerUsed?: string;
+        matchMode?: string;
+      }> => {
+        const response = await aiQueue.enqueue(
+          captionQueueLabel(postId, post.dayNumber),
+          () =>
+            aiFetch("/api/match-and-generate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+              signal: controller.signal,
+            })
+        );
 
-      if (controller.signal.aborted) return {};
+        if (controller.signal.aborted) {
+          throw new DOMException("Aborted", "AbortError");
+        }
 
-      const result = await readJsonResponse<{
-        matchedId?: string | null;
-        reasoning?: string;
-        caption?: string;
-        error?: string;
-      }>(response);
+        const result = await readJsonResponse<{
+          matchedId?: string | null;
+          reasoning?: string;
+          caption?: string;
+          error?: string;
+        }>(response);
 
-      if (!response.ok) {
-        throw new Error(result.error || "Falha ao gerar legenda no servidor.");
+        if (!response.ok) {
+          throw new Error(result.error || "Falha ao gerar legenda no servidor.");
+        }
+
+        const providerUsed = response.headers.get("X-AI-Provider-Used") ?? undefined;
+        noteLastProviderUsed(providerUsed);
+        const matchMode = response.headers.get("X-AI-Match-Mode") ?? undefined;
+        const matchedId = imageOnly ? null : (result.matchedId ?? null);
+        const caption = finalizeCaption(result.caption ?? "", {
+          matchedCatalogId: matchedId,
+          matchedLabel: resolveCatalogLabel(refs, matchedId),
+          footer: brandGem.footer,
+          captionParams: brandGem.captionParams,
+        });
+
+        return {
+          matchedId,
+          reasoning: result.reasoning ?? null,
+          caption,
+          providerUsed,
+          matchMode,
+        };
+      };
+
+      let body = buildRequestBody();
+      let result = await callMatchAndGenerate(body);
+
+      const mainHook = extractMainCaptionText(result.caption, brandGem.footer).trim();
+      if (mainHook && isHookTooSimilar(mainHook, recentHooks)) {
+        const retryHooks = mergeRecentCaptionSignals(
+          getPostsSnapshot(),
+          [mainHook, ...extraAvoidHooks, ...batchCaptionHooksRef.current],
+          postId,
+          brandGem.footer,
+          15
+        );
+        body = buildRequestBody(true, retryHooks);
+        result = await callMatchAndGenerate(body);
       }
-
-      const providerUsed = response.headers.get("X-AI-Provider-Used") ?? undefined;
-      noteLastProviderUsed(providerUsed);
-      const matchMode = response.headers.get("X-AI-Match-Mode") ?? undefined;
-
-      const matchedId = imageOnly ? null : (result.matchedId ?? null);
-      const caption = finalizeCaption(result.caption ?? "", {
-        matchedCatalogId: matchedId,
-        matchedLabel: resolveCatalogLabel(refs, matchedId),
-        footer: brandGem.footer,
-        captionParams: brandGem.captionParams,
-      });
 
       if (useApiStorage) {
         await setCachedCaptionAsync(cacheKey, {
-          caption,
-          matchedId,
-          reasoning: result.reasoning ?? null,
-          providerUsed,
-          matchMode,
+          caption: result.caption,
+          matchedId: result.matchedId,
+          reasoning: result.reasoning,
+          providerUsed: result.providerUsed,
+          matchMode: result.matchMode,
           cachedAt: Date.now(),
         });
       } else {
         setCachedCaption(cacheKey, {
-          caption,
-          matchedId,
-          reasoning: result.reasoning ?? null,
-          providerUsed,
-          matchMode,
+          caption: result.caption,
+          matchedId: result.matchedId,
+          reasoning: result.reasoning,
+          providerUsed: result.providerUsed,
+          matchMode: result.matchMode,
           cachedAt: Date.now(),
         });
       }
 
-      setPosts((prev) =>
-        prev.map((p) =>
-          p.id === postId
-            ? {
-                ...p,
-                matchedCatalogId: matchedId,
-                reasoning: result.reasoning ?? null,
-                caption,
-                isGenerating: false,
-                isGenerated: true,
-                error: null,
-              }
-            : p
-        )
+      await applyCaptionResult(
+        result.caption,
+        result.matchedId,
+        result.reasoning,
+        result.providerUsed,
+        result.matchMode
       );
-      captionCacheBypassRef.current.delete(postId);
-      await saveWorkspaceNow();
       return { quotaExceeded: false };
     } catch (error: unknown) {
       if (isAbortError(error) || controller.signal.aborted) {
@@ -2187,6 +2296,7 @@ export default function App() {
     captionBatchAbortRef.current?.abort();
     const controller = new AbortController();
     captionBatchAbortRef.current = controller;
+    batchCaptionHooksRef.current = [];
 
     setIsProcessingAll(true);
     setCaptionBatchProgress({ current: 0, total: targets.length, label: "" });
@@ -3262,7 +3372,9 @@ export default function App() {
                   Importar Pasta de Ativos ou Seleção de Imagens em Lote
                 </h3>
                 <p className="text-xs text-ag-muted max-w-md mx-auto mt-1 leading-relaxed">
-                  Arraste pasta ou arquivos. Cada subpasta é um código (ex: <code>#00874</code>) e <strong className="text-ag-text font-medium">todas as fotos</strong> dentro dela viram referências.
+                  <strong className="text-ag-text font-medium">Arraste a pasta</strong> para esta área (recomendado).
+                  Cada subpasta é um código (ex: <code>#00874</code>) e{" "}
+                  <strong className="text-ag-text font-medium">todas as fotos</strong> dentro dela viram referências.
                 </p>
               </div>
 
@@ -3292,8 +3404,9 @@ export default function App() {
               </div>
 
               <p className="text-[10.5px] text-ag-muted max-w-md mx-auto -mt-2 leading-relaxed">
-                Selecione a pasta <strong className="text-ag-text font-medium">Fotos(6)</strong> inteira e clique em{" "}
-                <strong className="text-ag-text font-medium">Selecionar pasta</strong> — não entre nas subpastas.
+                Pelo botão: selecione a pasta <strong className="text-ag-text font-medium">Fotos(6)</strong> inteira.
+                O navegador pedirá «Fazer upload» — clique em confirmar.
+                Prefira <strong className="text-ag-text font-medium">arrastar a pasta</strong> na área acima.
               </p>
 
               {/* Hidden Inputs of batch triggers */}
