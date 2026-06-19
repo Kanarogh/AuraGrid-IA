@@ -6,6 +6,11 @@ import {
 } from "@aws-sdk/client-s3";
 import { createHash } from "crypto";
 import {
+  getMediaStorageProvider,
+  isSquareBlobConfigured,
+  SQUARE_BLOB_BUCKET,
+} from "../config/mediaStorage";
+import {
   MINIO_ACCESS_KEY,
   MINIO_BUCKET,
   MINIO_ENDPOINT,
@@ -15,10 +20,23 @@ import {
 } from "../config/env";
 import { getDb, isDatabaseConfigured } from "../db/client";
 import { mediaAssets } from "../db/schema";
+import {
+  checkSquareBlobConnection,
+  downloadSquareBlobObject,
+  uploadSquareBlobObject,
+} from "./squareBlobStorage";
 
 let s3: S3Client | null = null;
 
+/** @deprecated use isMediaStorageConfigured */
 export function isMinioConfigured(): boolean {
+  return isMediaStorageConfigured() && getMediaStorageProvider() === "minio";
+}
+
+export function isMediaStorageConfigured(): boolean {
+  if (getMediaStorageProvider() === "squareblob") {
+    return isSquareBlobConfigured();
+  }
   return !!MINIO_ACCESS_KEY && !!MINIO_SECRET_KEY && !!MINIO_BUCKET;
 }
 
@@ -38,7 +56,10 @@ function getS3(): S3Client {
 }
 
 export async function checkMinioConnection(): Promise<boolean> {
-  if (!isMinioConfigured()) return false;
+  if (getMediaStorageProvider() === "squareblob") {
+    return checkSquareBlobConnection();
+  }
+  if (!isMediaStorageConfigured()) return false;
   try {
     await getS3().send(new HeadBucketCommand({ Bucket: MINIO_BUCKET }));
     return true;
@@ -66,19 +87,41 @@ export async function uploadMediaBuffer(input: {
   height?: number;
 }): Promise<{ id: string; objectKey: string; url: string }> {
   if (!isDatabaseConfigured()) throw new Error("DATABASE_URL não configurada.");
-  if (!isMinioConfigured()) throw new Error("MinIO não configurado.");
+  if (!isMediaStorageConfigured()) {
+    throw new Error(
+      "Armazenamento de mídia não configurado. Use SQUARECLOUD_BLOB_API_KEY ou MINIO_*."
+    );
+  }
 
-  const objectKey = buildObjectKey(input.clientId, input.kind, input.fileName);
   const sha256 = createHash("sha256").update(input.buffer).digest("hex");
+  const provider = getMediaStorageProvider();
 
-  await getS3().send(
-    new PutObjectCommand({
-      Bucket: MINIO_BUCKET,
-      Key: objectKey,
-      Body: input.buffer,
-      ContentType: input.mimeType,
-    })
-  );
+  let bucket: string;
+  let objectKey: string;
+  let byteSize = input.buffer.byteLength;
+
+  if (provider === "squareblob") {
+    const blob = await uploadSquareBlobObject({
+      clientId: input.clientId,
+      buffer: input.buffer,
+      mimeType: input.mimeType,
+      fileName: input.fileName,
+    });
+    bucket = SQUARE_BLOB_BUCKET;
+    objectKey = blob.blobId;
+    byteSize = blob.byteSize;
+  } else {
+    objectKey = buildObjectKey(input.clientId, input.kind, input.fileName);
+    bucket = MINIO_BUCKET;
+    await getS3().send(
+      new PutObjectCommand({
+        Bucket: MINIO_BUCKET,
+        Key: objectKey,
+        Body: input.buffer,
+        ContentType: input.mimeType,
+      })
+    );
+  }
 
   const db = getDb();
   const [row] = await db
@@ -86,10 +129,10 @@ export async function uploadMediaBuffer(input: {
     .values({
       clientId: input.clientId,
       uploadedBy: input.userId,
-      bucket: MINIO_BUCKET,
+      bucket,
       objectKey,
       mimeType: input.mimeType,
-      byteSize: input.buffer.byteLength,
+      byteSize,
       width: input.width,
       height: input.height,
       sha256,
@@ -116,6 +159,14 @@ export async function getMediaBuffer(assetId: string): Promise<{
     .where(eq(mediaAssets.id, assetId))
     .limit(1);
   if (!row) throw new Error("Mídia não encontrada.");
+
+  if (row.bucket === SQUARE_BLOB_BUCKET) {
+    return {
+      buffer: await downloadSquareBlobObject(row.objectKey),
+      mimeType: row.mimeType,
+      clientId: row.clientId,
+    };
+  }
 
   const response = await getS3().send(
     new GetObjectCommand({ Bucket: row.bucket, Key: row.objectKey })

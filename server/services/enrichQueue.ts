@@ -4,6 +4,7 @@ import { ensureRuntimeAiSettingsLoaded } from "../ai/runtimeSettings";
 import { resetCatalogVisionBatchCache } from "../ai/openrouterModels";
 import type { AiProviderId } from "../ai/types";
 import { isMatchEmbeddingEnabled } from "../ai/matchConfig";
+import { isPgvectorAvailable } from "../db/pgvector";
 import { embedCatalogImage, isGeminiEmbeddingConfigured } from "../ai/geminiEmbeddings";
 import {
   getCatalogItem,
@@ -153,7 +154,11 @@ export async function runCatalogEnrichment(
           enrichmentError: null,
         });
 
-        if (isMatchEmbeddingEnabled() && isGeminiEmbeddingConfigured()) {
+        if (
+          isMatchEmbeddingEnabled() &&
+          isGeminiEmbeddingConfigured() &&
+          (await isPgvectorAvailable())
+        ) {
           try {
             const vector = await embedCatalogImage(image);
             await updateCatalogEmbedding(clientId, item.id, vector);

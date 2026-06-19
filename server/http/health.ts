@@ -1,12 +1,14 @@
 import { checkDatabaseConnection, isDatabaseConfigured } from "../db/client";
 import { isOfflineStorageAllowed, resolveStorageMode } from "../config/deploy";
-import { checkMinioConnection, isMinioConfigured } from "../services/mediaService";
+import { checkMinioConnection, isMediaStorageConfigured } from "../services/mediaService";
+import { getMediaStorageProvider } from "../config/mediaStorage";
 import { buildHealthResponse } from "../ai/index";
 
 export async function buildExtendedHealth() {
   const ai = buildHealthResponse();
   const dbConfigured = isDatabaseConfigured();
-  const minioConfigured = isMinioConfigured();
+  const minioConfigured = isMediaStorageConfigured();
+  const storageProvider = getMediaStorageProvider();
   const [dbOk, minioOk] = await Promise.all([
     dbConfigured ? checkDatabaseConnection() : Promise.resolve(false),
     minioConfigured ? checkMinioConnection() : Promise.resolve(false),
@@ -20,7 +22,11 @@ export async function buildExtendedHealth() {
     storage: {
       mode: resolveStorageMode(dbConfigured, dbOk),
       database: { configured: dbConfigured, ok: dbOk },
-      minio: { configured: minioConfigured, ok: minioOk },
+      minio: {
+        configured: minioConfigured,
+        ok: minioOk,
+        provider: storageProvider,
+      },
     },
     apiVersion: 7,
   };

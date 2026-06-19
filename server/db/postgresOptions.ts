@@ -38,7 +38,9 @@ export function getPostgresSsl():
   const certPath = process.env.DATABASE_SSL_CERT_PATH?.trim();
   if (!certPath) return undefined;
 
-  const full = path.isAbsolute(certPath) ? certPath : path.join(process.cwd(), certPath);
+  const full = path.isAbsolute(certPath)
+    ? certPath
+    : path.join(process.cwd(), "certs", path.basename(certPath));
   const cert = fs.readFileSync(full, "utf-8");
   return { ca: cert, key: cert, cert, rejectUnauthorized: true };
 }

@@ -10,6 +10,12 @@ export async function register() {
     try {
       await runMigrations();
       console.info("[AuraGrid] PostgreSQL conectado e migrations aplicadas.");
+      const { isPgvectorAvailable } = await import("./server/db/pgvector");
+      if (!(await isPgvectorAvailable())) {
+        console.warn(
+          "[AuraGrid] pgvector indisponível — shortlist por embedding desativado (match por fingerprint/ranker continua)."
+        );
+      }
     } catch (err) {
       console.error("[AuraGrid] Falha ao conectar/migrar PostgreSQL:", err);
     }

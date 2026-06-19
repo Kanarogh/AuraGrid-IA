@@ -10,6 +10,7 @@ import {
   countCatalogEmbeddings,
   searchCatalogByEmbedding,
 } from "../services/catalogService";
+import { isPgvectorAvailable } from "../db/pgvector";
 import {
   MATCH_SHORTLIST_THRESHOLD,
   MATCH_SHORTLIST_TOP_K,
@@ -73,7 +74,8 @@ export async function prepareMatchInput(
   if (
     sanitized.clientId &&
     isMatchEmbeddingEnabled() &&
-    isGeminiEmbeddingConfigured()
+    isGeminiEmbeddingConfigured() &&
+    (await isPgvectorAvailable())
   ) {
     try {
       const embeddedCount = await countCatalogEmbeddings(sanitized.clientId);
