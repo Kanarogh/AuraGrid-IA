@@ -150,8 +150,8 @@ export function CaptionBatchPanel({
         <div className="flex gap-2 text-xs text-ag-warning bg-ag-warning/10 border border-ag-warning/25 rounded-xl p-3">
           <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
           <p>
-            <strong>Gem incompleto:</strong> preencha nome, descrição, instruções (tom), endereço,
-            contato e hashtags em Configurações antes de gerar.
+            <strong>Gem incompleto:</strong> preencha nome, descrição, instruções (tom), contato e
+            hashtags em Configurações antes de gerar.
             {brandGemMissingFields ? ` Pendentes: ${brandGemMissingFields}.` : ""}
             {onOpenGemSettings && (
               <>

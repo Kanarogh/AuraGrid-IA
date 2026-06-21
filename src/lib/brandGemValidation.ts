@@ -17,6 +17,9 @@ const FIELD_LABELS: Record<BrandGemFieldKey, string> = {
   "footer.hashtags": "Hashtags",
 };
 
+/** Campos obrigatórios para gerar legendas (endereço é opcional). */
+export const REQUIRED_BRAND_GEM_FIELD_COUNT = 5;
+
 function isFilled(value: string | undefined | null): boolean {
   return Boolean(value?.trim());
 }
@@ -27,7 +30,6 @@ export function getMissingBrandGemFields(gem: BrandGem): BrandGemFieldKey[] {
   if (!isFilled(gem.name)) missing.push("name");
   if (!isFilled(gem.description)) missing.push("description");
   if (!isFilled(gem.instructions)) missing.push("instructions");
-  if (!isFilled(gem.footer.address)) missing.push("footer.address");
   if (!isFilled(gem.footer.contact)) missing.push("footer.contact");
   if (!isFilled(gem.footer.hashtags)) missing.push("footer.hashtags");
   return missing;

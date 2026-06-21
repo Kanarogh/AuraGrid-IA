@@ -61,7 +61,6 @@ export function getMissingBrandGemFields(gem?: BrandGemConfig): BrandGemRequired
   if (!filled(gem?.name)) missing.push("name");
   if (!filled(gem?.description)) missing.push("description");
   if (!filled(gem?.instructions)) missing.push("instructions");
-  if (!filled(gem?.footer?.address)) missing.push("footer.address");
   if (!filled(gem?.footer?.contact)) missing.push("footer.contact");
   if (!filled(gem?.footer?.hashtags)) missing.push("footer.hashtags");
   return missing;

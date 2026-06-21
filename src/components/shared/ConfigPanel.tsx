@@ -40,6 +40,7 @@ import {
   brandGemFieldLabel,
   getMissingBrandGemFields,
   isBrandGemReadyForCaptions,
+  REQUIRED_BRAND_GEM_FIELD_COUNT,
 } from "../../lib/brandGemValidation";
 import type { BrandGem } from "../../types";
 import { AiProviderPanel } from "./AiProviderPanel";
@@ -101,7 +102,10 @@ export function ConfigPanel({
   const savedLabel = useMemo(() => formatSavedAt(brandGemSavedAt), [brandGemSavedAt]);
   const missingFields = getMissingBrandGemFields(draftGem);
   const gemReady = isBrandGemReadyForCaptions(draftGem);
-  const gemProgress = Math.round(((6 - missingFields.length) / 6) * 100);
+  const gemProgress = Math.round(
+    ((REQUIRED_BRAND_GEM_FIELD_COUNT - missingFields.length) / REQUIRED_BRAND_GEM_FIELD_COUNT) *
+      100
+  );
 
   useEffect(() => {
     if (!gemReady) setFooterOpen(true);
@@ -282,7 +286,10 @@ export function ConfigPanel({
       <div className="mb-6">
         <div className="flex items-center justify-between gap-2 mb-1.5">
           <span className="text-xs font-medium text-ag-text">Progresso do Gem</span>
-          <span className="text-xs text-ag-muted">{6 - missingFields.length}/6 campos</span>
+          <span className="text-xs text-ag-muted">
+            {REQUIRED_BRAND_GEM_FIELD_COUNT - missingFields.length}/{REQUIRED_BRAND_GEM_FIELD_COUNT}{" "}
+            campos
+          </span>
         </div>
         <div className="h-2 rounded-full bg-ag-surface-3 overflow-hidden">
           <div
@@ -619,7 +626,7 @@ export function ConfigPanel({
           onClick={() => setFooterOpen((o) => !o)}
           className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left text-sm font-semibold text-ag-text hover:bg-ag-surface-2 cursor-pointer"
         >
-          <span>Dados fixos nas legendas (obrigatórios para gerar)</span>
+          <span>Dados fixos nas legendas (contato e hashtags obrigatórios)</span>
           <ChevronDown
             className={cn("h-4 w-4 text-ag-muted transition-transform", footerOpen && "rotate-180")}
           />
@@ -630,7 +637,7 @@ export function ConfigPanel({
               <p className="text-xs text-ag-muted py-2 leading-relaxed">
                 Ordem padrão: <strong className="text-ag-text">gancho</strong> →{" "}
                 <strong className="text-ag-text">Referência</strong> (se houver match) →{" "}
-                <strong className="text-ag-text">nota IA</strong> → endereço → CTA → hashtags.
+                <strong className="text-ag-text">nota IA</strong> → endereço (opcional) → CTA → hashtags.
                 Use <strong className="text-ag-text">campos extras</strong> para blocos fixos
                 adicionais (promo, horário, link, etc.).
               </p>
@@ -652,7 +659,8 @@ export function ConfigPanel({
             <div id="gem-field-footer.address">
               <FieldLabel>
                 <span className="inline-flex items-center gap-1">
-                  <Building className="h-3 w-3" /> Endereço{requiredMark("footer.address")}
+                  <Building className="h-3 w-3" /> Endereço{" "}
+                  <span className="text-ag-muted font-normal normal-case tracking-normal">(opcional)</span>
                 </span>
               </FieldLabel>
               <Input
