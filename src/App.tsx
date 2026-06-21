@@ -77,6 +77,7 @@ function captionQueueLabel(postId: string, dayNumber: number): string {
 import { useTheme } from "./hooks/useTheme";
 import { useAppRouteSync, type AppRouteSyncHandlers } from "./hooks/useAppRouteSync";
 import type { SettingsTab } from "./lib/appRouting";
+import { useAppNavigation } from "./lib/appRouting";
 import { useAuth } from "./context/AuthContext";
 import { aiFetch } from "./lib/aiFetch";
 import {
@@ -2907,6 +2908,9 @@ export default function App() {
     [activeEditorialIndex, orderedEditorialPosts, selectPreviewPost]
   );
 
+  const { parsedLocation } = useAppNavigation();
+  const onClientRoute = parsedLocation.kind === "client";
+
   if (useApiStorage && !workspaceHydrated) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-ag-bg text-ag-muted">
@@ -2974,7 +2978,31 @@ export default function App() {
           </div>
         )}
 
-        {hasActiveClient && activeSection === "settings" && (
+        {hasActiveClient && parsedLocation.kind === "welcome" && (
+          <div className="flex flex-col items-center justify-center min-h-[45vh] gap-6 px-4 text-center max-w-lg mx-auto">
+            <h2 className="font-display text-2xl font-semibold text-ag-text">
+              Bem-vindo ao AuraGrid
+            </h2>
+            <p className="text-sm text-ag-muted">
+              Você já tem clientes cadastrados. Entre no workspace para continuar de onde parou.
+            </p>
+            <Button
+              variant="accent"
+              size="lg"
+              onClick={() =>
+                void navigateClient({
+                  clientId: effectiveActiveClientId,
+                  section: "posts",
+                  postsTab: "day",
+                })
+              }
+            >
+              Ir para o workspace
+            </Button>
+          </div>
+        )}
+
+        {hasActiveClient && onClientRoute && activeSection === "settings" && (
           <ConfigPanel
             variant="page"
             clientName={activeClient.name}
@@ -2987,7 +3015,7 @@ export default function App() {
           />
         )}
 
-        {hasActiveClient && activeSection === "posts" && (
+        {hasActiveClient && onClientRoute && activeSection === "posts" && (
           <div className="ag-workspace-section">
             <PostsWorkflowBar stats={captionBatchStats} />
 
@@ -3214,7 +3242,7 @@ export default function App() {
           </div>
         )}
 
-        {hasActiveClient && activeSection === "canva_grid" && activeCanvaPage && (
+        {hasActiveClient && onClientRoute && activeSection === "canva_grid" && activeCanvaPage && (
           <StudioSection
             titleMode="hidden"
             actions={
@@ -3366,7 +3394,7 @@ export default function App() {
         )}
 
         {/* WORKSPACE VIEW 2: FEED GRID HARMONY SIMULATOR (Instagram 3x3) */}
-        {hasActiveClient && activeSection === "feed_simulator" && (
+        {hasActiveClient && onClientRoute && activeSection === "feed_simulator" && (
           <FeedInstagramPreview
             posts={posts}
             profileDisplayName={brandGem.name}
@@ -3384,7 +3412,7 @@ export default function App() {
           />
         )}
 
-        {hasActiveClient && activeSection === "reference_finder" && (
+        {hasActiveClient && onClientRoute && activeSection === "reference_finder" && (
           <ReferenceFinderPanel
             referenceCatalog={referenceCatalog}
             isEnrichingCatalog={isEnrichingCatalog}
@@ -3396,7 +3424,7 @@ export default function App() {
         )}
 
         {/* WORKSPACE VIEW 3: REFERENCE CLOTHES BATCH FILES MANAGER */}
-        {hasActiveClient && activeSection === "catalog" && (
+        {hasActiveClient && onClientRoute && activeSection === "catalog" && (
           <StudioSection
             titleMode="hidden"
             eyebrow="Acervo"

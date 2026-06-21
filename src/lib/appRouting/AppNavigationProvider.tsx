@@ -4,7 +4,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useRef,
   type ReactNode,
@@ -19,6 +18,7 @@ type BeforeNavigateFn = (next: ClientRoute) => Promise<boolean>;
 type AppNavigationContextValue = {
   parsedLocation: ParsedLocation;
   clientRoute: ClientRoute | null;
+  defaultClientId: string;
   /** Navega preservando clientId atual quando omitido. */
   navigateClient: (
     partial: Partial<ClientRoute>,
@@ -32,13 +32,21 @@ type AppNavigationContextValue = {
 
 const AppNavigationContext = createContext<AppNavigationContextValue | null>(null);
 
-export function AppNavigationProvider({ children }: { children: ReactNode }) {
+export function AppNavigationProvider({
+  children,
+  defaultClientId = "",
+}: {
+  children: ReactNode;
+  defaultClientId?: string;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const beforeNavigateRef = useRef<BeforeNavigateFn | null>(null);
   const isApplyingRouteRef = useRef(false);
   const currentRouteRef = useRef<ClientRoute | null>(null);
+  const defaultClientIdRef = useRef(defaultClientId);
+  defaultClientIdRef.current = defaultClientId;
 
   const parsedLocation = useMemo(
     () => parseAppPath(pathname, searchParams),
@@ -58,20 +66,21 @@ export function AppNavigationProvider({ children }: { children: ReactNode }) {
 
   const navigateClient = useCallback(
     async (partial: Partial<ClientRoute>, options?: NavigateOptions): Promise<boolean> => {
+      const resolvedClientId =
+        partial.clientId ?? currentRouteRef.current?.clientId ?? defaultClientIdRef.current;
+
+      if (!resolvedClientId) return false;
+
       const base =
         currentRouteRef.current ??
-        (partial.clientId
-          ? ({
-              clientId: partial.clientId,
-              section: partial.section ?? "posts",
-            } as ClientRoute)
-          : null);
-
-      if (!base?.clientId && !partial.clientId) return false;
+        ({
+          clientId: resolvedClientId,
+          section: partial.section ?? "posts",
+        } as ClientRoute);
 
       const next = mergeClientRoute(
-        base ?? ({ clientId: partial.clientId!, section: "posts" } as ClientRoute),
-        partial
+        { ...base, clientId: resolvedClientId },
+        { ...partial, clientId: resolvedClientId }
       );
 
       if (!options?.skipDirtyGuard && beforeNavigateRef.current) {
@@ -122,6 +131,7 @@ export function AppNavigationProvider({ children }: { children: ReactNode }) {
     () => ({
       parsedLocation,
       clientRoute,
+      defaultClientId,
       navigateClient,
       navigateSection,
       replaceClientRoute,
@@ -131,6 +141,7 @@ export function AppNavigationProvider({ children }: { children: ReactNode }) {
     [
       parsedLocation,
       clientRoute,
+      defaultClientId,
       navigateClient,
       navigateSection,
       replaceClientRoute,

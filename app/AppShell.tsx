@@ -5,13 +5,25 @@ import App from "../src/App";
 import { AppErrorBoundary } from "../src/components/shared/AppErrorBoundary";
 import { AuthProvider } from "../src/context/AuthContext";
 import { ApiWorkspaceSync } from "../src/context/ApiWorkspaceSync";
-import { ClientWorkspaceProvider } from "../src/context/ClientWorkspaceContext";
+import {
+  ClientWorkspaceProvider,
+  useClientWorkspace,
+} from "../src/context/ClientWorkspaceContext";
 import { AuthGate } from "../src/components/auth/AuthGate";
 import { NotificationProvider } from "../src/components/ui/NotificationProvider";
 import { AppNavigationProvider } from "../src/lib/appRouting";
 import { AppRouteBootstrap } from "../src/components/app/AppRouteBootstrap";
 import { initTheme } from "../src/hooks/useTheme";
 import { initAccent } from "../src/hooks/useAccent";
+
+function AppNavigationShell({ children }: { children: React.ReactNode }) {
+  const { effectiveActiveClientId } = useClientWorkspace();
+  return (
+    <AppNavigationProvider defaultClientId={effectiveActiveClientId}>
+      {children}
+    </AppNavigationProvider>
+  );
+}
 
 export default function AppShell() {
   useEffect(() => {
@@ -26,12 +38,12 @@ export default function AppShell() {
           <ClientWorkspaceProvider>
             <ApiWorkspaceSync />
             <Suspense fallback={null}>
-              <AppNavigationProvider>
+              <AppNavigationShell>
                 <AuthGate>
                   <AppRouteBootstrap />
                   <App />
                 </AuthGate>
-              </AppNavigationProvider>
+              </AppNavigationShell>
             </Suspense>
           </ClientWorkspaceProvider>
         </AuthProvider>

@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { confirmDialog } from "../lib/confirmDialog";
 import {
   buildClientPath,
   clientRouteToStatePatch,
+  mergeClientRoute,
   pathsEqual,
   postsTabToViewMode,
   stateToClientRoute,
@@ -13,6 +14,7 @@ import {
   validateClientRoute,
   type CatalogTab,
   type ClientRoute,
+  type NavigateOptions,
   type RouteStatePatch,
   type SettingsTab,
 } from "../lib/appRouting";
@@ -74,6 +76,25 @@ function buildValidationContext(
   };
 }
 
+function buildNextRoute(
+  partial: Partial<ClientRoute>,
+  clientRoute: ClientRoute | null,
+  stateRoute: ClientRoute | null,
+  effectiveActiveClientId: string
+): ClientRoute | null {
+  if (!effectiveActiveClientId) return null;
+
+  const base =
+    clientRoute ??
+    stateRoute ??
+    ({ clientId: effectiveActiveClientId, section: "posts" } as ClientRoute);
+
+  return mergeClientRoute(
+    { ...base, clientId: partial.clientId ?? base.clientId ?? effectiveActiveClientId },
+    { ...partial, clientId: partial.clientId ?? base.clientId ?? effectiveActiveClientId }
+  );
+}
+
 export function useAppRouteSync({
   enabled,
   hasActiveClient,
@@ -94,19 +115,15 @@ export function useAppRouteSync({
 }: UseAppRouteSyncArgs) {
   const {
     clientRoute,
-    navigateClient,
-    navigateSection,
+    navigateClient: pushClientRoute,
     replaceClientRoute,
     setBeforeNavigate,
   } = useAppNavigation();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const applyingFromUrlRef = useRef(false);
-  const routeInitializedRef = useRef(false);
-
-  useEffect(() => {
-    routeInitializedRef.current = false;
-  }, [pathname]);
+  const pendingCommitRef = useRef<string | null>(null);
 
   const currentRouteFromState = useCallback(
     () =>
@@ -159,6 +176,43 @@ export function useAppRouteSync({
     [handlers]
   );
 
+  const commitNavigation = useCallback(
+    async (partial: Partial<ClientRoute>, options?: NavigateOptions): Promise<boolean> => {
+      if (!effectiveActiveClientId) return false;
+
+      const stateRoute = currentRouteFromState();
+      const nextRoute = buildNextRoute(
+        partial,
+        clientRoute,
+        stateRoute,
+        effectiveActiveClientId
+      );
+      if (!nextRoute) return false;
+
+      const nextPath = buildClientPath(nextRoute);
+      pendingCommitRef.current = nextPath;
+
+      const ok = await pushClientRoute(nextRoute, options);
+      if (!ok) {
+        pendingCommitRef.current = null;
+        return false;
+      }
+
+      applyPatch(clientRouteToStatePatch(nextRoute));
+      queueMicrotask(() => {
+        pendingCommitRef.current = null;
+      });
+      return true;
+    },
+    [
+      effectiveActiveClientId,
+      currentRouteFromState,
+      clientRoute,
+      pushClientRoute,
+      applyPatch,
+    ]
+  );
+
   useEffect(() => {
     setBeforeNavigate(async (next: ClientRoute) => {
       if (
@@ -181,6 +235,10 @@ export function useAppRouteSync({
 
   useEffect(() => {
     if (!enabled || !clientRoute || !hasActiveClient) return;
+    if (applyingFromUrlRef.current) return;
+
+    const routePath = buildClientPath(clientRoute);
+    if (pendingCommitRef.current === routePath) return;
 
     let cancelled = false;
 
@@ -203,19 +261,16 @@ export function useAppRouteSync({
 
       if (route.clientId !== effectiveActiveClientId) {
         handlers.switchClient(route.clientId);
-        return;
       }
 
       const stateRoute = currentRouteFromState();
       if (!stateRoute) return;
 
       if (buildClientPath(route) === buildClientPath(stateRoute)) {
-        routeInitializedRef.current = true;
         return;
       }
 
       if (pathsEqual(route, stateRoute)) {
-        routeInitializedRef.current = true;
         return;
       }
 
@@ -235,7 +290,7 @@ export function useAppRouteSync({
         if (!ok) {
           const revertRoute = currentRouteFromState();
           if (revertRoute) {
-            void navigateClient(revertRoute, {
+            void commitNavigation(revertRoute, {
               replace: true,
               skipDirtyGuard: true,
             });
@@ -245,7 +300,6 @@ export function useAppRouteSync({
       }
 
       applyPatch(clientRouteToStatePatch(route));
-      routeInitializedRef.current = true;
     })();
 
     return () => {
@@ -253,6 +307,8 @@ export function useAppRouteSync({
     };
   }, [
     enabled,
+    pathname,
+    searchParams,
     clientRoute,
     hasActiveClient,
     effectiveActiveClientId,
@@ -266,77 +322,77 @@ export function useAppRouteSync({
     applyPatch,
     handlers,
     currentRouteFromState,
-    navigateClient,
+    commitNavigation,
   ]);
 
   const handleNavigate = useCallback(
-    (section: AppSection) => navigateSection(section),
-    [navigateSection]
+    (section: AppSection) => void commitNavigation({ section }),
+    [commitNavigation]
   );
 
   const handlePostsWorkTabChange = useCallback(
     (tab: PostsWorkTab) => {
-      void navigateClient({ section: "posts", postsTab: tab, postId: undefined });
+      void commitNavigation({ section: "posts", postsTab: tab, postId: undefined });
     },
-    [navigateClient]
+    [commitNavigation]
   );
 
   const handleCatalogTabChange = useCallback(
     (tab: CatalogTab) => {
-      void navigateClient({ section: "catalog", catalogTab: tab });
+      void commitNavigation({ section: "catalog", catalogTab: tab });
     },
-    [navigateClient]
+    [commitNavigation]
   );
 
   const handleSettingsTabChange = useCallback(
     (tab: SettingsTab) => {
-      void navigateClient({ section: "settings", settingsTab: tab });
+      void commitNavigation({ section: "settings", settingsTab: tab });
     },
-    [navigateClient]
+    [commitNavigation]
   );
 
   const selectPreviewPost = useCallback(
     (postId: string) => {
-      void navigateClient({
+      void commitNavigation({
         section: "posts",
         postsTab: "day",
         postId,
       });
     },
-    [navigateClient]
+    [commitNavigation]
   );
 
   const selectCanvaPage = useCallback(
     (pageId: string) => {
-      void navigateClient({
+      void commitNavigation({
         section: "canva_grid",
         pageId,
         slotId: undefined,
       });
     },
-    [navigateClient]
+    [commitNavigation]
   );
 
   const selectCanvaSlot = useCallback(
     (slotId: string | null) => {
-      void navigateClient({
+      void commitNavigation({
         section: "canva_grid",
         pageId: activeCanvaPageId,
         slotId: slotId ?? undefined,
       });
     },
-    [navigateClient, activeCanvaPageId]
+    [commitNavigation, activeCanvaPageId]
   );
 
   const navigateToClientSettings = useCallback(
     (clientId: string) => {
-      void navigateClient({
+      void commitNavigation({
         clientId,
         section: "settings",
         settingsTab: "brand",
       });
     },
-    [navigateClient]
+    [commitNavigation]
   );
 
   return {
@@ -348,6 +404,6 @@ export function useAppRouteSync({
     selectCanvaPage,
     selectCanvaSlot,
     navigateToClientSettings,
-    navigateClient,
+    navigateClient: commitNavigation,
   };
 }

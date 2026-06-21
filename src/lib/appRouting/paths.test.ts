@@ -105,4 +105,21 @@ test("resolveHomePath with empty activeClientId uses first client", () => {
   );
 });
 
+test("navigation without URL base uses defaultClientId", () => {
+  const base = { clientId: "palak-br", section: "posts" as const };
+  const next = mergeClientRoute(base, { section: "catalog", clientId: "palak-br" });
+  assert.equal(buildClientPath(next), "/c/palak-br/catalogo/referencias");
+});
+
+test("posts tab change clears postId", () => {
+  const base: ClientRoute = {
+    clientId: "palak-br",
+    section: "posts",
+    postsTab: "day",
+    postId: "post_day1",
+  };
+  const next = mergeClientRoute(base, { postsTab: "calendar", postId: undefined });
+  assert.equal(buildClientPath(next), "/c/palak-br/roteiros/calendario");
+});
+
 console.log("All appRouting tests passed.");
