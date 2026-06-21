@@ -61,6 +61,8 @@ type ClientWorkspaceContextValue = {
   registry: ClientRegistry;
   hasActiveClient: boolean;
   activeClientId: string;
+  /** ID resolvido para routing: activeClientId válido ou primeiro cliente. */
+  effectiveActiveClientId: string;
   activeClient: ClientMeta;
   clients: ClientMeta[];
   workspace: ClientWorkspace;
@@ -139,7 +141,12 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
     if (!useApiStorage) return;
     const onApiRegistry = (e: Event) => {
       const { registry: reg, workspace: ws } = (e as CustomEvent<ApiRegistryEvent>).detail;
-      setRegistry(reg);
+      const normalizedReg =
+        reg.clients.length > 0 &&
+        !reg.clients.some((c) => c.id === reg.activeClientId)
+          ? { ...reg, activeClientId: reg.clients[0]!.id }
+          : reg;
+      setRegistry(normalizedReg);
       setWorkspace(ws);
       workspaceRef.current = ws;
       setWorkspaceHydrated(true);
@@ -150,6 +157,13 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
 
   const hasActiveClient = registry.clients.length > 0;
   const activeClientId = hasActiveClient ? registry.activeClientId : "";
+  const effectiveActiveClientId = useMemo(() => {
+    if (!hasActiveClient) return "";
+    if (registry.clients.some((c) => c.id === registry.activeClientId)) {
+      return registry.activeClientId;
+    }
+    return registry.clients[0]?.id ?? "";
+  }, [hasActiveClient, registry.activeClientId, registry.clients]);
 
   useEffect(() => {
     setCaptionCacheClientId(activeClientId);
@@ -761,6 +775,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       registry,
       hasActiveClient,
       activeClientId,
+      effectiveActiveClientId,
       activeClient,
       clients: registry.clients,
       workspace,
@@ -796,6 +811,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       registry,
       hasActiveClient,
       activeClientId,
+      effectiveActiveClientId,
       activeClient,
       workspace,
       setCatalog,

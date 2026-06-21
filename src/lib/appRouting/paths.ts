@@ -20,6 +20,8 @@ function encodeSegment(value: string): string {
 
 /** Monta pathname + query a partir de uma rota de cliente. */
 export function buildClientPath(route: ClientRoute): string {
+  if (!route.clientId?.trim()) return "/welcome";
+
   const base = `/c/${encodeSegment(route.clientId)}/${SECTION_SLUGS[route.section]}`;
   const parts: string[] = [];
 

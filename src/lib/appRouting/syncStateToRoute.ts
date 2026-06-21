@@ -14,8 +14,10 @@ export type AppNavigationState = {
   activePlanningPeriodId: string;
 };
 
-/** Deriva rota canônica a partir do estado atual do App. */
-export function stateToClientRoute(state: AppNavigationState): ClientRoute {
+/** Deriva rota canônica a partir do estado atual do App. Retorna null se clientId vazio. */
+export function stateToClientRoute(state: AppNavigationState): ClientRoute | null {
+  if (!state.clientId?.trim()) return null;
+
   const route: ClientRoute = {
     clientId: state.clientId,
     section: state.section,

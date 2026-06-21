@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { confirmDialog } from "../lib/confirmDialog";
 import {
+  buildClientPath,
   clientRouteToStatePatch,
   pathsEqual,
   postsTabToViewMode,
@@ -35,7 +36,7 @@ export type AppRouteSyncHandlers = {
 type UseAppRouteSyncArgs = {
   enabled: boolean;
   hasActiveClient: boolean;
-  activeClientId: string;
+  effectiveActiveClientId: string;
   registryClientIds: string[];
   activeSection: AppSection;
   settingsDraftDirty: boolean;
@@ -76,7 +77,7 @@ function buildValidationContext(
 export function useAppRouteSync({
   enabled,
   hasActiveClient,
-  activeClientId,
+  effectiveActiveClientId,
   registryClientIds,
   activeSection,
   settingsDraftDirty,
@@ -111,7 +112,7 @@ export function useAppRouteSync({
   const currentRouteFromState = useCallback(
     () =>
       stateToClientRoute({
-        clientId: activeClientId,
+        clientId: effectiveActiveClientId,
         section: activeSection,
         postsWorkTab,
         catalogTab,
@@ -122,7 +123,7 @@ export function useAppRouteSync({
         activePlanningPeriodId,
       }),
     [
-      activeClientId,
+      effectiveActiveClientId,
       activeSection,
       postsWorkTab,
       catalogTab,
@@ -202,12 +203,20 @@ export function useAppRouteSync({
         return;
       }
 
-      if (route.clientId !== activeClientId) {
+      if (route.clientId !== effectiveActiveClientId) {
         handlers.switchClient(route.clientId);
         return;
       }
 
-      if (pathsEqual(route, currentRouteFromState())) {
+      const stateRoute = currentRouteFromState();
+      if (!stateRoute) return;
+
+      if (buildClientPath(route) === buildClientPath(stateRoute)) {
+        routeInitializedRef.current = true;
+        return;
+      }
+
+      if (pathsEqual(route, stateRoute)) {
         routeInitializedRef.current = true;
         return;
       }
@@ -226,10 +235,13 @@ export function useAppRouteSync({
         });
         if (cancelled) return;
         if (!ok) {
-          void navigateClient(currentRouteFromState(), {
-            replace: true,
-            skipDirtyGuard: true,
-          });
+          const revertRoute = currentRouteFromState();
+          if (revertRoute) {
+            void navigateClient(revertRoute, {
+              replace: true,
+              skipDirtyGuard: true,
+            });
+          }
           return;
         }
       }
@@ -245,7 +257,7 @@ export function useAppRouteSync({
     enabled,
     clientRoute,
     hasActiveClient,
-    activeClientId,
+    effectiveActiveClientId,
     activeSection,
     settingsDraftDirty,
     registryClientIds,
@@ -258,25 +270,6 @@ export function useAppRouteSync({
     isApplyingRouteRef,
     currentRouteFromState,
     navigateClient,
-  ]);
-
-  useEffect(() => {
-    if (!enabled || !hasActiveClient || !activeClientId) return;
-    if (!routeInitializedRef.current) return;
-    if (applyingFromUrlRef.current || isApplyingRouteRef.current) return;
-
-    const routeFromState = currentRouteFromState();
-    if (clientRoute && pathsEqual(routeFromState, clientRoute)) return;
-
-    void navigateClient(routeFromState, { replace: true, skipDirtyGuard: true });
-  }, [
-    enabled,
-    hasActiveClient,
-    activeClientId,
-    clientRoute,
-    currentRouteFromState,
-    navigateClient,
-    isApplyingRouteRef,
   ]);
 
   const handleNavigate = useCallback(

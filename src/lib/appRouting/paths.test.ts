@@ -7,6 +7,7 @@ import {
   parseAppPath,
   pathsEqual,
 } from "./paths";
+import { resolveHomePath } from "./defaults";
 import type { ClientRoute } from "./types";
 
 function test(name: string, fn: () => void) {
@@ -87,6 +88,21 @@ test("login returnTo", () => {
 test("home redirect", () => {
   assert.equal(buildHomeRedirectPath("palak-br"), "/c/palak-br/roteiros/dia");
   assert.equal(buildHomeRedirectPath(undefined), "/welcome");
+});
+
+test("empty clientId never produces /c//", () => {
+  assert.equal(
+    buildClientPath({ clientId: "", section: "settings", settingsTab: "marca" }),
+    "/welcome"
+  );
+  assert.equal(parseAppPath("/c//configuracoes/marca").kind, "unknown");
+});
+
+test("resolveHomePath with empty activeClientId uses first client", () => {
+  assert.equal(
+    resolveHomePath(["palak-br"], ""),
+    "/c/palak-br/roteiros/dia"
+  );
 });
 
 console.log("All appRouting tests passed.");

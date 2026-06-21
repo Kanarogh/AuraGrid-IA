@@ -5,29 +5,32 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import { useClientWorkspace } from "../../context/ClientWorkspaceContext";
 import {
+  buildClientPath,
   buildLoginPath,
   resolveHomePath,
   useAppNavigation,
 } from "../../lib/appRouting";
 
-/** Redirects globais: home, auth, welcome e rotas inválidas. */
+/** Redirects globais: home, auth e correção de rotas inválidas. */
 export function AppRouteBootstrap() {
   const router = useRouter();
   const pathname = usePathname();
   const { user, loading, storageMode } = useAuth();
-  const { registry, hasActiveClient, activeClientId, workspaceHydrated, useApiStorage, workspace } =
-    useClientWorkspace();
+  const {
+    hasActiveClient,
+    effectiveActiveClientId,
+    clients,
+    workspaceHydrated,
+    useApiStorage,
+  } = useClientWorkspace();
   const { parsedLocation } = useAppNavigation();
   const lastRedirectRef = useRef<string | null>(null);
 
+  const clientIds = clients.map((c) => c.id);
+
   useEffect(() => {
     if (loading) return;
-
-    // Nuvem: aguardar registry da API antes de qualquer redirect baseado em clientes.
-    // Evita loop /welcome ↔ /c/... com registry local vazio no primeiro paint.
     if (useApiStorage && !workspaceHydrated) return;
-
-    const clientIds = registry.clients.map((c) => c.id);
 
     const redirect = (path: string) => {
       if (pathname === path || lastRedirectRef.current === path) return;
@@ -52,26 +55,23 @@ export function AppRouteBootstrap() {
     lastRedirectRef.current = null;
 
     if (parsedLocation.kind === "home") {
-      if (!hasActiveClient || clientIds.length === 0) {
+      if (!hasActiveClient) {
         redirect("/welcome");
         return;
       }
-      redirect(resolveHomePath(clientIds, activeClientId, workspace.ui?.activeSection));
+      redirect(resolveHomePath(clientIds, effectiveActiveClientId));
       return;
     }
 
     if (parsedLocation.kind === "welcome") {
-      if (hasActiveClient && clientIds.length > 0) {
-        redirect(resolveHomePath(clientIds, activeClientId, workspace.ui?.activeSection));
-      }
       return;
     }
 
     if (parsedLocation.kind === "login") return;
 
     if (parsedLocation.kind === "unknown") {
-      if (hasActiveClient && activeClientId) {
-        redirect(resolveHomePath(clientIds, activeClientId, workspace.ui?.activeSection));
+      if (hasActiveClient && effectiveActiveClientId) {
+        redirect(resolveHomePath(clientIds, effectiveActiveClientId));
       } else {
         redirect("/welcome");
       }
@@ -79,8 +79,16 @@ export function AppRouteBootstrap() {
     }
 
     if (parsedLocation.kind === "client") {
-      if (!hasActiveClient || clientIds.length === 0) {
-        redirect("/welcome");
+      const route = parsedLocation.route;
+      if (!route.clientId?.trim()) return;
+
+      if (!clientIds.includes(route.clientId) && effectiveActiveClientId) {
+        redirect(
+          buildClientPath({
+            ...route,
+            clientId: effectiveActiveClientId,
+          })
+        );
       }
     }
   }, [
@@ -91,11 +99,10 @@ export function AppRouteBootstrap() {
     storageMode,
     user,
     hasActiveClient,
-    activeClientId,
-    registry.clients,
+    effectiveActiveClientId,
+    clientIds,
     workspaceHydrated,
     useApiStorage,
-    workspace.ui?.activeSection,
   ]);
 
   return null;

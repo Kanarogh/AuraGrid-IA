@@ -200,6 +200,7 @@ export default function App() {
   const {
     hasActiveClient,
     activeClientId,
+    effectiveActiveClientId,
     activeClient,
     clients,
     workspace,
@@ -444,7 +445,7 @@ export default function App() {
   } = useAppRouteSync({
     enabled: hasActiveClient,
     hasActiveClient,
-    activeClientId,
+    effectiveActiveClientId,
     registryClientIds: clients.map((c) => c.id),
     activeSection,
     settingsDraftDirty,
