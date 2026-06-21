@@ -108,9 +108,8 @@ export function CanvaTimelineSyncPanel({
       </div>
 
       <div className="mt-4 rounded-lg border border-ag-border/50 bg-ag-surface-2/50 px-3 py-2 text-[11px] text-ag-muted leading-relaxed">
-        <strong className="text-ag-text">Enviar para o calendário:</strong> use sync contínuo aqui para
-        manter legendas ao atualizar o grid; &quot;Aplicar página&quot; no Grid Canva faz push pontual; &quot;Distribuir
-        catálogo&quot; na aba Setup preenche direto do acervo.
+        <strong className="text-ag-text">Enviar para o calendário:</strong> configure regras e distribua em
+        Roteiros → Setup → Grid Canva; o auto-sync mantém fotos alinhadas ao grid.
       </div>
     </Card>
   );

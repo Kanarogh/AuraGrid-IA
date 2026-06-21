@@ -1,5 +1,6 @@
 import type { CatalogItem, PlannedPost } from "../../types";
 import { getPostStatus } from "../../lib/postStatus";
+import { countPostsWithImage, countUniqueDays, getPostDayLabel } from "../../lib/postDisplay";
 import { WorkspaceCard, WorkspaceCardHeader } from "../layout/WorkspaceCard";
 import { CalendarDays, CalendarPlus, ChevronRight, Sparkles } from "lucide-react";
 import { Button } from "../ui/Button";
@@ -40,13 +41,14 @@ export function EditorialGridView({
 }) {
   const withCaption = posts.filter((p) => p.caption?.trim()).length;
   const approved = posts.filter((p) => p.isConfirmed).length;
-  const withImage = posts.filter((p) => p.image).length;
+  const withImage = countPostsWithImage(posts);
+  const dayCount = countUniqueDays(posts.filter((p) => p.image || p.caption?.trim()));
 
   return (
     <WorkspaceCard variant="primary">
       <WorkspaceCardHeader
         title="Visão do calendário"
-        subtitle={`${posts.length} dias · ${withImage} com foto · ${withCaption} com legenda · ${approved} aprovadas`}
+        subtitle={`${dayCount} dias · ${posts.length} posts · ${withImage} com foto · ${withCaption} com legenda · ${approved} aprovadas`}
         actions={
           onOpenStudio && activePreviewId ? (
             <Button
@@ -98,7 +100,7 @@ export function EditorialGridView({
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-ag-text">
-                    Dia {post.dayNumber}
+                    {getPostDayLabel(post, posts)}
                     <span className="text-ag-muted font-normal ml-2 text-xs">{post.dateLabel}</span>
                   </p>
                   <p className="text-xs text-ag-muted truncate flex items-center gap-1">

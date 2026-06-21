@@ -1,19 +1,18 @@
 import { useState } from "react";
-import { LayoutGrid, RefreshCw, ShoppingBag, Upload } from "lucide-react";
+import { LayoutGrid, Upload } from "lucide-react";
 import { SchedulerPanel } from "../shared/SchedulerPanel";
-import { CanvaTimelineSyncPanel } from "../canva/CanvaTimelineSyncPanel";
+import { SmartDistributorPanel } from "./SmartDistributorPanel";
 import { WorkspaceCard, WorkspaceCardHeader } from "../layout/WorkspaceCard";
+import type { DistributionPrefs } from "../../lib/smartDistribution";
 import { cn } from "../../lib/cn";
 
-type SetupTab = "catalog" | "upload" | "canva";
+type SetupTab = "grid" | "upload";
 
 export function PopularCalendarioPanel({
   startDate,
   onStartDateChange,
   postsCount,
-  catalogCount,
   onAddDay,
-  onDistributeCatalog,
   onBatchUpload,
   isReadOnly,
   autoSync,
@@ -21,15 +20,16 @@ export function PopularCalendarioPanel({
   canvaGridReversed,
   onCanvaGridReversedChange,
   onSyncNow,
+  onDistributeFromGrid,
   canvaImageCount,
+  distributionPrefs,
+  onDistributionPrefsChange,
   onOpenCanvaGrid,
 }: {
   startDate: string;
   onStartDateChange: (date: string) => void;
   postsCount: number;
-  catalogCount: number;
   onAddDay: () => void;
-  onDistributeCatalog: () => void;
   onBatchUpload: (files: FileList) => void;
   isReadOnly?: boolean;
   autoSync: boolean;
@@ -37,15 +37,17 @@ export function PopularCalendarioPanel({
   canvaGridReversed: boolean;
   onCanvaGridReversedChange: (reversed: boolean) => void;
   onSyncNow: () => void;
+  onDistributeFromGrid: () => void;
   canvaImageCount: number;
+  distributionPrefs: DistributionPrefs;
+  onDistributionPrefsChange: (partial: Partial<DistributionPrefs>) => void;
   onOpenCanvaGrid?: () => void;
 }) {
-  const [tab, setTab] = useState<SetupTab>("catalog");
+  const [tab, setTab] = useState<SetupTab>("grid");
 
-  const tabs: { id: SetupTab; label: string; icon: typeof ShoppingBag }[] = [
-    { id: "catalog", label: "Catálogo", icon: ShoppingBag },
+  const tabs: { id: SetupTab; label: string; icon: typeof LayoutGrid }[] = [
+    { id: "grid", label: "Grid Canva", icon: LayoutGrid },
     { id: "upload", label: "Upload", icon: Upload },
-    { id: "canva", label: "Grid Canva", icon: LayoutGrid },
   ];
 
   return (
@@ -53,7 +55,7 @@ export function PopularCalendarioPanel({
       <div className="p-4 sm:p-5 border-b border-ag-border/60">
         <WorkspaceCardHeader
           title="Popular calendário"
-          subtitle="Escolha como preencher os 30 dias do roteiro ativo."
+          subtitle="Distribua looks do Grid Canva no roteiro de 30 dias com regras ajustáveis."
         />
         <div className="flex flex-wrap gap-1 p-1 rounded-xl bg-ag-surface-2 border border-ag-border">
           {tabs.map(({ id, label, icon: Icon }) => (
@@ -76,36 +78,33 @@ export function PopularCalendarioPanel({
       </div>
 
       <div className="p-4 sm:p-5 space-y-4">
-        {tab === "canva" ? (
-          <CanvaTimelineSyncPanel
-            autoSync={autoSync}
-            onAutoSyncChange={onAutoSyncChange}
+        {tab === "grid" ? (
+          <SmartDistributorPanel
+            canvaImageCount={canvaImageCount}
+            distributionPrefs={distributionPrefs}
+            onDistributionPrefsChange={onDistributionPrefsChange}
             canvaGridReversed={canvaGridReversed}
             onCanvaGridReversedChange={onCanvaGridReversedChange}
+            autoSync={autoSync}
+            onAutoSyncChange={onAutoSyncChange}
             onSyncNow={onSyncNow}
-            canvaImageCount={canvaImageCount}
+            onDistributeFromGrid={onDistributeFromGrid}
             onOpenCanvaGrid={onOpenCanvaGrid}
+            isReadOnly={isReadOnly}
           />
         ) : (
           <>
-            <div className="rounded-lg border border-ag-border/50 bg-ag-surface-2/50 px-3 py-2 text-xs text-ag-muted flex items-start gap-2">
-              <RefreshCw className="h-3.5 w-3.5 shrink-0 mt-0.5 text-ag-accent" />
-              {tab === "catalog"
-                ? "Distribui looks já cadastrados no catálogo, na ordem do acervo."
-                : "Envie um lote de fotos para criar ou preencher dias automaticamente."}
-            </div>
+            <p className="text-xs text-ag-muted rounded-lg border border-ag-border/50 bg-ag-surface-2/50 px-3 py-2">
+              Upload em lote aplica as mesmas regras de distribuição configuradas na aba Grid Canva.
+            </p>
             <SchedulerPanel
               embedded
               startDate={startDate}
               onStartDateChange={onStartDateChange}
               postsCount={postsCount}
-              catalogCount={catalogCount}
               onAddDay={onAddDay}
-              onDistributeCatalog={onDistributeCatalog}
               onBatchUpload={onBatchUpload}
               isReadOnly={isReadOnly}
-              showCatalogActions={tab === "catalog"}
-              showUploadActions={tab === "upload"}
             />
           </>
         )}

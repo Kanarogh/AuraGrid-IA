@@ -67,7 +67,14 @@ import {
 import { exportRoteiroPdf } from "./lib/exportRoteiroPdf";
 import { exportCanvaGridPdf } from "./lib/exportCanvaGridPdf";
 import { ensurePersistedImage, extractMediaAssetId } from "./lib/api/persistMedia";
-import { stablePlannedPostId } from "./lib/postIds";
+import { recalculatePostDates } from "./lib/dates";
+import { createEmptyCanvaPage, prependCanvaPage, renumberCanvaPages, resolveActiveCanvaPage, resolveSlotImage } from "./lib/canva";
+import { getPostStatus } from "./lib/postStatus";
+
+function captionQueueLabel(postId: string, dayNumber: number): string {
+  return `Legenda#${postId}#dia${dayNumber}`;
+}
+import { useTheme } from "./hooks/useTheme";
 import { useAuth } from "./context/AuthContext";
 import { aiFetch } from "./lib/aiFetch";
 import {
@@ -89,15 +96,17 @@ import {
 import { preparePostImageForAi } from "./lib/preparePostImageForAi";
 import { finalizeCaption, extractMainCaptionText, resolveCatalogLabel, sanitizeRefinedCaptionOutput } from "./lib/captionFormat";
 import { normalizeCaptionGenerationParams } from "./lib/captionParams";
-import { syncCanvaPagesToPosts } from "./lib/canvaTimelineSync";
-import { recalculatePostDates } from "./lib/dates";
-import { createEmptyCanvaPage, prependCanvaPage, renumberCanvaPages, resolveActiveCanvaPage, resolveSlotImage } from "./lib/canva";
-import { getPostStatus } from "./lib/postStatus";
-
-function captionQueueLabel(postId: string, dayNumber: number): string {
-  return `Legenda#${postId}#dia${dayNumber}`;
-}
-import { useTheme } from "./hooks/useTheme";
+import {
+  syncCanvaPagesToPosts,
+  scheduleItemsToPosts,
+  canvaSlotsToScheduleItems,
+  type ScheduleItem,
+} from "./lib/canvaTimelineSync";
+import {
+  DEFAULT_DISTRIBUTION_PREFS,
+  buildDistributionPreview,
+  type DistributionPrefs,
+} from "./lib/smartDistribution";
 import { AppShell } from "./components/layout/AppShell";
 import type { AppSection } from "./components/layout/AppSidebar";
 import { Footer } from "./components/layout/Footer";
@@ -397,6 +406,10 @@ export default function App() {
   const [swapSourceId, setSwapSourceId] = useState<string>("");
   const [timelineReorderMode, setTimelineReorderMode] = useState(false);
   const [settingsDraftDirty, setSettingsDraftDirty] = useState(false);
+  const [distributionPrefs, setDistributionPrefsState] = useState<DistributionPrefs>(() => ({
+    ...DEFAULT_DISTRIBUTION_PREFS,
+    ...workspace.ui?.distributionPrefs,
+  }));
 
   const handlePostsWorkTabChange = useCallback((tab: PostsWorkTab) => {
     setPostsWorkTab(tab);
@@ -430,6 +443,94 @@ export default function App() {
     setSwapSourceId("");
   }, []);
 
+  const updateDistributionPrefs = useCallback(
+    (partial: Partial<DistributionPrefs>) => {
+      setDistributionPrefsState((prev) => {
+        const next = { ...prev, ...partial };
+        setUiPrefs({ distributionPrefs: next });
+        return next;
+      });
+    },
+    [setUiPrefs]
+  );
+
+  const confirmDistributionOverwrite = useCallback(async (): Promise<boolean> => {
+    const editorialCount = postsRef.current.filter(
+      (p) => p.caption?.trim() || p.isConfirmed || p.isGenerated
+    ).length;
+    if (editorialCount === 0) return true;
+    return confirmDialog({
+      title: "Redistribuir calendário?",
+      message: `Existem ${editorialCount} post(s) com legenda ou aprovação. As fotos serão atualizadas conforme a nova distribuição; textos já salvos serão preservados quando possível.`,
+      confirmLabel: "Distribuir",
+    });
+  }, []);
+
+  const applySmartDistribution = useCallback(
+    async (items: ScheduleItem[]) => {
+      const validItems = items.filter((item) => item.image != null);
+      if (validItems.length === 0) {
+        toast.warning("Nenhuma imagem válida para distribuir.");
+        return;
+      }
+
+      const preview = buildDistributionPreview(validItems.length, distributionPrefs);
+      if (preview.overflowCount > 0) {
+        toast.warning(
+          "Capacidade insuficiente para todos os looks. Ajuste máx. posts/dia ou dias densos."
+        );
+        return;
+      }
+
+      if (!(await confirmDistributionOverwrite())) return;
+
+      let prepared = validItems;
+      if (useApiStorage && activeClientId) {
+        prepared = await Promise.all(
+          validItems.map(async (item) => {
+            const persisted = await ensurePersistedImage(
+              activeClientId,
+              item.image!,
+              "posts",
+              item.imageAssetId
+            );
+            return {
+              ...item,
+              image: persisted.image,
+              imageAssetId: persisted.imageAssetId,
+            };
+          })
+        );
+      }
+
+      const finalizedList = scheduleItemsToPosts(
+        prepared,
+        postsRef.current,
+        startDate,
+        distributionPrefs
+      );
+      setPosts(finalizedList);
+      const firstWithImg = finalizedList.find((p) => p.image) || finalizedList[0];
+      if (firstWithImg) setActivePreviewId(firstWithImg.id);
+      await saveWorkspaceNow();
+      toast.success(
+        `${validItems.length} look${validItems.length === 1 ? "" : "s"} distribuído${validItems.length === 1 ? "" : "s"} no calendário de 30 dias.`
+      );
+    },
+    [
+      distributionPrefs,
+      useApiStorage,
+      activeClientId,
+      startDate,
+      saveWorkspaceNow,
+      confirmDistributionOverwrite,
+    ]
+  );
+
+  const handleDistributeFromGrid = useCallback(() => {
+    void applySmartDistribution(canvaSlotsToScheduleItems(canvaPages, canvaGridReversed));
+  }, [applySmartDistribution, canvaPages, canvaGridReversed]);
+
   const [refineInstructions, setRefineInstructions] = useState<{ [postId: string]: string }>({});
   const [isRefining, setIsRefining] = useState<{ [postId: string]: boolean }>({});
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -454,6 +555,10 @@ export default function App() {
     setRefineInstructions({});
     setSwapSourceId("");
     setTimelineReorderMode(false);
+    setDistributionPrefsState({
+      ...DEFAULT_DISTRIBUTION_PREFS,
+      ...workspace.ui?.distributionPrefs,
+    });
     setSelectedCanvaSlotId(null);
     setCanvaLightbox(null);
     setCatalogLightbox(null);
@@ -519,7 +624,7 @@ export default function App() {
         pagesList,
         prevPosts,
         startDate,
-        { reversed: canvaGridReversed }
+        { reversed: canvaGridReversed, distribution: distributionPrefs }
       );
 
       const firstWithImg =
@@ -587,7 +692,7 @@ export default function App() {
     if (autoSyncCanva) {
       syncCanvaGridToTimeline(canvaPages, false);
     }
-  }, [canvaPages, autoSyncCanva, canvaGridReversed, startDate, useApiStorage]);
+  }, [canvaPages, autoSyncCanva, canvaGridReversed, startDate, useApiStorage, distributionPrefs]);
 
   // Handle standard clipboard copy
   const handleCopy = (id: string, text: string) => {
@@ -737,145 +842,7 @@ export default function App() {
     }, 100);
   };
 
-  // Automatically arrange and distribute photos/images into exactly 30 days starting from Start Date
-  const handleAutoDistribute = async (
-    itemsToSchedule: {
-      image: string | null;
-      label: string;
-      id?: string;
-      imageAssetId?: string | null;
-    }[]
-  ) => {
-    const validItems = itemsToSchedule.filter(item => item.image !== null);
-    
-    if (validItems.length === 0) {
-      toast.warning("Nenhuma imagem válida com foto para distribuir! Por favor, adicione fotos ao acervo primeiro.");
-      return;
-    }
-
-    const N = validItems.length;
-    
-    // Mathematically distribute N files over exactly 30 days
-    const postsPerDay = Array(30).fill(0);
-    
-    if (N >= 30) {
-      // Each day gets at least 1 post
-      for (let i = 0; i < 30; i++) {
-        postsPerDay[i] = 1;
-      }
-      let remaining = N - 30;
-      let d = 0;
-      // Distribute extra posts to the first days (suggesting max 3 posts per day on those first few days)
-      while (remaining > 0 && d < 30) {
-        const currentSpace = 3 - postsPerDay[d];
-        if (currentSpace > 0) {
-          const add = Math.min(currentSpace, remaining);
-          postsPerDay[d] += add;
-          remaining -= add;
-        }
-        d++;
-      }
-      // If there is still some remaining (e.g. very high image collections), distribute sequentially
-      let cycle = 0;
-      while (remaining > 0) {
-        postsPerDay[cycle % 30] += 1;
-        remaining--;
-        cycle++;
-      }
-    } else {
-      // Fewer than 30 images: each of the N images gets placed in 1 day from Day 1 to Day N,
-      // and the remaining days 30-N are kept as empty slots ready in the schedule.
-      for (let i = 0; i < N; i++) {
-        postsPerDay[i] = 1;
-      }
-      for (let i = N; i < 30; i++) {
-        postsPerDay[i] = 0; // Empty day slot in the schedule
-      }
-    }
-
-    const existingById = new Map(postsRef.current.map((p) => [p.id, p]));
-    const newPosts: PlannedPost[] = [];
-    let itemIndex = 0;
-
-    for (let dIndex = 0; dIndex < 30; dIndex++) {
-      const dayNum = dIndex + 1;
-      const countForDay = postsPerDay[dIndex];
-      
-      if (countForDay === 0) {
-        const postId = stablePlannedPostId(dayNum, 0);
-        const prev = existingById.get(postId);
-        newPosts.push(
-          prev
-            ? { ...prev, dayNumber: dayNum, dateLabel: "" }
-            : {
-                id: postId,
-                dayNumber: dayNum,
-                dateLabel: "",
-                image: null,
-                imageAssetId: null,
-                matchedCatalogId: null,
-                reasoning: null,
-                caption: "",
-                isGenerating: false,
-                isGenerated: false,
-                isConfirmed: false,
-                error: null,
-              }
-        );
-      } else {
-        for (let pIndex = 0; pIndex < countForDay; pIndex++) {
-          const item = validItems[itemIndex];
-          itemIndex++;
-          const postId = stablePlannedPostId(dayNum, pIndex);
-          const prev = existingById.get(postId);
-
-          let image = item ? item.image : null;
-          let imageAssetId = item?.imageAssetId ?? prev?.imageAssetId ?? null;
-          if (useApiStorage && activeClientId && image) {
-            const persisted = await ensurePersistedImage(
-              activeClientId,
-              image,
-              "posts",
-              imageAssetId
-            );
-            image = persisted.image;
-            imageAssetId = persisted.imageAssetId;
-          }
-
-          newPosts.push({
-            id: postId,
-            dayNumber: dayNum,
-            dateLabel: "",
-            image,
-            imageAssetId,
-            matchedCatalogId: item ? (item.id || null) : null,
-            reasoning:
-              item && item.id
-                ? `Vínculo automático via distribuidor inteligente de guarda-roupa.`
-                : prev?.reasoning ?? null,
-            caption: prev?.caption ?? "",
-            isGenerating: false,
-            isGenerated: prev?.isGenerated ?? false,
-            isConfirmed: prev?.isConfirmed ?? false,
-            error: null,
-          });
-        }
-      }
-    }
-
-    const finalizedList = recalculatePostDates(startDate, newPosts);
-    setPosts(finalizedList);
-    
-    // Choose active post
-    const firstWithImg = finalizedList.find(p => p.image !== null) || finalizedList[0];
-    setActivePreviewId(firstWithImg.id);
-    
-    await saveWorkspaceNow();
-    
-    toast.success(`Planejamento de 30 Dias Gerado!\n\nAs ${N} fotos foram distribuídas esteticamente:\n- Cada dia tem postagem obrigatória.\n- Foram colocados múltiplos posts por dia nos primeiros dias para organizar o excedente de fotos.\n- Data inicial do calendário definida para: ${startDate}.`);
-  };
-
-  // Upload a batch of files specifically to be instantly scheduled across 30 days!
+  // Upload a batch of files and distribute across 30 days using current rules
   const handleBatchScheduleUpload = async (files: FileList) => {
     let imagesProcessed: { image: string, label: string }[] = [];
     
@@ -913,14 +880,13 @@ export default function App() {
     }
 
     if (imagesProcessed.length > 0) {
-      const scheduleItems = imagesProcessed.map((img) => ({
+      const scheduleItems: ScheduleItem[] = imagesProcessed.map((img) => ({
         image: img.image,
         label: img.label,
-        id: "sched_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9),
+        matchedCatalogId: null,
       }));
 
-      // Agenda nos roteiros sem poluir o guarda-roupa de referências
-      await handleAutoDistribute(scheduleItems);
+      await applySmartDistribution(scheduleItems);
     } else {
       toast.warning("Nenhuma imagem válida encontrada no lote selecionado.");
     }
@@ -1329,42 +1295,20 @@ export default function App() {
 
   // Plan 30 Days based on Canva layouts sequence
   const handlePlanFromCanva = (scope: "active" | "all", reverseOrder: boolean = true) => {
-    let allSlots: CanvaGridSlot[] = [];
-    if (scope === "active") {
-      const activePage = canvaPages.find(p => p.id === activeCanvaPageId);
-      if (activePage && activePage.slots) {
-        allSlots = [...activePage.slots];
-      }
-    } else {
-      // Gather from all pages in order (Página 1, Página 2, etc.)
-      canvaPages.forEach(page => {
-        if (page && page.slots) {
-          allSlots.push(...page.slots);
-        }
-      });
-    }
+    const pages =
+      scope === "active"
+        ? canvaPages.filter((p) => p.id === activeCanvaPageId)
+        : canvaPages;
 
-    // Filter slots containing image
-    let validSlots = allSlots.filter(s => s && s.image !== null);
-    
-    if (validSlots.length === 0) {
-      toast.warning("A página está sem imagens! Adicione fotos no Canva Grid primeiro para usá-las no agendamento.");
+    const items = canvaSlotsToScheduleItems(pages, reverseOrder);
+    if (items.length === 0) {
+      toast.warning(
+        "Nenhuma foto no Grid Canva para aplicar. Adicione looks nas páginas primeiro."
+      );
       return;
     }
 
-    // Instagram bottom-up order sequence (oldest uploads visual first, so reverse to follow chronological stream)
-    if (reverseOrder) {
-      validSlots = [...validSlots].reverse();
-    }
-
-    const itemsToSchedule = validSlots.map((slot) => ({
-      id: slot?.matchedCatalogId || undefined,
-      image: slot?.image || null,
-      imageAssetId: slot?.imageAssetId ?? null,
-      label: slot?.label || "Visual",
-    }));
-
-    handleAutoDistribute(itemsToSchedule);
+    void applySmartDistribution(items);
   };
 
   // Toggle single post confirmation
@@ -3078,9 +3022,7 @@ export default function App() {
                 startDate={startDate}
                 onStartDateChange={handleStartDateChange}
                 postsCount={posts.length}
-                catalogCount={referenceCatalog.length}
                 onAddDay={handleAddDay}
-                onDistributeCatalog={() => handleAutoDistribute(referenceCatalog)}
                 onBatchUpload={(files) => handleBatchScheduleUpload(files)}
                 isReadOnly={isReadOnly}
                 autoSync={autoSyncCanva}
@@ -3098,6 +3040,9 @@ export default function App() {
                 onSyncNow={() => syncCanvaGridToTimeline(canvaPages, true)}
                 canvaImageCount={canvaImageCount}
                 onOpenCanvaGrid={() => void handleNavigate("canva_grid")}
+                distributionPrefs={distributionPrefs}
+                onDistributionPrefsChange={updateDistributionPrefs}
+                onDistributeFromGrid={handleDistributeFromGrid}
               />
             )}
 

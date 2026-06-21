@@ -1,6 +1,7 @@
 import { ArrowLeftRight, Check, Upload, X } from "lucide-react";
 import type { CatalogItem, PlannedPost } from "../../types";
 import { getPostStatus } from "../../lib/postStatus";
+import { getPostDayLabel } from "../../lib/postDisplay";
 import { cn } from "../../lib/cn";
 import { Button } from "../ui/Button";
 
@@ -103,7 +104,7 @@ export function TimelineStrip({
                         isActive ? "text-ag-accent" : "text-ag-text"
                       )}
                     >
-                      Dia {post.dayNumber}
+                      {getPostDayLabel(post, posts)}
                     </span>
                     <span className="text-[9px] text-ag-muted block">{post.dateLabel}</span>
                   </div>

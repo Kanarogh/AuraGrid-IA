@@ -1,9 +1,22 @@
 import { POST_COUNT } from "./planningConstants";
 import { recalculatePostDates } from "./dates";
 import { stablePlannedPostId } from "./postIds";
+import {
+  computePostsPerDay,
+  resolveDistributionOptions,
+  type DistributionPrefs,
+} from "./smartDistribution";
 import type { CanvaGridPage, CanvaGridSlot, PlannedPost } from "../types";
 
 export type CanvaSlotWithPage = CanvaGridSlot & { pageId: string };
+
+export type ScheduleItem = {
+  image: string | null;
+  imageAssetId?: string | null;
+  matchedCatalogId?: string | null;
+  label?: string;
+  canvaSlotRef?: { pageId: string; slotId: string } | null;
+};
 
 export function gatherCanvaSlots(pages: CanvaGridPage[]): CanvaSlotWithPage[] {
   const all: CanvaSlotWithPage[] = [];
@@ -21,9 +34,24 @@ export function countCanvaImages(pages: CanvaGridPage[]): number {
   return gatherCanvaSlots(pages).filter((s) => s?.image != null).length;
 }
 
+export function canvaSlotsToScheduleItems(
+  pages: CanvaGridPage[],
+  reversed: boolean
+): ScheduleItem[] {
+  let ordered = gatherCanvaSlots(pages).filter((s) => s?.image != null);
+  if (reversed) ordered = [...ordered].reverse();
+  return ordered.map((slot) => ({
+    image: slot.image,
+    imageAssetId: slot.imageAssetId ?? null,
+    matchedCatalogId: slot.matchedCatalogId ?? null,
+    label: slot.label,
+    canvaSlotRef: { pageId: slot.pageId, slotId: slot.id },
+  }));
+}
+
 function shouldPreserveSyncedPost(
   existing: PlannedPost | undefined,
-  item: CanvaSlotWithPage
+  item: ScheduleItem
 ): boolean {
   if (!existing) return false;
 
@@ -33,74 +61,38 @@ function shouldPreserveSyncedPost(
     existing.isConfirmed ||
     !!existing.reasoning?.trim();
 
-  // Mesmo dia/slot no calendário: mantém legenda aprovada ou gerada (foto pode mudar)
   if (hasEditorial) return true;
 
   if (existing.image && existing.image === item.image) return true;
-  if (existing.canvaSlotRef?.slotId === item.id) return true;
   if (
-    existing.canvaSlotRef?.pageId === item.pageId &&
-    existing.canvaSlotRef?.slotId === item.id
+    item.canvaSlotRef &&
+    existing.canvaSlotRef?.pageId === item.canvaSlotRef.pageId &&
+    existing.canvaSlotRef?.slotId === item.canvaSlotRef.slotId
   ) {
     return true;
   }
   return false;
 }
 
-/** Distribui looks do Canva Grid no roteiro de 30 dias, preservando legendas existentes. */
-export function syncCanvaPagesToPosts(
-  pages: CanvaGridPage[],
+export function buildPostsFromSchedule(
+  items: ScheduleItem[],
+  postsPerDay: number[],
   existingPosts: PlannedPost[],
-  startDate: string,
-  options: { reversed: boolean }
+  startDate: string
 ): PlannedPost[] {
-  const validSlots = gatherCanvaSlots(pages).filter((s) => s?.image != null);
-  if (validSlots.length === 0) return existingPosts;
-
-  let orderedSlots = [...validSlots];
-  if (options.reversed) {
-    orderedSlots.reverse();
-  }
-
-  const N = orderedSlots.length;
-  const postsPerDay = Array(POST_COUNT).fill(0);
-
-  if (N >= POST_COUNT) {
-    for (let i = 0; i < POST_COUNT; i++) postsPerDay[i] = 1;
-    let remaining = N - POST_COUNT;
-    let d = 0;
-    while (remaining > 0 && d < POST_COUNT) {
-      const currentSpace = 3 - postsPerDay[d];
-      if (currentSpace > 0) {
-        const add = Math.min(currentSpace, remaining);
-        postsPerDay[d] += add;
-        remaining -= add;
-      }
-      d++;
-    }
-    let cycle = 0;
-    while (remaining > 0) {
-      postsPerDay[cycle % POST_COUNT] += 1;
-      remaining--;
-      cycle++;
-    }
-  } else {
-    for (let i = 0; i < N; i++) postsPerDay[i] = 1;
-    for (let i = N; i < POST_COUNT; i++) postsPerDay[i] = 0;
-  }
-
-  const existing = [...(existingPosts || [])];
-  const existingById = new Map(existing.map((p) => [p.id, p]));
+  const validItems = items.filter((i) => i.image != null);
+  const existingById = new Map(existingPosts.map((p) => [p.id, p]));
   const resultPosts: PlannedPost[] = [];
   let itemIndex = 0;
+  const totalDays = postsPerDay.length;
 
-  for (let dIndex = 0; dIndex < POST_COUNT; dIndex++) {
+  for (let dIndex = 0; dIndex < totalDays; dIndex++) {
     const dayNum = dIndex + 1;
     const countForDay = postsPerDay[dIndex];
 
     if (countForDay === 0) {
       const postId = stablePlannedPostId(dayNum, 0);
-      const existingAtSlot = existingById.get(postId) ?? existing[resultPosts.length];
+      const existingAtSlot = existingById.get(postId) ?? existingPosts[resultPosts.length];
 
       if (existingAtSlot && existingAtSlot.image === null) {
         resultPosts.push({
@@ -117,6 +109,7 @@ export function syncCanvaPagesToPosts(
           image: null,
           imageAssetId: null,
           matchedCatalogId: null,
+          canvaSlotRef: null,
           reasoning: null,
           caption: "",
           isGenerating: false,
@@ -127,11 +120,11 @@ export function syncCanvaPagesToPosts(
       }
     } else {
       for (let pIndex = 0; pIndex < countForDay; pIndex++) {
-        const item = orderedSlots[itemIndex];
+        const item = validItems[itemIndex];
         itemIndex++;
 
         const postId = stablePlannedPostId(dayNum, pIndex);
-        const existingAtSlot = existingById.get(postId) ?? existing[resultPosts.length];
+        const existingAtSlot = existingById.get(postId) ?? existingPosts[resultPosts.length];
 
         if (item && shouldPreserveSyncedPost(existingAtSlot, item)) {
           resultPosts.push({
@@ -141,7 +134,7 @@ export function syncCanvaPagesToPosts(
             imageAssetId: item.imageAssetId ?? existingAtSlot!.imageAssetId ?? null,
             matchedCatalogId:
               existingAtSlot!.matchedCatalogId ?? item.matchedCatalogId ?? null,
-            canvaSlotRef: { pageId: item.pageId, slotId: item.id },
+            canvaSlotRef: item.canvaSlotRef ?? existingAtSlot!.canvaSlotRef ?? null,
             dayNumber: dayNum,
             dateLabel: "",
           });
@@ -153,15 +146,15 @@ export function syncCanvaPagesToPosts(
             image: item?.image ?? null,
             imageAssetId: item?.imageAssetId ?? null,
             matchedCatalogId: item?.matchedCatalogId ?? null,
-            canvaSlotRef: item ? { pageId: item.pageId, slotId: item.id } : null,
+            canvaSlotRef: item?.canvaSlotRef ?? null,
             reasoning:
-              item?.matchedCatalogId
-                ? "Vínculo automático via distribuidor inteligente de acervo."
+              item?.matchedCatalogId || item?.canvaSlotRef
+                ? "Vínculo automático via distribuidor inteligente do Grid Canva."
                 : null,
-            caption: "",
+            caption: existingAtSlot?.caption ?? "",
             isGenerating: false,
-            isGenerated: false,
-            isConfirmed: false,
+            isGenerated: existingAtSlot?.isGenerated ?? false,
+            isConfirmed: existingAtSlot?.isConfirmed ?? false,
             error: null,
           });
         }
@@ -170,4 +163,33 @@ export function syncCanvaPagesToPosts(
   }
 
   return recalculatePostDates(startDate, resultPosts);
+}
+
+/** Distribui looks do Canva Grid no roteiro de 30 dias, preservando legendas existentes. */
+export function syncCanvaPagesToPosts(
+  pages: CanvaGridPage[],
+  existingPosts: PlannedPost[],
+  startDate: string,
+  options: { reversed: boolean; distribution: DistributionPrefs }
+): PlannedPost[] {
+  const items = canvaSlotsToScheduleItems(pages, options.reversed);
+  if (items.length === 0) return existingPosts;
+
+  const resolved = resolveDistributionOptions(items.length, options.distribution, POST_COUNT);
+  const postsPerDay = computePostsPerDay(items.length, resolved);
+  return buildPostsFromSchedule(items, postsPerDay, existingPosts, startDate);
+}
+
+export function scheduleItemsToPosts(
+  items: ScheduleItem[],
+  existingPosts: PlannedPost[],
+  startDate: string,
+  distribution: DistributionPrefs
+): PlannedPost[] {
+  const validCount = items.filter((i) => i.image != null).length;
+  if (validCount === 0) return existingPosts;
+
+  const resolved = resolveDistributionOptions(validCount, distribution, POST_COUNT);
+  const postsPerDay = computePostsPerDay(validCount, resolved);
+  return buildPostsFromSchedule(items, postsPerDay, existingPosts, startDate);
 }

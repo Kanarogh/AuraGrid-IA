@@ -3,6 +3,7 @@ import type { CanvaGridFormatId } from "../canvaGridFormats";
 import type { BrandGem, CanvaGridPage, CatalogItem, PlannedPost } from "../../types";
 import type { PlanningPeriod } from "../planningConstants";
 import type { PeriodSnapshot } from "./planningPeriodLocal";
+import type { DistributionPrefs } from "../smartDistribution";
 
 export const REGISTRY_KEY = "auragrid_client_registry";
 export const WORKSPACE_KEY_PREFIX = "auragrid_ws:";
@@ -48,6 +49,7 @@ export type ClientWorkspace = {
     viewMode?: "split" | "editorial";
     /** ISO — último salvamento explícito do Gem deste cliente */
     brandGemSavedAt?: string;
+    distributionPrefs?: DistributionPrefs;
   };
 };
 
