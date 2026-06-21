@@ -79,3 +79,5 @@ Health: `GET /api/health` inclui status de DB e MinIO.
 ## Roteamento e navegação
 
 Arquitetura SPA-in-Next, bootstrap unificado e regras anti-regressão: **[docs/routing.md](docs/routing.md)**.
+
+Com clientes cadastrados, a home do app é **`/dashboard`** (KPIs, pipeline de produção, atalhos e troca de marca).

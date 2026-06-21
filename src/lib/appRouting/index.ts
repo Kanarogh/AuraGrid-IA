@@ -24,6 +24,7 @@ export {
 
 export {
   buildClientPath,
+  buildDashboardPath,
   buildHomeRedirectPath,
   buildLoginPath,
   mergeClientRoute,

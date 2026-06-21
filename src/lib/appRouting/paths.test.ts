@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   buildClientPath,
+  buildDashboardPath,
   buildHomeRedirectPath,
   buildLoginPath,
   mergeClientRoute,
@@ -22,10 +23,11 @@ function test(name: string, fn: () => void) {
 
 console.log("appRouting/paths");
 
-test("parse home/login/welcome", () => {
+test("parse home/login/welcome/dashboard", () => {
   assert.deepEqual(parseAppPath("/"), { kind: "home" });
   assert.deepEqual(parseAppPath("/login"), { kind: "login" });
   assert.deepEqual(parseAppPath("/welcome"), { kind: "welcome" });
+  assert.deepEqual(parseAppPath("/dashboard"), { kind: "dashboard" });
 });
 
 test("posts round-trip", () => {
@@ -120,6 +122,10 @@ test("posts tab change clears postId", () => {
   };
   const next = mergeClientRoute(base, { postsTab: "calendar", postId: undefined });
   assert.equal(buildClientPath(next), "/c/palak-br/roteiros/calendario");
+});
+
+test("buildDashboardPath", () => {
+  assert.equal(buildDashboardPath(), "/dashboard");
 });
 
 console.log("All appRouting tests passed.");

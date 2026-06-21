@@ -77,7 +77,10 @@ function captionQueueLabel(postId: string, dayNumber: number): string {
 import { useTheme } from "./hooks/useTheme";
 import { useAppRouteSync, type AppRouteSyncHandlers } from "./hooks/useAppRouteSync";
 import type { SettingsTab } from "./lib/appRouting";
-import { useAppNavigation } from "./lib/appRouting";
+import { useAppNavigation, buildDashboardPath } from "./lib/appRouting";
+import { useRouter } from "next/navigation";
+import { DashboardView } from "./components/dashboard/DashboardView";
+import { useDashboardMetrics } from "./hooks/useDashboardMetrics";
 import { useAuth } from "./context/AuthContext";
 import { aiFetch } from "./lib/aiFetch";
 import {
@@ -220,6 +223,7 @@ export default function App() {
     useApiStorage,
     persistWorkspaceNow,
     getPostsSnapshot,
+    workspaceHydrated,
     activePlanningPeriodId,
     planningPeriods,
     isReadOnly,
@@ -324,6 +328,20 @@ export default function App() {
     () => getCaptionBatchStats(posts, catalog),
     [posts, catalog]
   );
+
+  const dashboardMetrics = useDashboardMetrics({
+    posts,
+    catalog,
+    canvaPages,
+    referenceCount: referenceCatalog.length,
+    brandGemReady,
+    brandGemMissingCount,
+  });
+
+  const router = useRouter();
+  const goToDashboard = useCallback(() => {
+    router.push(buildDashboardPath());
+  }, [router]);
 
   const [activePreviewId, setActivePreviewId] = useState<string>(
     () => workspace.ui?.activePreviewId ?? "post_day1"
@@ -2882,6 +2900,7 @@ export default function App() {
   );
 
   const { parsedLocation, clientRoute } = useAppNavigation();
+  const isDashboardActive = parsedLocation.kind === "dashboard";
   const onClientRoute = parsedLocation.kind === "client";
   const routeSection = clientRoute?.section ?? activeSection;
   const routePostsTab = clientRoute?.postsTab ?? postsWorkTab;
@@ -2919,7 +2938,9 @@ export default function App() {
     <>
       <AppShell
         activeSection={routeSection}
+        isDashboardActive={isDashboardActive}
         onNavigate={handleNavigate}
+        onNavigateDashboard={goToDashboard}
         clientName={hasActiveClient ? activeClient.name : "—"}
         catalogCount={referenceCatalog.length}
         brandGemReady={hasActiveClient ? brandGemReady : undefined}
@@ -2971,6 +2992,40 @@ export default function App() {
               </li>
             </ol>
           </div>
+        )}
+
+        {hasActiveClient && isDashboardActive && (
+          <DashboardView
+            userName={authUser?.displayName ?? authUser?.email}
+            activeClient={activeClient}
+            clients={clients}
+            activeClientId={activeClientId}
+            activePeriodLabel={activePeriodLabel}
+            isReadOnly={isReadOnly}
+            metrics={dashboardMetrics}
+            isLoading={useApiStorage && !workspaceHydrated}
+            onContinueRoteiro={() =>
+              void navigateClient({
+                clientId: effectiveActiveClientId,
+                section: "posts",
+                postsTab: "day",
+              })
+            }
+            onNavigateSection={(section) =>
+              void navigateClient({ clientId: effectiveActiveClientId, section })
+            }
+            onSelectClient={(clientId) => {
+              if (clientId !== activeClientId) switchClient(clientId);
+            }}
+            onConfigureGem={() =>
+              void navigateClient({
+                clientId: effectiveActiveClientId,
+                section: "settings",
+                settingsTab: "brand",
+              })
+            }
+            onClientCreated={(clientId) => void navigateToClientSettings(clientId)}
+          />
         )}
 
         {hasActiveClient && parsedLocation.kind === "welcome" && (

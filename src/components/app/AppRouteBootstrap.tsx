@@ -6,8 +6,8 @@ import { useAuth } from "../../context/AuthContext";
 import { useClientWorkspace } from "../../context/ClientWorkspaceContext";
 import {
   buildClientPath,
+  buildDashboardPath,
   buildLoginPath,
-  resolveHomePath,
   useAppNavigation,
 } from "../../lib/appRouting";
 import { isStorageModeResolved } from "../../lib/storageMode";
@@ -28,6 +28,7 @@ export function AppRouteBootstrap() {
   const lastRedirectRef = useRef<string | null>(null);
 
   const clientIds = clients.map((c) => c.id);
+  const dashboardPath = buildDashboardPath();
 
   useEffect(() => {
     if (loading || !isStorageModeResolved(storageMode)) return;
@@ -46,7 +47,11 @@ export function AppRouteBootstrap() {
     }
 
     if (storageMode === "postgresql" && !user) {
-      if (pathname.startsWith("/c/") || pathname === "/welcome") {
+      if (
+        pathname.startsWith("/c/") ||
+        pathname === "/welcome" ||
+        pathname === dashboardPath
+      ) {
         redirect(buildLoginPath(pathname));
       } else if (pathname === "/") {
         redirect(buildLoginPath("/"));
@@ -57,26 +62,28 @@ export function AppRouteBootstrap() {
     lastRedirectRef.current = null;
 
     if (parsedLocation.kind === "home") {
-      if (!hasActiveClient) {
-        redirect("/welcome");
-        return;
-      }
-      redirect(resolveHomePath(clientIds, effectiveActiveClientId));
+      redirect(hasActiveClient ? dashboardPath : "/welcome");
       return;
     }
 
     if (parsedLocation.kind === "welcome") {
+      if (hasActiveClient) {
+        redirect(dashboardPath);
+      }
+      return;
+    }
+
+    if (parsedLocation.kind === "dashboard") {
+      if (!hasActiveClient) {
+        redirect("/welcome");
+      }
       return;
     }
 
     if (parsedLocation.kind === "login") return;
 
     if (parsedLocation.kind === "unknown") {
-      if (hasActiveClient && effectiveActiveClientId) {
-        redirect(resolveHomePath(clientIds, effectiveActiveClientId));
-      } else {
-        redirect("/welcome");
-      }
+      redirect(hasActiveClient ? dashboardPath : "/welcome");
       return;
     }
 
@@ -106,6 +113,7 @@ export function AppRouteBootstrap() {
     workspaceHydrated,
     useApiStorage,
     isNavigationInFlight,
+    dashboardPath,
   ]);
 
   return null;

@@ -22,6 +22,7 @@ export type ParsedLocation =
   | { kind: "home" }
   | { kind: "login" }
   | { kind: "welcome" }
+  | { kind: "dashboard" }
   | { kind: "client"; route: ClientRoute }
   | { kind: "unknown"; pathname: string };
 

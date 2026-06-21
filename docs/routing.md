@@ -10,6 +10,7 @@ app/
 ├── (workspace)/layout.tsx     # AppShell persistente (dynamic ssr:false)
 ├── (workspace)/page.tsx       # GET /  → null
 ├── (workspace)/welcome/       # GET /welcome
+├── (workspace)/dashboard/     # GET /dashboard
 ├── (workspace)/c/[clientId]/  # GET /c/:id/...
 ├── login/page.tsx             # Fora do workspace (AuthProvider separado)
 └── not-found.tsx              # Redirect → /welcome
@@ -22,8 +23,18 @@ Providers e `src/App.tsx` vivem em [`app/AppShell.tsx`](../app/AppShell.tsx). Pa
 1. `(workspace)/layout` carrega `AppShell` (`ssr: false`)
 2. `AuthProvider` resolve `storageMode` via `/api/health` (`pending` → `local`|`postgresql`)
 3. `AppBootstrapGate` bloqueia UI até auth + workspace hidratado (cloud)
-4. `AppRouteBootstrap` faz redirects globais (`/` → home, auth, clientId inválido)
+4. `AppRouteBootstrap` faz redirects globais (`/` → `/dashboard` ou `/welcome`, auth, clientId inválido)
 5. `useAppRouteSync` sincroniza URL ↔ estado React
+
+## Home e dashboard
+
+| Rota | Quem vê |
+|------|---------|
+| `/` | Redirect-only |
+| `/welcome` | Onboarding sem clientes |
+| `/dashboard` | Home com KPIs, pipeline, atalhos e lista de clientes |
+
+UI em [`DashboardView.tsx`](../src/components/dashboard/DashboardView.tsx). Sidebar: item **Dashboard** (Início).
 
 ## Regras (não quebrar)
 

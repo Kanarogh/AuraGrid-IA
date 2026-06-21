@@ -65,6 +65,10 @@ export function buildClientPath(route: ClientRoute): string {
   return pathname;
 }
 
+export function buildDashboardPath(): string {
+  return "/dashboard";
+}
+
 export function buildLoginPath(returnTo?: string): string {
   if (!returnTo || returnTo === "/login") return "/login";
   return `/login?returnTo=${encodeURIComponent(returnTo)}`;
@@ -173,6 +177,7 @@ export function parseAppPath(
   if (normalized === "/") return { kind: "home" };
   if (normalized === "/login") return { kind: "login" };
   if (normalized === "/welcome") return { kind: "welcome" };
+  if (normalized === "/dashboard") return { kind: "dashboard" };
 
   const clientMatch = normalized.match(/^\/c\/([^/]+)(?:\/(.*))?$/);
   if (!clientMatch) return { kind: "unknown", pathname: normalized };

@@ -11,7 +11,9 @@ import { AppTopBar } from "./AppTopBar";
 
 export function AppShell({
   activeSection,
+  isDashboardActive,
   onNavigate,
+  onNavigateDashboard,
   catalogCount,
   brandGemReady,
   brandGemMissingCount,
@@ -26,7 +28,9 @@ export function AppShell({
 }: {
   clientName: string;
   activeSection: AppSection;
+  isDashboardActive?: boolean;
   onNavigate: (section: AppSection) => void;
+  onNavigateDashboard?: () => void;
   catalogCount: number;
   brandGemReady?: boolean;
   brandGemMissingCount?: number;
@@ -68,7 +72,9 @@ export function AppShell({
 
       <AppSidebar
         active={activeSection}
+        isDashboardActive={isDashboardActive}
         onNavigate={onNavigate}
+        onNavigateDashboard={onNavigateDashboard}
         catalogCount={catalogCount}
         brandGemReady={brandGemReady}
         brandGemMissingCount={brandGemMissingCount}
@@ -84,6 +90,7 @@ export function AppShell({
       <div className="flex-1 flex flex-col min-w-0">
         <AppTopBar
           activeSection={activeSection}
+          isDashboardActive={isDashboardActive}
           clientName={clientName}
           onOpenMenu={() => setMobileNavOpen(true)}
           isDark={isDark}

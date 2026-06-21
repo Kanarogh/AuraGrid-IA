@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   LogOut,
+  LayoutDashboard,
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
@@ -42,7 +43,9 @@ export function saveSidebarCollapsed(collapsed: boolean) {
 
 export function AppSidebar({
   active,
+  isDashboardActive,
   onNavigate,
+  onNavigateDashboard,
   catalogCount,
   brandGemReady,
   brandGemMissingCount = 0,
@@ -55,7 +58,9 @@ export function AppSidebar({
   hasActiveClient,
 }: {
   active: AppSection;
+  isDashboardActive?: boolean;
   onNavigate: (id: AppSection) => void;
+  onNavigateDashboard?: () => void;
   catalogCount: number;
   brandGemReady?: boolean;
   brandGemMissingCount?: number;
@@ -186,6 +191,36 @@ export function AppSidebar({
         className="flex-1 overflow-y-auto py-3 sm:py-4 px-2 ag-scrollbar-thin space-y-4 sm:space-y-5 overscroll-contain"
         aria-label="Navegação principal"
       >
+        <div>
+          {!isCollapsed && (
+            <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-widest text-ag-muted">
+              Início
+            </p>
+          )}
+          <ul className="space-y-0.5">
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  onNavigateDashboard?.();
+                  onMobileClose();
+                }}
+                className={cn(
+                  "w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors cursor-pointer ag-focus-ring",
+                  isDashboardActive
+                    ? "bg-ag-accent text-ag-accent-fg shadow-sm"
+                    : "text-ag-text hover:bg-ag-surface-3",
+                  isCollapsed && "justify-center px-2"
+                )}
+                title={isCollapsed ? "Início" : undefined}
+              >
+                <LayoutDashboard className="h-[18px] w-[18px] shrink-0" />
+                {!isCollapsed && <span className="truncate">Dashboard</span>}
+              </button>
+            </li>
+          </ul>
+        </div>
+
         {groups.map((group) => (
           <div key={group.title}>
             {!isCollapsed && (
@@ -196,7 +231,7 @@ export function AppSidebar({
             <ul className="space-y-0.5">
               {group.items.map((item) => {
                 const Icon = item.icon;
-                const isActive = active === item.id;
+                const isActive = !isDashboardActive && active === item.id;
                 const badge = "badge" in item ? (item as { badge?: number }).badge : undefined;
                 const disabled = !hasActiveClient;
                 return (

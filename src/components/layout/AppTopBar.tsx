@@ -8,6 +8,7 @@ import { AiUsagePanel } from "../shared/AiUsagePanel";
 
 export function AppTopBar({
   activeSection,
+  isDashboardActive,
   clientName,
   onOpenMenu,
   isDark,
@@ -16,6 +17,7 @@ export function AppTopBar({
   menuButtonRef,
 }: {
   activeSection: AppSection;
+  isDashboardActive?: boolean;
   clientName: string;
   onOpenMenu: () => void;
   isDark: boolean;
@@ -23,8 +25,10 @@ export function AppTopBar({
   onOpenSettings?: () => void;
   menuButtonRef?: React.RefObject<HTMLButtonElement | null>;
 }) {
-  const sectionTitle = getSectionTitle(activeSection);
-  const subtitle = getSectionSubtitle(activeSection);
+  const sectionTitle = isDashboardActive ? "Dashboard" : getSectionTitle(activeSection);
+  const subtitle = isDashboardActive
+    ? `Visão geral de ${clientName}`
+    : getSectionSubtitle(activeSection);
 
   return (
     <header className="sticky top-0 z-20 border-b border-ag-border ag-glass shrink-0 min-h-[var(--ag-topbar-height)]">
