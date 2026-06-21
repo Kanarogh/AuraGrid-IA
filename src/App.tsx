@@ -394,6 +394,9 @@ export default function App() {
   const [postsWorkTab, setPostsWorkTab] = useState<PostsWorkTab>(() =>
     workspace.ui?.viewMode === "editorial" ? "calendar" : "day"
   );
+  const [swapSourceId, setSwapSourceId] = useState<string>("");
+  const [timelineReorderMode, setTimelineReorderMode] = useState(false);
+  const [settingsDraftDirty, setSettingsDraftDirty] = useState(false);
 
   const handlePostsWorkTabChange = useCallback((tab: PostsWorkTab) => {
     setPostsWorkTab(tab);
@@ -427,9 +430,6 @@ export default function App() {
     setSwapSourceId("");
   }, []);
 
-  const [swapSourceId, setSwapSourceId] = useState<string>("");
-  const [timelineReorderMode, setTimelineReorderMode] = useState(false);
-  const [settingsDraftDirty, setSettingsDraftDirty] = useState(false);
   const [refineInstructions, setRefineInstructions] = useState<{ [postId: string]: string }>({});
   const [isRefining, setIsRefining] = useState<{ [postId: string]: boolean }>({});
   const [isExportingPdf, setIsExportingPdf] = useState(false);
