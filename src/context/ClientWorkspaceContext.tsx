@@ -125,7 +125,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
   const [workspace, setWorkspace] = useState<ClientWorkspace>(() =>
     initialWorkspace(ensureClientRegistry())
   );
-  const [workspaceHydrated, setWorkspaceHydrated] = useState(() => storageMode !== "postgresql");
+  const [workspaceHydrated, setWorkspaceHydrated] = useState(false);
 
   useEffect(() => {
     if (!useApiStorage) {

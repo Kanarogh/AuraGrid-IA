@@ -102,6 +102,10 @@ export function useAppRouteSync({
   const applyingFromUrlRef = useRef(false);
   const routeInitializedRef = useRef(false);
 
+  useEffect(() => {
+    routeInitializedRef.current = false;
+  }, [pathname]);
+
   const currentRouteFromState = useCallback(
     () =>
       stateToClientRoute({
