@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
 import type { AppSection } from "../../lib/sectionMeta";
 import {
   AppSidebar,
@@ -9,7 +8,6 @@ import {
   saveSidebarCollapsed,
 } from "./AppSidebar";
 import { AppTopBar } from "./AppTopBar";
-import { SectionTransition } from "../ui/Motion";
 
 export function AppShell({
   activeSection,
@@ -44,11 +42,6 @@ export function AppShell({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const mainRef = useRef<HTMLElement>(null);
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const contentTransitionKey = searchParams.toString()
-    ? `${pathname}?${searchParams.toString()}`
-    : pathname;
 
   useEffect(() => {
     setSidebarCollapsed(loadSidebarCollapsed());
@@ -105,12 +98,9 @@ export function AppShell({
           className="flex-1 overflow-auto ag-page-mesh"
           tabIndex={-1}
         >
-          <SectionTransition
-            transitionKey={contentTransitionKey}
-            className="w-full max-w-[100rem] mx-auto px-4 sm:px-5 lg:px-6 py-6 ag-workspace-section"
-          >
+          <div className="w-full max-w-[100rem] mx-auto px-4 sm:px-5 lg:px-6 py-6 ag-workspace-section">
             {children}
-          </SectionTransition>
+          </div>
           {footer}
         </main>
       </div>

@@ -2882,8 +2882,14 @@ export default function App() {
     ]
   );
 
+  const { parsedLocation, clientRoute } = useAppNavigation();
+  const onClientRoute = parsedLocation.kind === "client";
+  const routeSection = clientRoute?.section ?? activeSection;
+  const routePostsTab = clientRoute?.postsTab ?? postsWorkTab;
+  const routePreviewId = clientRoute?.postId ?? activePreviewId;
+
   const activePost =
-    posts.find((p) => p?.id === activePreviewId) ?? posts.find((p) => !!p?.id) ?? null;
+    posts.find((p) => p?.id === routePreviewId) ?? posts.find((p) => !!p?.id) ?? null;
 
   const orderedEditorialPosts = useMemo(
     () =>
@@ -2894,9 +2900,9 @@ export default function App() {
   );
 
   const activeEditorialIndex = useMemo(() => {
-    const idx = orderedEditorialPosts.findIndex((p) => p.id === activePreviewId);
+    const idx = orderedEditorialPosts.findIndex((p) => p.id === routePreviewId);
     return idx >= 0 ? idx : 0;
-  }, [orderedEditorialPosts, activePreviewId]);
+  }, [orderedEditorialPosts, routePreviewId]);
 
   const navigateEditorialPost = useCallback(
     (delta: -1 | 1) => {
@@ -2907,9 +2913,6 @@ export default function App() {
     },
     [activeEditorialIndex, orderedEditorialPosts, selectPreviewPost]
   );
-
-  const { parsedLocation } = useAppNavigation();
-  const onClientRoute = parsedLocation.kind === "client";
 
   if (useApiStorage && !workspaceHydrated) {
     return (
@@ -2923,7 +2926,7 @@ export default function App() {
   return (
     <>
       <AppShell
-        activeSection={activeSection}
+        activeSection={routeSection}
         onNavigate={handleNavigate}
         clientName={hasActiveClient ? activeClient.name : "—"}
         catalogCount={referenceCatalog.length}
@@ -3002,7 +3005,7 @@ export default function App() {
           </div>
         )}
 
-        {hasActiveClient && onClientRoute && activeSection === "settings" && (
+        {hasActiveClient && onClientRoute && routeSection === "settings" && (
           <ConfigPanel
             variant="page"
             clientName={activeClient.name}
@@ -3015,7 +3018,7 @@ export default function App() {
           />
         )}
 
-        {hasActiveClient && onClientRoute && activeSection === "posts" && (
+        {hasActiveClient && onClientRoute && routeSection === "posts" && (
           <div className="ag-workspace-section">
             <PostsWorkflowBar stats={captionBatchStats} />
 
@@ -3037,7 +3040,7 @@ export default function App() {
               }}
               toolbar={
                 <PostsWorkspaceToolbar
-                  activeTab={postsWorkTab}
+                  activeTab={routePostsTab}
                   onTabChange={handlePostsWorkTabChange}
                   onExportTxt={handleExportTxt}
                   onExportPdf={handleExportPdf}
@@ -3056,7 +3059,7 @@ export default function App() {
               />
             )}
 
-            {postsWorkTab === "setup" && (
+            {routePostsTab === "setup" && (
               <PopularCalendarioPanel
                 startDate={startDate}
                 onStartDateChange={handleStartDateChange}
@@ -3103,7 +3106,7 @@ export default function App() {
               </div>
             )}
 
-            {postsWorkTab === "calendar" && (
+            {routePostsTab === "calendar" && (
               <TimelineStrip
                 posts={posts}
                 catalog={referenceCatalog}
@@ -3128,7 +3131,7 @@ export default function App() {
               />
             )}
 
-            {postsWorkTab === "day" && posts.length > 0 && (
+            {routePostsTab === "day" && posts.length > 0 && (
               <TimelineStrip
                 posts={posts}
                 catalog={referenceCatalog}
@@ -3153,7 +3156,7 @@ export default function App() {
               />
             )}
 
-            {postsWorkTab === "day" && activePost ? (
+            {routePostsTab === "day" && activePost ? (
               <PostDayStudio
                 cardRef={(el) => {
                   dayCardRefs.current[activePost.id] = el;
@@ -3198,11 +3201,11 @@ export default function App() {
                 }
                 onRefine={(instruction) => void handleRefineCaption(activePost.id, instruction)}
               />
-            ) : postsWorkTab === "day" ? (
+            ) : routePostsTab === "day" ? (
               <div className="ag-card p-8 text-center text-sm text-ag-muted">
                 Nenhum post no roteiro. Use a aba <strong>Setup</strong> para popular o calendário.
               </div>
-            ) : postsWorkTab === "calendar" ? (
+            ) : routePostsTab === "calendar" ? (
               <EditorialGridView
                 posts={posts}
                 referenceCatalog={referenceCatalog}
@@ -3241,7 +3244,7 @@ export default function App() {
           </div>
         )}
 
-        {hasActiveClient && onClientRoute && activeSection === "canva_grid" && activeCanvaPage && (
+        {hasActiveClient && onClientRoute && routeSection === "canva_grid" && activeCanvaPage && (
           <StudioSection
             titleMode="hidden"
             actions={
@@ -3393,7 +3396,7 @@ export default function App() {
         )}
 
         {/* WORKSPACE VIEW 2: FEED GRID HARMONY SIMULATOR (Instagram 3x3) */}
-        {hasActiveClient && onClientRoute && activeSection === "feed_simulator" && (
+        {hasActiveClient && onClientRoute && routeSection === "feed_simulator" && (
           <FeedInstagramPreview
             posts={posts}
             profileDisplayName={brandGem.name}
@@ -3411,7 +3414,7 @@ export default function App() {
           />
         )}
 
-        {hasActiveClient && onClientRoute && activeSection === "reference_finder" && (
+        {hasActiveClient && onClientRoute && routeSection === "reference_finder" && (
           <ReferenceFinderPanel
             referenceCatalog={referenceCatalog}
             isEnrichingCatalog={isEnrichingCatalog}
@@ -3423,7 +3426,7 @@ export default function App() {
         )}
 
         {/* WORKSPACE VIEW 3: REFERENCE CLOTHES BATCH FILES MANAGER */}
-        {hasActiveClient && onClientRoute && activeSection === "catalog" && (
+        {hasActiveClient && onClientRoute && routeSection === "catalog" && (
           <StudioSection
             titleMode="hidden"
             eyebrow="Acervo"

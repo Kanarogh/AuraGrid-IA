@@ -212,12 +212,18 @@ export function useAppRouteSync({
         activeCanvaPageId
       );
       const nextRoute = enrichRouteBeforePush(built, activeCanvaPageId, ctx);
+      const nextPath = buildClientPath(nextRoute);
+      const currentPath = searchParams.toString()
+        ? `${pathname}?${searchParams.toString()}`
+        : pathname;
+
+      if (nextPath === currentPath) {
+        applyPatch(clientRouteToStatePatch(nextRoute));
+        return true;
+      }
 
       const ok = await pushClientRoute(nextRoute, options);
-      if (!ok) return false;
-
-      applyPatch(clientRouteToStatePatch(nextRoute));
-      return true;
+      return ok;
     },
     [
       effectiveActiveClientId,
@@ -229,6 +235,8 @@ export function useAppRouteSync({
       posts,
       canvaPages,
       activeCanvaPageId,
+      pathname,
+      searchParams,
     ]
   );
 
@@ -261,6 +269,18 @@ export function useAppRouteSync({
     if (pendingNavigationPathRef.current) {
       if (routePath === pendingNavigationPathRef.current) {
         pendingNavigationPathRef.current = null;
+        const ctx = buildValidationContext(
+          registryClientIds,
+          posts,
+          canvaPages,
+          activeCanvaPageId
+        );
+        const validated = validateClientRoute(clientRoute, ctx);
+        const route = validated.route;
+        if (route.clientId !== effectiveActiveClientId) {
+          handlers.switchClient(route.clientId);
+        }
+        applyPatch(clientRouteToStatePatch(route));
       }
       return;
     }
