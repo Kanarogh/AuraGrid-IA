@@ -16,7 +16,7 @@ export function PostsWorkspaceToolbar({
   isExportingPdf?: boolean;
 }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-1">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <SegmentedControl
         value={viewMode}
         onChange={onViewModeChange}

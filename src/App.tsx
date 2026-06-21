@@ -2955,7 +2955,7 @@ export default function App() {
         )}
 
         {hasActiveClient && activeSection === "posts" && (
-          <>
+          <div className="space-y-4">
             <PlanningPeriodSelector
               periods={planningPeriods}
               activePeriodId={activePlanningPeriodId}
@@ -2969,6 +2969,15 @@ export default function App() {
                 setDuplicateSourcePeriodId(sourceId);
                 setShowNewPlanningPeriodModal(true);
               }}
+              toolbar={
+                <PostsWorkspaceToolbar
+                  viewMode={viewMode}
+                  onViewModeChange={setViewMode}
+                  onExportTxt={handleExportTxt}
+                  onExportPdf={handleExportPdf}
+                  isExportingPdf={isExportingPdf}
+                />
+              }
             />
 
             {isReadOnly && (
@@ -2980,14 +2989,6 @@ export default function App() {
                 }}
               />
             )}
-
-            <PostsWorkspaceToolbar
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
-              onExportTxt={handleExportTxt}
-              onExportPdf={handleExportPdf}
-              isExportingPdf={isExportingPdf}
-            />
 
             {viewMode === "editorial" && (
               <>
@@ -3137,7 +3138,7 @@ export default function App() {
                 }}
               />
             )}
-          </>
+          </div>
         )}
 
         {hasActiveClient && activeSection === "canva_grid" && activeCanvaPage && (
