@@ -200,5 +200,11 @@ export function mergeClientRoute(base: ClientRoute, partial: Partial<ClientRoute
     if (partial.section !== "catalog") delete next.catalogTab;
     if (partial.section !== "settings") delete next.settingsTab;
   }
+  if (partial.postsTab && partial.postsTab !== "day") {
+    delete next.postId;
+  }
+  if (partial.postId === undefined && "postId" in partial) {
+    delete next.postId;
+  }
   return { ...next, ...partial };
 }

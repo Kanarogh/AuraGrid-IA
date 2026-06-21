@@ -98,7 +98,6 @@ export function useAppRouteSync({
     navigateSection,
     replaceClientRoute,
     setBeforeNavigate,
-    isApplyingRouteRef,
   } = useAppNavigation();
   const pathname = usePathname();
 
@@ -182,7 +181,6 @@ export function useAppRouteSync({
 
   useEffect(() => {
     if (!enabled || !clientRoute || !hasActiveClient) return;
-    if (isApplyingRouteRef.current) return;
 
     let cancelled = false;
 
@@ -267,7 +265,6 @@ export function useAppRouteSync({
     replaceClientRoute,
     applyPatch,
     handlers,
-    isApplyingRouteRef,
     currentRouteFromState,
     navigateClient,
   ]);
