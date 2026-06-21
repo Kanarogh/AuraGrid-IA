@@ -112,6 +112,11 @@ import {
 import { PostDayStudio } from "./components/posts/PostDayStudio";
 import { EditorialGridView } from "./components/posts/EditorialGridView";
 import { PostsWorkspaceToolbar } from "./components/posts/PostsWorkspaceToolbar";
+import {
+  PlanningPeriodReadOnlyBanner,
+  PlanningPeriodSelector,
+} from "./components/posts/PlanningPeriodSelector";
+import { NewPlanningPeriodModal } from "./components/posts/NewPlanningPeriodModal";
 import { StudioSection } from "./components/ui/StudioSection";
 import { Button } from "./components/ui/Button";
 import { CatalogThumbnail } from "./components/ui/CatalogThumbnail";
@@ -199,6 +204,12 @@ export default function App() {
     persistWorkspaceNow,
     getPostsSnapshot,
     workspaceHydrated,
+    activePlanningPeriodId,
+    planningPeriods,
+    isReadOnly,
+    switchPlanningPeriod,
+    createPlanningPeriod,
+    duplicatePlanningPeriod,
   } = useClientWorkspace();
 
   const activeClientIdRef = useRef(activeClientId);
@@ -216,6 +227,8 @@ export default function App() {
   const posts = workspace.posts;
   const startDate = workspace.startDate;
   const brandGem = workspace.brandGem;
+  const activePeriodLabel =
+    planningPeriods.find((p) => p.id === activePlanningPeriodId)?.label ?? "Roteiro";
   const brandGemReady = useMemo(() => isBrandGemReadyForCaptions(brandGem), [brandGem]);
   const brandGemMissingFields = useMemo(
     () => formatMissingBrandGemFields(brandGem),
@@ -381,6 +394,8 @@ export default function App() {
   const [isRefining, setIsRefining] = useState<{ [postId: string]: boolean }>({});
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isExportingCanvaPdf, setIsExportingCanvaPdf] = useState(false);
+  const [showNewPlanningPeriodModal, setShowNewPlanningPeriodModal] = useState(false);
+  const [duplicateSourcePeriodId, setDuplicateSourcePeriodId] = useState<string | undefined>();
 
   const prevClientIdRef = useRef(activeClientId);
 
@@ -544,7 +559,7 @@ export default function App() {
     if (!hasActiveClient) return;
     if (
       !(await confirmDialog({
-        message: `Resetar o cliente «${activeClient.name}»? Catálogo, roteiro, Canva e Gem voltam ao estado vazio. Outros clientes não são afetados.`,
+        message: `Resetar o roteiro ativo de «${activeClient.name}»? Catálogo, posts e Canva deste roteiro voltam ao vazio. Roteiros arquivados são preservados.`,
         variant: "danger",
         confirmLabel: "Resetar",
       }))
@@ -2941,6 +2956,31 @@ export default function App() {
 
         {hasActiveClient && activeSection === "posts" && (
           <>
+            <PlanningPeriodSelector
+              periods={planningPeriods}
+              activePeriodId={activePlanningPeriodId}
+              isReadOnly={isReadOnly}
+              onSelect={(periodId) => void switchPlanningPeriod(periodId)}
+              onCreateNew={() => {
+                setDuplicateSourcePeriodId(undefined);
+                setShowNewPlanningPeriodModal(true);
+              }}
+              onDuplicate={(sourceId) => {
+                setDuplicateSourcePeriodId(sourceId);
+                setShowNewPlanningPeriodModal(true);
+              }}
+            />
+
+            {isReadOnly && (
+              <PlanningPeriodReadOnlyBanner
+                periodLabel={activePeriodLabel}
+                onDuplicate={() => {
+                  setDuplicateSourcePeriodId(activePlanningPeriodId);
+                  setShowNewPlanningPeriodModal(true);
+                }}
+              />
+            )}
+
             <PostsWorkspaceToolbar
               viewMode={viewMode}
               onViewModeChange={setViewMode}
@@ -2959,6 +2999,7 @@ export default function App() {
                   onAddDay={handleAddDay}
                   onDistributeCatalog={() => handleAutoDistribute(referenceCatalog)}
                   onBatchUpload={(files) => handleBatchScheduleUpload(files)}
+                  isReadOnly={isReadOnly}
                 />
 
                 <CanvaTimelineSyncPanel
@@ -3870,6 +3911,19 @@ export default function App() {
         }}
         onPickFile={() => catalogFileInputRef.current?.click()}
         onSave={createCatalogItem}
+      />
+
+      <NewPlanningPeriodModal
+        open={showNewPlanningPeriodModal}
+        onClose={() => {
+          setShowNewPlanningPeriodModal(false);
+          setDuplicateSourcePeriodId(undefined);
+        }}
+        periods={planningPeriods}
+        defaultSourcePeriodId={duplicateSourcePeriodId}
+        onSubmit={async (options) => {
+          await createPlanningPeriod(options);
+        }}
       />
 
       <input

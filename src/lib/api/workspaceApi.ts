@@ -2,6 +2,7 @@ import { normalizeCanvaPages } from "../canva";
 import type { BrandGem, CatalogItem, PlannedPost } from "../../types";
 import type { ClientRegistry, ClientWorkspace } from "../clientWorkspace/types";
 import type { ClientMeta } from "../clientWorkspace/types";
+import type { PlanningPeriod } from "../planningConstants";
 import { withAiHeaders } from "../aiFetch";
 import { apiFetch, readApiJson } from "./apiClient";
 
@@ -14,6 +15,9 @@ export type ApiWorkspaceResponse = {
   catalog: CatalogItem[];
   posts: PlannedPost[];
   startDate: string;
+  activePlanningPeriodId: string;
+  planningPeriods: PlanningPeriod[];
+  isReadOnly?: boolean;
   canva: ClientWorkspace["canva"];
   ui?: ClientWorkspace["ui"];
 };
@@ -51,6 +55,9 @@ export function apiWorkspaceToClientWorkspace(dto: ApiWorkspaceResponse): Client
         image: resolveMediaUrl(typeof p.image === "string" ? p.image : null),
       })),
     startDate: dto.startDate,
+    activePlanningPeriodId: dto.activePlanningPeriodId,
+    planningPeriods: dto.planningPeriods ?? [],
+    isReadOnly: dto.isReadOnly ?? false,
     canva: {
       ...dto.canva,
       pages: normalizedPages,
@@ -64,8 +71,12 @@ export async function fetchRegistry(): Promise<ApiRegistry> {
   return readApiJson(res);
 }
 
-export async function fetchWorkspace(clientId: string): Promise<ApiWorkspaceResponse> {
-  const res = await apiFetch(`/api/v1/clients/${clientId}/workspace`);
+export async function fetchWorkspace(
+  clientId: string,
+  periodId?: string
+): Promise<ApiWorkspaceResponse> {
+  const qs = periodId ? `?periodId=${encodeURIComponent(periodId)}` : "";
+  const res = await apiFetch(`/api/v1/clients/${clientId}/workspace${qs}`);
   return readApiJson(res);
 }
 
@@ -77,12 +88,42 @@ export async function createClientApi(name: string, slug?: string): Promise<{ id
   return readApiJson(res);
 }
 
-export async function patchWorkspaceApi(clientId: string, patch: Partial<ClientWorkspace>) {
+export async function patchWorkspaceApi(
+  clientId: string,
+  patch: Record<string, unknown>
+) {
   const res = await apiFetch(`/api/v1/clients/${clientId}/workspace`, {
     method: "PATCH",
-    body: JSON.stringify(patch),
+    body: JSON.stringify({
+      ...patch,
+      planningPeriodId: patch.planningPeriodId ?? patch.activePlanningPeriodId,
+    }),
   });
   return readApiJson<ApiWorkspaceResponse>(res);
+}
+
+export async function fetchPlanningPeriodsApi(clientId: string) {
+  const res = await apiFetch(`/api/v1/clients/${clientId}/planning-periods`);
+  return readApiJson<{ periods: PlanningPeriod[] }>(res);
+}
+
+export async function createPlanningPeriodApi(
+  clientId: string,
+  body: { label?: string; startDate?: string; sourcePeriodId?: string }
+) {
+  const res = await apiFetch(`/api/v1/clients/${clientId}/planning-periods`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return readApiJson<{ period: PlanningPeriod; workspace: ApiWorkspaceResponse }>(res);
+}
+
+export async function activatePlanningPeriodApi(clientId: string, periodId: string) {
+  const res = await apiFetch(
+    `/api/v1/clients/${clientId}/planning-periods/${periodId}/activate`,
+    { method: "POST" }
+  );
+  return readApiJson<{ period: PlanningPeriod; workspace: ApiWorkspaceResponse }>(res);
 }
 
 export async function activateClientApi(clientId: string) {

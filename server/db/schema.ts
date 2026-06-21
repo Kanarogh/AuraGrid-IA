@@ -12,6 +12,7 @@ import {
   timestamp,
   unique,
   uuid,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
@@ -50,6 +51,27 @@ export const userAiPreferences = pgTable("user_ai_preferences", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const planningPeriods = pgTable(
+  "planning_periods",
+  {
+    id: text("id").primaryKey(),
+    clientId: text("client_id")
+      .notNull()
+      .references((): AnyPgColumn => clients.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    startDate: date("start_date").notNull(),
+    status: text("status").notNull().default("active"),
+    campaignContext: text("campaign_context").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("planning_periods_client_id_idx").on(t.clientId),
+    index("planning_periods_client_status_idx").on(t.clientId, t.status),
+  ]
+);
+
 export const clients = pgTable(
   "clients",
   {
@@ -60,6 +82,10 @@ export const clients = pgTable(
     name: text("name").notNull(),
     instagramHandle: text("instagram_handle"),
     startDate: date("start_date").notNull(),
+    activePlanningPeriodId: text("active_planning_period_id").references(
+      (): AnyPgColumn => planningPeriods.id,
+      { onDelete: "set null" }
+    ),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
@@ -140,6 +166,9 @@ export const catalogItems = pgTable(
     clientId: text("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
+    planningPeriodId: text("planning_period_id").references(() => planningPeriods.id, {
+      onDelete: "cascade",
+    }),
     label: text("label").notNull(),
     description: text("description"),
     isReference: boolean("is_reference").notNull().default(true),
@@ -157,13 +186,17 @@ export const catalogItems = pgTable(
   (t) => [
     index("catalog_items_client_id_idx").on(t.clientId),
     index("catalog_items_client_status_idx").on(t.clientId, t.enrichmentStatus),
+    index("catalog_items_planning_period_id_idx").on(t.planningPeriodId),
   ]
 );
 
 export const canvaSettings = pgTable("canva_settings", {
   clientId: text("client_id")
-    .primaryKey()
+    .notNull()
     .references(() => clients.id, { onDelete: "cascade" }),
+  planningPeriodId: text("planning_period_id")
+    .primaryKey()
+    .references(() => planningPeriods.id, { onDelete: "cascade" }),
   activePageId: text("active_page_id").notNull(),
   autoSync: boolean("auto_sync").notNull().default(true),
   reversed: boolean("reversed").notNull().default(true),
@@ -178,10 +211,13 @@ export const canvaPages = pgTable(
     clientId: text("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
+    planningPeriodId: text("planning_period_id")
+      .notNull()
+      .references(() => planningPeriods.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     sortOrder: smallint("sort_order").notNull().default(0),
   },
-  (t) => [primaryKey({ columns: [t.clientId, t.id] })]
+  (t) => [primaryKey({ columns: [t.planningPeriodId, t.id] })]
 );
 
 export const canvaSlots = pgTable(
@@ -189,6 +225,9 @@ export const canvaSlots = pgTable(
   {
     id: text("id").notNull(),
     clientId: text("client_id").notNull(),
+    planningPeriodId: text("planning_period_id")
+      .notNull()
+      .references(() => planningPeriods.id, { onDelete: "cascade" }),
     pageId: text("page_id").notNull(),
     slotIndex: smallint("slot_index").notNull(),
     label: text("label"),
@@ -200,8 +239,8 @@ export const canvaSlots = pgTable(
     }),
   },
   (t) => [
-    primaryKey({ columns: [t.clientId, t.id] }),
-    unique("canva_slots_page_slot_idx").on(t.clientId, t.pageId, t.slotIndex),
+    primaryKey({ columns: [t.planningPeriodId, t.id] }),
+    unique("canva_slots_period_page_slot_idx").on(t.planningPeriodId, t.pageId, t.slotIndex),
   ]
 );
 
@@ -212,6 +251,9 @@ export const plannedPosts = pgTable(
     clientId: text("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
+    planningPeriodId: text("planning_period_id")
+      .notNull()
+      .references(() => planningPeriods.id, { onDelete: "cascade" }),
     dayNumber: smallint("day_number").notNull(),
     dateLabel: text("date_label").notNull(),
     imageAssetId: uuid("image_asset_id").references(() => mediaAssets.id, {
@@ -228,7 +270,7 @@ export const plannedPosts = pgTable(
     captionFromImageOnly: boolean("caption_from_image_only").notNull().default(false),
     lastError: text("last_error"),
   },
-  (t) => [primaryKey({ columns: [t.clientId, t.id] })]
+  (t) => [primaryKey({ columns: [t.planningPeriodId, t.id] })]
 );
 
 export const captionCacheEntries = pgTable(

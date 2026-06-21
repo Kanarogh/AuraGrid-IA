@@ -12,9 +12,20 @@ import {
   userClientState,
 } from "../db/schema";
 import { mediaPublicUrl } from "./mediaService";
-
-const DEFAULT_START_DATE = "2026-05-24";
-const POST_COUNT = 30;
+import {
+  DEFAULT_START_DATE,
+  defaultCanvaPages,
+  defaultPosts,
+} from "./planningDefaults";
+import {
+  createInitialPeriodForClient,
+  ensureClientHasActivePeriod,
+  getActivePeriodId,
+  isPeriodReadOnly,
+  listPeriodsForClient,
+  resetPeriod,
+  updatePeriod,
+} from "./planningPeriodService";
 
 function slugify(name: string): string {
   const base = name
@@ -41,49 +52,6 @@ export async function uniqueClientId(ownerUserId: string, baseSlug: string): Pro
     id = `${baseSlug}-${n}`;
     n += 1;
   }
-}
-
-function defaultCanvaPages(clientId: string) {
-  const pageDefs = [
-    { id: "page_1", name: "Página 1", sortOrder: 0 },
-    { id: "page_2", name: "Página 2", sortOrder: 1 },
-    { id: "page_3", name: "Página 3", sortOrder: 2 },
-    { id: "page_4", name: "Página 4", sortOrder: 3 },
-  ];
-  const pages = pageDefs.map((p) => ({ ...p, clientId }));
-  const slots = pageDefs.flatMap((p) =>
-    Array.from({ length: 12 }, (_, i) => ({
-      id: `slot_${p.id}_${i}`,
-      clientId,
-      pageId: p.id,
-      slotIndex: i,
-      label: `Look ${i + 1}`,
-      matchedCatalogId: null as string | null,
-      imageAssetId: null as string | null,
-    }))
-  );
-  return { pages, slots, activePageId: "page_4" };
-}
-
-function defaultPosts(clientId: string) {
-  return Array.from({ length: POST_COUNT }, (_, i) => {
-    const day = i + 1;
-    return {
-      id: `post_day${day}`,
-      clientId,
-      dayNumber: day,
-      dateLabel: `Dia ${day}`,
-      imageAssetId: null as string | null,
-      canvaSlotId: null as string | null,
-      matchedCatalogId: null as string | null,
-      reasoning: null as string | null,
-      caption: "",
-      isGenerated: false,
-      isConfirmed: false,
-      captionFromImageOnly: false,
-      lastError: null as string | null,
-    };
-  });
 }
 
 export async function listClientsForUser(userId: string) {
@@ -132,18 +100,7 @@ export async function createClientForUser(userId: string, name: string, slug?: s
     footer: { structure: "", address: "", contact: "", hashtags: "", extra: "", customFields: [] },
   });
 
-  const { pages, slots, activePageId } = defaultCanvaPages(id);
-  await db.insert(canvaSettings).values({
-    clientId: id,
-    activePageId,
-    autoSync: true,
-    reversed: true,
-    gridFormat: "square",
-    gridMaxWidth: 480,
-  });
-  await db.insert(canvaPages).values(pages);
-  await db.insert(canvaSlots).values(slots);
-  await db.insert(plannedPosts).values(defaultPosts(id));
+  await createInitialPeriodForClient(id, DEFAULT_START_DATE);
 
   await db
     .insert(userClientState)
@@ -194,7 +151,11 @@ export async function softDeleteClient(userId: string, clientId: string) {
   }
 }
 
-export async function loadWorkspaceDto(userId: string, clientId: string) {
+export async function loadWorkspaceDto(
+  userId: string,
+  clientId: string,
+  periodId?: string
+) {
   const db = getDb();
 
   const [client] = await db
@@ -206,31 +167,46 @@ export async function loadWorkspaceDto(userId: string, clientId: string) {
     .limit(1);
   if (!client) throw new Error("Cliente não encontrado.");
 
+  const activePeriodId =
+    periodId ?? client.activePlanningPeriodId ?? (await ensureClientHasActivePeriod(clientId));
+
+  const planningPeriodsList = await listPeriodsForClient(clientId);
+  const activePeriod =
+    planningPeriodsList.find((p) => p.id === activePeriodId) ??
+    planningPeriodsList.find((p) => p.status === "active") ??
+    planningPeriodsList[0];
+
+  const periodStartDate = activePeriod?.startDate ?? client.startDate;
+  const periodCampaignContext = activePeriod?.campaignContext ?? "";
+  const isReadOnly = activePeriod?.status === "archived";
+
   const [gem] = await db.select().from(brandGems).where(eq(brandGems.clientId, clientId)).limit(1);
   const [canvaCfg] = await db
     .select()
     .from(canvaSettings)
-    .where(eq(canvaSettings.clientId, clientId))
+    .where(eq(canvaSettings.planningPeriodId, activePeriodId))
     .limit(1);
   const pages = await db
     .select()
     .from(canvaPages)
-    .where(eq(canvaPages.clientId, clientId))
+    .where(eq(canvaPages.planningPeriodId, activePeriodId))
     .orderBy(asc(canvaPages.sortOrder));
   const slots = await db
     .select()
     .from(canvaSlots)
-    .where(eq(canvaSlots.clientId, clientId))
+    .where(eq(canvaSlots.planningPeriodId, activePeriodId))
     .orderBy(asc(canvaSlots.slotIndex));
   const catalog = await db
     .select()
     .from(catalogItems)
-    .where(eq(catalogItems.clientId, clientId))
+    .where(
+      and(eq(catalogItems.clientId, clientId), eq(catalogItems.planningPeriodId, activePeriodId))
+    )
     .orderBy(desc(catalogItems.createdAt));
   const posts = await db
     .select()
     .from(plannedPosts)
-    .where(eq(plannedPosts.clientId, clientId))
+    .where(eq(plannedPosts.planningPeriodId, activePeriodId))
     .orderBy(asc(plannedPosts.dayNumber));
   const [ui] = await db
     .select()
@@ -263,54 +239,55 @@ export async function loadWorkspaceDto(userId: string, clientId: string) {
       .map((c) => [c.id, c.imageAssetId as string])
   );
 
-  // Fix page slots grouping — sempre 12 slots por página
-  const pagesWithSlots = (pages.length > 0 ? pages : defaultCanvaPages(clientId).pages).map(
+  const pagesWithSlots = (
+    pages.length > 0 ? pages : defaultCanvaPages(clientId, activePeriodId).pages
+  ).map((p) => ({
+    id: p.id,
+    name: p.name,
+    slots: Array.from({ length: 12 }, (_, i) => {
+      const row = slots.find((s) => s.pageId === p.id && s.slotIndex === i);
+      if (row) {
+        const resolvedAssetId =
+          row.imageAssetId ??
+          (row.matchedCatalogId ? (catalogAssetById.get(row.matchedCatalogId) ?? null) : null);
+        return {
+          id: row.id,
+          image: resolvedAssetId ? mediaPublicUrl(resolvedAssetId) : null,
+          imageAssetId: resolvedAssetId,
+          label: row.label,
+          matchedCatalogId: row.matchedCatalogId,
+        };
+      }
+      return {
+        id: `slot_${p.id}_${i}`,
+        image: null,
+        imageAssetId: null,
+        label: `Look ${i + 1}`,
+        matchedCatalogId: null,
+      };
+    }),
+  }));
+
+  const postsDto = (posts.length > 0 ? posts : defaultPosts(clientId, activePeriodId)).map(
     (p) => ({
       id: p.id,
-      name: p.name,
-      slots: Array.from({ length: 12 }, (_, i) => {
-        const row = slots.find((s) => s.pageId === p.id && s.slotIndex === i);
-        if (row) {
-          const resolvedAssetId =
-            row.imageAssetId ??
-            (row.matchedCatalogId
-              ? (catalogAssetById.get(row.matchedCatalogId) ?? null)
-              : null);
-          return {
-            id: row.id,
-            image: resolvedAssetId ? mediaPublicUrl(resolvedAssetId) : null,
-            imageAssetId: resolvedAssetId,
-            label: row.label,
-            matchedCatalogId: row.matchedCatalogId,
-          };
-        }
-        return {
-          id: `slot_${p.id}_${i}`,
-          image: null,
-          imageAssetId: null,
-          label: `Look ${i + 1}`,
-          matchedCatalogId: null,
-        };
-      }),
+      dayNumber: p.dayNumber,
+      dateLabel: p.dateLabel,
+      image: p.imageAssetId ? mediaPublicUrl(p.imageAssetId) : null,
+      imageAssetId: p.imageAssetId,
+      matchedCatalogId: p.matchedCatalogId,
+      reasoning: p.reasoning,
+      caption: p.caption,
+      isGenerating: false,
+      isGenerated: p.isGenerated,
+      isConfirmed: p.isConfirmed,
+      error: p.lastError,
+      canvaSlotRef: p.canvaSlotId
+        ? { pageId: findPageForSlot(slots, p.canvaSlotId), slotId: p.canvaSlotId }
+        : null,
+      captionFromImageOnly: p.captionFromImageOnly,
     })
   );
-
-  const postsDto = (posts.length > 0 ? posts : defaultPosts(clientId)).map((p) => ({
-    id: p.id,
-    dayNumber: p.dayNumber,
-    dateLabel: p.dateLabel,
-    image: p.imageAssetId ? mediaPublicUrl(p.imageAssetId) : null,
-    imageAssetId: p.imageAssetId,
-    matchedCatalogId: p.matchedCatalogId,
-    reasoning: p.reasoning,
-    caption: p.caption,
-    isGenerating: false,
-    isGenerated: p.isGenerated,
-    isConfirmed: p.isConfirmed,
-    error: p.lastError,
-    canvaSlotRef: p.canvaSlotId ? { pageId: findPageForSlot(slots, p.canvaSlotId), slotId: p.canvaSlotId } : null,
-    captionFromImageOnly: p.captionFromImageOnly,
-  }));
 
   return {
     version: 1 as const,
@@ -326,13 +303,16 @@ export async function loadWorkspaceDto(userId: string, clientId: string) {
       name: gem?.name ?? client.name,
       description: gem?.description ?? "",
       instructions: gem?.instructions ?? "",
-      campaignContext: gem?.campaignContext ?? "",
+      campaignContext: periodCampaignContext,
       captionParams: gem?.captionParams ?? {},
       footer: gem?.footer ?? {},
     },
     catalog: catalogDto,
     posts: postsDto,
-    startDate: client.startDate,
+    startDate: periodStartDate,
+    activePlanningPeriodId: activePeriodId,
+    planningPeriods: planningPeriodsList,
+    isReadOnly,
     canva: {
       pages: pagesWithSlots,
       activePageId: canvaCfg?.activePageId ?? "page_1",
@@ -350,18 +330,11 @@ export async function loadWorkspaceDto(userId: string, clientId: string) {
   };
 }
 
-function findPageForSlot(
-  slots: { id: string; pageId: string }[],
-  slotId: string
-): string {
+function findPageForSlot(slots: { id: string; pageId: string }[], slotId: string): string {
   return slots.find((s) => s.id === slotId)?.pageId ?? "page_1";
 }
 
-/** FK catalog_items — ignora placeholders locais (canva_*) e ids inexistentes. */
-function sanitizeCatalogRefId(
-  raw: unknown,
-  validCatalogIds: Set<string>
-): string | null {
+function sanitizeCatalogRefId(raw: unknown, validCatalogIds: Set<string>): string | null {
   if (raw === null || raw === undefined) return null;
   if (typeof raw !== "string" || !raw.trim()) return null;
   if (raw.startsWith("canva_")) return null;
@@ -383,6 +356,11 @@ export async function saveBrandGem(
   const db = getDb();
   const savedAt = new Date();
   const trimmedName = gem.name.trim() || clientId;
+  const activePeriodId = await ensureClientHasActivePeriod(clientId);
+
+  if (await isPeriodReadOnly(clientId, activePeriodId)) {
+    throw new Error("Roteiro arquivado é somente leitura.");
+  }
 
   await db
     .insert(brandGems)
@@ -391,7 +369,7 @@ export async function saveBrandGem(
       name: trimmedName,
       description: gem.description,
       instructions: gem.instructions,
-      campaignContext: gem.campaignContext ?? "",
+      campaignContext: "",
       captionParams: gem.captionParams ?? {},
       footer: gem.footer ?? {},
       savedAt,
@@ -402,12 +380,15 @@ export async function saveBrandGem(
         name: trimmedName,
         description: gem.description,
         instructions: gem.instructions,
-        campaignContext: gem.campaignContext ?? "",
         captionParams: gem.captionParams ?? {},
         footer: gem.footer ?? {},
         savedAt,
       },
     });
+
+  if (typeof gem.campaignContext === "string") {
+    await updatePeriod(clientId, activePeriodId, { campaignContext: gem.campaignContext });
+  }
 
   await db
     .update(clients)
@@ -423,12 +404,17 @@ export async function patchWorkspace(
   patch: Record<string, unknown>
 ) {
   const db = getDb();
+  const periodId =
+    typeof patch.planningPeriodId === "string"
+      ? patch.planningPeriodId
+      : await ensureClientHasActivePeriod(clientId);
+
+  if (await isPeriodReadOnly(clientId, periodId)) {
+    throw new Error("Roteiro arquivado é somente leitura.");
+  }
 
   if (typeof patch.startDate === "string") {
-    await db
-      .update(clients)
-      .set({ startDate: patch.startDate, updatedAt: new Date() })
-      .where(eq(clients.id, clientId));
+    await updatePeriod(clientId, periodId, { startDate: patch.startDate });
   }
 
   if (patch.brandGem && typeof patch.brandGem === "object") {
@@ -461,7 +447,9 @@ export async function patchWorkspace(
       ? await db
           .select({ id: catalogItems.id })
           .from(catalogItems)
-          .where(eq(catalogItems.clientId, clientId))
+          .where(
+            and(eq(catalogItems.clientId, clientId), eq(catalogItems.planningPeriodId, periodId))
+          )
       : [];
   const validCatalogIds = new Set(catalogIdRows.map((r) => r.id));
 
@@ -470,14 +458,13 @@ export async function patchWorkspace(
     await db
       .update(canvaSettings)
       .set({
-        activePageId:
-          typeof canva.activePageId === "string" ? canva.activePageId : undefined,
+        activePageId: typeof canva.activePageId === "string" ? canva.activePageId : undefined,
         autoSync: typeof canva.autoSync === "boolean" ? canva.autoSync : undefined,
         reversed: typeof canva.reversed === "boolean" ? canva.reversed : undefined,
         gridFormat: typeof canva.gridFormat === "string" ? canva.gridFormat : undefined,
         gridMaxWidth: typeof canva.gridMaxWidth === "number" ? canva.gridMaxWidth : undefined,
       })
-      .where(eq(canvaSettings.clientId, clientId));
+      .where(eq(canvaSettings.planningPeriodId, periodId));
 
     if (Array.isArray(canva.pages)) {
       const sentPageIds = new Set<string>();
@@ -494,11 +481,12 @@ export async function patchWorkspace(
           .values({
             id: page.id,
             clientId,
+            planningPeriodId: periodId,
             name: pageName,
             sortOrder: pageIndex,
           })
           .onConflictDoUpdate({
-            target: [canvaPages.clientId, canvaPages.id],
+            target: [canvaPages.planningPeriodId, canvaPages.id],
             set: { name: pageName, sortOrder: pageIndex },
           });
 
@@ -506,12 +494,8 @@ export async function patchWorkspace(
         for (let slotIndex = 0; slotIndex < page.slots.length; slotIndex++) {
           const slot = page.slots[slotIndex] as Record<string, unknown>;
           if (typeof slot.id !== "string") continue;
-          const label =
-            typeof slot.label === "string" ? slot.label : `Look ${slotIndex + 1}`;
-          const matchedCatalogId = sanitizeCatalogRefId(
-            slot.matchedCatalogId,
-            validCatalogIds
-          );
+          const label = typeof slot.label === "string" ? slot.label : `Look ${slotIndex + 1}`;
+          const matchedCatalogId = sanitizeCatalogRefId(slot.matchedCatalogId, validCatalogIds);
           const imageAssetId =
             slot.imageAssetId === null || typeof slot.imageAssetId === "string"
               ? (slot.imageAssetId as string | null)
@@ -522,6 +506,7 @@ export async function patchWorkspace(
             .values({
               id: slot.id,
               clientId,
+              planningPeriodId: periodId,
               pageId: page.id,
               slotIndex,
               label,
@@ -529,7 +514,7 @@ export async function patchWorkspace(
               imageAssetId,
             })
             .onConflictDoUpdate({
-              target: [canvaSlots.clientId, canvaSlots.id],
+              target: [canvaSlots.planningPeriodId, canvaSlots.id],
               set: { label, matchedCatalogId, imageAssetId, pageId: page.id, slotIndex },
             });
         }
@@ -538,15 +523,17 @@ export async function patchWorkspace(
       const existingPages = await db
         .select({ id: canvaPages.id })
         .from(canvaPages)
-        .where(eq(canvaPages.clientId, clientId));
+        .where(eq(canvaPages.planningPeriodId, periodId));
       for (const row of existingPages) {
         if (!sentPageIds.has(row.id)) {
           await db
             .delete(canvaSlots)
-            .where(and(eq(canvaSlots.clientId, clientId), eq(canvaSlots.pageId, row.id)));
+            .where(
+              and(eq(canvaSlots.planningPeriodId, periodId), eq(canvaSlots.pageId, row.id))
+            );
           await db
             .delete(canvaPages)
-            .where(and(eq(canvaPages.clientId, clientId), eq(canvaPages.id, row.id)));
+            .where(and(eq(canvaPages.planningPeriodId, periodId), eq(canvaPages.id, row.id)));
         }
       }
     }
@@ -560,13 +547,11 @@ export async function patchWorkspace(
       if (typeof post.id !== "string") continue;
       sentPostIds.add(post.id);
       const dayNumber =
-        typeof post.dayNumber === "number" ? post.dayNumber : parseInt(post.id.replace(/\D/g, ""), 10) || 1;
-      const dateLabel =
-        typeof post.dateLabel === "string" ? post.dateLabel : `Dia ${dayNumber}`;
-      const matchedCatalogId = sanitizeCatalogRefId(
-        post.matchedCatalogId,
-        validCatalogIds
-      );
+        typeof post.dayNumber === "number"
+          ? post.dayNumber
+          : parseInt(post.id.replace(/\D/g, ""), 10) || 1;
+      const dateLabel = typeof post.dateLabel === "string" ? post.dateLabel : `Dia ${dayNumber}`;
+      const matchedCatalogId = sanitizeCatalogRefId(post.matchedCatalogId, validCatalogIds);
       const reasoning =
         post.reasoning === null || typeof post.reasoning === "string"
           ? (post.reasoning as string | null)
@@ -599,6 +584,7 @@ export async function patchWorkspace(
         .values({
           id: post.id,
           clientId,
+          planningPeriodId: periodId,
           dayNumber,
           dateLabel,
           matchedCatalogId,
@@ -612,7 +598,7 @@ export async function patchWorkspace(
           canvaSlotId,
         })
         .onConflictDoUpdate({
-          target: [plannedPosts.clientId, plannedPosts.id],
+          target: [plannedPosts.planningPeriodId, plannedPosts.id],
           set: {
             dayNumber,
             dateLabel,
@@ -632,12 +618,14 @@ export async function patchWorkspace(
     const existingPosts = await db
       .select({ id: plannedPosts.id })
       .from(plannedPosts)
-      .where(eq(plannedPosts.clientId, clientId));
+      .where(eq(plannedPosts.planningPeriodId, periodId));
     for (const row of existingPosts) {
       if (!sentPostIds.has(row.id)) {
         await db
           .delete(plannedPosts)
-          .where(and(eq(plannedPosts.clientId, clientId), eq(plannedPosts.id, row.id)));
+          .where(
+            and(eq(plannedPosts.planningPeriodId, periodId), eq(plannedPosts.id, row.id))
+          );
       }
     }
   }
@@ -647,24 +635,9 @@ export async function patchWorkspace(
 
 export async function resetClientWorkspace(userId: string, clientId: string) {
   const db = getDb();
-  await db.delete(catalogItems).where(eq(catalogItems.clientId, clientId));
-  await db.delete(plannedPosts).where(eq(plannedPosts.clientId, clientId));
-  await db.delete(canvaSlots).where(eq(canvaSlots.clientId, clientId));
-  await db.delete(canvaPages).where(eq(canvaPages.clientId, clientId));
-  await db.delete(canvaSettings).where(eq(canvaSettings.clientId, clientId));
-
-  const { pages, slots, activePageId } = defaultCanvaPages(clientId);
-  await db.insert(canvaSettings).values({
-    clientId,
-    activePageId,
-    autoSync: true,
-    reversed: true,
-    gridFormat: "square",
-    gridMaxWidth: 480,
-  });
-  await db.insert(canvaPages).values(pages);
-  await db.insert(canvaSlots).values(slots);
-  await db.insert(plannedPosts).values(defaultPosts(clientId));
+  const periodId = await getActivePeriodId(clientId);
+  if (!periodId) throw new Error("Nenhum roteiro ativo.");
+  await resetPeriod(clientId, periodId);
 
   const [client] = await db.select().from(clients).where(eq(clients.id, clientId)).limit(1);
   await db
@@ -673,10 +646,18 @@ export async function resetClientWorkspace(userId: string, clientId: string) {
       name: client?.name ?? clientId,
       description: "",
       instructions: "",
-      campaignContext: "",
       captionParams: {},
-      footer: { structure: "", address: "", contact: "", hashtags: "", extra: "", customFields: [] },
+      footer: {
+        structure: "",
+        address: "",
+        contact: "",
+        hashtags: "",
+        extra: "",
+        customFields: [],
+      },
       savedAt: null,
     })
     .where(eq(brandGems.clientId, clientId));
 }
+
+export { getActivePeriodId };

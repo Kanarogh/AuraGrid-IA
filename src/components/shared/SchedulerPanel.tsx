@@ -12,6 +12,7 @@ export function SchedulerPanel({
   onAddDay,
   onDistributeCatalog,
   onBatchUpload,
+  isReadOnly = false,
 }: {
   startDate: string;
   onStartDateChange: (date: string) => void;
@@ -20,6 +21,7 @@ export function SchedulerPanel({
   onAddDay: () => void;
   onDistributeCatalog: () => void;
   onBatchUpload: (files: FileList) => void;
+  isReadOnly?: boolean;
 }) {
   return (
     <Card className="ag-studio relative overflow-hidden mb-4 border-ag-border/70 shadow-[var(--ag-shadow-lg)]" padding="sm">
@@ -44,12 +46,13 @@ export function SchedulerPanel({
               value={startDate}
               onChange={(e) => onStartDateChange(e.target.value)}
               className="font-semibold"
+              disabled={isReadOnly}
             />
             <p className="text-xs text-ag-muted mt-2 leading-relaxed">
               Os dias seguintes são calculados automaticamente a partir desta data.
             </p>
           </div>
-          <Button variant="primary" size="md" onClick={onAddDay} className="w-fit">
+          <Button variant="primary" size="md" onClick={onAddDay} className="w-fit" disabled={isReadOnly}>
             <Plus className="h-4 w-4" />
             Adicionar dia
           </Button>
@@ -73,7 +76,7 @@ export function SchedulerPanel({
                 variant="accent"
                 size="sm"
                 onClick={onDistributeCatalog}
-                disabled={catalogCount === 0}
+                disabled={isReadOnly || catalogCount === 0}
                 className="mt-1"
               >
                 <ShoppingBag className="h-3.5 w-3.5" />
@@ -90,6 +93,7 @@ export function SchedulerPanel({
                 multiple
                 accept="image/*"
                 className="hidden"
+                disabled={isReadOnly}
                 onChange={(e) => {
                   if (e.target.files?.length) onBatchUpload(e.target.files);
                 }}
@@ -98,6 +102,7 @@ export function SchedulerPanel({
                 variant="secondary"
                 size="sm"
                 className="mt-1"
+                disabled={isReadOnly}
                 onClick={() =>
                   document.getElementById("smart-scheduler-file-picker")?.click()
                 }

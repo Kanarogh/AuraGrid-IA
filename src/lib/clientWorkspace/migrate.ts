@@ -7,6 +7,7 @@ import {
 } from "../../data/preloaded";
 import { recalculatePostDates } from "../dates";
 import type { CatalogItem, CanvaGridPage, PlannedPost } from "../../types";
+import { createDefaultPlanningPeriod } from "../planningConstants";
 import { createClientMeta, createDefaultCanvaPages, createEmptyWorkspace } from "./factory";
 import { loadRegistry, loadWorkspace, saveRegistry, saveWorkspace } from "./storage";
 import type { ClientRegistry, ClientWorkspace } from "./types";
@@ -68,12 +69,17 @@ function buildLegacyWorkspace(): ClientWorkspace {
   const activePageId =
     localStorage.getItem("palak_active_canva_page_id") || "page_1";
 
+  const defaultPeriod = createDefaultPlanningPeriod(LEGACY_PALAK_ID, startDate);
+
   return {
     version: 1,
     brandGem: brandGem.name ? brandGem : createEmptyBrandGem(LEGACY_PALAK_ID, "Palak"),
     catalog,
     posts,
     startDate,
+    activePlanningPeriodId: defaultPeriod.id,
+    planningPeriods: [defaultPeriod],
+    isReadOnly: false,
     canva: {
       pages: readLegacyCanvaPages(),
       activePageId,

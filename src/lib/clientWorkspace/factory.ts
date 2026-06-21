@@ -13,8 +13,12 @@ import { normalizeCaptionGenerationParams } from "../captionParams";
 import type { BrandGem, CanvaGridPage, PlannedPost } from "../../types";
 import type { ClientMeta, ClientWorkspace } from "./types";
 
-const DEFAULT_START_DATE = "2026-05-24";
-const POST_COUNT = 30;
+import {
+  DEFAULT_START_DATE,
+  POST_COUNT,
+  createDefaultPlanningPeriod,
+  defaultPeriodId,
+} from "../planningConstants";
 
 export function slugifyClientName(name: string): string {
   const base = name
@@ -99,12 +103,16 @@ export function createEmptyWorkspace(meta: ClientMeta): ClientWorkspace {
   const startDate = DEFAULT_START_DATE;
   const posts = recalculatePostDates(startDate, createEmptyPosts());
   const defaultPages = createDefaultCanvaPages();
+  const defaultPeriod = createDefaultPlanningPeriod(meta.id, startDate);
   return {
     version: 1,
     brandGem: createBrandGemForClient(meta.id, meta.name),
     catalog: [],
     posts,
     startDate,
+    activePlanningPeriodId: defaultPeriod.id,
+    planningPeriods: [defaultPeriod],
+    isReadOnly: false,
     canva: {
       pages: defaultPages,
       activePageId: getDefaultActiveCanvaPageId(defaultPages),
@@ -160,12 +168,31 @@ export function normalizeWorkspace(
       : empty.canva.pages
   );
 
+  const defaultPeriod = createDefaultPlanningPeriod(meta.id, empty.startDate);
+  const planningPeriods =
+    Array.isArray(raw.planningPeriods) && raw.planningPeriods.length > 0
+      ? raw.planningPeriods
+      : [defaultPeriod];
+  const activePlanningPeriodId =
+    typeof raw.activePlanningPeriodId === "string" &&
+    planningPeriods.some((p) => p.id === raw.activePlanningPeriodId)
+      ? raw.activePlanningPeriodId
+      : planningPeriods.find((p) => p.status === "active")?.id ?? defaultPeriod.id;
+  const activePeriod =
+    planningPeriods.find((p) => p.id === activePlanningPeriodId) ?? defaultPeriod;
+
   return {
     version: 1,
-    brandGem,
+    brandGem: {
+      ...brandGem,
+      campaignContext: activePeriod.campaignContext ?? brandGem.campaignContext ?? "",
+    },
     catalog: Array.isArray(raw.catalog) ? raw.catalog : empty.catalog,
     posts: Array.isArray(raw.posts) && raw.posts.length > 0 ? raw.posts : empty.posts,
-    startDate: typeof raw.startDate === "string" ? raw.startDate : empty.startDate,
+    startDate: activePeriod.startDate ?? empty.startDate,
+    activePlanningPeriodId,
+    planningPeriods,
+    isReadOnly: activePeriod.status === "archived",
     canva: {
       pages,
       activePageId: resolveActivePageId(

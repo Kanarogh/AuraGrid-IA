@@ -1,3 +1,4 @@
+import { POST_COUNT } from "./planningConstants";
 import { recalculatePostDates } from "./dates";
 import { stablePlannedPostId } from "./postIds";
 import type { CanvaGridPage, CanvaGridSlot, PlannedPost } from "../types";
@@ -62,13 +63,13 @@ export function syncCanvaPagesToPosts(
   }
 
   const N = orderedSlots.length;
-  const postsPerDay = Array(30).fill(0);
+  const postsPerDay = Array(POST_COUNT).fill(0);
 
-  if (N >= 30) {
-    for (let i = 0; i < 30; i++) postsPerDay[i] = 1;
-    let remaining = N - 30;
+  if (N >= POST_COUNT) {
+    for (let i = 0; i < POST_COUNT; i++) postsPerDay[i] = 1;
+    let remaining = N - POST_COUNT;
     let d = 0;
-    while (remaining > 0 && d < 30) {
+    while (remaining > 0 && d < POST_COUNT) {
       const currentSpace = 3 - postsPerDay[d];
       if (currentSpace > 0) {
         const add = Math.min(currentSpace, remaining);
@@ -79,13 +80,13 @@ export function syncCanvaPagesToPosts(
     }
     let cycle = 0;
     while (remaining > 0) {
-      postsPerDay[cycle % 30] += 1;
+      postsPerDay[cycle % POST_COUNT] += 1;
       remaining--;
       cycle++;
     }
   } else {
     for (let i = 0; i < N; i++) postsPerDay[i] = 1;
-    for (let i = N; i < 30; i++) postsPerDay[i] = 0;
+    for (let i = N; i < POST_COUNT; i++) postsPerDay[i] = 0;
   }
 
   const existing = [...(existingPosts || [])];
@@ -93,7 +94,7 @@ export function syncCanvaPagesToPosts(
   const resultPosts: PlannedPost[] = [];
   let itemIndex = 0;
 
-  for (let dIndex = 0; dIndex < 30; dIndex++) {
+  for (let dIndex = 0; dIndex < POST_COUNT; dIndex++) {
     const dayNum = dIndex + 1;
     const countForDay = postsPerDay[dIndex];
 

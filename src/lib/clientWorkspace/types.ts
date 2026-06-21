@@ -1,6 +1,8 @@
 import type { AppSection } from "../../components/layout/AppSidebar";
 import type { CanvaGridFormatId } from "../canvaGridFormats";
 import type { BrandGem, CanvaGridPage, CatalogItem, PlannedPost } from "../../types";
+import type { PlanningPeriod } from "../planningConstants";
+import type { PeriodSnapshot } from "./planningPeriodLocal";
 
 export const REGISTRY_KEY = "auragrid_client_registry";
 export const WORKSPACE_KEY_PREFIX = "auragrid_ws:";
@@ -26,6 +28,10 @@ export type ClientWorkspace = {
   catalog: CatalogItem[];
   posts: PlannedPost[];
   startDate: string;
+  activePlanningPeriodId: string;
+  planningPeriods: PlanningPeriod[];
+  periodSnapshots?: Record<string, PeriodSnapshot>;
+  isReadOnly?: boolean;
   canva: {
     pages: CanvaGridPage[];
     activePageId: string;

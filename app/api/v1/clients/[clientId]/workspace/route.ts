@@ -12,7 +12,8 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     const user = requireUser(req);
     const { clientId } = await params;
     await assertClientAccess(user, clientId);
-    const workspace = await loadWorkspaceDto(user.id, clientId);
+    const periodId = req.nextUrl.searchParams.get("periodId") ?? undefined;
+    const workspace = await loadWorkspaceDto(user.id, clientId, periodId);
     return NextResponse.json(workspace);
   } catch (err) {
     return errorResponse(err, 404);
@@ -26,7 +27,11 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     await assertClientAccess(user, clientId);
     const body = (await req.json().catch(() => ({}))) ?? {};
     await patchWorkspace(user.id, clientId, body);
-    const workspace = await loadWorkspaceDto(user.id, clientId);
+    const periodId =
+      typeof body.planningPeriodId === "string"
+        ? body.planningPeriodId
+        : req.nextUrl.searchParams.get("periodId") ?? undefined;
+    const workspace = await loadWorkspaceDto(user.id, clientId, periodId);
     return NextResponse.json(workspace);
   } catch (err) {
     return errorResponse(err, 400);

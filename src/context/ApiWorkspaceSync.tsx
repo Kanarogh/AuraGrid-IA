@@ -26,9 +26,11 @@ import { emitCloudSaveStatus } from "../lib/cloudSaveStatus";
 const SAVE_DEBOUNCE_MS = 400;
 
 function buildWorkspacePatch(ws: ClientWorkspace) {
+  if (ws.isReadOnly) return null;
   return {
     brandGem: ws.brandGem,
     startDate: ws.startDate,
+    planningPeriodId: ws.activePlanningPeriodId,
     posts: ws.posts.map(stripTransientPostFields),
     canva: compactCanvaForApiPatch(ws.canva),
     ui: ws.ui,
@@ -36,6 +38,8 @@ function buildWorkspacePatch(ws: ClientWorkspace) {
 }
 
 function flushWorkspacePatch(clientId: string, ws: ClientWorkspace) {
+  const patch = buildWorkspacePatch(ws);
+  if (!patch) return;
   const token = getAccessToken();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -43,7 +47,7 @@ function flushWorkspacePatch(clientId: string, ws: ClientWorkspace) {
     method: "PATCH",
     headers,
     credentials: "include",
-    body: JSON.stringify(buildWorkspacePatch(ws)),
+    body: JSON.stringify(patch),
     keepalive: true,
   }).catch(() => {
     // Falha esperada ao fechar/recarregar a aba — o browser aborta o request.
@@ -137,8 +141,10 @@ export function ApiWorkspaceSync() {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       const ws = workspaceRef.current;
+      const patch = buildWorkspacePatch(ws);
+      if (!patch) return;
       emitCloudSaveStatus("saving");
-      void patchWorkspaceApi(activeClientId, buildWorkspacePatch(ws))
+      void patchWorkspaceApi(activeClientId, patch)
         .then(() => emitCloudSaveStatus("saved"))
         .catch((err) => {
           console.error("[AuraGrid] Falha ao salvar workspace:", err);
@@ -198,7 +204,9 @@ export function ApiWorkspaceSync() {
       }
       emitCloudSaveStatus("saving");
       try {
-        await patchWorkspaceApi(activeClientId, buildWorkspacePatch(ws));
+        const patch = buildWorkspacePatch(ws);
+        if (!patch) return;
+        await patchWorkspaceApi(activeClientId, patch);
         emitCloudSaveStatus("saved");
       } catch (err) {
         emitCloudSaveStatus("error");

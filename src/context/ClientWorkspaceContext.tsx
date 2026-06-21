@@ -41,7 +41,21 @@ import { toast } from "../lib/toast";
 import type { BrandGem, CanvaGridPage, CatalogItem, PlannedPost } from "../types";
 import { useAuth } from "./AuthContext";
 import { getApiHelpers, type ApiRegistryEvent } from "./ApiWorkspaceSync";
-import { fetchRegistry, renameClientApi, saveBrandGemApi } from "../lib/api/workspaceApi";
+import {
+  apiWorkspaceToClientWorkspace,
+  createPlanningPeriodApi,
+  fetchRegistry,
+  fetchWorkspace,
+  renameClientApi,
+  saveBrandGemApi,
+} from "../lib/api/workspaceApi";
+import {
+  createLocalPlanningPeriod,
+  persistActivePeriodSnapshot,
+  resetLocalActivePeriod,
+  switchLocalPlanningPeriod,
+} from "../lib/clientWorkspace/planningPeriodLocal";
+import type { PlanningPeriod } from "../lib/planningConstants";
 
 type ClientWorkspaceContextValue = {
   registry: ClientRegistry;
@@ -70,6 +84,19 @@ type ClientWorkspaceContextValue = {
   persistWorkspaceNow: () => Promise<void>;
   /** Leitura síncrona dos posts — evita closure desatualizado em lotes de legenda. */
   getPostsSnapshot: () => PlannedPost[];
+  activePlanningPeriodId: string;
+  planningPeriods: PlanningPeriod[];
+  isReadOnly: boolean;
+  switchPlanningPeriod: (periodId: string) => Promise<void>;
+  createPlanningPeriod: (options: {
+    label?: string;
+    startDate?: string;
+    sourcePeriodId?: string;
+  }) => Promise<void>;
+  duplicatePlanningPeriod: (
+    sourcePeriodId: string,
+    options?: { label?: string; startDate?: string }
+  ) => Promise<void>;
   useApiStorage: boolean;
   workspaceHydrated: boolean;
 };
@@ -140,7 +167,9 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
   workspaceRef.current = workspace;
 
   const flushSave = useCallback((clientId: string, ws: ClientWorkspace) => {
-    void saveWorkspaceResilient(clientId, ws).then(notifyStorageSaveFailure);
+    void saveWorkspaceResilient(clientId, persistActivePeriodSnapshot(ws)).then(
+      notifyStorageSaveFailure
+    );
   }, []);
 
   const persistWorkspaceNow = useCallback(async () => {
@@ -266,6 +295,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
   const setCatalog: Dispatch<SetStateAction<CatalogItem[]>> = useCallback(
     (action) => {
       setWorkspace((prev) => {
+        if (prev.isReadOnly) return prev;
         const nextCatalog =
           typeof action === "function"
             ? action(prev.catalog).map(normalizeCatalogItem)
@@ -289,6 +319,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
 
   const setPosts: Dispatch<SetStateAction<PlannedPost[]>> = useCallback((action) => {
     setWorkspace((prev) => {
+      if (prev.isReadOnly) return prev;
       const next: ClientWorkspace = {
         ...prev,
         posts: typeof action === "function" ? action(prev.posts) : action,
@@ -304,9 +335,16 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
 
   const setStartDate: Dispatch<SetStateAction<string>> = useCallback((action) => {
     setWorkspace((prev) => {
+      if (prev.isReadOnly) return prev;
+      const nextStartDate = typeof action === "function" ? action(prev.startDate) : action;
       const next: ClientWorkspace = {
         ...prev,
-        startDate: typeof action === "function" ? action(prev.startDate) : action,
+        startDate: nextStartDate,
+        planningPeriods: prev.planningPeriods.map((p) =>
+          p.id === prev.activePlanningPeriodId
+            ? { ...p, startDate: nextStartDate, updatedAt: new Date().toISOString() }
+            : p
+        ),
       };
       workspaceRef.current = next;
       return next;
@@ -315,14 +353,30 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
 
   const setBrandGem: Dispatch<SetStateAction<BrandGem>> = useCallback((action) => {
     setWorkspace((prev) => {
+      if (prev.isReadOnly) return prev;
       const nextGem = typeof action === "function" ? action(prev.brandGem) : action;
-      return { ...prev, brandGem: { ...nextGem, id: prev.brandGem.id } };
+      const next: ClientWorkspace = {
+        ...prev,
+        brandGem: { ...nextGem, id: prev.brandGem.id },
+        planningPeriods: prev.planningPeriods.map((p) =>
+          p.id === prev.activePlanningPeriodId
+            ? {
+                ...p,
+                campaignContext: nextGem.campaignContext ?? "",
+                updatedAt: new Date().toISOString(),
+              }
+            : p
+        ),
+      };
+      workspaceRef.current = next;
+      return next;
     });
   }, []);
 
   const setCanvaPages: Dispatch<SetStateAction<CanvaGridPage[]>> = useCallback(
     (action) => {
       setWorkspace((prev) => {
+        if (prev.isReadOnly) return prev;
         const next: ClientWorkspace = {
           ...prev,
           canva: {
@@ -340,6 +394,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
   const setActiveCanvaPageId: Dispatch<SetStateAction<string>> = useCallback(
     (action) => {
       setWorkspace((prev) => {
+        if (prev.isReadOnly) return prev;
         const next: ClientWorkspace = {
           ...prev,
           canva: {
@@ -356,42 +411,52 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
   );
 
   const setAutoSyncCanva: Dispatch<SetStateAction<boolean>> = useCallback((action) => {
-    setWorkspace((prev) => ({
-      ...prev,
-      canva: {
-        ...prev.canva,
-        autoSync: typeof action === "function" ? action(prev.canva.autoSync) : action,
-      },
-    }));
+    setWorkspace((prev) => {
+      if (prev.isReadOnly) return prev;
+      return {
+        ...prev,
+        canva: {
+          ...prev.canva,
+          autoSync: typeof action === "function" ? action(prev.canva.autoSync) : action,
+        },
+      };
+    });
   }, []);
 
   const setCanvaGridReversed: Dispatch<SetStateAction<boolean>> = useCallback(
     (action) => {
-      setWorkspace((prev) => ({
-        ...prev,
-        canva: {
-          ...prev.canva,
-          reversed: typeof action === "function" ? action(prev.canva.reversed) : action,
-        },
-      }));
+      setWorkspace((prev) => {
+        if (prev.isReadOnly) return prev;
+        return {
+          ...prev,
+          canva: {
+            ...prev.canva,
+            reversed: typeof action === "function" ? action(prev.canva.reversed) : action,
+          },
+        };
+      });
     },
     []
   );
 
   const setCanvaGridFormat = useCallback((format: CanvaGridFormatId) => {
     const defaults = getCanvaGridFormat(format);
-    setWorkspace((prev) => ({
-      ...prev,
-      canva: {
-        ...prev.canva,
-        gridFormat: format,
-        gridMaxWidth: defaults.defaultMaxWidth,
-      },
-    }));
+    setWorkspace((prev) => {
+      if (prev.isReadOnly) return prev;
+      return {
+        ...prev,
+        canva: {
+          ...prev.canva,
+          gridFormat: format,
+          gridMaxWidth: defaults.defaultMaxWidth,
+        },
+      };
+    });
   }, []);
 
   const setCanvaGridMaxWidth = useCallback((width: number) => {
     setWorkspace((prev) => {
+      if (prev.isReadOnly) return prev;
       const format = getCanvaGridFormat(prev.canva.gridFormat);
       const clamped = Math.min(format.zoomMax, Math.max(format.zoomMin, width));
       return {
@@ -411,6 +476,10 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
   const saveBrandGem = useCallback(
     async (gem: BrandGem): Promise<string | null> => {
       if (!activeClientId) return null;
+      if (workspaceRef.current.isReadOnly) {
+        toast.error("Roteiro arquivado é somente leitura.");
+        return null;
+      }
       const normalized: BrandGem = { ...gem, id: activeClientId };
       const trimmedName = normalized.name.trim() || activeClientId;
 
@@ -594,6 +663,72 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
     [registry, activeClientId, persistRegistry, loadClientIntoState, useApiStorage]
   );
 
+  const switchPlanningPeriod = useCallback(
+    async (periodId: string) => {
+      if (!activeClientId || periodId === workspaceRef.current.activePlanningPeriodId) return;
+
+      if (useApiStorage) {
+        try {
+          const dto = await fetchWorkspace(activeClientId, periodId);
+          const ws = apiWorkspaceToClientWorkspace(dto);
+          setWorkspace(ws);
+          workspaceRef.current = ws;
+        } catch (err) {
+          console.error("[AuraGrid] Falha ao trocar roteiro:", err);
+          toast.error("Não foi possível carregar o roteiro.");
+        }
+        return;
+      }
+
+      const next = switchLocalPlanningPeriod(workspaceRef.current, periodId);
+      setWorkspace(next);
+      workspaceRef.current = next;
+      flushSave(activeClientId, next);
+    },
+    [activeClientId, flushSave, useApiStorage]
+  );
+
+  const createPlanningPeriod = useCallback(
+    async (options: { label?: string; startDate?: string; sourcePeriodId?: string }) => {
+      if (!activeClientId) return;
+
+      if (useApiStorage) {
+        try {
+          const api = getApiHelpers();
+          if (api?.flushWorkspaceNow && !workspaceRef.current.isReadOnly) {
+            await api.flushWorkspaceNow(workspaceRef.current);
+          }
+          const { workspace: dto } = await createPlanningPeriodApi(activeClientId, options);
+          const ws = api ? api.toWorkspace(dto) : apiWorkspaceToClientWorkspace(dto);
+          setWorkspace(ws);
+          workspaceRef.current = ws;
+          toast.success("Novo roteiro criado.");
+        } catch (err) {
+          console.error("[AuraGrid] Falha ao criar roteiro:", err);
+          toast.error("Não foi possível criar o roteiro.");
+        }
+        return;
+      }
+
+      const next = createLocalPlanningPeriod(workspaceRef.current, activeClient, options);
+      setWorkspace(next);
+      workspaceRef.current = next;
+      flushSave(activeClientId, next);
+      toast.success("Novo roteiro criado.");
+    },
+    [activeClient, activeClientId, flushSave, useApiStorage]
+  );
+
+  const duplicatePlanningPeriod = useCallback(
+    async (
+      sourcePeriodId: string,
+      options: { label?: string; startDate?: string } = {}
+    ) => {
+      await createPlanningPeriod({ ...options, sourcePeriodId });
+    },
+    [createPlanningPeriod]
+  );
+
   const resetActiveClient = useCallback(() => {
     if (!hasActiveClient) return;
     if (useApiStorage) {
@@ -614,7 +749,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       return;
     }
     const meta = activeClient;
-    const ws = createEmptyWorkspace(meta);
+    const ws = resetLocalActivePeriod(workspaceRef.current, meta);
     setWorkspace(ws);
     workspaceRef.current = ws;
     flushSave(activeClientId, ws);
@@ -648,6 +783,12 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       resetActiveClient,
       persistWorkspaceNow,
       getPostsSnapshot,
+      activePlanningPeriodId: workspace.activePlanningPeriodId,
+      planningPeriods: workspace.planningPeriods,
+      isReadOnly: workspace.isReadOnly ?? false,
+      switchPlanningPeriod,
+      createPlanningPeriod,
+      duplicatePlanningPeriod,
       useApiStorage,
       workspaceHydrated,
     }),
@@ -676,6 +817,9 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       resetActiveClient,
       persistWorkspaceNow,
       getPostsSnapshot,
+      switchPlanningPeriod,
+      createPlanningPeriod,
+      duplicatePlanningPeriod,
       useApiStorage,
       workspaceHydrated,
     ]
@@ -702,6 +846,9 @@ export function useWorkspaceData() {
     posts: workspace.posts,
     startDate: workspace.startDate,
     brandGem: workspace.brandGem,
+    activePlanningPeriodId: workspace.activePlanningPeriodId,
+    planningPeriods: workspace.planningPeriods,
+    isReadOnly: workspace.isReadOnly ?? false,
     canvaPages: workspace.canva.pages,
     activeCanvaPageId: workspace.canva.activePageId,
     autoSyncCanva: workspace.canva.autoSync,
