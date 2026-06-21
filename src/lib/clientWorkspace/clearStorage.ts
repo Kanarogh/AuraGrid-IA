@@ -40,6 +40,22 @@ export function clearAllAuraGridStorage(): void {
   toRemove.forEach((k) => window.localStorage.removeItem(k));
 }
 
+/** Remove só cache de legendas (localStorage); preserva workspaces e catálogo. */
+export function clearAuraGridCaptionCache(): void {
+  if (typeof window === "undefined") return;
+
+  window.localStorage.removeItem("ag.captionCache.v1");
+
+  const toRemove: string[] = [];
+  for (let i = 0; i < window.localStorage.length; i++) {
+    const key = window.localStorage.key(i);
+    if (key?.startsWith("ag.captionCache.v1:")) {
+      toRemove.push(key);
+    }
+  }
+  toRemove.forEach((k) => window.localStorage.removeItem(k));
+}
+
 export function runOneTimeStorageWipe(): void {
   const WIPE_MARKER = "auragrid_wipe_2026_05";
   if (typeof window === "undefined") return;
