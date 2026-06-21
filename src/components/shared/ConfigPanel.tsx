@@ -4,6 +4,7 @@ import {
   Building,
   Check,
   ChevronDown,
+  Cpu,
   Hash,
   Info,
   ListOrdered,
@@ -12,6 +13,7 @@ import {
   Save,
   Sparkles,
   Trash2,
+  Settings,
   Type,
   CalendarDays,
   Palette,
@@ -45,6 +47,7 @@ import { AccentPicker } from "./AccentPicker";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { FieldLabel, Input, Textarea } from "../ui/Input";
+import { TabNav } from "../ui/Tabs";
 import { useAuth } from "../../context/AuthContext";
 import { migrateLocalStorageApi } from "../../lib/api/workspaceApi";
 import { REGISTRY_KEY } from "../../lib/clientWorkspace/types";
@@ -68,6 +71,7 @@ export function ConfigPanel({
   brandGem,
   brandGemSavedAt,
   onSaveBrandGem,
+  onDirtyChange,
 }: {
   open?: boolean;
   variant?: "panel" | "page";
@@ -76,10 +80,14 @@ export function ConfigPanel({
   brandGem: BrandGem;
   brandGemSavedAt?: string | null;
   onSaveBrandGem: (gem: BrandGem) => Promise<string | null>;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const { storageMode } = useAuth();
   const [footerOpen, setFooterOpen] = useState(true);
   const [captionParamsOpen, setCaptionParamsOpen] = useState(true);
+  const [settingsTab, setSettingsTab] = useState<
+    "brand" | "captions" | "ai" | "appearance"
+  >("brand");
   const [draftGem, setDraftGem] = useState<BrandGem>(brandGem);
   const [justSaved, setJustSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -93,6 +101,24 @@ export function ConfigPanel({
   const savedLabel = useMemo(() => formatSavedAt(brandGemSavedAt), [brandGemSavedAt]);
   const missingFields = getMissingBrandGemFields(draftGem);
   const gemReady = isBrandGemReadyForCaptions(draftGem);
+  const gemProgress = Math.round(((6 - missingFields.length) / 6) * 100);
+
+  useEffect(() => {
+    if (!gemReady) setFooterOpen(true);
+  }, [gemReady]);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [isDirty]);
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
 
   if (!open) return null;
 
@@ -247,20 +273,62 @@ export function ConfigPanel({
       </div>
       <p className="text-sm text-ag-muted mb-4">
         Configure tom, instruções e rodapé fixo para{" "}
-        <strong className="text-ag-text">{clientName}</strong> (
-        <code className="text-xs font-mono text-ag-accent">{brandGem.id}</code>). As legendas só
-        usam estes dados depois de clicar em <strong className="text-ag-text">Salvar Gem</strong>.
+        <strong className="text-ag-text">{clientName}</strong>. As legendas só usam estes dados
+        depois de clicar em <strong className="text-ag-text">Salvar Gem</strong>.
       </p>
 
       <div className="mb-6">{saveBar}</div>
+
+      <div className="mb-6">
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <span className="text-xs font-medium text-ag-text">Progresso do Gem</span>
+          <span className="text-xs text-ag-muted">{6 - missingFields.length}/6 campos</span>
+        </div>
+        <div className="h-2 rounded-full bg-ag-surface-3 overflow-hidden">
+          <div
+            className="h-full bg-ag-accent transition-all duration-300"
+            style={{ width: `${gemProgress}%` }}
+          />
+        </div>
+      </div>
+
+      <TabNav
+        tabs={[
+          { id: "brand" as const, label: "Marca (Gem)", icon: Sparkles },
+          { id: "captions" as const, label: "Legendas", icon: Type },
+          { id: "ai" as const, label: "IA", icon: Cpu },
+          { id: "appearance" as const, label: "Aparência", icon: Palette },
+        ]}
+        active={settingsTab}
+        onChange={setSettingsTab}
+      />
 
       {!gemReady && (
         <div className="mb-6 flex gap-2 text-xs text-ag-warning bg-ag-warning/10 border border-ag-warning/25 rounded-xl p-3">
           <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
           <p>
             <strong>Gem incompleto:</strong> preencha todos os campos obrigatórios antes de gerar
-            legendas. Pendentes:{" "}
-            {missingFields.map((key) => brandGemFieldLabel(key)).join(", ")}.
+            legendas.             Pendentes:{" "}
+            {missingFields.map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => {
+                  setSettingsTab(
+                    key.startsWith("footer") || key === "footer.address" ? "captions" : "brand"
+                  );
+                  window.setTimeout(() => {
+                    document.getElementById(`gem-field-${key}`)?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "center",
+                    });
+                  }, 50);
+                }}
+                className="underline hover:text-ag-text cursor-pointer mr-1"
+              >
+                {brandGemFieldLabel(key)}
+              </button>
+            ))}
           </p>
         </div>
       )}
@@ -275,6 +343,7 @@ export function ConfigPanel({
         </div>
       )}
 
+      {settingsTab === "appearance" && (
       <div className="mb-8 rounded-2xl border border-ag-border bg-ag-surface-2/50 p-5 sm:p-6 space-y-4">
         <div className="flex items-center gap-2">
           <Palette className="h-4 w-4 text-ag-accent" />
@@ -288,11 +357,15 @@ export function ConfigPanel({
         </p>
         <AccentPicker />
       </div>
+      )}
 
+      {settingsTab === "ai" && (
       <div className="mb-8">
         <AiProviderPanel />
       </div>
+      )}
 
+      {settingsTab === "brand" && (
       <div className="rounded-2xl border border-ag-border bg-ag-surface-2/50 p-5 sm:p-6 space-y-5">
         <div className="flex items-center gap-4 pb-4 border-b border-ag-border/60">
           <div
@@ -301,7 +374,7 @@ export function ConfigPanel({
           >
             {gemInitial(draftGem.name)}
           </div>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1" id="gem-field-name">
             <FieldLabel>Nome{requiredMark("name")}</FieldLabel>
             <Input
               value={draftGem.name}
@@ -312,7 +385,7 @@ export function ConfigPanel({
           </div>
         </div>
 
-        <div>
+        <div id="gem-field-description">
           <FieldLabel>Descrição{requiredMark("description")}</FieldLabel>
           <Textarea
             value={draftGem.description}
@@ -323,7 +396,7 @@ export function ConfigPanel({
           />
         </div>
 
-        <div>
+        <div id="gem-field-instructions">
           <FieldLabel>
             <span className="inline-flex items-center gap-1.5">
               Instruções{requiredMark("instructions")}
@@ -374,8 +447,11 @@ export function ConfigPanel({
           </p>
         </div>
       </div>
+      )}
 
-      <div className="mt-6 rounded-xl border border-ag-border bg-ag-surface-1/80 overflow-hidden">
+      {settingsTab === "captions" && (
+      <>
+      <div className="rounded-xl border border-ag-border bg-ag-surface-1/80 overflow-hidden">
         <button
           type="button"
           onClick={() => setCaptionParamsOpen((o) => !o)}
@@ -573,7 +649,7 @@ export function ConfigPanel({
                 className="text-sm"
               />
             </div>
-            <div>
+            <div id="gem-field-footer.address">
               <FieldLabel>
                 <span className="inline-flex items-center gap-1">
                   <Building className="h-3 w-3" /> Endereço{requiredMark("footer.address")}
@@ -585,7 +661,7 @@ export function ConfigPanel({
                 placeholder="Endereço da loja (se quiser no rodapé da legenda)"
               />
             </div>
-            <div>
+            <div id="gem-field-footer.contact">
               <FieldLabel>
                 <span className="inline-flex items-center gap-1">
                   <PhoneCall className="h-3 w-3" /> Contato{requiredMark("footer.contact")}
@@ -597,7 +673,7 @@ export function ConfigPanel({
                 placeholder="Acesse nosso site pelo link na Bio… (➡️ é adicionado automaticamente)"
               />
             </div>
-            <div className="sm:col-span-2">
+            <div className="sm:col-span-2" id="gem-field-footer.hashtags">
               <FieldLabel>
                 <span className="inline-flex items-center gap-1">
                   <Hash className="h-3 w-3" /> Hashtags{requiredMark("footer.hashtags")}
@@ -703,6 +779,8 @@ export function ConfigPanel({
           </div>
         )}
       </div>
+      </>
+      )}
 
       <div className="mt-6">{saveBar}</div>
 

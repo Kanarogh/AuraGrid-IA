@@ -37,6 +37,7 @@ export function CanvaWardrobePanel({
   selectedSlotNumber,
   onClearSlotSelection,
   onAssignItem,
+  onOpenCatalog,
 }: {
   items: CatalogItem[];
   usageByCatalogId: Map<string, number[]>;
@@ -46,6 +47,7 @@ export function CanvaWardrobePanel({
   selectedSlotNumber: number | null;
   onClearSlotSelection: () => void;
   onAssignItem: (item: CatalogItem) => void;
+  onOpenCatalog?: () => void;
 }) {
   const [filter, setFilter] = useState<WardrobeFilter>("all");
   const [thumbMinWidth, setThumbMinWidth] = useState(WARDROBE_THUMB_DEFAULT);
@@ -90,10 +92,10 @@ export function CanvaWardrobePanel({
           </div>
           <div className="min-w-0 flex-1">
             <h3 className="font-display text-base font-semibold text-ag-text tracking-tight">
-              Guarda-roupa
+              Catálogo
             </h3>
             <p className="text-[11px] text-ag-muted mt-0.5">
-              {items.length} looks · proporção {gridRatioLabel}
+              Arraste looks para o grid · {items.length} itens · {gridRatioLabel}
             </p>
           </div>
           <div className="text-right shrink-0">
@@ -196,8 +198,19 @@ export function CanvaWardrobePanel({
             }
             description={
               filter === "all"
-                ? "Cadastre referências na aba Catálogo para montar o grid."
+                ? "Cadastre referências no Catálogo para montar o grid."
                 : undefined
+            }
+            action={
+              filter === "all" && onOpenCatalog ? (
+                <button
+                  type="button"
+                  onClick={onOpenCatalog}
+                  className="text-xs font-semibold text-ag-accent hover:underline cursor-pointer mt-2"
+                >
+                  Abrir Catálogo →
+                </button>
+              ) : undefined
             }
           />
         ) : (

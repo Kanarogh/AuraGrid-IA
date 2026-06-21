@@ -61,6 +61,7 @@ export function CanvaGridWorkspace({
   onFormatChange,
   onZoomChange,
   onAssignWardrobeItem,
+  onOpenCatalog,
   cloudSave,
 }: {
   pages: CanvaGridPage[];
@@ -93,6 +94,7 @@ export function CanvaGridWorkspace({
   onFormatChange: (format: CanvaGridFormatId) => void;
   onZoomChange: (width: number) => void;
   onAssignWardrobeItem: (item: CatalogItem) => void;
+  onOpenCatalog?: () => void;
   cloudSave?: boolean;
 }) {
   const [tipsOpen, setTipsOpen] = useState(false);
@@ -375,6 +377,7 @@ export function CanvaGridWorkspace({
             selectedSlotNumber={selectedSlotNumber}
             onClearSlotSelection={clearSelection}
             onAssignItem={onAssignWardrobeItem}
+            onOpenCatalog={onOpenCatalog}
           />
         </div>
       </div>

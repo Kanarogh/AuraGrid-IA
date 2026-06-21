@@ -1,114 +1,42 @@
-import type { ComponentType } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  Grid,
-  LayoutGrid,
   LogOut,
+  MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
   RotateCcw,
-  ScanSearch,
-  Settings,
-  ShoppingBag,
-  Sliders,
-  Sparkles,
 } from "lucide-react";
 import { Badge } from "../ui/Badge";
 import { cn } from "../../lib/cn";
 import { ClientSwitcher } from "./ClientSwitcher";
+import { WorkspaceStatusBar } from "./WorkspaceStatusBar";
 import { useAuth } from "../../context/AuthContext";
+import {
+  NAV_GROUPS,
+  type AppSection,
+  type NavItem,
+} from "../../lib/sectionMeta";
+import { confirmDialog } from "../../lib/confirmDialog";
+import { useFocusTrap } from "../../lib/useFocusTrap";
 
-export type AppSection =
-  | "posts"
-  | "canva_grid"
-  | "feed_simulator"
-  | "catalog"
-  | "reference_finder"
-  | "settings";
+export type { AppSection } from "../../lib/sectionMeta";
+export {
+  getSectionTitle,
+  getSectionSubtitle,
+  getSectionIcon,
+  SECTION_SUBTITLES,
+} from "../../lib/sectionMeta";
 
-export type NavItem = {
-  id: AppSection;
-  label: string;
-  description?: string;
-  icon: ComponentType<{ className?: string }>;
-  badge?: number | string;
-  badgeTone?: "neutral" | "warning";
-};
+const SIDEBAR_COLLAPSED_KEY = "auragrid_sidebar_collapsed";
 
-export type NavGroup = {
-  title: string;
-  items: NavItem[];
-};
+export function loadSidebarCollapsed(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
+}
 
-const NAV_GROUPS: NavGroup[] = [
-  {
-    title: "Planejamento",
-    items: [
-      {
-        id: "posts",
-        label: "Roteiros e legendas",
-        description: "Calendário, IA e revisão",
-        icon: Sliders,
-      },
-    ],
-  },
-  {
-    title: "Produção visual",
-    items: [
-      {
-        id: "canva_grid",
-        label: "Grid Canva",
-        description: "Montagem multi-página",
-        icon: LayoutGrid,
-      },
-      {
-        id: "feed_simulator",
-        label: "Feed 3×3",
-        description: "Prévia do Instagram",
-        icon: Grid,
-      },
-    ],
-  },
-  {
-    title: "Acervo",
-    items: [
-      {
-        id: "catalog",
-        label: "Catálogo",
-        description: "Referências e indexação",
-        icon: ShoppingBag,
-      },
-      {
-        id: "reference_finder",
-        label: "Buscar referência",
-        description: "Foto → código no catálogo",
-        icon: ScanSearch,
-      },
-    ],
-  },
-  {
-    title: "Sistema",
-    items: [
-      {
-        id: "settings",
-        label: "Configurações",
-        description: "Tom da IA e provedor",
-        icon: Settings,
-      },
-    ],
-  },
-];
-
-const SECTION_TITLES: Record<AppSection, string> = {
-  posts: "Roteiros e legendas",
-  canva_grid: "Grid Canva",
-  feed_simulator: "Simulador de feed",
-  catalog: "Catálogo de referências",
-  reference_finder: "Buscar referência",
-  settings: "Configurações",
-};
-
-export function getSectionTitle(section: AppSection): string {
-  return SECTION_TITLES[section];
+export function saveSidebarCollapsed(collapsed: boolean) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
 }
 
 export function AppSidebar({
@@ -125,6 +53,7 @@ export function AppSidebar({
   onMobileClose,
   onReset,
   onClientCreated,
+  hasActiveClient,
 }: {
   active: AppSection;
   onNavigate: (id: AppSection) => void;
@@ -139,37 +68,80 @@ export function AppSidebar({
   onMobileClose: () => void;
   onReset: () => void;
   onClientCreated?: () => void;
+  hasActiveClient: boolean;
 }) {
   const { storageMode, user, logout } = useAuth();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+  const asideRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+
   const groups = NAV_GROUPS.map((g) => ({
     ...g,
     items: g.items.map((item) => {
-      if (item.id === "catalog") {
-        return { ...item, badge: catalogCount || undefined };
-      }
-      if (item.id === "settings" && brandGemReady === false) {
-        return {
-          ...item,
-          description: "Tom da IA — campos pendentes",
-          badge: brandGemMissingCount > 0 ? brandGemMissingCount : "!",
-          badgeTone: "warning" as const,
-        };
-      }
-      if (item.id === "settings" && brandGemReady === true) {
-        return { ...item, description: "Gem configurado · provedor IA" };
+      if (item.id === "catalog" && catalogCount > 0) {
+        return { ...item, badge: catalogCount } as NavItem & { badge?: number };
       }
       return item;
     }),
   }));
 
-  const gemStatusLabel =
-    brandGemReady === undefined
-      ? null
-      : brandGemReady
-        ? "Gem pronto"
-        : brandGemMissingCount > 0
-          ? `Gem — ${brandGemMissingCount} campo${brandGemMissingCount !== 1 ? "s" : ""} pendente${brandGemMissingCount !== 1 ? "s" : ""}`
-          : "Gem incompleto";
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
+        setMoreOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [moreOpen]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onMobileClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [mobileOpen, onMobileClose]);
+
+  useFocusTrap(asideRef, mobileOpen);
+
+  useEffect(() => {
+    if (!mobileOpen || !asideRef.current) return;
+    const focusable = asideRef.current.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    const first = focusable[0];
+    first?.focus();
+  }, [mobileOpen]);
+
+  const handleReset = async () => {
+    setMoreOpen(false);
+    if (
+      !(await confirmDialog({
+        title: "Reiniciar roteiro ativo?",
+        message:
+          "Isso apaga posts, Canva e catálogo do roteiro ativo. Roteiros arquivados são preservados.",
+        variant: "danger",
+        confirmLabel: "Continuar",
+      }))
+    ) {
+      return;
+    }
+    if (
+      !(await confirmDialog({
+        title: "Confirmação final",
+        message: "Esta ação não pode ser desfeita. Deseja realmente reiniciar?",
+        variant: "danger",
+        confirmLabel: "Reiniciar agora",
+      }))
+    ) {
+      return;
+    }
+    onReset();
+  };
 
   const sidebarContent = (
     <div className="flex flex-col h-full">
@@ -201,7 +173,10 @@ export function AppSidebar({
 
       <ClientSwitcher collapsed={collapsed} onClientCreated={onClientCreated} />
 
-      <nav className="flex-1 overflow-y-auto py-4 px-2 ag-scrollbar-thin space-y-5">
+      <nav
+        className="flex-1 overflow-y-auto py-4 px-2 ag-scrollbar-thin space-y-5"
+        aria-label="Navegação principal"
+      >
         {groups.map((group) => (
           <div key={group.title}>
             {!collapsed && (
@@ -213,27 +188,36 @@ export function AppSidebar({
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const isActive = active === item.id;
+                const badge = "badge" in item ? (item as { badge?: number }).badge : undefined;
+                const disabled = !hasActiveClient;
                 return (
                   <li key={item.id}>
                     <button
                       type="button"
+                      disabled={disabled}
+                      aria-current={isActive ? "page" : undefined}
                       onClick={() => {
+                        if (disabled) return;
                         onNavigate(item.id);
                         onMobileClose();
                       }}
                       title={
                         collapsed
-                          ? item.id === "settings" && brandGemReady === false
-                            ? `${item.label} — Gem incompleto`
+                          ? disabled
+                            ? "Crie um cliente primeiro"
                             : item.label
-                          : undefined
+                          : disabled
+                            ? "Crie um cliente para acessar"
+                            : undefined
                       }
                       className={cn(
-                        "group w-full flex items-center gap-3 rounded-xl text-left transition-all duration-200 cursor-pointer relative",
+                        "group w-full flex items-center gap-3 rounded-xl text-left transition-all duration-200 relative",
                         collapsed ? "justify-center p-2.5" : "px-3 py-2.5",
+                        disabled && "opacity-45 cursor-not-allowed",
+                        !disabled && "cursor-pointer",
                         isActive
                           ? "bg-ag-accent text-ag-accent-fg shadow-sm"
-                          : "text-ag-text hover:bg-ag-surface-3"
+                          : !disabled && "text-ag-text hover:bg-ag-surface-3"
                       )}
                     >
                       {isActive && !collapsed && (
@@ -249,15 +233,14 @@ export function AppSidebar({
                             isActive ? "text-ag-accent-fg" : "text-ag-muted group-hover:text-ag-text"
                           )}
                         />
-                        {collapsed && item.id === "settings" && brandGemReady === false && (
-                          <span
-                            className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-ag-warning ring-2 ring-ag-surface-1"
-                            aria-hidden
-                          />
-                        )}
                       </span>
                       {!collapsed && (
-                        <span className="flex-1 min-w-0">
+                        <span
+                          className={cn(
+                            "flex-1 min-w-0",
+                            item.nested && "pl-1 border-l-2 border-ag-border/40 ml-0.5"
+                          )}
+                        >
                           <span className="text-sm font-medium block truncate">{item.label}</span>
                           {item.description && (
                             <span
@@ -271,20 +254,16 @@ export function AppSidebar({
                           )}
                         </span>
                       )}
-                      {!collapsed && item.badge !== undefined && (
+                      {!collapsed && badge !== undefined && (
                         <span
                           className={cn(
                             "text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md",
-                            item.badgeTone === "warning"
-                              ? isActive
-                                ? "bg-ag-accent-fg/25 text-ag-accent-fg"
-                                : "bg-ag-warning/15 text-ag-warning"
-                              : isActive
-                                ? "bg-ag-accent-fg/20 text-ag-accent-fg"
-                                : "bg-ag-surface-3 text-ag-muted"
+                            isActive
+                              ? "bg-ag-accent-fg/20 text-ag-accent-fg"
+                              : "bg-ag-surface-3 text-ag-muted"
                           )}
                         >
-                          {item.badge}
+                          {badge}
                         </span>
                       )}
                     </button>
@@ -302,69 +281,67 @@ export function AppSidebar({
           collapsed && "flex flex-col items-center"
         )}
       >
-        {gemStatusLabel && (
+        <WorkspaceStatusBar
+          brandGemReady={brandGemReady}
+          brandGemMissingCount={brandGemMissingCount}
+          apiStatusLabel={apiStatusLabel}
+          apiStatusTone={apiStatusTone}
+          storageMode={storageMode}
+          collapsed={collapsed}
+          onOpenSettings={onNavigate}
+        />
+
+        <div className={cn("relative", collapsed ? "" : "w-full")} ref={moreRef}>
           <button
             type="button"
-            onClick={() => {
-              if (!brandGemReady) {
-                onNavigate("settings");
-                onMobileClose();
-              }
-            }}
-            title={gemStatusLabel}
-            className={cn(
-              "transition-opacity",
-              !brandGemReady && "cursor-pointer hover:opacity-90",
-              brandGemReady && "cursor-default",
-              collapsed ? "p-0" : "w-full"
-            )}
-          >
-            <Badge
-              tone={brandGemReady ? "success" : "warning"}
-              dot
-              className={cn(
-                collapsed ? "p-2 rounded-lg" : "w-full justify-center normal-case text-[10px]"
-              )}
-            >
-              {collapsed ? (
-                <Sparkles className="h-3.5 w-3.5" aria-hidden />
-              ) : (
-                gemStatusLabel
-              )}
-            </Badge>
-          </button>
-        )}
-        {!collapsed && (
-          <Badge tone={apiStatusTone} dot className="w-full justify-center normal-case text-[10px]">
-            {apiStatusLabel}
-          </Badge>
-        )}
-        <button
-          type="button"
-          onClick={onReset}
-          title="Reiniciar dados"
-          className={cn(
-            "flex items-center gap-2 text-xs text-ag-danger hover:bg-ag-danger/10 rounded-lg transition-colors cursor-pointer",
-            collapsed ? "p-2" : "w-full px-3 py-2"
-          )}
-        >
-          <RotateCcw className="h-3.5 w-3.5" />
-          {!collapsed && <span>Reiniciar sistema</span>}
-        </button>
-        {storageMode === "postgresql" && user && (
-          <button
-            type="button"
-            onClick={() => void logout()}
-            title="Sair da conta"
+            onClick={() => setMoreOpen((o) => !o)}
+            aria-expanded={moreOpen}
+            aria-haspopup="menu"
+            title="Mais opções"
             className={cn(
               "flex items-center gap-2 text-xs text-ag-muted hover:text-ag-text hover:bg-ag-surface-3 rounded-lg transition-colors cursor-pointer",
               collapsed ? "p-2" : "w-full px-3 py-2"
             )}
           >
-            <LogOut className="h-3.5 w-3.5" />
-            {!collapsed && <span>Sair ({user.displayName})</span>}
+            <MoreHorizontal className="h-3.5 w-3.5" />
+            {!collapsed && <span>Mais opções</span>}
           </button>
-        )}
+          {moreOpen && (
+            <div
+              role="menu"
+              className={cn(
+                "absolute bottom-full mb-1 rounded-lg border border-ag-border bg-ag-surface-1 shadow-lg py-1 text-xs z-50 min-w-[11rem]",
+                collapsed ? "left-0" : "left-0 right-0"
+              )}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!hasActiveClient}
+                onClick={() => void handleReset()}
+                className="w-full px-3 py-2 text-left text-ag-danger hover:bg-ag-danger/10 cursor-pointer disabled:opacity-40 flex items-center gap-2"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Reiniciar roteiro
+              </button>
+              {storageMode === "postgresql" && user && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    void logout();
+                  }}
+                  className="w-full px-3 py-2 text-left hover:bg-ag-surface-2 cursor-pointer flex items-center gap-2"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  Sair ({user.displayName})
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
         <button
           type="button"
           onClick={onToggleCollapsed}
@@ -398,11 +375,13 @@ export function AppSidebar({
       )}
 
       <aside
+        ref={asideRef}
         className={cn(
           "fixed lg:sticky top-0 z-50 lg:z-30 h-screen shrink-0 border-r border-ag-border bg-ag-surface-1 flex flex-col transition-all duration-200",
           collapsed ? "w-[72px]" : "w-[260px]",
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
+        aria-label="Menu lateral"
       >
         {sidebarContent}
       </aside>

@@ -138,8 +138,24 @@ export function ClientSwitcher({
   const [modalOpen, setModalOpen] = useState(false);
   const [menuClientId, setMenuClientId] = useState<string | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [collapsedPopoverOpen, setCollapsedPopoverOpen] = useState(false);
+  const collapsedPopoverRef = useRef<HTMLDivElement>(null);
 
   const menuClient = menuClientId ? clients.find((c) => c.id === menuClientId) : null;
+
+  useEffect(() => {
+    if (!collapsedPopoverOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (
+        collapsedPopoverRef.current &&
+        !collapsedPopoverRef.current.contains(e.target as Node)
+      ) {
+        setCollapsedPopoverOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [collapsedPopoverOpen]);
 
   const closeMenu = () => {
     setMenuClientId(null);
@@ -168,15 +184,59 @@ export function ClientSwitcher({
   if (collapsed) {
     return (
       <>
-        <div className="px-2 py-3 border-b border-ag-border flex flex-col items-center gap-2 shrink-0">
+        <div
+          ref={collapsedPopoverRef}
+          className="px-2 py-3 border-b border-ag-border flex flex-col items-center gap-2 shrink-0 relative"
+        >
           <button
             type="button"
-            title={hasActiveClient ? activeClient.name : "Novo cliente"}
-            className="h-9 w-9 rounded-full bg-gradient-to-br from-ag-accent to-ag-accent-strong flex items-center justify-center text-sm font-bold text-ag-accent-fg cursor-pointer"
-            onClick={() => setModalOpen(true)}
+            title={hasActiveClient ? activeClient.name : "Clientes"}
+            aria-expanded={collapsedPopoverOpen}
+            aria-haspopup="listbox"
+            className="h-9 w-9 rounded-full bg-gradient-to-br from-ag-accent to-ag-accent-strong flex items-center justify-center text-sm font-bold text-ag-accent-fg cursor-pointer ring-2 ring-transparent hover:ring-ag-accent/30"
+            onClick={() => setCollapsedPopoverOpen((o) => !o)}
           >
             {hasActiveClient ? gemInitial(activeClient.name) : <Plus className="h-4 w-4" />}
           </button>
+          {collapsedPopoverOpen && (
+            <div
+              role="listbox"
+              className="absolute left-full top-0 ml-2 z-[80] w-48 rounded-xl border border-ag-border bg-ag-surface-1 shadow-lg py-1 max-h-64 overflow-y-auto ag-scrollbar-thin"
+            >
+              {clients.map((client) => (
+                <button
+                  key={client.id}
+                  type="button"
+                  role="option"
+                  aria-selected={client.id === activeClientId}
+                  onClick={() => {
+                    switchClient(client.id);
+                    setCollapsedPopoverOpen(false);
+                  }}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-ag-surface-2 cursor-pointer",
+                    client.id === activeClientId && "bg-ag-accent/10 text-ag-accent"
+                  )}
+                >
+                  <span className="h-6 w-6 rounded-full bg-ag-accent text-ag-accent-fg text-[10px] font-bold flex items-center justify-center shrink-0">
+                    {gemInitial(client.name)}
+                  </span>
+                  <span className="truncate">{client.name}</span>
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setCollapsedPopoverOpen(false);
+                  setModalOpen(true);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs text-ag-accent hover:bg-ag-surface-2 cursor-pointer border-t border-ag-border mt-1"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Novo cliente
+              </button>
+            </div>
+          )}
         </div>
         <NewClientModal
           open={modalOpen}
@@ -267,9 +327,6 @@ export function ClientSwitcher({
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="text-sm font-medium block truncate">{client.name}</span>
-                    <span className="text-[10px] text-ag-muted font-mono truncate block">
-                      {client.id}
-                    </span>
                   </span>
                 </button>
                 <button

@@ -7,7 +7,8 @@ export function ApiAlert() {
       <code className="font-mono">GEMINI_API_KEY</code>,{" "}
       <code className="text-ag-accent font-mono">GROQ_API_KEY</code> ou{" "}
       <code className="text-ag-accent font-mono">OPENROUTER_API_KEY</code>). Na Vercel, use
-      Settings → Environment Variables. O provedor ativo é escolhido no painel IA (ícone ✨ no topo).
+      Settings → Environment Variables. Configure o provedor completo em{" "}
+      <strong>Configurações → IA</strong> ou use o atalho no topo (status IA → Configurar IA).
     </Alert>
   );
 }

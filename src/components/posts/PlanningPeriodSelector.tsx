@@ -20,6 +20,7 @@ export function PlanningPeriodSelector({
   onCreateNew,
   onDuplicate,
   toolbar,
+  hideDuplicateAction = false,
 }: {
   periods: PlanningPeriod[];
   activePeriodId: string;
@@ -28,6 +29,7 @@ export function PlanningPeriodSelector({
   onCreateNew: () => void;
   onDuplicate?: (sourcePeriodId: string) => void;
   toolbar?: ReactNode;
+  hideDuplicateAction?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -106,8 +108,8 @@ export function PlanningPeriodSelector({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 shrink-0 sm:self-start">
-          {isReadOnly && onDuplicate && active && (
+          <div className="flex flex-wrap items-center gap-2 shrink-0 sm:self-start">
+            {isReadOnly && onDuplicate && active && !hideDuplicateAction && (
             <Button
               variant="secondary"
               size="sm"

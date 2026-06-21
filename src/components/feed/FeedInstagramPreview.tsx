@@ -1,6 +1,7 @@
 import type { PlannedPost } from "../../types";
 import { sortPostsForInstagramProfile } from "../../lib/instagramFeedOrder";
 import { StudioSection } from "../ui/StudioSection";
+import { Button } from "../ui/Button";
 import { InstagramProfileMockup } from "./InstagramProfileMockup";
 
 export function FeedInstagramPreview({
@@ -28,36 +29,31 @@ export function FeedInstagramPreview({
 
   return (
     <StudioSection
-      title="Feed 3×3"
-      subtitle={
-        <>
-          Prévia do perfil no estilo Instagram · miniaturas 4:5.
-          {ordered.length > 0 ? (
-            <>
-              {" "}
-              <strong className="text-ag-text">{ordered.length}</strong>{" "}
-              {ordered.length === 1 ? "foto" : "fotos"} — mais recente{" "}
-              {newest ? `(D${newest.dayNumber})` : ""}, mais antiga{" "}
-              {oldest ? `(D${oldest.dayNumber})` : ""}.
-            </>
-          ) : (
-            " Adicione looks nos roteiros."
-          )}
-        </>
-      }
+      titleMode="hidden"
+      eyebrow="Produção visual"
       actions={
         onOpenStudio ? (
-          <button
-            type="button"
-            onClick={onOpenStudio}
-            className="text-xs font-semibold px-4 py-2 rounded-xl border border-ag-border bg-ag-surface-2 hover:bg-ag-surface-3 cursor-pointer"
-          >
+          <Button type="button" variant="secondary" size="sm" onClick={onOpenStudio}>
             Editar no estúdio
-          </button>
+          </Button>
         ) : undefined
       }
       noPadding
     >
+      <p className="text-sm text-ag-muted leading-relaxed max-w-3xl px-4 sm:px-6 pt-5 sm:pt-6">
+        Prévia do perfil no estilo Instagram · miniaturas 4:5.
+        {ordered.length > 0 ? (
+          <>
+            {" "}
+            <strong className="text-ag-text">{ordered.length}</strong>{" "}
+            {ordered.length === 1 ? "foto" : "fotos"} — mais recente{" "}
+            {newest ? `(D${newest.dayNumber})` : ""}, mais antiga{" "}
+            {oldest ? `(D${oldest.dayNumber})` : ""}.
+          </>
+        ) : (
+          " Adicione looks nos roteiros."
+        )}
+      </p>
       <div className="relative flex justify-center py-8 sm:py-10 px-4 sm:px-6">
         <InstagramProfileMockup
           posts={posts}

@@ -111,7 +111,9 @@ import {
 } from "./components/posts/CaptionBatchPanel";
 import { PostDayStudio } from "./components/posts/PostDayStudio";
 import { EditorialGridView } from "./components/posts/EditorialGridView";
-import { PostsWorkspaceToolbar } from "./components/posts/PostsWorkspaceToolbar";
+import { PostsWorkspaceToolbar, type PostsWorkTab } from "./components/posts/PostsWorkspaceToolbar";
+import { PopularCalendarioPanel } from "./components/posts/PopularCalendarioPanel";
+import { PostsWorkflowBar } from "./components/posts/PostsWorkflowBar";
 import {
   PlanningPeriodReadOnlyBanner,
   PlanningPeriodSelector,
@@ -126,6 +128,7 @@ import { getCaptionBatchStats, getPendingCaptionPosts } from "./lib/captionBatch
 import { mergeRecentCaptionSignals } from "./lib/recentCaptionHooks";
 import { isHookTooSimilar } from "./lib/captionSimilarity";
 import { readJsonResponse } from "./lib/apiResponse";
+import { CatalogTabNav } from "./components/catalog/CatalogTabNav";
 import { CatalogModal } from "./components/catalog/CatalogModal";
 import { CatalogProfileModal } from "./components/catalog/CatalogProfileModal";
 import { ReferenceFinderPanel } from "./components/reference/ReferenceFinderPanel";
@@ -388,14 +391,52 @@ export default function App() {
   const [viewMode, setViewMode] = useState<"split" | "editorial">(
     () => workspace.ui?.viewMode ?? "split"
   );
+  const [postsWorkTab, setPostsWorkTab] = useState<PostsWorkTab>(() =>
+    workspace.ui?.viewMode === "editorial" ? "calendar" : "day"
+  );
+
+  const handlePostsWorkTabChange = useCallback((tab: PostsWorkTab) => {
+    setPostsWorkTab(tab);
+    if (tab === "day") setViewMode("split");
+    else if (tab === "calendar") setViewMode("editorial");
+  }, []);
+
+  const handleNavigate = useCallback(
+    async (next: AppSection) => {
+      if (
+        activeSection === "settings" &&
+        settingsDraftDirty &&
+        next !== "settings"
+      ) {
+        const ok = await confirmDialog({
+          title: "Alterações não salvas",
+          message:
+            "Você tem alterações no Gem da marca que ainda não foram salvas. Sair sem salvar?",
+          variant: "danger",
+          confirmLabel: "Sair sem salvar",
+        });
+        if (!ok) return;
+      }
+      setActiveSection(next);
+    },
+    [activeSection, settingsDraftDirty]
+  );
+
+  const cancelTimelineReorder = useCallback(() => {
+    setTimelineReorderMode(false);
+    setSwapSourceId("");
+  }, []);
 
   const [swapSourceId, setSwapSourceId] = useState<string>("");
+  const [timelineReorderMode, setTimelineReorderMode] = useState(false);
+  const [settingsDraftDirty, setSettingsDraftDirty] = useState(false);
   const [refineInstructions, setRefineInstructions] = useState<{ [postId: string]: string }>({});
   const [isRefining, setIsRefining] = useState<{ [postId: string]: boolean }>({});
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isExportingCanvaPdf, setIsExportingCanvaPdf] = useState(false);
   const [showNewPlanningPeriodModal, setShowNewPlanningPeriodModal] = useState(false);
   const [duplicateSourcePeriodId, setDuplicateSourcePeriodId] = useState<string | undefined>();
+  const [catalogTab, setCatalogTab] = useState<"references" | "grid">("references");
 
   const prevClientIdRef = useRef(activeClientId);
 
@@ -412,6 +453,7 @@ export default function App() {
     setProfileViewItem(null);
     setRefineInstructions({});
     setSwapSourceId("");
+    setTimelineReorderMode(false);
     setSelectedCanvaSlotId(null);
     setCanvaLightbox(null);
     setCatalogLightbox(null);
@@ -890,10 +932,18 @@ export default function App() {
     const element = dayCardRefs.current[postId];
     if (element) {
       element.scrollIntoView({ behavior: "smooth", block: "center" });
-      // Add a visual pulse
       element.classList.add("ring-2", "ring-ag-accent", "scale-[1.01]");
       setTimeout(() => {
         element.classList.remove("ring-2", "ring-ag-accent", "scale-[1.01]");
+      }, 1500);
+      return;
+    }
+    const editorialRow = document.getElementById(`editorial-row-${postId}`);
+    if (editorialRow) {
+      editorialRow.scrollIntoView({ behavior: "smooth", block: "center" });
+      editorialRow.classList.add("ring-2", "ring-ag-accent");
+      setTimeout(() => {
+        editorialRow.classList.remove("ring-2", "ring-ag-accent");
       }, 1500);
     }
   };
@@ -1372,6 +1422,7 @@ export default function App() {
     setPosts(updated);
     void saveWorkspaceNow();
     setSwapSourceId("");
+    setTimelineReorderMode(false);
     toast.success(`Sequência modificada! Os conteúdos de "${sourcePost.dateLabel}" e "${destPost.dateLabel}" foram invertidos para harmonização visual.`);
   };
 
@@ -1951,9 +2002,9 @@ export default function App() {
   const ensureBrandGemConfigured = useCallback((): boolean => {
     if (isBrandGemReadyForCaptions(brandGem)) return true;
     toast.warning(brandGemRequiredMessage(brandGem));
-    setActiveSection("settings");
+    void handleNavigate("settings");
     return false;
-  }, [brandGem]);
+  }, [brandGem, handleNavigate]);
 
   const matchAndGenerateForPost = async (
     postId: string,
@@ -2916,7 +2967,7 @@ export default function App() {
     <>
       <AppShell
         activeSection={activeSection}
-        onNavigate={setActiveSection}
+        onNavigate={handleNavigate}
         clientName={hasActiveClient ? activeClient.name : "—"}
         catalogCount={referenceCatalog.length}
         brandGemReady={hasActiveClient ? brandGemReady : undefined}
@@ -2926,21 +2977,49 @@ export default function App() {
         isDark={isDark}
         onToggleTheme={toggleTheme}
         onReset={handleResetPresets}
-        onClientCreated={() => setActiveSection("settings")}
+        onClientCreated={() => void handleNavigate("settings")}
+        hasActiveClient={hasActiveClient}
         footer={<Footer />}
       >
         {connectionStatus === "disconnected" && <ApiAlert />}
 
         {!hasActiveClient && (
-          <div className="flex flex-col items-center justify-center min-h-[45vh] gap-3 px-4 text-center">
+          <div className="flex flex-col items-center justify-center min-h-[45vh] gap-6 px-4 text-center max-w-lg mx-auto">
             <h2 className="font-display text-2xl font-semibold text-ag-text">
               Crie seu primeiro cliente
             </h2>
-            <p className="text-sm text-ag-muted max-w-md">
+            <p className="text-sm text-ag-muted">
               Use <strong className="font-medium text-ag-text">+ Novo</strong> na barra lateral
-              para cadastrar uma marca. Catálogo, roteiro e configurações ficam isolados por
-              cliente.
+              para cadastrar uma marca. Depois siga o fluxo:
             </p>
+            <ol className="text-left text-sm text-ag-muted space-y-2 w-full">
+              <li className="flex gap-2">
+                <span className="font-bold text-ag-accent shrink-0">1.</span>
+                <span>
+                  <strong className="text-ag-text">Catálogo</strong> — importe e indexe referências
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span className="font-bold text-ag-accent shrink-0">2.</span>
+                <span>
+                  <strong className="text-ag-text">Grid Canva</strong> — monte páginas de 12 fotos
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span className="font-bold text-ag-accent shrink-0">3.</span>
+                <span>
+                  <strong className="text-ag-text">Roteiros</strong> — sincronize, gere e aprove
+                  legendas
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span className="font-bold text-ag-accent shrink-0">4.</span>
+                <span>
+                  <strong className="text-ag-text">Configurações</strong> — configure o Gem da
+                  marca
+                </span>
+              </li>
+            </ol>
           </div>
         )}
 
@@ -2951,15 +3030,19 @@ export default function App() {
             brandGem={brandGem}
             brandGemSavedAt={workspace.ui?.brandGemSavedAt}
             onSaveBrandGem={saveBrandGem}
+            onDirtyChange={setSettingsDraftDirty}
           />
         )}
 
         {hasActiveClient && activeSection === "posts" && (
-          <div className="space-y-4">
+          <div className="ag-workspace-section">
+            <PostsWorkflowBar stats={captionBatchStats} />
+
             <PlanningPeriodSelector
               periods={planningPeriods}
               activePeriodId={activePlanningPeriodId}
               isReadOnly={isReadOnly}
+              hideDuplicateAction={isReadOnly}
               onSelect={(periodId) => void switchPlanningPeriod(periodId)}
               onCreateNew={() => {
                 setDuplicateSourcePeriodId(undefined);
@@ -2971,8 +3054,8 @@ export default function App() {
               }}
               toolbar={
                 <PostsWorkspaceToolbar
-                  viewMode={viewMode}
-                  onViewModeChange={setViewMode}
+                  activeTab={postsWorkTab}
+                  onTabChange={handlePostsWorkTabChange}
                   onExportTxt={handleExportTxt}
                   onExportPdf={handleExportPdf}
                   isExportingPdf={isExportingPdf}
@@ -2990,70 +3073,103 @@ export default function App() {
               />
             )}
 
-            {viewMode === "editorial" && (
-              <>
-                <SchedulerPanel
-                  startDate={startDate}
-                  onStartDateChange={handleStartDateChange}
-                  postsCount={posts.length}
-                  catalogCount={referenceCatalog.length}
-                  onAddDay={handleAddDay}
-                  onDistributeCatalog={() => handleAutoDistribute(referenceCatalog)}
-                  onBatchUpload={(files) => handleBatchScheduleUpload(files)}
-                  isReadOnly={isReadOnly}
-                />
-
-                <CanvaTimelineSyncPanel
-                  autoSync={autoSyncCanva}
-                  onAutoSyncChange={(enabled) => {
-                    setAutoSyncCanva(enabled);
-                    if (enabled) syncCanvaGridToTimeline(canvaPages, true);
-                  }}
-                  canvaGridReversed={canvaGridReversed}
-                  onCanvaGridReversedChange={(reversed) => {
-                    setCanvaGridReversed(reversed);
-                    setTimeout(() => {
-                      if (autoSyncCanva) syncCanvaGridToTimeline(canvaPages, false);
-                    }, 50);
-                  }}
-                  onSyncNow={() => syncCanvaGridToTimeline(canvaPages, true)}
-                  canvaImageCount={canvaImageCount}
-                  onOpenCanvaGrid={() => setActiveSection("canva_grid")}
-                />
-
-                <TimelineStrip
-                  posts={posts}
-                  catalog={referenceCatalog}
-                  activePreviewId={activePreviewId}
-                  swapSourceId={swapSourceId}
-                  onSelectPost={handleScrollToDay}
-                  onSwapClick={(id) => {
-                    if (swapSourceId) {
-                      handleSwapDays(swapSourceId, id);
-                    } else {
-                      setSwapSourceId(id);
-                      toast.info("Origem selecionada! Escolha outro post para inverter os conteúdos.");
-                    }
-                  }}
-                />
-              </>
+            {postsWorkTab === "setup" && (
+              <PopularCalendarioPanel
+                startDate={startDate}
+                onStartDateChange={handleStartDateChange}
+                postsCount={posts.length}
+                catalogCount={referenceCatalog.length}
+                onAddDay={handleAddDay}
+                onDistributeCatalog={() => handleAutoDistribute(referenceCatalog)}
+                onBatchUpload={(files) => handleBatchScheduleUpload(files)}
+                isReadOnly={isReadOnly}
+                autoSync={autoSyncCanva}
+                onAutoSyncChange={(enabled) => {
+                  setAutoSyncCanva(enabled);
+                  if (enabled) syncCanvaGridToTimeline(canvaPages, true);
+                }}
+                canvaGridReversed={canvaGridReversed}
+                onCanvaGridReversedChange={(reversed) => {
+                  setCanvaGridReversed(reversed);
+                  setTimeout(() => {
+                    if (autoSyncCanva) syncCanvaGridToTimeline(canvaPages, false);
+                  }, 50);
+                }}
+                onSyncNow={() => syncCanvaGridToTimeline(canvaPages, true)}
+                canvaImageCount={canvaImageCount}
+                onOpenCanvaGrid={() => void handleNavigate("canva_grid")}
+              />
             )}
 
-            <CaptionBatchPanel
-              stats={captionBatchStats}
-              isRunning={isProcessingAll}
-              progress={captionBatchProgress}
-              brandGemReady={brandGemReady}
-              brandGemMissingFields={brandGemMissingFields}
-              onOpenGemSettings={() => setActiveSection("settings")}
-              onGeneratePending={handleRunAllMatching}
-              onRegenerateErrors={handleRegenerateCaptionErrors}
-              onStop={stopCaptionBatch}
-              onReviewAll={() => setViewMode("editorial")}
-              compact={viewMode === "split"}
-            />
+            {postsWorkTab !== "setup" && (
+              <div className="sticky top-[var(--ag-topbar-height)] z-10 -mx-4 sm:-mx-5 lg:-mx-6 px-4 sm:px-5 lg:px-6 py-2 bg-ag-bg/90 backdrop-blur-sm border-b border-ag-border/40">
+                <CaptionBatchPanel
+                  stats={captionBatchStats}
+                  isRunning={isProcessingAll}
+                  progress={captionBatchProgress}
+                  brandGemReady={brandGemReady}
+                  brandGemMissingFields={brandGemMissingFields}
+                  onOpenGemSettings={() => void handleNavigate("settings")}
+                  onGeneratePending={handleRunAllMatching}
+                  onRegenerateErrors={handleRegenerateCaptionErrors}
+                  onStop={stopCaptionBatch}
+                  onReviewAll={() => handlePostsWorkTabChange("calendar")}
+                  compact
+                />
+              </div>
+            )}
 
-            {viewMode === "split" && activePost ? (
+            {postsWorkTab === "calendar" && (
+              <TimelineStrip
+                posts={posts}
+                catalog={referenceCatalog}
+                activePreviewId={activePreviewId}
+                swapSourceId={swapSourceId}
+                reorderMode={timelineReorderMode}
+                onEnterReorderMode={() => setTimelineReorderMode(true)}
+                onCancelReorder={cancelTimelineReorder}
+                onSelectPost={handleScrollToDay}
+                onSwapClick={(id) => {
+                  if (swapSourceId === id) {
+                    setSwapSourceId("");
+                    return;
+                  }
+                  if (swapSourceId) {
+                    handleSwapDays(swapSourceId, id);
+                  } else {
+                    setSwapSourceId(id);
+                    toast.info("Origem selecionada! Escolha outro post para inverter os conteúdos.");
+                  }
+                }}
+              />
+            )}
+
+            {postsWorkTab === "day" && posts.length > 0 && (
+              <TimelineStrip
+                posts={posts}
+                catalog={referenceCatalog}
+                activePreviewId={activePreviewId}
+                swapSourceId={swapSourceId}
+                reorderMode={timelineReorderMode}
+                onEnterReorderMode={() => setTimelineReorderMode(true)}
+                onCancelReorder={cancelTimelineReorder}
+                onSelectPost={handleScrollToDay}
+                onSwapClick={(id) => {
+                  if (swapSourceId === id) {
+                    setSwapSourceId("");
+                    return;
+                  }
+                  if (swapSourceId) {
+                    handleSwapDays(swapSourceId, id);
+                  } else {
+                    setSwapSourceId(id);
+                    toast.info("Origem selecionada! Escolha outro post para inverter os conteúdos.");
+                  }
+                }}
+              />
+            )}
+
+            {postsWorkTab === "day" && activePost ? (
               <PostDayStudio
                 cardRef={(el) => {
                   dayCardRefs.current[activePost.id] = el;
@@ -3098,11 +3214,11 @@ export default function App() {
                 }
                 onRefine={(instruction) => void handleRefineCaption(activePost.id, instruction)}
               />
-            ) : viewMode === "split" ? (
+            ) : postsWorkTab === "day" ? (
               <div className="ag-card p-8 text-center text-sm text-ag-muted">
-                Nenhum post no roteiro. Adicione um dia ou sincronize pelo Grid Canva.
+                Nenhum post no roteiro. Use a aba <strong>Setup</strong> para popular o calendário.
               </div>
-            ) : (
+            ) : postsWorkTab === "calendar" ? (
               <EditorialGridView
                 posts={posts}
                 referenceCatalog={referenceCatalog}
@@ -3134,23 +3250,16 @@ export default function App() {
                 onFocusPost={(id) => setActivePreviewId(id)}
                 onOpenStudio={(id) => {
                   setActivePreviewId(id);
-                  setViewMode("split");
+                  handlePostsWorkTabChange("day");
                 }}
               />
-            )}
+            ) : null}
           </div>
         )}
 
         {hasActiveClient && activeSection === "canva_grid" && activeCanvaPage && (
           <StudioSection
-            title="Grid Canva"
-            eyebrow="Produção visual"
-            subtitle={
-              <>
-                Monte páginas de 12 fotos, organize looks e envie para o roteiro de 30 dias.{" "}
-                <CanvaGridOrderHint onOpenRoteiros={() => setActiveSection("posts")} />
-              </>
-            }
+            titleMode="hidden"
             actions={
               <>
                 <Button
@@ -3190,7 +3299,7 @@ export default function App() {
                       }
                       handlePlanFromCanva("active", true);
                       toast.success("Calendário atualizado com o bloco ativo.");
-                      setActiveSection("posts");
+                      void handleNavigate("posts");
                     })();
                   }}
                 >
@@ -3212,7 +3321,7 @@ export default function App() {
                       }
                       handlePlanFromCanva("all", true);
                       toast.success("Calendário atualizado com todas as páginas.");
-                      setActiveSection("posts");
+                      void handleNavigate("posts");
                     })();
                   }}
                 >
@@ -3222,6 +3331,10 @@ export default function App() {
               </>
             }
           >
+            <p className="text-sm text-ag-muted mb-4 leading-relaxed max-w-3xl">
+              Monte páginas de 12 fotos, organize looks e envie para o roteiro de 30 dias.{" "}
+              <CanvaGridOrderHint onOpenRoteiros={() => void handleNavigate("posts")} />
+            </p>
             <CanvaGridWorkspace
               pages={canvaPages}
               activePage={activeCanvaPage}
@@ -3285,6 +3398,7 @@ export default function App() {
                   );
                 }
               }}
+              onOpenCatalog={() => void handleNavigate("catalog")}
             />
             {canvaLightbox && (
               <CanvaGridLightbox
@@ -3310,8 +3424,8 @@ export default function App() {
             onSelectPost={handleScrollToDay}
             onSwapDays={handleSwapDays}
             onOpenStudio={() => {
-              setViewMode("split");
-              setActiveSection("posts");
+              handlePostsWorkTabChange("day");
+              void handleNavigate("posts");
             }}
           />
         )}
@@ -3320,7 +3434,7 @@ export default function App() {
           <ReferenceFinderPanel
             referenceCatalog={referenceCatalog}
             isEnrichingCatalog={isEnrichingCatalog}
-            onNavigateCatalog={() => setActiveSection("catalog")}
+            onNavigateCatalog={() => void handleNavigate("catalog")}
             onEnsureCatalogIndexed={ensureCatalogIndexedForMatch}
             onViewProfile={(item) => setProfileViewItem(item)}
             clientId={useApiStorage ? activeClientId ?? undefined : undefined}
@@ -3330,55 +3444,62 @@ export default function App() {
         {/* WORKSPACE VIEW 3: REFERENCE CLOTHES BATCH FILES MANAGER */}
         {hasActiveClient && activeSection === "catalog" && (
           <StudioSection
-            title="Catálogo de referências"
-            subtitle={
-              <>
-                Cada foto gera um perfil JSON para a IA fazer match sem reenviar imagens.
-                {!serverEnrichReady && (
-                  <span className="block mt-2 text-ag-danger text-xs p-2 rounded-lg bg-ag-danger/10 border border-ag-danger/25">
-                    Reinicie com <strong>npm run dev</strong> para ativar indexação.
-                  </span>
-                )}
-                {isEnrichingCatalog && (
-                  <span className="flex items-center gap-2 mt-2 text-ag-accent text-xs">
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin shrink-0" />
-                    <span className="min-w-0">{catalogEnrichProgressLabel}</span>
-                    <button
-                      type="button"
-                      onClick={stopCatalogEnrichment}
-                      className="font-semibold text-ag-danger cursor-pointer"
-                    >
-                      Parar
-                    </button>
-                  </span>
-                )}
-              </>
-            }
+            titleMode="hidden"
+            eyebrow="Acervo"
             actions={
               <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowCatalogModal(true)}
-                  className="text-xs font-semibold px-4 py-2 rounded-xl bg-ag-accent text-white hover:opacity-90 flex items-center gap-2 cursor-pointer"
-                >
+                <Button variant="secondary" size="sm" onClick={() => void handleNavigate("canva_grid")}>
+                  <LayoutGrid className="h-4 w-4" />
+                  Usar no Grid Canva
+                </Button>
+                <Button variant="accent" size="sm" onClick={() => setShowCatalogModal(true)}>
                   <Plus className="h-4 w-4" />
                   Nova referência
-                </button>
-                {referenceCatalog.length > 0 && (
-                  <button
-                    type="button"
+                </Button>
+                {referenceCatalog.length > 0 && catalogTab === "references" && (
+                  <Button
+                    variant="danger"
+                    size="sm"
                     onClick={clearEntireCatalog}
                     disabled={isEnrichingCatalog}
-                    className="text-xs font-semibold px-4 py-2 rounded-xl border border-ag-danger/35 bg-ag-danger/10 text-ag-danger hover:bg-ag-danger/15 disabled:opacity-50 cursor-pointer flex items-center gap-2"
-                    title="Remove todas as referências do catálogo deste cliente"
                   >
                     <Trash2 className="h-4 w-4" />
                     Excluir catálogo
-                  </button>
+                  </Button>
                 )}
               </div>
             }
           >
+            <p className="text-sm text-ag-muted leading-relaxed max-w-3xl mb-4">
+              Referências indexadas para match de IA e peças visuais para o Grid Canva.
+              {!serverEnrichReady && (
+                <span className="block mt-2 text-ag-danger text-xs p-2 rounded-lg bg-ag-danger/10 border border-ag-danger/25">
+                  Reinicie com <strong>npm run dev</strong> para ativar indexação.
+                </span>
+              )}
+              {isEnrichingCatalog && (
+                <span className="flex items-center gap-2 mt-2 text-ag-accent text-xs">
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin shrink-0" />
+                  <span className="min-w-0">{catalogEnrichProgressLabel}</span>
+                  <button
+                    type="button"
+                    onClick={stopCatalogEnrichment}
+                    className="font-semibold text-ag-danger cursor-pointer"
+                  >
+                    Parar
+                  </button>
+                </span>
+              )}
+            </p>
+            <CatalogTabNav
+              active={catalogTab}
+              onChange={setCatalogTab}
+              referenceCount={referenceCatalog.length}
+              gridCount={gridCatalog.length}
+            />
+
+            {catalogTab === "references" && (
+              <>
             <div className={`p-6 sm:p-8 border-2 border-dashed rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-4 mb-8 ${
               catalogDragOver 
                 ? "border-ag-accent bg-ag-accent/5 rotate-0 scale-99" 
@@ -3552,18 +3673,6 @@ export default function App() {
                     Só indexados ({indexedCatalogCount})
                   </button>
                 )}
-                {referenceCatalog.length > 0 && (
-                  <button
-                    type="button"
-                    disabled={isEnrichingCatalog}
-                    onClick={clearEntireCatalog}
-                    className="text-[10px] font-bold px-3 py-1.5 rounded-lg border border-ag-danger/35 bg-ag-danger/10 text-ag-danger hover:bg-ag-danger/15 disabled:opacity-50 cursor-pointer flex items-center gap-1"
-                    title="Remove todas as referências e indexações"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                    Excluir catálogo ({referenceCatalog.length})
-                  </button>
-                )}
               </div>
             </div>
 
@@ -3710,8 +3819,11 @@ export default function App() {
               </div>
             )}
 
-            {/* Peças de grid / atmosfera — não usadas na IA de match */}
-            <div className="mt-10 pt-8 border-t border-ag-border">
+              </>
+            )}
+
+            {catalogTab === "grid" && (
+            <div>
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div>
                   <h3 className="text-sm font-bold text-ag-text flex items-center gap-2">
@@ -3854,6 +3966,7 @@ export default function App() {
                 </div>
               )}
             </div>
+            )}
 
           </StudioSection>
         )}

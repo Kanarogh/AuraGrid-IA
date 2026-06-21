@@ -40,13 +40,14 @@
 :root,
 .light {
   color-scheme: light;
+  --ag-topbar-height: 4rem;
   --ag-bg: #f5f5f3;
   --ag-surface-1: #ffffff;
   --ag-surface-2: #f0f0ed;
   --ag-surface-3: #e6e6e1;
   --ag-border: #deded8;
   --ag-text: #15151a;
-  --ag-muted: #6b6b76;
+  --ag-muted: #57575f;
   --ag-cta: #17171c;
   --ag-cta-fg: #fafafa;
   --ag-success: #0d9488;
@@ -59,13 +60,14 @@
 
 .dark {
   color-scheme: dark;
+  --ag-topbar-height: 4rem;
   --ag-bg: #08080b;
   --ag-surface-1: #111117;
   --ag-surface-2: #18181f;
   --ag-surface-3: #23232e;
   --ag-border: #2d2d39;
   --ag-text: #f3f3f6;
-  --ag-muted: #989aa8;
+  --ag-muted: #a3a5b3;
   --ag-cta: #f3f3f6;
   --ag-cta-fg: #08080b;
   --ag-success: #2dd4bf;
@@ -253,6 +255,36 @@ body {
   .ag-page-mesh {
     background:
       radial-gradient(ellipse 120% 90% at 50% -25%, color-mix(in srgb, var(--ag-accent) 7%, transparent), transparent 60%);
+  }
+
+  .ag-workspace-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  @media (min-width: 640px) {
+    .ag-workspace-section {
+      gap: 1.25rem;
+    }
+  }
+
+  .ag-skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 100;
+    padding: 0.5rem 1rem;
+    background: var(--ag-accent);
+    color: var(--ag-accent-fg);
+    border-radius: var(--radius-ag-md);
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .ag-skip-link:focus {
+    left: 1rem;
+    top: 1rem;
   }
 
   .ag-gradient-text {

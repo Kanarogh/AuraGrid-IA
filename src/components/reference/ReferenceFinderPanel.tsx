@@ -21,6 +21,7 @@ import { Badge } from "../ui/Badge";
 import { AiErrorBanner } from "../shared/AiErrorBanner";
 import { EmptyState } from "../ui/EmptyState";
 import { cn } from "../../lib/cn";
+import { getSectionBreadcrumb } from "../../lib/sectionMeta";
 
 async function readImageFile(file: File): Promise<string> {
   const raw = await new Promise<string>((resolve, reject) => {
@@ -148,12 +149,8 @@ export function ReferenceFinderPanel({
   return (
     <StudioSection
       title="Buscar referência"
-      subtitle={
-        <>
-          Envie uma foto de look ou peça e a IA identifica qual referência do catálogo corresponde —
-          sem gerar legenda. Use o mesmo índice JSON do catálogo (mais rápido e preciso).
-        </>
-      }
+      titleMode="nested"
+      eyebrow={getSectionBreadcrumb("reference_finder")}
       actions={
         <Badge tone={catalogReady ? "success" : "warning"} dot>
           {indexedCount}/{referenceCatalog.length} indexadas
@@ -161,6 +158,10 @@ export function ReferenceFinderPanel({
         </Badge>
       }
     >
+      <p className="text-sm text-ag-muted leading-relaxed max-w-3xl mb-6">
+        Envie uma foto de look ou peça e a IA identifica qual referência do catálogo corresponde —
+        sem gerar legenda. Use o mesmo índice JSON do catálogo (mais rápido e preciso).
+      </p>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">
           <div

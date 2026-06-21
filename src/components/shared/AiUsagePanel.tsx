@@ -18,7 +18,13 @@ import { useEffect, useState } from "react";
 
 type Stats = ReturnType<typeof getCaptionCacheStats>;
 
-export function AiUsagePanel() {
+export function AiUsagePanel({
+  compact = false,
+  onOpenSettings,
+}: {
+  compact?: boolean;
+  onOpenSettings?: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [queueState, setQueueState] = useState<AiQueueState>(aiQueue.getState());
   const [cacheStats, setCacheStats] = useState<Stats>(getCaptionCacheStats());
@@ -111,53 +117,81 @@ export function AiUsagePanel() {
               <Stat icon={<Database className="h-3 w-3" />} label="Cache" value={`${cacheStats.size}/${cacheStats.capacity}`} />
             </div>
 
-            {settings && (
-              <div className="border-t border-ag-border/60 pt-3 space-y-1.5">
-                <p className="text-[10px] font-mono uppercase tracking-widest text-ag-muted">
-                  Trocar provedor
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {settings.providers.map((p) => {
-                    const isActive = p.id === settings.activeProvider;
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        disabled={!p.configured || isActive || switching !== null || saving}
-                        onClick={async () => {
-                          setSwitching(p.id);
-                          try {
-                            await setProvider(p.id);
-                          } finally {
-                            setSwitching(null);
-                          }
-                        }}
-                        className={`text-[10px] px-2 py-1 rounded-md border cursor-pointer ${
-                          isActive
-                            ? "border-ag-accent bg-ag-accent/15 text-ag-accent font-semibold"
-                            : p.configured
-                              ? "border-ag-border bg-ag-surface-2 text-ag-text hover:bg-ag-surface-3"
-                              : "border-ag-border bg-ag-surface-2 text-ag-muted cursor-not-allowed"
-                        }`}
-                      >
-                        {switching === p.id ? `${providerDisplayName(p.id)}…` : providerDisplayName(p.id)}
-                      </button>
-                    );
-                  })}
-                </div>
-                {settings.activeProvider !== "openrouter" &&
-                  settings.activeProvider !== "gemini" &&
-                  settings.activeProvider !== "ollama" && (
-                  <p className="text-[10px] text-ag-muted leading-snug">
-                    Com <strong>{providerDisplayName(settings.activeProvider)}</strong> ativo, só
-                    esse provedor é usado (padrão). Para cair em Groq/OpenRouter ao esgotar cota,
-                    defina <code className="text-[9px]">AI_ALLOW_FALLBACK=1</code> no .env.
-                  </p>
-                )}
+            {pending > 0 && (
+              <div className="border-t border-ag-border/60 pt-3">
+                <button
+                  type="button"
+                  onClick={() => aiQueue.cancelPending()}
+                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-ag-danger hover:underline cursor-pointer"
+                >
+                  <AlertTriangle className="h-3 w-3" />
+                  Cancelar pendentes
+                </button>
               </div>
             )}
 
-            {settings?.activeProvider === "openrouter" && (
+            {compact && onOpenSettings ? (
+              <div className="border-t border-ag-border/60 pt-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    onOpenSettings();
+                  }}
+                  className="text-xs font-semibold text-ag-accent hover:underline cursor-pointer"
+                >
+                  Configurar IA →
+                </button>
+              </div>
+            ) : (
+              settings && (
+                <div className="border-t border-ag-border/60 pt-3 space-y-1.5">
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-ag-muted">
+                    Trocar provedor
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {settings.providers.map((p) => {
+                      const isActive = p.id === settings.activeProvider;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          disabled={!p.configured || isActive || switching !== null || saving}
+                          onClick={async () => {
+                            setSwitching(p.id);
+                            try {
+                              await setProvider(p.id);
+                            } finally {
+                              setSwitching(null);
+                            }
+                          }}
+                          className={`text-[10px] px-2 py-1 rounded-md border cursor-pointer ${
+                            isActive
+                              ? "border-ag-accent bg-ag-accent/15 text-ag-accent font-semibold"
+                              : p.configured
+                                ? "border-ag-border bg-ag-surface-2 text-ag-text hover:bg-ag-surface-3"
+                                : "border-ag-border bg-ag-surface-2 text-ag-muted cursor-not-allowed"
+                          }`}
+                        >
+                          {switching === p.id ? `${providerDisplayName(p.id)}…` : providerDisplayName(p.id)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {settings.activeProvider !== "openrouter" &&
+                    settings.activeProvider !== "gemini" &&
+                    settings.activeProvider !== "ollama" && (
+                    <p className="text-[10px] text-ag-muted leading-snug">
+                      Com <strong>{providerDisplayName(settings.activeProvider)}</strong> ativo, só
+                      esse provedor é usado (padrão). Para cair em Groq/OpenRouter ao esgotar cota,
+                      defina <code className="text-[9px]">AI_ALLOW_FALLBACK=1</code> no .env.
+                    </p>
+                  )}
+                </div>
+              )
+            )}
+
+            {!compact && settings?.activeProvider === "openrouter" && (
               <div className="border-t border-ag-border/60 pt-3 space-y-1.5">
                 <p className="text-[10px] font-mono uppercase tracking-widest text-ag-muted">
                   Modelo OpenRouter
@@ -186,25 +220,12 @@ export function AiUsagePanel() {
               </div>
             )}
 
-            {settings?.activeProvider === "gemini" && (
+            {!compact && settings?.activeProvider === "gemini" && (
               <GeminiModelPicker variant="popover" disabled={savingModel || saving} />
             )}
 
-            {settings?.activeProvider === "ollama" && (
+            {!compact && settings?.activeProvider === "ollama" && (
               <OllamaModelPicker variant="popover" disabled={savingModel || saving} />
-            )}
-
-            {pending > 0 && (
-              <div className="border-t border-ag-border/60 pt-3">
-                <button
-                  type="button"
-                  onClick={() => aiQueue.cancelPending()}
-                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-ag-danger hover:underline cursor-pointer"
-                >
-                  <AlertTriangle className="h-3 w-3" />
-                  Cancelar pendentes
-                </button>
-              </div>
             )}
           </div>
         </>
