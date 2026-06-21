@@ -10,6 +10,7 @@ import {
   resolveHomePath,
   useAppNavigation,
 } from "../../lib/appRouting";
+import { isStorageModeResolved } from "../../lib/storageMode";
 
 /** Redirects globais: home, auth e correção de rotas inválidas. */
 export function AppRouteBootstrap() {
@@ -23,14 +24,15 @@ export function AppRouteBootstrap() {
     workspaceHydrated,
     useApiStorage,
   } = useClientWorkspace();
-  const { parsedLocation } = useAppNavigation();
+  const { parsedLocation, isNavigationInFlight } = useAppNavigation();
   const lastRedirectRef = useRef<string | null>(null);
 
   const clientIds = clients.map((c) => c.id);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || !isStorageModeResolved(storageMode)) return;
     if (useApiStorage && !workspaceHydrated) return;
+    if (isNavigationInFlight()) return;
 
     const redirect = (path: string) => {
       if (pathname === path || lastRedirectRef.current === path) return;
@@ -103,6 +105,7 @@ export function AppRouteBootstrap() {
     clientIds,
     workspaceHydrated,
     useApiStorage,
+    isNavigationInFlight,
   ]);
 
   return null;

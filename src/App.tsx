@@ -220,7 +220,6 @@ export default function App() {
     useApiStorage,
     persistWorkspaceNow,
     getPostsSnapshot,
-    workspaceHydrated,
     activePlanningPeriodId,
     planningPeriods,
     isReadOnly,
@@ -2887,6 +2886,8 @@ export default function App() {
   const routeSection = clientRoute?.section ?? activeSection;
   const routePostsTab = clientRoute?.postsTab ?? postsWorkTab;
   const routePreviewId = clientRoute?.postId ?? activePreviewId;
+  const routeCatalogTab = clientRoute?.catalogTab ?? catalogTab;
+  const routeSettingsTab = clientRoute?.settingsTab ?? settingsTab;
 
   const activePost =
     posts.find((p) => p?.id === routePreviewId) ?? posts.find((p) => !!p?.id) ?? null;
@@ -2913,15 +2914,6 @@ export default function App() {
     },
     [activeEditorialIndex, orderedEditorialPosts, selectPreviewPost]
   );
-
-  if (useApiStorage && !workspaceHydrated) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-ag-bg text-ag-muted">
-        <Loader2 className="h-8 w-8 animate-spin text-ag-accent" />
-        <p className="text-sm">Carregando workspace na nuvem…</p>
-      </div>
-    );
-  }
 
   return (
     <>
@@ -3013,7 +3005,7 @@ export default function App() {
             brandGemSavedAt={workspace.ui?.brandGemSavedAt}
             onSaveBrandGem={saveBrandGem}
             onDirtyChange={setSettingsDraftDirty}
-            settingsTab={settingsTab}
+            settingsTab={routeSettingsTab}
             onSettingsTabChange={handleSettingsTabChange}
           />
         )}
@@ -3440,7 +3432,7 @@ export default function App() {
                   <Plus className="h-4 w-4" />
                   Nova referência
                 </Button>
-                {referenceCatalog.length > 0 && catalogTab === "references" && (
+                {referenceCatalog.length > 0 && routeCatalogTab === "references" && (
                   <Button
                     variant="danger"
                     size="sm"
@@ -3476,13 +3468,13 @@ export default function App() {
               )}
             </p>
             <CatalogTabNav
-              active={catalogTab}
+              active={routeCatalogTab}
               onChange={handleCatalogTabChange}
               referenceCount={referenceCatalog.length}
               gridCount={gridCatalog.length}
             />
 
-            {catalogTab === "references" && (
+            {routeCatalogTab === "references" && (
               <>
             <div className={`p-6 sm:p-8 border-2 border-dashed rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-4 mb-8 ${
               catalogDragOver 
@@ -3806,7 +3798,7 @@ export default function App() {
               </>
             )}
 
-            {catalogTab === "grid" && (
+            {routeCatalogTab === "grid" && (
             <div>
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div>

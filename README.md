@@ -53,7 +53,9 @@ npm run docker:up
 
 | Script | Descrição |
 |--------|-----------|
-| `npm run dev` | Servidor Express + Vite |
+| `npm run dev` | Next.js dev server |
+| `npm run test:app-routing` | Testes de parse/build de URLs |
+| `npm run test:navigation` | Testes de sync, bootstrap e validação |
 | `npm run docker:infra` | Só Postgres + MinIO |
 | `npm run docker:up` | Stack completa |
 | `npm run db:migrate` | Aplica migrations SQL |
@@ -73,3 +75,7 @@ npm run docker:up
 - `GET /api/v1/media/:id` — serve imagem (auth Bearer ou `?token=`)
 
 Health: `GET /api/health` inclui status de DB e MinIO.
+
+## Roteamento e navegação
+
+Arquitetura SPA-in-Next, bootstrap unificado e regras anti-regressão: **[docs/routing.md](docs/routing.md)**.

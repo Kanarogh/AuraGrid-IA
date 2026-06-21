@@ -4,6 +4,8 @@ import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthProvider, useAuth } from "../../src/context/AuthContext";
 import { LoginForm } from "../../src/components/auth/LoginForm";
+import { AppBootstrapSplash } from "../../src/components/app/AppBootstrapSplash";
+import { isStorageModeResolved } from "../../src/lib/storageMode";
 
 function LoginPageInner() {
   const router = useRouter();
@@ -12,6 +14,7 @@ function LoginPageInner() {
   const returnTo = searchParams.get("returnTo") || "/";
 
   useEffect(() => {
+    if (!isStorageModeResolved(storageMode)) return;
     if (storageMode === "local") {
       router.replace("/");
       return;
@@ -21,12 +24,12 @@ function LoginPageInner() {
     }
   }, [user, loading, storageMode, router, returnTo]);
 
-  if (storageMode === "local" || loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-ag-bg text-ag-muted">
-        Carregando…
-      </div>
-    );
+  if (!isStorageModeResolved(storageMode) || loading) {
+    return <AppBootstrapSplash status="connecting" />;
+  }
+
+  if (storageMode === "local") {
+    return <AppBootstrapSplash status="redirecting" />;
   }
 
   if (user) return null;
@@ -43,13 +46,7 @@ function LoginPageInner() {
 export default function LoginPage() {
   return (
     <AuthProvider>
-      <Suspense
-        fallback={
-          <div className="min-h-screen flex items-center justify-center bg-ag-bg text-ag-muted">
-            Carregando…
-          </div>
-        }
-      >
+      <Suspense fallback={<AppBootstrapSplash status="connecting" />}>
         <LoginPageInner />
       </Suspense>
     </AuthProvider>

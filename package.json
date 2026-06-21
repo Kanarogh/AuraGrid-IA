@@ -10,6 +10,7 @@
     "lint": "tsc --noEmit",
     "db:migrate": "tsx server/db/migrate.ts",
     "test:app-routing": "tsx src/lib/appRouting/paths.test.ts",
+    "test:navigation": "tsx src/lib/appRouting/navigation.test.ts",
     "docker:infra": "docker compose -f docker-compose.dev.yml up -d",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down"

@@ -36,6 +36,8 @@ export type RouteValidationContext = {
   pageIds: string[];
   slotIdsByPage: Map<string, string[]>;
   defaultPageId?: string;
+  /** Quando false, não valida postId/pageId/slotId (workspace ainda carregando). */
+  workspaceReady?: boolean;
 };
 
 export type RouteValidationResult =

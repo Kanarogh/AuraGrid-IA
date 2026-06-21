@@ -12,6 +12,7 @@ import {
   stateToClientRoute,
   useAppNavigation,
   validateClientRoute,
+  resolvePendingNavigation,
   type CatalogTab,
   type ClientRoute,
   type NavigateOptions,
@@ -58,7 +59,8 @@ function buildValidationContext(
   registryClientIds: string[],
   posts: PlannedPost[],
   canvaPages: CanvaGridPage[],
-  defaultPageId?: string
+  defaultPageId?: string,
+  workspaceReady = true
 ) {
   const slotIdsByPage = new Map<string, string[]>();
   for (const page of canvaPages) {
@@ -73,6 +75,7 @@ function buildValidationContext(
     pageIds: canvaPages.map((p) => p.id),
     slotIdsByPage,
     defaultPageId,
+    workspaceReady,
   };
 }
 
@@ -130,7 +133,9 @@ export function useAppRouteSync({
     navigateClient: pushClientRoute,
     replaceClientRoute,
     setBeforeNavigate,
-    pendingNavigationPathRef,
+    pendingNavigationRef,
+    registerCommitNavigation,
+    isApplyingRouteRef,
   } = useAppNavigation();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -209,7 +214,8 @@ export function useAppRouteSync({
         registryClientIds,
         posts,
         canvaPages,
-        activeCanvaPageId
+        activeCanvaPageId,
+        clientRoute?.clientId === effectiveActiveClientId
       );
       const nextRoute = enrichRouteBeforePush(built, activeCanvaPageId, ctx);
       const nextPath = buildClientPath(nextRoute);
@@ -261,38 +267,50 @@ export function useAppRouteSync({
   }, [setBeforeNavigate]);
 
   useEffect(() => {
+    registerCommitNavigation(commitNavigation);
+    return () => registerCommitNavigation(null);
+  }, [commitNavigation, registerCommitNavigation]);
+
+  useEffect(() => {
     if (!enabled || !clientRoute || !hasActiveClient) return;
     if (applyingFromUrlRef.current) return;
+    if (isApplyingRouteRef.current) return;
 
     const routePath = buildClientPath(clientRoute);
+    const pendingStatus = resolvePendingNavigation(pendingNavigationRef.current, routePath);
 
-    if (pendingNavigationPathRef.current) {
-      if (routePath === pendingNavigationPathRef.current) {
-        pendingNavigationPathRef.current = null;
-        const ctx = buildValidationContext(
-          registryClientIds,
-          posts,
-          canvaPages,
-          activeCanvaPageId
-        );
-        const validated = validateClientRoute(clientRoute, ctx);
-        const route = validated.route;
-        if (route.clientId !== effectiveActiveClientId) {
-          handlers.switchClient(route.clientId);
-        }
-        applyPatch(clientRouteToStatePatch(route));
+    if (pendingStatus === "blocked") {
+      return;
+    }
+
+    if (pendingStatus === "match") {
+      pendingNavigationRef.current = null;
+      const ctx = buildValidationContext(
+        registryClientIds,
+        posts,
+        canvaPages,
+        activeCanvaPageId,
+        clientRoute.clientId === effectiveActiveClientId
+      );
+      const validated = validateClientRoute(clientRoute, ctx);
+      const route = validated.route;
+      if (route.clientId !== effectiveActiveClientId) {
+        handlers.switchClient(route.clientId);
       }
+      applyPatch(clientRouteToStatePatch(route));
       return;
     }
 
     let cancelled = false;
 
     void (async () => {
+      const workspaceReady = clientRoute.clientId === effectiveActiveClientId;
       const ctx = buildValidationContext(
         registryClientIds,
         posts,
         canvaPages,
-        activeCanvaPageId
+        activeCanvaPageId,
+        workspaceReady
       );
       const validated = validateClientRoute(clientRoute, ctx);
       const route = validated.route;
@@ -366,7 +384,8 @@ export function useAppRouteSync({
     handlers,
     currentRouteFromState,
     commitNavigation,
-    pendingNavigationPathRef,
+    pendingNavigationRef,
+    isApplyingRouteRef,
   ]);
 
   const handleNavigate = useCallback(

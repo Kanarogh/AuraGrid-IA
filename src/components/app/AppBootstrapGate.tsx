@@ -3,13 +3,18 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
+import { useClientWorkspace } from "../../context/ClientWorkspaceContext";
 import { buildLoginPath } from "../../lib/appRouting";
 import { isStorageModeResolved } from "../../lib/storageMode";
-import { AppBootstrapSplash } from "../app/AppBootstrapSplash";
+import { AppBootstrapSplash } from "./AppBootstrapSplash";
 
-/** @deprecated Prefer AppBootstrapGate no workspace shell. Mantido para compatibilidade. */
-export function AuthGate({ children }: { children: React.ReactNode }) {
+/**
+ * Gate único de bootstrap: health → auth → workspace.
+ * Substitui spinners empilhados em AuthGate + App.
+ */
+export function AppBootstrapGate({ children }: { children: React.ReactNode }) {
   const { user, loading, storageMode } = useAuth();
+  const { useApiStorage, workspaceHydrated } = useClientWorkspace();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -28,10 +33,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return <AppBootstrapSplash status="connecting" />;
   }
 
-  if (storageMode === "local") return <>{children}</>;
-  if (user) return <>{children}</>;
+  if (storageMode === "postgresql" && !user) {
+    if (pathname === "/login") return null;
+    return <AppBootstrapSplash status="redirecting" />;
+  }
 
-  if (pathname === "/login") return null;
+  if (useApiStorage && !workspaceHydrated) {
+    return <AppBootstrapSplash status="workspace" />;
+  }
 
-  return <AppBootstrapSplash status="redirecting" />;
+  return <>{children}</>;
 }

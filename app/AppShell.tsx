@@ -9,7 +9,7 @@ import {
   ClientWorkspaceProvider,
   useClientWorkspace,
 } from "../src/context/ClientWorkspaceContext";
-import { AuthGate } from "../src/components/auth/AuthGate";
+import { AppBootstrapGate } from "../src/components/app/AppBootstrapGate";
 import { NotificationProvider } from "../src/components/ui/NotificationProvider";
 import { AppNavigationProvider } from "../src/lib/appRouting";
 import { AppRouteBootstrap } from "../src/components/app/AppRouteBootstrap";
@@ -39,10 +39,10 @@ export default function AppShell() {
             <ApiWorkspaceSync />
             <Suspense fallback={null}>
               <AppNavigationShell>
-                <AuthGate>
+                <AppBootstrapGate>
                   <AppRouteBootstrap />
                   <App />
-                </AuthGate>
+                </AppBootstrapGate>
               </AppNavigationShell>
             </Suspense>
           </ClientWorkspaceProvider>

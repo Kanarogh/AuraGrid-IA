@@ -17,11 +17,16 @@ import {
   restoreSession,
   type AuthUser,
 } from "../lib/api/apiClient";
+import {
+  resolveInitialStorageMode,
+  type ResolvedStorageMode,
+  type StorageMode,
+} from "../lib/storageMode";
 
 type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
-  storageMode: "postgresql" | "local";
+  storageMode: StorageMode;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, displayName: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -30,10 +35,23 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+type AuthBootstrap = {
+  storageMode: ResolvedStorageMode;
+  user: AuthUser | null;
+};
+
+let authBootstrapCache: AuthBootstrap | null = null;
+
+export function getCachedAuthBootstrap(): AuthBootstrap | null {
+  return authBootstrapCache;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [storageMode, setStorageMode] = useState<"postgresql" | "local">("local");
+  const [user, setUser] = useState<AuthUser | null>(() => authBootstrapCache?.user ?? null);
+  const [loading, setLoading] = useState(() => authBootstrapCache === null);
+  const [storageMode, setStorageMode] = useState<StorageMode>(() =>
+    resolveInitialStorageMode(authBootstrapCache?.storageMode)
+  );
 
   const refreshUser = useCallback(async () => {
     const me = await restoreSession();
@@ -41,34 +59,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (authBootstrapCache) return;
     let cancelled = false;
     (async () => {
       const mode = await fetchStorageMode();
       if (cancelled) return;
-      setStorageMode(mode);
+      let me: AuthUser | null = null;
       if (mode === "postgresql") {
-        await refreshUser();
+        me = await restoreSession();
       }
-      if (!cancelled) setLoading(false);
+      if (cancelled) return;
+      authBootstrapCache = { storageMode: mode, user: me };
+      setStorageMode(mode);
+      setUser(me);
+      setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [refreshUser]);
+  }, []);
 
   const login = useCallback(async (email: string, password: string) => {
     const u = await loginApi(email, password);
     setUser(u);
+    if (authBootstrapCache) authBootstrapCache = { ...authBootstrapCache, user: u };
   }, []);
 
   const register = useCallback(async (email: string, password: string, displayName: string) => {
     const u = await registerApi(email, password, displayName);
     setUser(u);
+    if (authBootstrapCache) authBootstrapCache = { ...authBootstrapCache, user: u };
   }, []);
 
   const logout = useCallback(async () => {
     await logoutApi();
     setUser(null);
+    if (authBootstrapCache) authBootstrapCache = { ...authBootstrapCache, user: null };
   }, []);
 
   const value = useMemo(

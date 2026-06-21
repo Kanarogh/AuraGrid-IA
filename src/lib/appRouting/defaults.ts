@@ -40,6 +40,10 @@ export function validateClientRoute(
     next = { ...next, clientId: fallbackId };
   }
 
+  if (ctx.workspaceReady === false) {
+    return { ok: true, route: withSectionDefaults(next) };
+  }
+
   if (next.postId && !ctx.postIds.includes(next.postId)) {
     next = { ...next, postId: undefined };
   }

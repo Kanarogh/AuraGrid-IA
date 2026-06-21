@@ -135,7 +135,7 @@ export function ClientSwitcher({
     renameClient,
     hasActiveClient,
   } = useClientWorkspace();
-  const { navigateClient } = useAppNavigation();
+  const { navigateRoute } = useAppNavigation();
   const [modalOpen, setModalOpen] = useState(false);
   const [menuClientId, setMenuClientId] = useState<string | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
@@ -211,7 +211,7 @@ export function ClientSwitcher({
                   role="option"
                   aria-selected={client.id === activeClientId}
                   onClick={() => {
-                    void navigateClient({ clientId: client.id });
+                    void navigateRoute({ clientId: client.id });
                     setCollapsedPopoverOpen(false);
                   }}
                   className={cn(
@@ -308,7 +308,7 @@ export function ClientSwitcher({
               <li key={client.id} className="relative">
                 <button
                   type="button"
-                  onClick={() => void navigateClient({ clientId: client.id })}
+                  onClick={() => void navigateRoute({ clientId: client.id })}
                   className={cn(
                     "w-full flex items-center gap-2.5 rounded-lg pl-2 pr-9 py-2 text-left transition-colors cursor-pointer min-w-0",
                     isActive

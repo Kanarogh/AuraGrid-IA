@@ -41,4 +41,10 @@ export {
   type RouteStatePatch,
 } from "./syncStateToRoute";
 
-export { AppNavigationProvider, useAppNavigation } from "./AppNavigationProvider";
+export {
+  AppNavigationProvider,
+  useAppNavigation,
+  resolvePendingNavigation,
+  PENDING_NAV_TIMEOUT_MS,
+  type PendingNavigation,
+} from "./AppNavigationProvider";

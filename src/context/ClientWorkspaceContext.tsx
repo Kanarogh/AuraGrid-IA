@@ -22,6 +22,7 @@ import {
   createClientMeta,
   createEmptyWorkspace,
   createOrphanWorkspace,
+  createEmptyRegistry,
   ensureClientRegistry,
   loadWorkspace,
   resolveWorkspaceForClient,
@@ -39,7 +40,8 @@ import {
 import { notifyStorageSaveFailure } from "../lib/clientWorkspace/saveNotify";
 import { toast } from "../lib/toast";
 import type { BrandGem, CanvaGridPage, CatalogItem, PlannedPost } from "../types";
-import { useAuth } from "./AuthContext";
+import { useAuth, getCachedAuthBootstrap } from "./AuthContext";
+import { isStorageModeResolved, resolveInitialStorageMode } from "../lib/storageMode";
 import { getApiHelpers, type ApiRegistryEvent } from "./ApiWorkspaceSync";
 import {
   apiWorkspaceToClientWorkspace,
@@ -119,23 +121,47 @@ function initialWorkspace(reg: ClientRegistry): ClientWorkspace {
   return resolveWorkspaceForClient(reg.activeClientId, meta);
 }
 
-export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
-  const { storageMode, user } = useAuth();
-  const useApiStorage = storageMode === "postgresql" && !!user;
+function seedRegistryFromLocal(): ClientRegistry {
+  return ensureClientRegistry();
+}
 
-  const [registry, setRegistry] = useState<ClientRegistry>(() => ensureClientRegistry());
+export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
+  const { storageMode, user, loading: authLoading } = useAuth();
+  const useApiStorage = storageMode === "postgresql" && !!user;
+  const initialMode = resolveInitialStorageMode(getCachedAuthBootstrap()?.storageMode);
+  const localSeededRef = useRef(initialMode === "local");
+
+  const [registry, setRegistry] = useState<ClientRegistry>(() =>
+    initialMode === "local" ? seedRegistryFromLocal() : createEmptyRegistry()
+  );
   const [workspace, setWorkspace] = useState<ClientWorkspace>(() =>
-    initialWorkspace(ensureClientRegistry())
+    initialMode === "local"
+      ? initialWorkspace(seedRegistryFromLocal())
+      : createOrphanWorkspace()
   );
   const [workspaceHydrated, setWorkspaceHydrated] = useState(false);
 
   useEffect(() => {
-    if (!useApiStorage) {
+    if (authLoading || !isStorageModeResolved(storageMode)) return;
+
+    if (storageMode === "local") {
+      if (!localSeededRef.current) {
+        localSeededRef.current = true;
+        const reg = seedRegistryFromLocal();
+        setRegistry(reg);
+        setWorkspace(initialWorkspace(reg));
+      }
       setWorkspaceHydrated(true);
       return;
     }
+
+    if (!user) {
+      setWorkspaceHydrated(false);
+      return;
+    }
+
     setWorkspaceHydrated(false);
-  }, [useApiStorage, user?.id]);
+  }, [useApiStorage, user?.id, authLoading, storageMode, user]);
 
   useEffect(() => {
     if (!useApiStorage) return;
