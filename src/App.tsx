@@ -3025,7 +3025,6 @@ export default function App() {
               isReadOnly={isReadOnly}
               hideDuplicateAction={isReadOnly}
               onSelect={(periodId) => {
-                void switchPlanningPeriod(periodId);
                 void navigateClient({ periodId }, { replace: true, skipDirtyGuard: true });
               }}
               onCreateNew={() => {

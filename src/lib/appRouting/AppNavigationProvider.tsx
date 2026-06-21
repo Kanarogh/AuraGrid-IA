@@ -19,6 +19,8 @@ type AppNavigationContextValue = {
   parsedLocation: ParsedLocation;
   clientRoute: ClientRoute | null;
   defaultClientId: string;
+  /** Pathname+query alvo durante navegação programática (bloqueia revert no sync). */
+  pendingNavigationPathRef: React.MutableRefObject<string | null>;
   /** Navega preservando clientId atual quando omitido. */
   navigateClient: (
     partial: Partial<ClientRoute>,
@@ -44,6 +46,7 @@ export function AppNavigationProvider({
   const searchParams = useSearchParams();
   const beforeNavigateRef = useRef<BeforeNavigateFn | null>(null);
   const isApplyingRouteRef = useRef(false);
+  const pendingNavigationPathRef = useRef<string | null>(null);
   const currentRouteRef = useRef<ClientRoute | null>(null);
   const defaultClientIdRef = useRef(defaultClientId);
   defaultClientIdRef.current = defaultClientId;
@@ -58,6 +61,7 @@ export function AppNavigationProvider({
 
   const pushPath = useCallback(
     (path: string, replace?: boolean) => {
+      pendingNavigationPathRef.current = path;
       if (replace) router.replace(path);
       else router.push(path);
     },
@@ -114,6 +118,7 @@ export function AppNavigationProvider({
   const replaceClientRoute = useCallback(
     (route: ClientRoute) => {
       const path = buildClientPath(route);
+      pendingNavigationPathRef.current = path;
       isApplyingRouteRef.current = true;
       router.replace(path);
       queueMicrotask(() => {
@@ -132,6 +137,7 @@ export function AppNavigationProvider({
       parsedLocation,
       clientRoute,
       defaultClientId,
+      pendingNavigationPathRef,
       navigateClient,
       navigateSection,
       replaceClientRoute,

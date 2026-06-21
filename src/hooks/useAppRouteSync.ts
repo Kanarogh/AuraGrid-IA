@@ -95,6 +95,18 @@ function buildNextRoute(
   );
 }
 
+function enrichRouteBeforePush(
+  route: ClientRoute,
+  activeCanvaPageId: string,
+  ctx: ReturnType<typeof buildValidationContext>
+): ClientRoute {
+  let next = route;
+  if (next.section === "canva_grid" && !next.pageId && activeCanvaPageId) {
+    next = { ...next, pageId: activeCanvaPageId };
+  }
+  return validateClientRoute(next, ctx).route;
+}
+
 export function useAppRouteSync({
   enabled,
   hasActiveClient,
@@ -118,12 +130,16 @@ export function useAppRouteSync({
     navigateClient: pushClientRoute,
     replaceClientRoute,
     setBeforeNavigate,
+    pendingNavigationPathRef,
   } = useAppNavigation();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const applyingFromUrlRef = useRef(false);
-  const pendingCommitRef = useRef<string | null>(null);
+  const activeSectionRef = useRef(activeSection);
+  const settingsDraftDirtyRef = useRef(settingsDraftDirty);
+  activeSectionRef.current = activeSection;
+  settingsDraftDirtyRef.current = settingsDraftDirty;
 
   const currentRouteFromState = useCallback(
     () =>
@@ -181,27 +197,26 @@ export function useAppRouteSync({
       if (!effectiveActiveClientId) return false;
 
       const stateRoute = currentRouteFromState();
-      const nextRoute = buildNextRoute(
+      const built = buildNextRoute(
         partial,
         clientRoute,
         stateRoute,
         effectiveActiveClientId
       );
-      if (!nextRoute) return false;
+      if (!built) return false;
 
-      const nextPath = buildClientPath(nextRoute);
-      pendingCommitRef.current = nextPath;
+      const ctx = buildValidationContext(
+        registryClientIds,
+        posts,
+        canvaPages,
+        activeCanvaPageId
+      );
+      const nextRoute = enrichRouteBeforePush(built, activeCanvaPageId, ctx);
 
       const ok = await pushClientRoute(nextRoute, options);
-      if (!ok) {
-        pendingCommitRef.current = null;
-        return false;
-      }
+      if (!ok) return false;
 
       applyPatch(clientRouteToStatePatch(nextRoute));
-      queueMicrotask(() => {
-        pendingCommitRef.current = null;
-      });
       return true;
     },
     [
@@ -210,14 +225,18 @@ export function useAppRouteSync({
       clientRoute,
       pushClientRoute,
       applyPatch,
+      registryClientIds,
+      posts,
+      canvaPages,
+      activeCanvaPageId,
     ]
   );
 
   useEffect(() => {
     setBeforeNavigate(async (next: ClientRoute) => {
       if (
-        activeSection === "settings" &&
-        settingsDraftDirty &&
+        activeSectionRef.current === "settings" &&
+        settingsDraftDirtyRef.current &&
         next.section !== "settings"
       ) {
         return confirmDialog({
@@ -231,14 +250,20 @@ export function useAppRouteSync({
       return true;
     });
     return () => setBeforeNavigate(null);
-  }, [activeSection, settingsDraftDirty, setBeforeNavigate]);
+  }, [setBeforeNavigate]);
 
   useEffect(() => {
     if (!enabled || !clientRoute || !hasActiveClient) return;
     if (applyingFromUrlRef.current) return;
 
     const routePath = buildClientPath(clientRoute);
-    if (pendingCommitRef.current === routePath) return;
+
+    if (pendingNavigationPathRef.current) {
+      if (routePath === pendingNavigationPathRef.current) {
+        pendingNavigationPathRef.current = null;
+      }
+      return;
+    }
 
     let cancelled = false;
 
@@ -275,8 +300,8 @@ export function useAppRouteSync({
       }
 
       if (
-        activeSection === "settings" &&
-        settingsDraftDirty &&
+        activeSectionRef.current === "settings" &&
+        settingsDraftDirtyRef.current &&
         route.section !== "settings"
       ) {
         const ok = await confirmDialog({
@@ -312,8 +337,6 @@ export function useAppRouteSync({
     clientRoute,
     hasActiveClient,
     effectiveActiveClientId,
-    activeSection,
-    settingsDraftDirty,
     registryClientIds,
     posts,
     canvaPages,
@@ -323,6 +346,7 @@ export function useAppRouteSync({
     handlers,
     currentRouteFromState,
     commitNavigation,
+    pendingNavigationPathRef,
   ]);
 
   const handleNavigate = useCallback(
