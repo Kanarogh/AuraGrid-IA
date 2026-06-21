@@ -32,7 +32,7 @@ export function AppShell({
   isDark: boolean;
   onToggleTheme: () => void;
   onReset: () => void;
-  onClientCreated?: () => void;
+  onClientCreated?: (clientId: string) => void;
   hasActiveClient: boolean;
   children: ReactNode;
   footer?: ReactNode;

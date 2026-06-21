@@ -9,7 +9,7 @@
     "start": "next start -H 0.0.0.0 -p 80",
     "lint": "tsc --noEmit",
     "db:migrate": "tsx server/db/migrate.ts",
-    "test:match-ranker": "tsx server/ai/matchRankerDecision.test.ts",
+    "test:app-routing": "tsx src/lib/appRouting/paths.test.ts",
     "docker:infra": "docker compose -f docker-compose.dev.yml up -d",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down"

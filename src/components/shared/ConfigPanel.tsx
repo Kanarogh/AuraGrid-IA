@@ -52,6 +52,7 @@ import { TabNav } from "../ui/Tabs";
 import { useAuth } from "../../context/AuthContext";
 import { migrateLocalStorageApi } from "../../lib/api/workspaceApi";
 import { REGISTRY_KEY } from "../../lib/clientWorkspace/types";
+import type { SettingsTab } from "../../lib/appRouting";
 
 function formatSavedAt(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -73,6 +74,8 @@ export function ConfigPanel({
   brandGemSavedAt,
   onSaveBrandGem,
   onDirtyChange,
+  settingsTab: settingsTabProp,
+  onSettingsTabChange,
 }: {
   open?: boolean;
   variant?: "panel" | "page";
@@ -82,13 +85,15 @@ export function ConfigPanel({
   brandGemSavedAt?: string | null;
   onSaveBrandGem: (gem: BrandGem) => Promise<string | null>;
   onDirtyChange?: (dirty: boolean) => void;
+  settingsTab?: SettingsTab;
+  onSettingsTabChange?: (tab: SettingsTab) => void;
 }) {
   const { storageMode } = useAuth();
   const [footerOpen, setFooterOpen] = useState(true);
   const [captionParamsOpen, setCaptionParamsOpen] = useState(true);
-  const [settingsTab, setSettingsTab] = useState<
-    "brand" | "captions" | "ai" | "appearance"
-  >("brand");
+  const [settingsTabLocal, setSettingsTabLocal] = useState<SettingsTab>("brand");
+  const settingsTab = settingsTabProp ?? settingsTabLocal;
+  const setSettingsTab = onSettingsTabChange ?? setSettingsTabLocal;
   const [draftGem, setDraftGem] = useState<BrandGem>(brandGem);
   const [justSaved, setJustSaved] = useState(false);
   const [saving, setSaving] = useState(false);

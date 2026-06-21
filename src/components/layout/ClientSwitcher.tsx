@@ -8,6 +8,7 @@ import { cn } from "../../lib/cn";
 import { confirmDialog } from "../../lib/confirmDialog";
 import { promptDialog } from "../../lib/promptDialog";
 import { NewClientModal } from "../clients/NewClientModal";
+import { useAppNavigation } from "../../lib/appRouting";
 
 const MENU_WIDTH = 176;
 
@@ -124,17 +125,17 @@ export function ClientSwitcher({
   onClientCreated,
 }: {
   collapsed: boolean;
-  onClientCreated?: () => void;
+  onClientCreated?: (clientId: string) => void;
 }) {
   const {
     clients,
     activeClientId,
     activeClient,
-    switchClient,
     deleteClient,
     renameClient,
     hasActiveClient,
   } = useClientWorkspace();
+  const { navigateClient } = useAppNavigation();
   const [modalOpen, setModalOpen] = useState(false);
   const [menuClientId, setMenuClientId] = useState<string | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
@@ -210,7 +211,7 @@ export function ClientSwitcher({
                   role="option"
                   aria-selected={client.id === activeClientId}
                   onClick={() => {
-                    switchClient(client.id);
+                    void navigateClient({ clientId: client.id });
                     setCollapsedPopoverOpen(false);
                   }}
                   className={cn(
@@ -241,7 +242,7 @@ export function ClientSwitcher({
         <NewClientModal
           open={modalOpen}
           onClose={() => setModalOpen(false)}
-          onCreated={() => onClientCreated?.()}
+          onCreated={(clientId) => onClientCreated?.(clientId)}
         />
       </>
     );
@@ -274,7 +275,7 @@ export function ClientSwitcher({
         <NewClientModal
           open={modalOpen}
           onClose={() => setModalOpen(false)}
-          onCreated={() => onClientCreated?.()}
+          onCreated={(clientId) => onClientCreated?.(clientId)}
         />
       </>
     );
@@ -307,7 +308,7 @@ export function ClientSwitcher({
               <li key={client.id} className="relative">
                 <button
                   type="button"
-                  onClick={() => switchClient(client.id)}
+                  onClick={() => void navigateClient({ clientId: client.id })}
                   className={cn(
                     "w-full flex items-center gap-2.5 rounded-lg pl-2 pr-9 py-2 text-left transition-colors cursor-pointer min-w-0",
                     isActive
@@ -365,7 +366,7 @@ export function ClientSwitcher({
       <NewClientModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        onCreated={() => onClientCreated?.()}
+        onCreated={(clientId) => onClientCreated?.(clientId)}
       />
     </>
   );

@@ -64,7 +64,7 @@ export function AppSidebar({
   mobileOpen: boolean;
   onMobileClose: () => void;
   onReset: () => void;
-  onClientCreated?: () => void;
+  onClientCreated?: (clientId: string) => void;
   hasActiveClient: boolean;
 }) {
   const { storageMode, user, logout } = useAuth();

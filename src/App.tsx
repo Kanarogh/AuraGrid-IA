@@ -75,6 +75,8 @@ function captionQueueLabel(postId: string, dayNumber: number): string {
   return `Legenda#${postId}#dia${dayNumber}`;
 }
 import { useTheme } from "./hooks/useTheme";
+import { useAppRouteSync, type AppRouteSyncHandlers } from "./hooks/useAppRouteSync";
+import type { SettingsTab } from "./lib/appRouting";
 import { useAuth } from "./context/AuthContext";
 import { aiFetch } from "./lib/aiFetch";
 import {
@@ -199,6 +201,7 @@ export default function App() {
     hasActiveClient,
     activeClientId,
     activeClient,
+    clients,
     workspace,
     setCatalog,
     setPosts,
@@ -222,6 +225,7 @@ export default function App() {
     switchPlanningPeriod,
     createPlanningPeriod,
     duplicatePlanningPeriod,
+    switchClient,
   } = useClientWorkspace();
 
   const activeClientIdRef = useRef(activeClientId);
@@ -394,9 +398,7 @@ export default function App() {
     return idx >= 0 ? idx + 1 : null;
   }, [selectedCanvaSlotId, activeCanvaPage]);
 
-  const [activeSection, setActiveSection] = useState<AppSection>(
-    () => workspace.ui?.activeSection ?? "posts"
-  );
+  const [activeSection, setActiveSection] = useState<AppSection>("posts");
   const [viewMode, setViewMode] = useState<"split" | "editorial">(
     () => workspace.ui?.viewMode ?? "split"
   );
@@ -410,33 +412,53 @@ export default function App() {
     ...DEFAULT_DISTRIBUTION_PREFS,
     ...workspace.ui?.distributionPrefs,
   }));
+  const [catalogTab, setCatalogTab] = useState<"references" | "grid">("references");
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("brand");
 
-  const handlePostsWorkTabChange = useCallback((tab: PostsWorkTab) => {
-    setPostsWorkTab(tab);
-    if (tab === "day") setViewMode("split");
-    else if (tab === "calendar") setViewMode("editorial");
-  }, []);
-
-  const handleNavigate = useCallback(
-    async (next: AppSection) => {
-      if (
-        activeSection === "settings" &&
-        settingsDraftDirty &&
-        next !== "settings"
-      ) {
-        const ok = await confirmDialog({
-          title: "Alterações não salvas",
-          message:
-            "Você tem alterações no Gem da marca que ainda não foram salvas. Sair sem salvar?",
-          variant: "danger",
-          confirmLabel: "Sair sem salvar",
-        });
-        if (!ok) return;
-      }
-      setActiveSection(next);
-    },
-    [activeSection, settingsDraftDirty]
+  const routeHandlers = useMemo<AppRouteSyncHandlers>(
+    () => ({
+      setActiveSection,
+      setPostsWorkTab,
+      setViewMode,
+      setCatalogTab,
+      setSettingsTab,
+      setActivePreviewId,
+      setActiveCanvaPageId,
+      setSelectedCanvaSlotId,
+      switchPlanningPeriod,
+      switchClient,
+    }),
+    [setActiveCanvaPageId, switchPlanningPeriod, switchClient]
   );
+
+  const {
+    handleNavigate,
+    handlePostsWorkTabChange,
+    handleCatalogTabChange,
+    handleSettingsTabChange,
+    selectPreviewPost,
+    selectCanvaPage,
+    selectCanvaSlot,
+    navigateToClientSettings,
+    navigateClient,
+  } = useAppRouteSync({
+    enabled: hasActiveClient,
+    hasActiveClient,
+    activeClientId,
+    registryClientIds: clients.map((c) => c.id),
+    activeSection,
+    settingsDraftDirty,
+    postsWorkTab,
+    catalogTab,
+    settingsTab,
+    activePreviewId,
+    activeCanvaPageId,
+    selectedCanvaSlotId,
+    activePlanningPeriodId,
+    posts,
+    canvaPages,
+    handlers: routeHandlers,
+  });
 
   const cancelTimelineReorder = useCallback(() => {
     setTimelineReorderMode(false);
@@ -537,7 +559,6 @@ export default function App() {
   const [isExportingCanvaPdf, setIsExportingCanvaPdf] = useState(false);
   const [showNewPlanningPeriodModal, setShowNewPlanningPeriodModal] = useState(false);
   const [duplicateSourcePeriodId, setDuplicateSourcePeriodId] = useState<string | undefined>();
-  const [catalogTab, setCatalogTab] = useState<"references" | "grid">("references");
 
   const prevClientIdRef = useRef(activeClientId);
 
@@ -562,30 +583,22 @@ export default function App() {
     setSelectedCanvaSlotId(null);
     setCanvaLightbox(null);
     setCatalogLightbox(null);
-    setUiPrefs({ activeSection, viewMode });
+    setUiPrefs({ viewMode });
   }, [
     activeClientId,
     workspace.brandGem.id,
     workspace.ui?.activePreviewId,
+    workspace.ui?.distributionPrefs,
     hasActiveClient,
     setUiPrefs,
-    activeSection,
     viewMode,
   ]);
-
-  useEffect(() => {
-    setUiPrefs({ activeSection });
-  }, [activeSection, setUiPrefs]);
 
   useEffect(() => {
     setUiPrefs({ activePreviewId });
   }, [activePreviewId, setUiPrefs]);
 
-  useEffect(() => {
-    setUiPrefs({ viewMode });
-  }, [viewMode, setUiPrefs]);
-
-  // Drag and drop states 
+  // Drag and drop states
   const [catalogDragOver, setCatalogDragOver] = useState(false);
   const [postDragOver, setPostDragOver] = useState<{ [id: string]: boolean }>({});
 
@@ -714,8 +727,10 @@ export default function App() {
       return;
     }
     resetActiveClient();
-    setActiveSection("posts");
-    setActivePreviewId("post_day1");
+    void navigateClient(
+      { section: "posts", postsTab: "day", postId: "post_day1" },
+      { replace: true, skipDirtyGuard: true }
+    );
     toast.success(`Cliente «${activeClient.name}» foi resetado.`);
   };
 
@@ -894,7 +909,7 @@ export default function App() {
 
   // Smooth click scroll to day card
   const handleScrollToDay = (postId: string) => {
-    setActivePreviewId(postId);
+    selectPreviewPost(postId);
     const element = dayCardRefs.current[postId];
     if (element) {
       element.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -2885,10 +2900,10 @@ export default function App() {
     (delta: -1 | 1) => {
       const nextIdx = activeEditorialIndex + delta;
       if (nextIdx >= 0 && nextIdx < orderedEditorialPosts.length) {
-        setActivePreviewId(orderedEditorialPosts[nextIdx].id);
+        selectPreviewPost(orderedEditorialPosts[nextIdx].id);
       }
     },
-    [activeEditorialIndex, orderedEditorialPosts]
+    [activeEditorialIndex, orderedEditorialPosts, selectPreviewPost]
   );
 
   if (useApiStorage && !workspaceHydrated) {
@@ -2912,7 +2927,7 @@ export default function App() {
         isDark={isDark}
         onToggleTheme={toggleTheme}
         onReset={handleResetPresets}
-        onClientCreated={() => void handleNavigate("settings")}
+        onClientCreated={(clientId) => void navigateToClientSettings(clientId)}
         hasActiveClient={hasActiveClient}
         footer={<Footer />}
       >
@@ -2966,6 +2981,8 @@ export default function App() {
             brandGemSavedAt={workspace.ui?.brandGemSavedAt}
             onSaveBrandGem={saveBrandGem}
             onDirtyChange={setSettingsDraftDirty}
+            settingsTab={settingsTab}
+            onSettingsTabChange={handleSettingsTabChange}
           />
         )}
 
@@ -2978,7 +2995,10 @@ export default function App() {
               activePeriodId={activePlanningPeriodId}
               isReadOnly={isReadOnly}
               hideDuplicateAction={isReadOnly}
-              onSelect={(periodId) => void switchPlanningPeriod(periodId)}
+              onSelect={(periodId) => {
+                void switchPlanningPeriod(periodId);
+                void navigateClient({ periodId }, { replace: true, skipDirtyGuard: true });
+              }}
               onCreateNew={() => {
                 setDuplicateSourcePeriodId(undefined);
                 setShowNewPlanningPeriodModal(true);
@@ -3183,9 +3203,9 @@ export default function App() {
                   setRefineInstructions((prev) => ({ ...prev, [postId]: v }))
                 }
                 onRefine={(postId, instruction) => void handleRefineCaption(postId, instruction)}
-                onFocusPost={(id) => setActivePreviewId(id)}
+                onFocusPost={(id) => selectPreviewPost(id)}
                 onOpenStudio={(id) => {
-                  setActivePreviewId(id);
+                  selectPreviewPost(id);
                   handlePostsWorkTabChange("day");
                 }}
               />
@@ -3284,18 +3304,15 @@ export default function App() {
               wardrobeItems={canvaCatalog}
               catalogUsageOnActivePage={catalogUsageOnActivePage}
               cloudSave={useApiStorage}
-              onSelectPage={(id) => {
-                setActiveCanvaPageId(id);
-                setSelectedCanvaSlotId(null);
-              }}
+              onSelectPage={(id) => selectCanvaPage(id)}
               onAddPage={handleAddCanvaPage}
               onDeletePage={handleDeleteCanvaPage}
               onDuplicatePage={handleDuplicateCanvaPage}
               onClearPage={handleClearCanvaPage}
               onReorderPages={handleReorderCanvaPages}
               onBatchUpload={handleBatchUploadToCanva}
-              onSelectSlot={setSelectedCanvaSlotId}
-              onClearSlotSelection={() => setSelectedCanvaSlotId(null)}
+              onSelectSlot={(slotId) => selectCanvaSlot(slotId)}
+              onClearSlotSelection={() => selectCanvaSlot(null)}
               onSwapSlots={(a, b) => handleSwapCanvaSlots(activeCanvaPage!.id, a, b)}
               onClearSlotImage={(slotId) =>
                 handleAssignCatalogToCanvaSlot(activeCanvaPage!.id, slotId, null)
@@ -3429,7 +3446,7 @@ export default function App() {
             </p>
             <CatalogTabNav
               active={catalogTab}
-              onChange={setCatalogTab}
+              onChange={handleCatalogTabChange}
               referenceCount={referenceCatalog.length}
               gridCount={gridCatalog.length}
             />
