@@ -5,6 +5,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   RotateCcw,
+  X,
 } from "lucide-react";
 import { Badge } from "../ui/Badge";
 import { cn } from "../../lib/cn";
@@ -45,8 +46,6 @@ export function AppSidebar({
   catalogCount,
   brandGemReady,
   brandGemMissingCount = 0,
-  apiStatusLabel,
-  apiStatusTone,
   collapsed,
   onToggleCollapsed,
   mobileOpen,
@@ -60,8 +59,6 @@ export function AppSidebar({
   catalogCount: number;
   brandGemReady?: boolean;
   brandGemMissingCount?: number;
-  apiStatusLabel: string;
-  apiStatusTone: "success" | "warning" | "danger";
   collapsed: boolean;
   onToggleCollapsed: () => void;
   mobileOpen: boolean;
@@ -75,6 +72,8 @@ export function AppSidebar({
   const moreRef = useRef<HTMLDivElement>(null);
   const asideRef = useRef<HTMLElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  /** Drawer mobile sempre expandido; recolhido só no desktop. */
+  const isCollapsed = collapsed && !mobileOpen;
 
   const groups = NAV_GROUPS.map((g) => ({
     ...g,
@@ -148,7 +147,7 @@ export function AppSidebar({
       <div
         className={cn(
           "flex items-center gap-3 border-b border-ag-border shrink-0",
-          collapsed ? "justify-center p-4" : "px-5 py-4"
+          isCollapsed ? "justify-center p-3 sm:p-4" : "px-4 sm:px-5 py-3 sm:py-4"
         )}
       >
         <div
@@ -159,9 +158,9 @@ export function AppSidebar({
         >
           A
         </div>
-        {!collapsed && (
-          <div className="min-w-0">
-            <p className="font-display text-lg font-semibold text-ag-text leading-tight tracking-tight">
+        {!isCollapsed && (
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-base sm:text-lg font-semibold text-ag-text leading-tight tracking-tight truncate">
               AuraGrid
             </p>
             <p className="text-[10px] uppercase tracking-widest text-ag-muted font-mono">
@@ -169,17 +168,27 @@ export function AppSidebar({
             </p>
           </div>
         )}
+        {!isCollapsed && (
+          <button
+            type="button"
+            onClick={onMobileClose}
+            className="lg:hidden p-2 rounded-lg text-ag-muted hover:bg-ag-surface-2 hover:text-ag-text cursor-pointer shrink-0"
+            aria-label="Fechar menu"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
       </div>
 
-      <ClientSwitcher collapsed={collapsed} onClientCreated={onClientCreated} />
+      <ClientSwitcher collapsed={isCollapsed} onClientCreated={onClientCreated} />
 
       <nav
-        className="flex-1 overflow-y-auto py-4 px-2 ag-scrollbar-thin space-y-5"
+        className="flex-1 overflow-y-auto py-3 sm:py-4 px-2 ag-scrollbar-thin space-y-4 sm:space-y-5 overscroll-contain"
         aria-label="Navegação principal"
       >
         {groups.map((group) => (
           <div key={group.title}>
-            {!collapsed && (
+            {!isCollapsed && (
               <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-widest text-ag-muted">
                 {group.title}
               </p>
@@ -202,7 +211,7 @@ export function AppSidebar({
                         onMobileClose();
                       }}
                       title={
-                        collapsed
+                        isCollapsed
                           ? disabled
                             ? "Crie um cliente primeiro"
                             : item.label
@@ -212,7 +221,7 @@ export function AppSidebar({
                       }
                       className={cn(
                         "group w-full flex items-center gap-3 rounded-xl text-left transition-all duration-200 relative",
-                        collapsed ? "justify-center p-2.5" : "px-3 py-2.5",
+                        isCollapsed ? "justify-center p-2.5" : "px-3 py-2.5 max-lg:min-h-[44px]",
                         disabled && "opacity-45 cursor-not-allowed",
                         !disabled && "cursor-pointer",
                         isActive
@@ -220,7 +229,7 @@ export function AppSidebar({
                           : !disabled && "text-ag-text hover:bg-ag-surface-3"
                       )}
                     >
-                      {isActive && !collapsed && (
+                      {isActive && !isCollapsed && (
                         <span
                           className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-ag-accent-fg/80"
                           aria-hidden
@@ -234,7 +243,7 @@ export function AppSidebar({
                           )}
                         />
                       </span>
-                      {!collapsed && (
+                      {!isCollapsed && (
                         <span
                           className={cn(
                             "flex-1 min-w-0",
@@ -254,7 +263,7 @@ export function AppSidebar({
                           )}
                         </span>
                       )}
-                      {!collapsed && badge !== undefined && (
+                      {!isCollapsed && badge !== undefined && (
                         <span
                           className={cn(
                             "text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md",
@@ -277,21 +286,18 @@ export function AppSidebar({
 
       <div
         className={cn(
-          "border-t border-ag-border p-3 space-y-2 shrink-0",
-          collapsed && "flex flex-col items-center"
+          "border-t border-ag-border p-2 sm:p-3 space-y-1.5 sm:space-y-2 shrink-0 pb-[max(0.5rem,env(safe-area-inset-bottom))]",
+          isCollapsed && "flex flex-col items-center"
         )}
       >
         <WorkspaceStatusBar
           brandGemReady={brandGemReady}
           brandGemMissingCount={brandGemMissingCount}
-          apiStatusLabel={apiStatusLabel}
-          apiStatusTone={apiStatusTone}
-          storageMode={storageMode}
-          collapsed={collapsed}
+          collapsed={isCollapsed}
           onOpenSettings={onNavigate}
         />
 
-        <div className={cn("relative", collapsed ? "" : "w-full")} ref={moreRef}>
+        <div className={cn("relative", isCollapsed ? "" : "w-full")} ref={moreRef}>
           <button
             type="button"
             onClick={() => setMoreOpen((o) => !o)}
@@ -299,19 +305,19 @@ export function AppSidebar({
             aria-haspopup="menu"
             title="Mais opções"
             className={cn(
-              "flex items-center gap-2 text-xs text-ag-muted hover:text-ag-text hover:bg-ag-surface-3 rounded-lg transition-colors cursor-pointer",
-              collapsed ? "p-2" : "w-full px-3 py-2"
+              "flex items-center gap-2 text-xs text-ag-muted hover:text-ag-text hover:bg-ag-surface-3 rounded-lg transition-colors cursor-pointer max-lg:min-h-[44px]",
+              isCollapsed ? "p-2" : "w-full px-3 py-2"
             )}
           >
             <MoreHorizontal className="h-3.5 w-3.5" />
-            {!collapsed && <span>Mais opções</span>}
+            {!isCollapsed && <span>Mais opções</span>}
           </button>
           {moreOpen && (
             <div
               role="menu"
               className={cn(
                 "absolute bottom-full mb-1 rounded-lg border border-ag-border bg-ag-surface-1 shadow-lg py-1 text-xs z-50 min-w-[11rem]",
-                collapsed ? "left-0" : "left-0 right-0"
+                isCollapsed ? "left-0" : "left-0 right-0"
               )}
             >
               <button
@@ -377,8 +383,8 @@ export function AppSidebar({
       <aside
         ref={asideRef}
         className={cn(
-          "fixed lg:sticky top-0 z-50 lg:z-30 h-screen shrink-0 border-r border-ag-border bg-ag-surface-1 flex flex-col transition-all duration-200",
-          collapsed ? "w-[72px]" : "w-[260px]",
+          "fixed lg:sticky top-0 z-50 lg:z-30 h-[100dvh] shrink-0 border-r border-ag-border bg-ag-surface-1 flex flex-col transition-all duration-200",
+          isCollapsed ? "w-[72px]" : "w-[min(100vw-2rem,280px)] lg:w-[260px]",
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
         aria-label="Menu lateral"

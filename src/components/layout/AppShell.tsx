@@ -14,8 +14,6 @@ export function AppShell({
   catalogCount,
   brandGemReady,
   brandGemMissingCount,
-  apiStatusLabel,
-  apiStatusTone,
   isDark,
   onToggleTheme,
   clientName,
@@ -31,8 +29,6 @@ export function AppShell({
   catalogCount: number;
   brandGemReady?: boolean;
   brandGemMissingCount?: number;
-  apiStatusLabel: string;
-  apiStatusTone: "success" | "warning" | "danger";
   isDark: boolean;
   onToggleTheme: () => void;
   onReset: () => void;
@@ -75,8 +71,6 @@ export function AppShell({
         catalogCount={catalogCount}
         brandGemReady={brandGemReady}
         brandGemMissingCount={brandGemMissingCount}
-        apiStatusLabel={apiStatusLabel}
-        apiStatusTone={apiStatusTone}
         collapsed={sidebarCollapsed}
         onToggleCollapsed={toggleCollapsed}
         mobileOpen={mobileNavOpen}

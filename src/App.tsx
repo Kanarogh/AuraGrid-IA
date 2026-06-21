@@ -351,7 +351,7 @@ export default function App() {
   const [catalogEnrichProgress, setCatalogEnrichProgress] = useState<CatalogEnrichProgress | null>(
     null
   );
-  const { connectionStatus, apiStatusLabel, health } = useAiSettings();
+  const { connectionStatus, health } = useAiSettings();
   
   const [selectedCanvaSlotId, setSelectedCanvaSlotId] = useState<string | null>(null);
   const [canvaLightbox, setCanvaLightbox] = useState<{
@@ -2766,13 +2766,6 @@ export default function App() {
     void clearCatalogEnrichments(ids);
   }, [referenceCatalog, clearCatalogEnrichments]);
 
-  const apiStatusTone =
-    connectionStatus === "connected"
-      ? "success"
-      : connectionStatus === "checking"
-        ? "warning"
-        : "danger";
-
   const serverEnrichReady = health?.catalogEnrich !== false;
 
   // Export 7-day plan as formatted TXT file response
@@ -2916,8 +2909,6 @@ export default function App() {
         catalogCount={referenceCatalog.length}
         brandGemReady={hasActiveClient ? brandGemReady : undefined}
         brandGemMissingCount={hasActiveClient ? brandGemMissingCount : undefined}
-        apiStatusLabel={apiStatusLabel}
-        apiStatusTone={apiStatusTone}
         isDark={isDark}
         onToggleTheme={toggleTheme}
         onReset={handleResetPresets}
