@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
 import { confirmDialog } from "../lib/confirmDialog";
 import {
   clientRouteToStatePatch,
@@ -98,6 +99,7 @@ export function useAppRouteSync({
     setBeforeNavigate,
     isApplyingRouteRef,
   } = useAppNavigation();
+  const pathname = usePathname();
 
   const applyingFromUrlRef = useRef(false);
   const routeInitializedRef = useRef(false);
