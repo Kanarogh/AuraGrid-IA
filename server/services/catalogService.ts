@@ -42,6 +42,7 @@ function mapCatalogRow(c: typeof catalogItems.$inferSelect) {
       | undefined,
     enrichedAt: c.enrichedAt?.toISOString(),
     enrichmentError: c.enrichmentError ?? undefined,
+    updatedAt: c.updatedAt?.toISOString(),
   };
 }
 
@@ -289,6 +290,49 @@ export async function getCatalogItem(
     .where(and(periodWhere(clientId, periodId), eq(catalogItems.id, id)))
     .limit(1);
   return row ? mapCatalogRow(row) : null;
+}
+
+export async function getCatalogEnrichmentSnapshot(clientId: string, planningPeriodId?: string | null) {
+  const items = await listCatalogItems(clientId, planningPeriodId);
+  const { buildCatalogEnrichmentSnapshot } = await import("./catalogEnrichmentSnapshot");
+  return buildCatalogEnrichmentSnapshot(
+    items.map((i) => ({
+      id: i.id,
+      label: i.label,
+      isReference: i.isReference,
+      imageAssetId: i.imageAssetId,
+      enrichmentStatus: i.enrichmentStatus,
+      visualProfile: i.visualProfile,
+      updatedAt: i.updatedAt,
+    }))
+  );
+}
+
+export async function resetStaleProcessingCatalogItems(
+  clientId: string,
+  maxAgeMs?: number,
+  planningPeriodId?: string | null
+): Promise<number> {
+  const db = getDb();
+  const periodId = await resolvePeriodId(clientId, planningPeriodId);
+  const { STALE_PROCESSING_MS } = await import("./catalogEnrichmentSnapshot");
+  const threshold = new Date(Date.now() - (maxAgeMs ?? STALE_PROCESSING_MS));
+  const rows = await db
+    .update(catalogItems)
+    .set({
+      enrichmentStatus: "pending",
+      enrichmentError: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        periodWhere(clientId, periodId),
+        eq(catalogItems.enrichmentStatus, "processing"),
+        sql`${catalogItems.updatedAt} < ${threshold}`
+      )
+    )
+    .returning({ id: catalogItems.id });
+  return rows.length;
 }
 
 export async function getCatalogProfiles(clientId: string, planningPeriodId?: string | null) {

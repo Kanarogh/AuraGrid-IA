@@ -10,6 +10,7 @@ import { embedCatalogImage, isGeminiEmbeddingConfigured } from "../ai/geminiEmbe
 import {
   getCatalogItem,
   listCatalogItems,
+  resetStaleProcessingCatalogItems,
   updateCatalogEmbedding,
   updateCatalogItem,
 } from "./catalogService";
@@ -88,6 +89,7 @@ async function runCatalogEnrichmentInner(
   let quotaExceeded = false;
   try {
     await ensureRuntimeAiSettingsLoaded();
+    await resetStaleProcessingCatalogItems(clientId);
     const activeProvider = providerId ?? getAiProviderId();
     console.info(`[enrich] provedor=${activeProvider} (indexação JSON)`);
 
@@ -158,6 +160,8 @@ async function runCatalogEnrichmentInner(
             throw firstErr;
           }
         }
+
+        if (abort.signal.aborted) return { quotaExceeded, cancelled: true };
 
         await updateCatalogItem(clientId, item.id, {
           visualProfile: profile,

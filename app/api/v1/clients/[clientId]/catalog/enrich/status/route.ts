@@ -1,7 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { assertClientAccess, requireUser } from "@/server/http/auth";
 import { errorResponse } from "@/server/http/respond";
-import { getEnrichmentProgress, isEnrichmentRunning } from "@/server/services/enrichQueue";
+import {
+  getCatalogEnrichmentSnapshot,
+  resetStaleProcessingCatalogItems,
+} from "@/server/services/catalogService";
+import {
+  deriveEnrichProgressFromSnapshot,
+  isSnapshotEnriching,
+} from "@/server/services/catalogEnrichmentSnapshot";
+import {
+  getEnrichmentProgress,
+  isEnrichmentRunning,
+} from "@/server/services/enrichQueue";
 
 export const dynamic = "force-dynamic";
 
@@ -12,9 +23,23 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     const user = requireUser(req);
     const { clientId } = await params;
     await assertClientAccess(user, clientId);
-    const enriching = isEnrichmentRunning(clientId);
-    const progress = enriching ? getEnrichmentProgress(clientId) : null;
-    return NextResponse.json({ enriching, progress });
+
+    if (isEnrichmentRunning(clientId)) {
+      const progress = getEnrichmentProgress(clientId);
+      return NextResponse.json({ enriching: true, progress });
+    }
+
+    await resetStaleProcessingCatalogItems(clientId);
+    const snapshot = await getCatalogEnrichmentSnapshot(clientId);
+
+    if (isSnapshotEnriching(snapshot)) {
+      return NextResponse.json({
+        enriching: true,
+        progress: deriveEnrichProgressFromSnapshot(snapshot),
+      });
+    }
+
+    return NextResponse.json({ enriching: false, progress: null });
   } catch (err) {
     return errorResponse(err, 400);
   }

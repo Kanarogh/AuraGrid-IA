@@ -54,8 +54,6 @@ import {
   clearGridCatalogApi,
   deleteCatalogItemApi,
   enrichCatalogApi,
-  fetchEnrichStatusApi,
-  type CatalogEnrichProgress,
   fetchWorkspace,
   stopEnrichCatalogApi,
   uploadMediaApi,
@@ -194,6 +192,8 @@ import {
   computeOverallUploadPercent,
   estimateUploadEtaSeconds,
 } from "./lib/uploadProgress";
+import { useCatalogEnrichmentWatcher } from "./hooks/useCatalogEnrichmentWatcher";
+import { CatalogEnrichProgressPanel } from "./components/catalog/CatalogEnrichProgressPanel";
 import { CatalogUploadProgressPanel } from "./components/catalog/CatalogUploadProgressPanel";
 
 
@@ -311,8 +311,9 @@ export default function App() {
     });
   }, [setCatalog]);
 
-  // Indexação interrompida (ex.: erro 500 no servidor) pode deixar itens em "processing" sem botão
+  // Indexação interrompida no modo local — no cloud o status vem do servidor
   useEffect(() => {
+    if (useApiStorage) return;
     setCatalog((prev) => {
       const hasStuck = prev.some((c) => c.enrichmentStatus === "processing");
       if (!hasStuck) return prev;
@@ -322,7 +323,30 @@ export default function App() {
           : c
       );
     });
-  }, [activeClientId, setCatalog]);
+  }, [activeClientId, setCatalog, useApiStorage]);
+
+  const reloadCatalogFromApi = useCallback(async () => {
+    if (!useApiStorage || !activeClientId) return;
+    const dto = await fetchWorkspace(activeClientId);
+    const ws = apiWorkspaceToClientWorkspace(dto);
+    setCatalog(ws.catalog);
+  }, [useApiStorage, activeClientId, setCatalog]);
+
+  const {
+    isEnriching: isEnrichingCatalog,
+    progress: catalogEnrichProgress,
+    startPolling: startCatalogEnrichPolling,
+    stopLocalPolling: stopCatalogEnrichPolling,
+  } = useCatalogEnrichmentWatcher({
+    enabled: useApiStorage,
+    clientId: activeClientId ?? "",
+    workspaceHydrated,
+    onCatalogReload: reloadCatalogFromApi,
+  });
+
+  const catalogEnrichProgressLabel = catalogEnrichProgress
+    ? `Indexando ${catalogEnrichProgress.index}/${catalogEnrichProgress.total} — ${catalogEnrichProgress.label} (um por vez)`
+    : "Indexando… (um por vez, aguarde)";
 
   const captionBatchStats = useMemo(
     () => getCaptionBatchStats(posts, catalog),
@@ -363,7 +387,6 @@ export default function App() {
   const captionGeneratePostIdRef = useRef<string | null>(null);
   /** Posts que apagaram legenda — próxima geração ignora cache e chama a IA de novo. */
   const captionCacheBypassRef = useRef(new Set<string>());
-  const [isEnrichingCatalog, setIsEnrichingCatalog] = useState(false);
   const [catalogUploadProgress, setCatalogUploadProgress] =
     useState<CatalogUploadProgressState | null>(null);
   const catalogUploadAbortRef = useRef<AbortController | null>(null);
@@ -371,9 +394,6 @@ export default function App() {
   const isUploadingCatalog =
     catalogUploadProgress?.phase === "processing" ||
     catalogUploadProgress?.phase === "uploading";
-  const [catalogEnrichProgress, setCatalogEnrichProgress] = useState<CatalogEnrichProgress | null>(
-    null
-  );
   const { connectionStatus, health } = useAiSettings();
   
   const [selectedCanvaSlotId, setSelectedCanvaSlotId] = useState<string | null>(null);
@@ -1479,46 +1499,15 @@ export default function App() {
     setUiPrefs(ws.ui ?? {});
   };
 
-  const reloadCatalogFromApi = async () => {
-    if (!useApiStorage || !activeClientId) return;
-    const dto = await fetchWorkspace(activeClientId);
-    const ws = apiWorkspaceToClientWorkspace(dto);
-    setCatalog(ws.catalog);
-  };
-
-  const catalogEnrichProgressLabel = catalogEnrichProgress
-    ? `Indexando ${catalogEnrichProgress.index}/${catalogEnrichProgress.total} — ${catalogEnrichProgress.label} (um por vez)`
-    : "Indexando… (um por vez, aguarde)";
-
-  const pollApiEnrichment = async () => {
-    if (!useApiStorage || !activeClientId) return;
-    setIsEnrichingCatalog(true);
-    try {
-      for (;;) {
-        const { enriching, progress } = await fetchEnrichStatusApi(activeClientId);
-        setCatalogEnrichProgress(progress ?? null);
-        await reloadCatalogFromApi();
-        if (!enriching) break;
-        await new Promise((r) => setTimeout(r, 2000));
-      }
-    } finally {
-      setIsEnrichingCatalog(false);
-      setCatalogEnrichProgress(null);
-    }
-  };
-
   const stopCatalogEnrichment = () => {
     if (useApiStorage && activeClientId) {
       void stopEnrichCatalogApi(activeClientId).then(() => reloadWorkspaceFromApi());
-      setIsEnrichingCatalog(false);
-      setCatalogEnrichProgress(null);
+      stopCatalogEnrichPolling();
       return;
     }
     catalogEnrichAbortRef.current?.abort();
     catalogEnrichAbortRef.current = null;
     resetCatalogProcessingState();
-    setIsEnrichingCatalog(false);
-    setCatalogEnrichProgress(null);
   };
 
   const runCatalogEnrichment = async (items: CatalogItem[]) => {
@@ -1538,9 +1527,8 @@ export default function App() {
       catalogRef.current = next;
       return next;
     });
-    setIsEnrichingCatalog(true);
     await enrichCatalogApi(activeClientId, ids.length ? ids : undefined);
-    void pollApiEnrichment();
+    startCatalogEnrichPolling();
   };
 
   // Importa imagens para o guarda-roupa de referências (aba Catálogo)
@@ -3722,7 +3710,8 @@ export default function App() {
                   const showIndexButton = !catalogIndexed;
                   const canClearEnrichment = hasCatalogEnrichmentData(item);
                   const isIndexingThis =
-                    item.enrichmentStatus === "processing" && isEnrichingCatalog;
+                    item.enrichmentStatus === "processing" ||
+                    (isEnrichingCatalog && catalogEnrichProgress?.itemId === item.id);
 
                   return (
                   <div 
@@ -4014,6 +4003,12 @@ export default function App() {
           }
           setCatalogUploadProgress(null);
         }}
+      />
+
+      <CatalogEnrichProgressPanel
+        progress={catalogEnrichProgress}
+        isEnriching={isEnrichingCatalog}
+        onStop={isEnrichingCatalog ? stopCatalogEnrichment : undefined}
       />
 
       <CatalogProfileModal
