@@ -54,6 +54,7 @@ import {
   clearGridCatalogApi,
   deleteCatalogItemApi,
   enrichCatalogApi,
+  fetchCatalogRevisionApi,
   fetchWorkspace,
   stopEnrichCatalogApi,
   uploadMediaApi,
@@ -193,6 +194,12 @@ import {
   estimateUploadEtaSeconds,
 } from "./lib/uploadProgress";
 import { useCatalogEnrichmentWatcher } from "./hooks/useCatalogEnrichmentWatcher";
+import { useCatalogSyncWatcher } from "./hooks/useCatalogSyncWatcher";
+import { broadcastCatalogChanged } from "./lib/catalogBroadcast";
+import {
+  beginCatalogMutation,
+  endCatalogMutation,
+} from "./lib/catalogMutationGuard";
 import { CatalogEnrichProgressPanel } from "./components/catalog/CatalogEnrichProgressPanel";
 import { CatalogUploadProgressPanel } from "./components/catalog/CatalogUploadProgressPanel";
 
@@ -343,6 +350,24 @@ export default function App() {
     workspaceHydrated,
     onCatalogReload: reloadCatalogFromApi,
   });
+
+  const { setKnownRevision: setKnownCatalogRevision } = useCatalogSyncWatcher({
+    enabled: useApiStorage,
+    clientId: activeClientId ?? "",
+    workspaceHydrated,
+    onCatalogReload: reloadCatalogFromApi,
+  });
+
+  const publishCatalogChange = useCallback(async () => {
+    if (!useApiStorage || !activeClientId) return;
+    try {
+      const rev = await fetchCatalogRevisionApi(activeClientId);
+      setKnownCatalogRevision(rev.revision);
+      broadcastCatalogChanged(activeClientId, rev.revision);
+    } catch {
+      /* ignore */
+    }
+  }, [useApiStorage, activeClientId, setKnownCatalogRevision]);
 
   const catalogEnrichProgressLabel = catalogEnrichProgress
     ? `Indexando ${catalogEnrichProgress.index}/${catalogEnrichProgress.total} — ${catalogEnrichProgress.label} (um por vez)`
@@ -1527,7 +1552,13 @@ export default function App() {
       catalogRef.current = next;
       return next;
     });
-    await enrichCatalogApi(activeClientId, ids.length ? ids : undefined);
+    beginCatalogMutation();
+    try {
+      await enrichCatalogApi(activeClientId, ids.length ? ids : undefined);
+      void publishCatalogChange();
+    } finally {
+      endCatalogMutation();
+    }
     startCatalogEnrichPolling();
   };
 
@@ -1586,6 +1617,9 @@ export default function App() {
 
     try {
       if (useApiStorage && activeClientId) {
+        beginCatalogMutation();
+        let uploadSucceeded = false;
+        try {
         const { items, errors, cancelled } = await uploadCatalogCandidatesSequential(
           activeClientId,
           candidates,
@@ -1605,11 +1639,15 @@ export default function App() {
 
         if (cancelled || controller.signal.aborted) {
           if (items.length > 0) {
+            uploadSucceeded = true;
             toast.info(
               `Envio interrompido. ${items.length} arquivo(s) já foram salvos no catálogo.`
             );
           }
           setCatalogUploadProgress(null);
+          if (uploadSucceeded) {
+            void publishCatalogChange();
+          }
           return;
         }
 
@@ -1639,6 +1677,7 @@ export default function App() {
         });
 
         if (succeeded > 0) {
+          uploadSucceeded = true;
           toast.success(
             asReference
               ? `${succeeded} referência(s) adicionada(s).`
@@ -1649,6 +1688,12 @@ export default function App() {
           toast.error(
             `${failed} arquivo(s) falharam no envio.${errors[0] ? `\n${errors[0].fileName}: ${errors[0].message}` : ""}`
           );
+        }
+        if (uploadSucceeded) {
+          void publishCatalogChange();
+        }
+        } finally {
+          endCatalogMutation();
         }
         scheduleCatalogUploadDismiss();
         return;
@@ -2770,17 +2815,37 @@ export default function App() {
       setProfileViewItem((current) => (current && idSet.has(current.id) ? null : current));
 
       if (useApiStorage && activeClientId) {
+        beginCatalogMutation();
         try {
           await clearCatalogEnrichmentsApi(activeClientId, ids);
           await reloadWorkspaceFromApi();
+          void publishCatalogChange();
         } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          toast.error(`Não foi possível limpar as indexações no servidor:\n${msg}`);
-          await reloadWorkspaceFromApi();
+          let clearedOnServer = false;
+          try {
+            const dto = await fetchWorkspace(activeClientId);
+            const ws = apiWorkspaceToClientWorkspace(dto);
+            setCatalog(ws.catalog);
+            clearedOnServer = ids.every((id) => {
+              const item = ws.catalog.find((c) => c.id === id);
+              return item && !hasCatalogEnrichmentData(item);
+            });
+            if (clearedOnServer) {
+              void publishCatalogChange();
+            }
+          } catch {
+            /* reload falhou */
+          }
+          if (!clearedOnServer) {
+            const msg = err instanceof Error ? err.message : String(err);
+            toast.error(`Não foi possível limpar as indexações no servidor:\n${msg}`);
+          }
+        } finally {
+          endCatalogMutation();
         }
       }
     },
-    [setCatalog, useApiStorage, activeClientId]
+    [setCatalog, useApiStorage, activeClientId, publishCatalogChange]
   );
 
   const clearAllCatalogEnrichments = useCallback(() => {

@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { GEMINI_EMBEDDING_DIMENSIONS, getGeminiEmbeddingModel } from "../ai/matchConfig";
 import { getDb, getSqlClient } from "../db/client";
+import { isPgvectorAvailable } from "../db/pgvector";
 import { catalogItems } from "../db/schema";
 import { ensureClientHasActivePeriod } from "./planningPeriodService";
 import { mediaPublicUrl, deleteMediaAssetsIfUnreferenced } from "./mediaService";
@@ -162,7 +163,7 @@ export async function clearCatalogEnrichments(
   clientId: string,
   ids?: string[],
   planningPeriodId?: string | null
-) {
+): Promise<{ embeddingsCleared: boolean }> {
   const db = getDb();
   const periodId = await resolvePeriodId(clientId, planningPeriodId);
   const where =
@@ -181,24 +182,91 @@ export async function clearCatalogEnrichments(
     })
     .where(where);
 
-  if (ids && ids.length > 0) {
-    await db.execute(sql`
-      UPDATE catalog_items
-      SET image_embedding = NULL, embedding_model = NULL, embedded_at = NULL
-      WHERE client_id = ${clientId}
-        AND planning_period_id = ${periodId}
-        AND id IN (${sql.join(
-          ids.map((id) => sql`${id}`),
-          sql`, `
-        )})
-    `);
-  } else {
-    await db.execute(sql`
-      UPDATE catalog_items
-      SET image_embedding = NULL, embedding_model = NULL, embedded_at = NULL
-      WHERE client_id = ${clientId} AND planning_period_id = ${periodId}
-    `);
+  let embeddingsCleared = false;
+  const pgvectorReady = await isPgvectorAvailable();
+  if (!pgvectorReady) {
+    return { embeddingsCleared: false };
   }
+
+  try {
+    if (ids && ids.length > 0) {
+      await db.execute(sql`
+        UPDATE catalog_items
+        SET image_embedding = NULL, embedding_model = NULL, embedded_at = NULL
+        WHERE client_id = ${clientId}
+          AND planning_period_id = ${periodId}
+          AND id IN (${sql.join(
+            ids.map((id) => sql`${id}`),
+            sql`, `
+          )})
+      `);
+    } else {
+      await db.execute(sql`
+        UPDATE catalog_items
+        SET image_embedding = NULL, embedding_model = NULL, embedded_at = NULL
+        WHERE client_id = ${clientId} AND planning_period_id = ${periodId}
+      `);
+    }
+    embeddingsCleared = true;
+  } catch (err) {
+    console.warn(
+      "[catalog] limpeza de embeddings ignorada:",
+      err instanceof Error ? err.message : err
+    );
+  }
+
+  return { embeddingsCleared };
+}
+
+export type CatalogRevision = {
+  revision: string;
+  itemCount: number;
+  readyCount: number;
+  processingCount: number;
+};
+
+export function buildCatalogRevisionToken(stats: {
+  maxUpdatedAt: string | null;
+  itemCount: number;
+  readyCount: number;
+  processingCount: number;
+}): string {
+  return `${stats.maxUpdatedAt ?? "0"}:${stats.itemCount}:${stats.readyCount}:${stats.processingCount}`;
+}
+
+export async function getCatalogRevision(
+  clientId: string,
+  planningPeriodId?: string | null
+): Promise<CatalogRevision> {
+  const db = getDb();
+  const periodId = await resolvePeriodId(clientId, planningPeriodId);
+  const [row] = await db
+    .select({
+      maxUpdatedAt: sql<Date | null>`MAX(${catalogItems.updatedAt})`,
+      itemCount: sql<number>`COUNT(*)::int`,
+      readyCount: sql<number>`COUNT(*) FILTER (WHERE ${catalogItems.enrichmentStatus} = 'ready')::int`,
+      processingCount: sql<number>`COUNT(*) FILTER (WHERE ${catalogItems.enrichmentStatus} = 'processing')::int`,
+    })
+    .from(catalogItems)
+    .where(periodWhere(clientId, periodId));
+
+  const maxUpdatedAt = row?.maxUpdatedAt
+    ? row.maxUpdatedAt instanceof Date
+      ? row.maxUpdatedAt.toISOString()
+      : String(row.maxUpdatedAt)
+    : null;
+
+  return {
+    revision: buildCatalogRevisionToken({
+      maxUpdatedAt,
+      itemCount: row?.itemCount ?? 0,
+      readyCount: row?.readyCount ?? 0,
+      processingCount: row?.processingCount ?? 0,
+    }),
+    itemCount: row?.itemCount ?? 0,
+    readyCount: row?.readyCount ?? 0,
+    processingCount: row?.processingCount ?? 0,
+  };
 }
 
 function vectorLiteral(values: number[]): string {

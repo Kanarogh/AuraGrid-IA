@@ -212,7 +212,19 @@ export async function clearCatalogEnrichmentsApi(clientId: string, ids?: string[
     method: "POST",
     body: JSON.stringify({ ids }),
   });
-  return readApiJson(res);
+  return readApiJson<{ ok: boolean; embeddingsCleared?: boolean }>(res);
+}
+
+export type CatalogRevision = {
+  revision: string;
+  itemCount: number;
+  readyCount: number;
+  processingCount: number;
+};
+
+export async function fetchCatalogRevisionApi(clientId: string) {
+  const res = await apiFetch(`/api/v1/clients/${clientId}/catalog/revision`);
+  return readApiJson<CatalogRevision>(res);
 }
 
 export async function enrichCatalogApi(clientId: string, ids?: string[]) {
