@@ -15,8 +15,11 @@ export type MatchReferenceResult = {
 export async function buildMatchReferenceBody(
   queryImageDataUrl: string,
   catalog: CatalogItem[],
-  options?: { clientId?: string }
+  options?: { clientId?: string; usesReferences?: boolean }
 ): Promise<{ body: Record<string, unknown>; useJsonMatch: boolean }> {
+  if (options?.usesReferences === false) {
+    throw new Error("Este roteiro não usa referências de catálogo.");
+  }
   const refs = getReferenceCatalog(catalog);
   const ready = refs.filter((c) => c.enrichmentStatus === "ready" && c.visualProfile);
   const useJsonMatch = ready.length > 0 && ready.length === refs.length;
@@ -47,8 +50,11 @@ export async function matchReferenceOnServer(
   queryImageDataUrl: string,
   catalog: CatalogItem[],
   signal?: AbortSignal,
-  options?: { clientId?: string }
+  options?: { clientId?: string; usesReferences?: boolean }
 ): Promise<MatchReferenceResult> {
+  if (options?.usesReferences === false) {
+    throw new Error("Este roteiro não usa referências de catálogo.");
+  }
   const processed = await resizeForAi(await convertSvgToDataUrl(queryImageDataUrl));
   const { body } = await buildMatchReferenceBody(processed, catalog, options);
 

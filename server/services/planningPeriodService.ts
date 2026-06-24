@@ -18,6 +18,7 @@ import {
 } from "./planningDefaults";
 import { emitClientSync, emitEnrichProgress, resolveOwnerUserId } from "../sync/emitSyncEvent";
 import type { SyncDomain } from "../sync/syncEvents";
+import { resolveUsesReferences } from "../lib/referenceWorkflow";
 
 async function notifyPeriodChange(
   clientId: string,
@@ -36,6 +37,7 @@ export type PlanningPeriodDto = {
   startDate: string;
   status: PlanningPeriodStatus;
   campaignContext: string;
+  usesReferences?: boolean | null;
   createdAt: string;
   updatedAt: string;
   archivedAt?: string;
@@ -52,6 +54,7 @@ function toPeriodDto(
     startDate: row.startDate,
     status: row.status as PlanningPeriodStatus,
     campaignContext: row.campaignContext,
+    usesReferences: row.usesReferences ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     archivedAt: row.archivedAt?.toISOString(),
@@ -77,6 +80,26 @@ export async function getPeriodForClient(clientId: string, periodId: string) {
     .where(and(eq(planningPeriods.clientId, clientId), eq(planningPeriods.id, periodId)))
     .limit(1);
   return row ?? null;
+}
+
+export async function getEffectiveUsesReferences(
+  clientId: string,
+  periodId?: string | null
+): Promise<boolean> {
+  const db = getDb();
+  const [client] = await db
+    .select({
+      defaultUsesReferences: clients.defaultUsesReferences,
+      activePlanningPeriodId: clients.activePlanningPeriodId,
+    })
+    .from(clients)
+    .where(eq(clients.id, clientId))
+    .limit(1);
+  if (!client) return true;
+  const pid = periodId ?? client.activePlanningPeriodId;
+  if (!pid) return client.defaultUsesReferences ?? true;
+  const period = await getPeriodForClient(clientId, pid);
+  return resolveUsesReferences(client.defaultUsesReferences, period?.usesReferences ?? null);
 }
 
 export async function listPeriodsForClient(clientId: string): Promise<PlanningPeriodDto[]> {
@@ -284,6 +307,7 @@ export async function createPeriod(
     startDate?: string;
     sourcePeriodId?: string;
     activate?: boolean;
+    usesReferences?: boolean | null;
   } = {}
 ) {
   const db = getDb();
@@ -293,10 +317,12 @@ export async function createPeriod(
   const now = new Date();
 
   let campaignContext = "";
+  let usesReferences: boolean | null = null;
   if (options.sourcePeriodId) {
     const source = await getPeriodForClient(clientId, options.sourcePeriodId);
     if (!source) throw new Error("Roteiro de origem não encontrado.");
     campaignContext = source.campaignContext;
+    usesReferences = source.usesReferences ?? null;
   }
 
   if (options.activate !== false) {
@@ -310,6 +336,7 @@ export async function createPeriod(
     startDate,
     status: options.activate === false ? "draft" : "active",
     campaignContext,
+    usesReferences: options.usesReferences ?? usesReferences,
     createdAt: now,
     updatedAt: now,
   });
@@ -391,7 +418,12 @@ export async function archivePeriod(clientId: string, periodId: string) {
 export async function updatePeriod(
   clientId: string,
   periodId: string,
-  patch: { label?: string; startDate?: string; campaignContext?: string },
+  patch: {
+    label?: string;
+    startDate?: string;
+    campaignContext?: string;
+    usesReferences?: boolean | null;
+  },
   options?: { allowArchived?: boolean }
 ) {
   const db = getDb();
@@ -416,6 +448,13 @@ export async function updatePeriod(
   }
   if (typeof patch.campaignContext === "string" && patch.campaignContext !== period.campaignContext) {
     updates.campaignContext = patch.campaignContext;
+  }
+  if (patch.usesReferences === true || patch.usesReferences === false) {
+    if (patch.usesReferences !== period.usesReferences) {
+      updates.usesReferences = patch.usesReferences;
+    }
+  } else if (patch.usesReferences === null && period.usesReferences !== null) {
+    updates.usesReferences = null;
   }
 
   if (!Object.keys(updates).length) {

@@ -8,14 +8,18 @@ export function CatalogTabNav({
   onChange,
   referenceCount,
   gridCount,
+  usesReferences = true,
 }: {
   active: CatalogTab;
   onChange: (tab: CatalogTab) => void;
   referenceCount: number;
   gridCount: number;
+  usesReferences?: boolean;
 }) {
   const tabs: { id: CatalogTab; label: string; icon: typeof ShoppingBag; count: number }[] = [
-    { id: "references", label: "Referências (IA)", icon: ShoppingBag, count: referenceCount },
+    ...(usesReferences
+      ? [{ id: "references" as const, label: "Referências (IA)", icon: ShoppingBag, count: referenceCount }]
+      : []),
     { id: "grid", label: "Peças de grid", icon: LayoutGrid, count: gridCount },
   ];
 

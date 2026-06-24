@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
         id: c.id,
         name: c.name,
         instagramHandle: c.instagramHandle ?? c.id.replace(/-/g, "_"),
+        defaultUsesReferences: c.defaultUsesReferences ?? true,
         createdAt: c.createdAt.toISOString(),
         updatedAt: c.updatedAt.toISOString(),
       })),

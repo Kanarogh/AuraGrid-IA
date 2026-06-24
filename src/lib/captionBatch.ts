@@ -18,10 +18,13 @@ export interface CaptionBatchStats {
 
 export function getCaptionBatchStats(
   posts: PlannedPost[],
-  catalog: CatalogItem[]
+  catalog: CatalogItem[],
+  usesReferences = true
 ): CaptionBatchStats {
   const safePosts = posts.filter((p): p is PlannedPost => !!p?.id);
-  const refs = getReferenceCatalog(catalog.filter((c): c is CatalogItem => !!c?.id));
+  const refs = usesReferences
+    ? getReferenceCatalog(catalog.filter((c): c is CatalogItem => !!c?.id))
+    : [];
   const withImage = safePosts.filter((p) => !!p.image);
 
   return {
@@ -35,7 +38,7 @@ export function getCaptionBatchStats(
     generating: safePosts.filter((p) => p.isGenerating).length,
     catalogTotal: refs.length,
     catalogIndexed: refs.filter((c) => c.enrichmentStatus === "ready" && c.visualProfile).length,
-    catalogReady: catalogReadyForTextMatch(refs),
+    catalogReady: usesReferences ? catalogReadyForTextMatch(refs) : true,
   };
 }
 

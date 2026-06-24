@@ -62,6 +62,7 @@ export const planningPeriods = pgTable(
     startDate: date("start_date").notNull(),
     status: text("status").notNull().default("active"),
     campaignContext: text("campaign_context").notNull().default(""),
+    usesReferences: boolean("uses_references"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
@@ -86,6 +87,7 @@ export const clients = pgTable(
       (): AnyPgColumn => planningPeriods.id,
       { onDelete: "set null" }
     ),
+    defaultUsesReferences: boolean("default_uses_references").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),

@@ -45,6 +45,7 @@ export function DashboardView({
   onSelectClient,
   onConfigureGem,
   onClientCreated,
+  usesReferences = true,
 }: {
   userName?: string | null;
   activeClient: ClientMeta;
@@ -59,6 +60,7 @@ export function DashboardView({
   onSelectClient: (clientId: string) => void;
   onConfigureGem: () => void;
   onClientCreated?: (clientId: string) => void;
+  usesReferences?: boolean;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const { captionBatchStats, referenceCount, canvaImageCount, canvaPageCount, brandGemReady, brandGemMissingCount } =
@@ -127,6 +129,7 @@ export function DashboardView({
       )}
 
       <section className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+        {usesReferences && (
         <DashboardStatCard
           label="Referências"
           value={String(referenceCount)}
@@ -134,6 +137,7 @@ export function DashboardView({
           icon={Image}
           style={{ animationDelay: "0ms" }}
         />
+        )}
         <DashboardStatCard
           label="Legendas"
           value={`${captionBatchStats.confirmed}/${captionBatchStats.total}`}
@@ -181,7 +185,7 @@ export function DashboardView({
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 xl:gap-8">
         <div className="xl:col-span-7">
-          <DashboardQuickActions onNavigateSection={onNavigateSection} />
+          <DashboardQuickActions onNavigateSection={onNavigateSection} usesReferences={usesReferences} />
         </div>
         <div className="xl:col-span-5">
           <DashboardClientGrid

@@ -12,6 +12,7 @@ import {
   createEmptyWorkspace,
 } from "./factory";
 import type { ClientMeta, ClientWorkspace } from "./types";
+import { effectiveUsesReferencesFromParts } from "../referenceWorkflow";
 
 export type PeriodSnapshot = {
   posts: ClientWorkspace["posts"];
@@ -19,6 +20,7 @@ export type PeriodSnapshot = {
   canva: ClientWorkspace["canva"];
   startDate: string;
   campaignContext: string;
+  usesReferences?: boolean | null;
 };
 
 function snapshotFromWorkspace(ws: ClientWorkspace): PeriodSnapshot {
@@ -28,6 +30,8 @@ function snapshotFromWorkspace(ws: ClientWorkspace): PeriodSnapshot {
     canva: ws.canva,
     startDate: ws.startDate,
     campaignContext: ws.brandGem.campaignContext ?? "",
+    usesReferences: ws.planningPeriods.find((p) => p.id === ws.activePlanningPeriodId)
+      ?.usesReferences,
   };
 }
 
@@ -87,6 +91,10 @@ export function switchLocalPlanningPeriod(
     activePlanningPeriodId: periodId,
     isReadOnly: period.status === "archived",
     periodEditMode: period.status === "archived" ? "view_archived" : "active",
+    usesReferences: effectiveUsesReferencesFromParts(
+      next.defaultUsesReferences,
+      period
+    ),
     brandGem: {
       ...next.brandGem,
       campaignContext: period.campaignContext ?? next.brandGem.campaignContext ?? "",
@@ -121,6 +129,7 @@ export function createLocalPlanningPeriod(
     label?: string;
     startDate?: string;
     sourcePeriodId?: string;
+    usesReferences?: boolean | null;
   }
 ): ClientWorkspace {
   const startDate = options.startDate ?? DEFAULT_START_DATE;
@@ -139,18 +148,22 @@ export function createLocalPlanningPeriod(
     startDate,
     status: "active",
     campaignContext: "",
+    usesReferences: options.usesReferences ?? null,
     createdAt: now,
     updatedAt: now,
   };
 
   let snapshot: PeriodSnapshot;
   if (options.sourcePeriodId) {
+    const sourceMeta = ws.planningPeriods.find((p) => p.id === options.sourcePeriodId);
+    if (options.usesReferences === undefined && sourceMeta) {
+      newPeriod.usesReferences = sourceMeta.usesReferences ?? null;
+    }
     const source =
       next.periodSnapshots?.[options.sourcePeriodId] ??
       (options.sourcePeriodId === ws.activePlanningPeriodId
         ? snapshotFromWorkspace(ws)
         : null);
-    const sourceMeta = ws.planningPeriods.find((p) => p.id === options.sourcePeriodId);
     snapshot = source
       ? cloneSnapshot(source)
       : {
@@ -181,6 +194,7 @@ export function createLocalPlanningPeriod(
     periodSnapshots: snapshots,
     isReadOnly: false,
     periodEditMode: "active",
+    usesReferences: effectiveUsesReferencesFromParts(next.defaultUsesReferences, newPeriod),
   };
 
   return next;

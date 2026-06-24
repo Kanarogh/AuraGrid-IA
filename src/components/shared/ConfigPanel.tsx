@@ -76,6 +76,9 @@ export function ConfigPanel({
   onDirtyChange,
   settingsTab: settingsTabProp,
   onSettingsTabChange,
+  onDefaultUsesReferencesChange,
+  defaultUsesReferences = true,
+  usesReferences = true,
 }: {
   open?: boolean;
   variant?: "panel" | "page";
@@ -87,6 +90,9 @@ export function ConfigPanel({
   onDirtyChange?: (dirty: boolean) => void;
   settingsTab?: SettingsTab;
   onSettingsTabChange?: (tab: SettingsTab) => void;
+  defaultUsesReferences?: boolean;
+  onDefaultUsesReferencesChange?: (value: boolean) => void | Promise<void>;
+  usesReferences?: boolean;
 }) {
   const { storageMode } = useAuth();
   const [footerOpen, setFooterOpen] = useState(true);
@@ -432,6 +438,27 @@ export function ConfigPanel({
           </p>
         </div>
 
+        {onDefaultUsesReferencesChange && (
+          <div className="rounded-xl border border-ag-border bg-ag-surface-1/80 p-4 space-y-2">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={defaultUsesReferences !== false}
+                onChange={(e) => void onDefaultUsesReferencesChange(e.target.checked)}
+              />
+              <span className="text-sm text-ag-text leading-relaxed">
+                <strong>Usar referências de catálogo</strong> (indexação JSON e match por código)
+                <span className="block text-xs text-ag-muted mt-1 font-normal">
+                  Desligado: legendas usam só a foto do post + Gem da marca. Indexação, busca por
+                  referência e aba de referências ficam ocultas. Cada roteiro pode sobrescrever
+                  isso.
+                </span>
+              </span>
+            </label>
+          </div>
+        )}
+
         <div className="rounded-xl border border-ag-warning/25 bg-ag-warning/5 p-4">
           <FieldLabel>
             <span className="inline-flex items-center gap-1.5">
@@ -588,17 +615,19 @@ export function ConfigPanel({
               </select>
             </div>
             <div className="sm:col-span-2 flex flex-col gap-2 pt-1">
-              <label className="flex items-center gap-2 text-sm text-ag-text cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={captionParams.includeReferenceWhenMatched}
-                  onChange={(e) =>
-                    patchCaptionParams({ includeReferenceWhenMatched: e.target.checked })
-                  }
-                  className="rounded border-ag-border"
-                />
-                Incluir linha Referência quando houver match no catálogo
-              </label>
+              {usesReferences && (
+                <label className="flex items-center gap-2 text-sm text-ag-text cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={captionParams.includeReferenceWhenMatched}
+                    onChange={(e) =>
+                      patchCaptionParams({ includeReferenceWhenMatched: e.target.checked })
+                    }
+                    className="rounded border-ag-border"
+                  />
+                  Incluir linha Referência quando houver match no catálogo
+                </label>
+              )}
               <label className="flex items-center gap-2 text-sm text-ag-text cursor-pointer">
                 <input
                   type="checkbox"

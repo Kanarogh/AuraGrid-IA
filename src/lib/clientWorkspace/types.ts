@@ -13,6 +13,8 @@ export type ClientMeta = {
   name: string;
   /** @ opcional; default: id sem hífens */
   instagramHandle?: string;
+  /** Padrão do cliente: usar workflow de referências (indexação + match). Default true. */
+  defaultUsesReferences?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -36,6 +38,10 @@ export type ClientWorkspace = {
   periodSnapshots?: Record<string, PeriodSnapshot>;
   isReadOnly?: boolean;
   periodEditMode?: PlanningPeriodEditMode;
+  /** Valor efetivo resolvido (cliente + override do roteiro). */
+  usesReferences?: boolean;
+  /** Padrão do cliente (espelhado do registry/API). */
+  defaultUsesReferences?: boolean;
   canva: {
     pages: CanvaGridPage[];
     activePageId: string;

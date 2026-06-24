@@ -28,6 +28,7 @@ import {
   resetPeriod,
   updatePeriod,
 } from "./planningPeriodService";
+import { resolveUsesReferences } from "../lib/referenceWorkflow";
 import { emitClientSync, emitRegistrySync } from "../sync/emitSyncEvent";
 import { serverSyncDebugLog } from "../sync/syncDebugLog";
 
@@ -186,6 +187,11 @@ export async function loadWorkspaceDto(
   const periodStartDate = activePeriod?.startDate ?? client.startDate;
   const periodCampaignContext = activePeriod?.campaignContext ?? "";
   const isReadOnly = activePeriod?.status === "archived";
+  const defaultUsesReferences = client.defaultUsesReferences ?? true;
+  const usesReferences = resolveUsesReferences(
+    defaultUsesReferences,
+    activePeriod?.usesReferences ?? null
+  );
 
   const [gem] = await db.select().from(brandGems).where(eq(brandGems.clientId, clientId)).limit(1);
   const [canvaCfg] = await db
@@ -302,6 +308,7 @@ export async function loadWorkspaceDto(
       id: client.id,
       name: client.name,
       instagramHandle: client.instagramHandle ?? client.id.replace(/-/g, "_"),
+      defaultUsesReferences,
       createdAt: client.createdAt.toISOString(),
       updatedAt: client.updatedAt.toISOString(),
     },
@@ -320,6 +327,8 @@ export async function loadWorkspaceDto(
     activePlanningPeriodId: activePeriodId,
     planningPeriods: planningPeriodsList,
     isReadOnly,
+    defaultUsesReferences,
+    usesReferences,
     canva: {
       pages: pagesWithSlots,
       activePageId: canvaCfg?.activePageId ?? "page_1",
@@ -528,6 +537,23 @@ export async function patchWorkspace(
     typeof patch.planningPeriodId === "string"
       ? patch.planningPeriodId
       : await ensureClientHasActivePeriod(clientId);
+
+  if (typeof patch.defaultUsesReferences === "boolean") {
+    await db
+      .update(clients)
+      .set({ defaultUsesReferences: patch.defaultUsesReferences, updatedAt: new Date() })
+      .where(and(eq(clients.id, clientId), eq(clients.ownerUserId, userId)));
+  }
+
+  if (
+    patch.periodUsesReferences === true ||
+    patch.periodUsesReferences === false ||
+    patch.periodUsesReferences === null
+  ) {
+    await updatePeriod(clientId, periodId, {
+      usesReferences: patch.periodUsesReferences as boolean | null,
+    });
+  }
 
   if (typeof patch.startDate === "string") {
     const [periodRow] = await db

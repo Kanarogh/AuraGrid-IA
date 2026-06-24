@@ -24,6 +24,9 @@ export function PlanningPeriodSelector({
   activePeriodId,
   isReadOnly,
   periodEditMode = "active",
+  usesReferences = true,
+  periodUsesReferencesOverride,
+  onPeriodUsesReferencesChange,
   onSelect,
   onCreateNew,
   onDuplicate,
@@ -34,6 +37,9 @@ export function PlanningPeriodSelector({
   activePeriodId: string;
   isReadOnly: boolean;
   periodEditMode?: PlanningPeriodEditMode;
+  usesReferences?: boolean;
+  periodUsesReferencesOverride?: boolean | null;
+  onPeriodUsesReferencesChange?: (value: boolean | null) => void;
   onSelect: (periodId: string) => void;
   onCreateNew: () => void;
   onDuplicate?: (sourcePeriodId: string) => void;
@@ -121,12 +127,44 @@ export function PlanningPeriodSelector({
                   {modeLabel}
                 </span>
               )}
+              {!usesReferences && (
+                <span className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold bg-violet-500/15 text-violet-700 dark:text-violet-300">
+                  Sem referências
+                </span>
+              )}
               {isReadOnly && (
                 <span className="text-amber-600 dark:text-amber-400 font-medium">
                   Somente leitura
                 </span>
               )}
             </p>
+            {onPeriodUsesReferencesChange && !isReadOnly && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <label className="text-[10px] font-mono uppercase tracking-wider text-ag-muted font-semibold">
+                  Referências
+                </label>
+                <select
+                  value={
+                    periodUsesReferencesOverride === true
+                      ? "on"
+                      : periodUsesReferencesOverride === false
+                        ? "off"
+                        : "inherit"
+                  }
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    void onPeriodUsesReferencesChange(
+                      v === "on" ? true : v === "off" ? false : null
+                    );
+                  }}
+                  className="rounded-lg border border-ag-border bg-ag-surface px-2 py-1 text-xs text-ag-text"
+                >
+                  <option value="inherit">Herdar do cliente</option>
+                  <option value="on">Com referências</option>
+                  <option value="off">Sem referências</option>
+                </select>
+              </div>
+            )}
           </div>
         </div>
 

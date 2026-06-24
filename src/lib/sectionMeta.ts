@@ -90,6 +90,15 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
+/** Filtra seções indisponíveis quando o roteiro não usa referências. */
+export function getNavGroups(usesReferences = true): NavGroup[] {
+  if (usesReferences) return NAV_GROUPS;
+  return NAV_GROUPS.map((g) => ({
+    ...g,
+    items: g.items.filter((item) => item.id !== "reference_finder"),
+  })).filter((g) => g.items.length > 0);
+}
+
 export const SECTION_SUBTITLES: Record<AppSection, string> = {
   posts: "Planeje, gere e aprove legendas do mês",
   canva_grid: "Monte páginas de 12 fotos e envie para o roteiro",

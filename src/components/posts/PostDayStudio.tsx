@@ -55,6 +55,7 @@ export function PostDayStudio({
   onRefineInstructionChange,
   onRefine,
   cardRef,
+  showReferenceControls = true,
 }: {
   post: PlannedPost;
   position: number;
@@ -89,6 +90,7 @@ export function PostDayStudio({
   onRefineInstructionChange: (value: string) => void;
   onRefine: (instruction?: string) => void;
   cardRef?: Ref<HTMLDivElement>;
+  showReferenceControls?: boolean;
 }) {
   const inputId = `feed-image-input-${post.id}`;
   const progressPct = total > 0 ? Math.round((position / total) * 100) : 0;
@@ -262,6 +264,7 @@ export function PostDayStudio({
         </section>
 
         <section className="p-5 sm:p-6 flex flex-col gap-4 min-w-0 bg-ag-surface-1/50">
+          {showReferenceControls && (
           <label className="flex items-start gap-2.5 rounded-xl border border-ag-border/70 bg-ag-surface-2/50 px-3 py-2.5 cursor-pointer">
             <input
               type="checkbox"
@@ -278,8 +281,10 @@ export function PostDayStudio({
               </span>
             </span>
           </label>
+          )}
 
           <div className="flex flex-col sm:flex-row gap-3">
+            {showReferenceControls && (
             <div className="flex-1 min-w-0">
               <label className="text-[10px] font-mono uppercase tracking-widest text-ag-muted block mb-1.5">
                 Referência
@@ -306,6 +311,7 @@ export function PostDayStudio({
                 ))}
               </select>
             </div>
+            )}
             <Button
               type="button"
               variant={post.isGenerating ? "secondary" : "accent"}

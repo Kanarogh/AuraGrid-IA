@@ -14,10 +14,14 @@ const QUICK_SECTIONS: AppSection[] = [
 
 export function DashboardQuickActions({
   onNavigateSection,
+  usesReferences = true,
 }: {
   onNavigateSection: (section: AppSection) => void;
+  usesReferences?: boolean;
 }) {
-  const items = QUICK_SECTIONS.map((id) => ALL_NAV_ITEMS.find((i) => i.id === id)!);
+  const items = QUICK_SECTIONS.filter(
+    (id) => usesReferences || id !== "reference_finder"
+  ).map((id) => ALL_NAV_ITEMS.find((i) => i.id === id)!);
 
   return (
     <section className="space-y-3 animate-ag-fade-in">

@@ -5,6 +5,7 @@ import { applyAiHeadersFromNextRequest } from "@/server/http/aiRequest";
 import { assertClientAccess, requireUser } from "@/server/http/auth";
 import { errorResponse } from "@/server/http/respond";
 import { runCatalogEnrichment } from "@/server/services/enrichQueue";
+import { getEffectiveUsesReferences } from "@/server/services/planningPeriodService";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,13 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const user = requireUser(req);
     const { clientId } = await params;
     await assertClientAccess(user, clientId);
+    const usesReferences = await getEffectiveUsesReferences(clientId);
+    if (!usesReferences) {
+      return NextResponse.json(
+        { error: "Este roteiro não usa referências de catálogo." },
+        { status: 400 }
+      );
+    }
     const { ids } = (await req.json().catch(() => ({}))) as { ids?: string[] };
     const providerId = await withUserAiContext(user.id, async () => {
       await applyAiHeadersFromNextRequest(req);

@@ -23,6 +23,7 @@ export function AppShell({
   onReset,
   onClientCreated,
   hasActiveClient,
+  usesReferences = true,
   children,
   footer,
 }: {
@@ -39,6 +40,7 @@ export function AppShell({
   onReset: () => void;
   onClientCreated?: (clientId: string) => void;
   hasActiveClient: boolean;
+  usesReferences?: boolean;
   children: ReactNode;
   footer?: ReactNode;
 }) {
@@ -85,6 +87,7 @@ export function AppShell({
         onReset={onReset}
         onClientCreated={onClientCreated}
         hasActiveClient={hasActiveClient}
+        usesReferences={usesReferences}
       />
 
       <div className="flex-1 flex flex-col min-w-0">

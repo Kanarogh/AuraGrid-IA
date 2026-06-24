@@ -3,6 +3,7 @@ import { formatAiError, getActiveProviderId } from "@/server/ai/index";
 import { matchOperationHeaders, runMatchOperation } from "@/server/ai/matchOrchestrator";
 import { sanitizeMatchOperationInput } from "@/server/ai/operations";
 import { aiAttemptsHeaderValue, withUserAiFromRequest } from "@/server/http/aiRequest";
+import { getEffectiveUsesReferences } from "@/server/services/planningPeriodService";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,16 @@ export async function POST(req: NextRequest) {
 
     if (!postImage) {
       return NextResponse.json({ error: "No query image provided." }, { status: 400 });
+    }
+
+    if (typeof clientId === "string") {
+      const usesReferences = await getEffectiveUsesReferences(clientId);
+      if (!usesReferences) {
+        return NextResponse.json(
+          { error: "Este roteiro não usa referências de catálogo." },
+          { status: 400 }
+        );
+      }
     }
 
     const sanitized = sanitizeMatchOperationInput("match-reference", {

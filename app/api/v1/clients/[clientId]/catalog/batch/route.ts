@@ -4,6 +4,7 @@ import { assertClientAccess, requireUser } from "@/server/http/auth";
 import { errorResponse } from "@/server/http/respond";
 import { createCatalogItem } from "@/server/services/catalogService";
 import { uploadMediaBuffer } from "@/server/services/mediaService";
+import { getEffectiveUsesReferences } from "@/server/services/planningPeriodService";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,15 @@ export async function POST(req: NextRequest, { params }: Ctx) {
 
     const isReferenceRaw = String(form.get("isReference") ?? "").trim().toLowerCase();
     const isReference = isReferenceRaw !== "false" && isReferenceRaw !== "0";
+    if (isReference) {
+      const usesReferences = await getEffectiveUsesReferences(clientId);
+      if (!usesReferences) {
+        return NextResponse.json(
+          { error: "Este roteiro não aceita referências. Envie apenas peças de grid." },
+          { status: 400 }
+        );
+      }
+    }
 
     let labels: string[] = [];
     const labelsRaw = form.get("labels");

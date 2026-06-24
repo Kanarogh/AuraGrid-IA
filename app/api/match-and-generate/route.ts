@@ -7,6 +7,7 @@ import {
 import { matchOperationHeaders, runMatchOperation } from "@/server/ai/matchOrchestrator";
 import { sanitizeMatchOperationInput } from "@/server/ai/operations";
 import { aiAttemptsHeaderValue, withUserAiFromRequest } from "@/server/http/aiRequest";
+import { getEffectiveUsesReferences } from "@/server/services/planningPeriodService";
 
 export const dynamic = "force-dynamic";
 
@@ -47,16 +48,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    let effectiveCaptionFromImageOnly = !!captionFromImageOnly;
+    if (typeof clientId === "string") {
+      const usesReferences = await getEffectiveUsesReferences(clientId);
+      if (!usesReferences) {
+        effectiveCaptionFromImageOnly = true;
+      }
+    }
+
     const sanitized = sanitizeMatchOperationInput("match-and-generate", {
       postImage,
       clientId: typeof clientId === "string" ? clientId : undefined,
-      catalogProfiles: body.catalogProfiles,
-      catalogItems: body.catalogItems,
+      catalogProfiles: effectiveCaptionFromImageOnly ? undefined : body.catalogProfiles,
+      catalogItems: effectiveCaptionFromImageOnly ? undefined : body.catalogItems,
       brandGem,
       promptContext,
       repeatingText,
       regenerateCaption: !!regenerateCaption,
-      captionFromImageOnly: !!captionFromImageOnly,
+      captionFromImageOnly: effectiveCaptionFromImageOnly,
       recentHooks: Array.isArray(recentHooks)
         ? recentHooks.filter((h): h is string => typeof h === "string")
         : undefined,

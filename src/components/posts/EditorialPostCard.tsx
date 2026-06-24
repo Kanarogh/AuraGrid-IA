@@ -42,6 +42,7 @@ export function EditorialPostCard({
   onRefineInstructionChange,
   onRefine,
   onFocus,
+  showReferenceControls = true,
 }: {
   post: PlannedPost;
   status: PostStatusStyle;
@@ -67,6 +68,7 @@ export function EditorialPostCard({
   onRefineInstructionChange: (v: string) => void;
   onRefine: (instruction?: string) => void;
   onFocus: () => void;
+  showReferenceControls?: boolean;
 }) {
   const inputId = `editorial-file-${post.id}`;
 
@@ -190,6 +192,8 @@ export function EditorialPostCard({
             />
           </div>
 
+          {showReferenceControls && (
+            <>
           <label className="flex items-start gap-2 rounded-lg border border-ag-border/70 bg-ag-surface-2/60 px-2.5 py-2 cursor-pointer">
             <input
               type="checkbox"
@@ -229,6 +233,8 @@ export function EditorialPostCard({
               </option>
             ))}
           </select>
+            </>
+          )}
 
           <Button
             type="button"

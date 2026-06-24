@@ -49,6 +49,7 @@ import {
   createPlanningPeriodApi,
   fetchRegistry,
   fetchWorkspace,
+  patchWorkspaceApi,
   renameClientApi,
   saveBrandGemApi,
 } from "../lib/api/workspaceApi";
@@ -72,6 +73,7 @@ import {
 } from "../lib/clientWorkspace/planningPeriodLocal";
 import type { PlanningPeriod } from "../lib/planningConstants";
 import type { PlanningPeriodEditMode } from "../lib/clientWorkspace/types";
+import { effectiveUsesReferencesFromParts } from "../lib/referenceWorkflow";
 
 type ClientWorkspaceContextValue = {
   registry: ClientRegistry;
@@ -106,6 +108,9 @@ type ClientWorkspaceContextValue = {
   planningPeriods: PlanningPeriod[];
   isReadOnly: boolean;
   periodEditMode: PlanningPeriodEditMode;
+  usesReferences: boolean;
+  setDefaultUsesReferences: (value: boolean) => Promise<void>;
+  setPeriodUsesReferences: (value: boolean | null) => Promise<void>;
   switchPlanningPeriod: (periodId: string) => Promise<void>;
   viewPlanningPeriod: (periodId: string) => Promise<void>;
   reactivatePlanningPeriod: (periodId: string) => Promise<void>;
@@ -115,6 +120,7 @@ type ClientWorkspaceContextValue = {
     label?: string;
     startDate?: string;
     sourcePeriodId?: string;
+    usesReferences?: boolean | null;
   }) => Promise<void>;
   duplicatePlanningPeriod: (
     sourcePeriodId: string,
@@ -157,6 +163,20 @@ function withPeriodEditMode(
     isReadOnly: (ws.periodEditMode ?? derived) === "view_archived",
   };
 }
+
+function withResolvedUsesReferences(
+  ws: ClientWorkspace,
+  clientDefault?: boolean
+): ClientWorkspace {
+  const defaultUsesReferences = clientDefault ?? ws.defaultUsesReferences ?? true;
+  const period = ws.planningPeriods.find((p) => p.id === ws.activePlanningPeriodId);
+  return {
+    ...ws,
+    defaultUsesReferences,
+    usesReferences: effectiveUsesReferencesFromParts(defaultUsesReferences, period),
+  };
+}
+
 function initialWorkspace(reg: ClientRegistry): ClientWorkspace {
   if (reg.clients.length === 0) return createOrphanWorkspace();
   const meta =
@@ -944,6 +964,75 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
     await viewPlanningPeriod(current.activePlanningPeriodId);
   }, [viewPlanningPeriod]);
 
+  const setDefaultUsesReferences = useCallback(
+    async (value: boolean) => {
+      if (!activeClientId) return;
+      const apply = (prev: ClientWorkspace) => {
+        const next = withResolvedUsesReferences(
+          { ...prev, defaultUsesReferences: value },
+          value
+        );
+        workspaceRef.current = next;
+        return next;
+      };
+      setWorkspace(apply);
+      setRegistry((reg) => {
+        const next = {
+          ...reg,
+          clients: reg.clients.map((c) =>
+            c.id === activeClientId
+              ? touchMeta({ ...c, defaultUsesReferences: value })
+              : c
+          ),
+        };
+        if (!useApiStorage) saveRegistry(next);
+        return next;
+      });
+      if (useApiStorage) {
+        try {
+          await patchWorkspaceApi(activeClientId, { defaultUsesReferences: value });
+          broadcastSyncChanged(activeClientId, ["workspace"]);
+        } catch (err) {
+          console.error("[AuraGrid] Falha ao salvar preferência de referências:", err);
+          toast.error("Não foi possível salvar a preferência.");
+        }
+        return;
+      }
+      flushSave(activeClientId, workspaceRef.current);
+    },
+    [activeClientId, flushSave, useApiStorage]
+  );
+
+  const setPeriodUsesReferences = useCallback(
+    async (value: boolean | null) => {
+      if (!activeClientId) return;
+      const periodId = workspaceRef.current.activePlanningPeriodId;
+      setWorkspace((prev) => {
+        const planningPeriods = prev.planningPeriods.map((p) =>
+          p.id === periodId ? { ...p, usesReferences: value } : p
+        );
+        const next = withResolvedUsesReferences({ ...prev, planningPeriods });
+        workspaceRef.current = next;
+        return next;
+      });
+      if (useApiStorage) {
+        try {
+          await patchWorkspaceApi(activeClientId, {
+            planningPeriodId: periodId,
+            periodUsesReferences: value,
+          });
+          broadcastSyncChanged(activeClientId, ["periods", "workspace"]);
+        } catch (err) {
+          console.error("[AuraGrid] Falha ao salvar roteiro:", err);
+          toast.error("Não foi possível salvar a preferência do roteiro.");
+        }
+        return;
+      }
+      flushSave(activeClientId, workspaceRef.current);
+    },
+    [activeClientId, flushSave, useApiStorage]
+  );
+
   const createPlanningPeriod = useCallback(
     async (options: { label?: string; startDate?: string; sourcePeriodId?: string }) => {
       if (!activeClientId) return;
@@ -1100,6 +1189,9 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       planningPeriods: workspace.planningPeriods,
       isReadOnly: workspace.isReadOnly ?? false,
       periodEditMode: workspace.periodEditMode ?? "active",
+      usesReferences: workspace.usesReferences !== false,
+      setDefaultUsesReferences,
+      setPeriodUsesReferences,
       switchPlanningPeriod,
       viewPlanningPeriod,
       reactivatePlanningPeriod,
@@ -1143,6 +1235,8 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       reactivatePlanningPeriod,
       editArchivedPlanningPeriod,
       exitArchivedEdit,
+      setDefaultUsesReferences,
+      setPeriodUsesReferences,
       createPlanningPeriod,
       duplicatePlanningPeriod,
       applyRemoteRegistry,

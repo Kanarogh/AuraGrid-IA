@@ -15,7 +15,7 @@ import {
   updateCatalogItem,
 } from "./catalogService";
 import { mediaAssetToDataUrl } from "./mediaService";
-import { ensureClientHasActivePeriod } from "./planningPeriodService";
+import { ensureClientHasActivePeriod, getEffectiveUsesReferences } from "./planningPeriodService";
 import { emitEnrichProgress } from "../sync/emitSyncEvent";
 
 const ENRICH_DELAY_MS = 5000;
@@ -95,6 +95,14 @@ async function runCatalogEnrichmentInner(
     if (userId) {
       periodId = await ensureClientHasActivePeriod(clientId);
       void emitEnrichProgress(userId, clientId, periodId, true);
+    }
+    const usesReferences = await getEffectiveUsesReferences(clientId, periodId);
+    if (!usesReferences) {
+      console.info(`[enrich] ignorado — roteiro sem referências (clientId=${clientId})`);
+      if (userId && periodId) {
+        void emitEnrichProgress(userId, clientId, periodId, false);
+      }
+      return { quotaExceeded: false, cancelled: false };
     }
     await ensureRuntimeAiSettingsLoaded();
     try {

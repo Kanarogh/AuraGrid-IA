@@ -18,6 +18,8 @@ export type ApiWorkspaceResponse = {
   activePlanningPeriodId: string;
   planningPeriods: PlanningPeriod[];
   isReadOnly?: boolean;
+  defaultUsesReferences?: boolean;
+  usesReferences?: boolean;
   canva: ClientWorkspace["canva"];
   ui?: ClientWorkspace["ui"];
 };
@@ -59,6 +61,8 @@ export function apiWorkspaceToClientWorkspace(dto: ApiWorkspaceResponse): Client
     planningPeriods: dto.planningPeriods ?? [],
     isReadOnly: dto.isReadOnly ?? false,
     periodEditMode: dto.isReadOnly ? "view_archived" : "active",
+    defaultUsesReferences: dto.defaultUsesReferences ?? dto.client.defaultUsesReferences ?? true,
+    usesReferences: dto.usesReferences ?? true,
     canva: {
       ...dto.canva,
       pages: normalizedPages,
@@ -110,7 +114,12 @@ export async function fetchPlanningPeriodsApi(clientId: string) {
 
 export async function createPlanningPeriodApi(
   clientId: string,
-  body: { label?: string; startDate?: string; sourcePeriodId?: string }
+  body: {
+    label?: string;
+    startDate?: string;
+    sourcePeriodId?: string;
+    usesReferences?: boolean | null;
+  }
 ) {
   const res = await apiFetch(`/api/v1/clients/${clientId}/planning-periods`, {
     method: "POST",

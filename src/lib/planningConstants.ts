@@ -9,6 +9,8 @@ export type PlanningPeriod = {
   startDate: string;
   status: PlanningPeriodStatus;
   campaignContext?: string;
+  /** null = herdar do cliente */
+  usesReferences?: boolean | null;
   createdAt: string;
   updatedAt: string;
   archivedAt?: string;

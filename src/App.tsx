@@ -259,10 +259,15 @@ export default function App() {
     switchClient,
     applyRemoteRegistry,
     applyRemotePlanningPeriods,
+    usesReferences,
+    setDefaultUsesReferences,
+    setPeriodUsesReferences,
   } = useClientWorkspace();
 
   const activeClientIdRef = useRef(activeClientId);
   activeClientIdRef.current = activeClientId;
+  const usesReferencesRef = useRef(usesReferences);
+  usesReferencesRef.current = usesReferences;
 
   const saveWorkspaceNow = useCallback(async () => {
     try {
@@ -455,8 +460,8 @@ export default function App() {
     : "Indexando… (um por vez, aguarde)";
 
   const captionBatchStats = useMemo(
-    () => getCaptionBatchStats(posts, catalog),
-    [posts, catalog]
+    () => getCaptionBatchStats(posts, catalog, usesReferences),
+    [posts, catalog, usesReferences]
   );
 
   const dashboardMetrics = useDashboardMetrics({
@@ -2186,7 +2191,7 @@ export default function App() {
 
     try {
       const processedPostImage = await preparePostImageForAi(post.image);
-      const imageOnly = !!post.captionFromImageOnly;
+      const imageOnly = !usesReferencesRef.current || !!post.captionFromImageOnly;
 
       if (controller.signal.aborted) return {};
 
@@ -2281,8 +2286,8 @@ export default function App() {
             p.id === postId
               ? {
                   ...p,
-                  matchedCatalogId: matchedId,
-                  reasoning,
+                  matchedCatalogId: usesReferencesRef.current ? matchedId : null,
+                  reasoning: usesReferencesRef.current ? reasoning : null,
                   caption,
                   isGenerating: false,
                   isGenerated: true,
@@ -2990,8 +2995,10 @@ export default function App() {
       output += `==================================================================\n`;
       output += `📅 DIA ${post.dayNumber}${postSuffix} - ${post.dateLabel.toUpperCase()} [${isOk}]\n`;
       output += `==================================================================\n`;
-      output += `👗 Peça do Showroom: ${refItem ? refItem.label : (post.matchedCatalogId || "Manual/Nenhuma")}\n`;
-      if (post.reasoning) {
+      if (usesReferences) {
+        output += `👗 Peça do Showroom: ${refItem ? refItem.label : (post.matchedCatalogId || "Manual/Nenhuma")}\n`;
+      }
+      if (post.reasoning && usesReferences) {
         output += `🧠 Análise de Correlação IA: ${post.reasoning}\n`;
       }
       output += `\n✍️ LEGENDA FORMATADA (Instagram/WhatsApp):\n`;
@@ -3075,7 +3082,18 @@ export default function App() {
   const routePostsTab = clientRoute?.postsTab ?? postsWorkTab;
   const routePreviewId = clientRoute?.postId ?? activePreviewId;
   const routeCatalogTab = clientRoute?.catalogTab ?? catalogTab;
+  const effectiveCatalogTab =
+    usesReferences || routeCatalogTab === "grid" ? routeCatalogTab : "grid";
   const routeSettingsTab = clientRoute?.settingsTab ?? settingsTab;
+
+  useEffect(() => {
+    if (!usesReferences) {
+      if (catalogTab === "references") setCatalogTab("grid");
+      if (routeSection === "reference_finder") {
+        void handleNavigate("catalog");
+      }
+    }
+  }, [usesReferences, catalogTab, routeSection, handleNavigate]);
 
   const activePost =
     posts.find((p) => p?.id === routePreviewId) ?? posts.find((p) => !!p?.id) ?? null;
@@ -3119,6 +3137,7 @@ export default function App() {
         onReset={handleResetPresets}
         onClientCreated={(clientId) => void navigateToClientSettings(clientId)}
         hasActiveClient={hasActiveClient}
+        usesReferences={usesReferences}
         footer={<Footer />}
       >
         {connectionStatus === "disconnected" && <ApiAlert />}
@@ -3173,6 +3192,7 @@ export default function App() {
             isReadOnly={isReadOnly}
             metrics={dashboardMetrics}
             isLoading={useApiStorage && !workspaceHydrated}
+            usesReferences={usesReferences}
             onContinueRoteiro={() =>
               void navigateClient({
                 clientId: effectiveActiveClientId,
@@ -3231,6 +3251,9 @@ export default function App() {
             onDirtyChange={setSettingsDraftDirty}
             settingsTab={routeSettingsTab}
             onSettingsTabChange={handleSettingsTabChange}
+            defaultUsesReferences={activeClient.defaultUsesReferences}
+            usesReferences={usesReferences}
+            onDefaultUsesReferencesChange={setDefaultUsesReferences}
           />
         )}
 
@@ -3243,6 +3266,12 @@ export default function App() {
               activePeriodId={activePlanningPeriodId}
               isReadOnly={isReadOnly}
               periodEditMode={periodEditMode}
+              usesReferences={usesReferences}
+              periodUsesReferencesOverride={
+                planningPeriods.find((p) => p.id === activePlanningPeriodId)?.usesReferences ??
+                null
+              }
+              onPeriodUsesReferencesChange={setPeriodUsesReferences}
               hideDuplicateAction={isReadOnly}
               onSelect={(periodId) => {
                 void navigateClient({ periodId }, { replace: true, skipDirtyGuard: true });
@@ -3441,6 +3470,7 @@ export default function App() {
                   setRefineInstructions((prev) => ({ ...prev, [activePost.id]: v }))
                 }
                 onRefine={(instruction) => void handleRefineCaption(activePost.id, instruction)}
+                showReferenceControls={usesReferences}
               />
             ) : routePostsTab === "day" ? (
               <div className="ag-card p-8 text-center text-sm text-ag-muted">
@@ -3655,7 +3685,7 @@ export default function App() {
           />
         )}
 
-        {hasActiveClient && onClientRoute && routeSection === "reference_finder" && (
+        {hasActiveClient && onClientRoute && usesReferences && routeSection === "reference_finder" && (
           <ReferenceFinderPanel
             referenceCatalog={referenceCatalog}
             isEnrichingCatalog={isEnrichingCatalog}
@@ -3717,13 +3747,14 @@ export default function App() {
               )}
             </p>
             <CatalogTabNav
-              active={routeCatalogTab}
+              active={effectiveCatalogTab}
               onChange={handleCatalogTabChange}
               referenceCount={referenceCatalog.length}
               gridCount={gridCatalog.length}
+              usesReferences={usesReferences}
             />
 
-            {routeCatalogTab === "references" && (
+            {usesReferences && routeCatalogTab === "references" && (
               <>
             <div className={`p-6 sm:p-8 border-2 border-dashed rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-4 mb-8 ${
               catalogDragOver 
@@ -4050,7 +4081,7 @@ export default function App() {
               </>
             )}
 
-            {routeCatalogTab === "grid" && (
+            {effectiveCatalogTab === "grid" && (
             <div>
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div>

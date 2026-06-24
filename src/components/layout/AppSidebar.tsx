@@ -14,7 +14,7 @@ import { ClientSwitcher } from "./ClientSwitcher";
 import { WorkspaceStatusBar } from "./WorkspaceStatusBar";
 import { useAuth } from "../../context/AuthContext";
 import {
-  NAV_GROUPS,
+  getNavGroups,
   type AppSection,
   type NavItem,
 } from "../../lib/sectionMeta";
@@ -56,6 +56,7 @@ export function AppSidebar({
   onReset,
   onClientCreated,
   hasActiveClient,
+  usesReferences = true,
 }: {
   active: AppSection;
   isDashboardActive?: boolean;
@@ -80,7 +81,7 @@ export function AppSidebar({
   /** Drawer mobile sempre expandido; recolhido só no desktop. */
   const isCollapsed = collapsed && !mobileOpen;
 
-  const groups = NAV_GROUPS.map((g) => ({
+  const groups = getNavGroups(usesReferences).map((g) => ({
     ...g,
     items: g.items.map((item) => {
       if (item.id === "catalog" && catalogCount > 0) {

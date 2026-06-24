@@ -10,6 +10,7 @@ import {
   createEmptyBrandGem,
 } from "../brandGemDefaults";
 import { normalizeCaptionGenerationParams } from "../captionParams";
+import { effectiveUsesReferencesFromParts } from "../referenceWorkflow";
 import type { BrandGem, CanvaGridPage, PlannedPost } from "../../types";
 import type { ClientMeta, ClientWorkspace } from "./types";
 
@@ -85,6 +86,7 @@ export function createClientMeta(id: string, name: string): ClientMeta {
     id,
     name: name.trim() || id,
     instagramHandle: id.replace(/-/g, "_"),
+    defaultUsesReferences: true,
     createdAt: now,
     updatedAt: now,
   };
@@ -113,6 +115,8 @@ export function createEmptyWorkspace(meta: ClientMeta): ClientWorkspace {
     activePlanningPeriodId: defaultPeriod.id,
     planningPeriods: [defaultPeriod],
     isReadOnly: false,
+    defaultUsesReferences: meta.defaultUsesReferences !== false,
+    usesReferences: true,
     canva: {
       pages: defaultPages,
       activePageId: getDefaultActiveCanvaPageId(defaultPages),
@@ -180,6 +184,12 @@ export function normalizeWorkspace(
       : planningPeriods.find((p) => p.status === "active")?.id ?? defaultPeriod.id;
   const activePeriod =
     planningPeriods.find((p) => p.id === activePlanningPeriodId) ?? defaultPeriod;
+  const defaultUsesReferences =
+    meta.defaultUsesReferences ?? raw.defaultUsesReferences ?? true;
+  const usesReferences = effectiveUsesReferencesFromParts(
+    defaultUsesReferences,
+    activePeriod
+  );
 
   return {
     version: 1,
@@ -194,6 +204,8 @@ export function normalizeWorkspace(
     planningPeriods,
     isReadOnly: activePeriod.status === "archived",
     periodEditMode: activePeriod.status === "archived" ? "view_archived" : "active",
+    defaultUsesReferences,
+    usesReferences,
     canva: {
       pages,
       activePageId: resolveActivePageId(

@@ -38,6 +38,12 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       sourcePeriodId:
         typeof body.sourcePeriodId === "string" ? body.sourcePeriodId : undefined,
       activate: body.activate !== false,
+      usesReferences:
+        body.usesReferences === true || body.usesReferences === false
+          ? body.usesReferences
+          : body.usesReferences === null
+            ? null
+            : undefined,
     });
     const workspace = await loadWorkspaceDto(user.id, clientId, period.id);
     return NextResponse.json({ period, workspace }, { status: 201 });

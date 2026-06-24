@@ -18,6 +18,12 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       startDate: typeof body.startDate === "string" ? body.startDate : undefined,
       campaignContext:
         typeof body.campaignContext === "string" ? body.campaignContext : undefined,
+      usesReferences:
+        body.usesReferences === true || body.usesReferences === false
+          ? body.usesReferences
+          : body.usesReferences === null
+            ? null
+            : undefined,
     });
     return NextResponse.json({ period });
   } catch (err) {
