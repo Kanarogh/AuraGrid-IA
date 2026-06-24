@@ -22,6 +22,7 @@ import {
   createInitialPeriodForClient,
   ensureClientHasActivePeriod,
   getActivePeriodId,
+  getPeriodForClient,
   isPeriodReadOnly,
   listPeriodsForClient,
   resetPeriod,
@@ -370,14 +371,10 @@ function brandGemFingerprint(gem: BrandGemPatchInput): string {
 async function syncBrandGemFromWorkspacePatch(
   userId: string,
   clientId: string,
+  periodId: string,
   gem: BrandGemPatchInput
 ): Promise<boolean> {
   const db = getDb();
-  const activePeriodId = await ensureClientHasActivePeriod(clientId);
-
-  if (await isPeriodReadOnly(clientId, activePeriodId)) {
-    throw new Error("Roteiro arquivado é somente leitura.");
-  }
 
   const trimmedName = gem.name.trim() || clientId;
   const nextFp = brandGemFingerprint(gem);
@@ -406,7 +403,7 @@ async function syncBrandGemFromWorkspacePatch(
     const [periodRow] = await db
       .select({ campaignContext: planningPeriods.campaignContext })
       .from(planningPeriods)
-      .where(eq(planningPeriods.id, activePeriodId))
+      .where(eq(planningPeriods.id, periodId))
       .limit(1);
     periodContextChanged = (periodRow?.campaignContext ?? "") !== campaignContext;
   }
@@ -451,7 +448,13 @@ async function syncBrandGemFromWorkspacePatch(
   }
 
   if (periodContextChanged && campaignContext !== undefined) {
-    await updatePeriod(clientId, activePeriodId, { campaignContext });
+    const period = await getPeriodForClient(clientId, periodId);
+    await updatePeriod(
+      clientId,
+      periodId,
+      { campaignContext },
+      { allowArchived: period?.status === "archived" }
+    );
   }
 
   return gemChanged || periodContextChanged;
@@ -526,10 +529,6 @@ export async function patchWorkspace(
       ? patch.planningPeriodId
       : await ensureClientHasActivePeriod(clientId);
 
-  if (await isPeriodReadOnly(clientId, periodId)) {
-    throw new Error("Roteiro arquivado é somente leitura.");
-  }
-
   if (typeof patch.startDate === "string") {
     const [periodRow] = await db
       .select({ startDate: planningPeriods.startDate })
@@ -537,7 +536,13 @@ export async function patchWorkspace(
       .where(eq(planningPeriods.id, periodId))
       .limit(1);
     if (periodRow && String(periodRow.startDate) !== patch.startDate) {
-      await updatePeriod(clientId, periodId, { startDate: patch.startDate });
+      const period = await getPeriodForClient(clientId, periodId);
+      await updatePeriod(
+        clientId,
+        periodId,
+        { startDate: patch.startDate },
+        { allowArchived: period?.status === "archived" }
+      );
     }
   }
 
@@ -546,6 +551,7 @@ export async function patchWorkspace(
     brandGemChanged = await syncBrandGemFromWorkspacePatch(
       userId,
       clientId,
+      periodId,
       patch.brandGem as BrandGemPatchInput
     );
   }

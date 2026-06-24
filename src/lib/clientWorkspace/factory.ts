@@ -193,6 +193,7 @@ export function normalizeWorkspace(
     activePlanningPeriodId,
     planningPeriods,
     isReadOnly: activePeriod.status === "archived",
+    periodEditMode: activePeriod.status === "archived" ? "view_archived" : "active",
     canva: {
       pages,
       activePageId: resolveActivePageId(

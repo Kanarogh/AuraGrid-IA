@@ -63,11 +63,15 @@ import {
 import { workspaceApiPatchFingerprint } from "../lib/clientWorkspace/apiWorkspacePatch";
 import {
   createLocalPlanningPeriod,
+  editArchivedLocalPlanningPeriod,
   persistActivePeriodSnapshot,
+  reactivateLocalPlanningPeriod,
   resetLocalActivePeriod,
   switchLocalPlanningPeriod,
+  viewLocalPlanningPeriod,
 } from "../lib/clientWorkspace/planningPeriodLocal";
 import type { PlanningPeriod } from "../lib/planningConstants";
+import type { PlanningPeriodEditMode } from "../lib/clientWorkspace/types";
 
 type ClientWorkspaceContextValue = {
   registry: ClientRegistry;
@@ -101,7 +105,12 @@ type ClientWorkspaceContextValue = {
   activePlanningPeriodId: string;
   planningPeriods: PlanningPeriod[];
   isReadOnly: boolean;
+  periodEditMode: PlanningPeriodEditMode;
   switchPlanningPeriod: (periodId: string) => Promise<void>;
+  viewPlanningPeriod: (periodId: string) => Promise<void>;
+  reactivatePlanningPeriod: (periodId: string) => Promise<void>;
+  editArchivedPlanningPeriod: (periodId: string) => Promise<void>;
+  exitArchivedEdit: () => Promise<void>;
   createPlanningPeriod: (options: {
     label?: string;
     startDate?: string;
@@ -128,6 +137,26 @@ function touchMeta(meta: ClientMeta): ClientMeta {
   return { ...meta, updatedAt: new Date().toISOString() };
 }
 
+function withPeriodEditMode(
+  ws: ClientWorkspace,
+  mode?: PlanningPeriodEditMode
+): ClientWorkspace {
+  if (mode) {
+    return {
+      ...ws,
+      periodEditMode: mode,
+      isReadOnly: mode === "view_archived",
+    };
+  }
+  const period = ws.planningPeriods.find((p) => p.id === ws.activePlanningPeriodId);
+  const derived: PlanningPeriodEditMode =
+    period?.status === "archived" ? "view_archived" : "active";
+  return {
+    ...ws,
+    periodEditMode: ws.periodEditMode ?? derived,
+    isReadOnly: (ws.periodEditMode ?? derived) === "view_archived",
+  };
+}
 function initialWorkspace(reg: ClientRegistry): ClientWorkspace {
   if (reg.clients.length === 0) return createOrphanWorkspace();
   const meta =
@@ -724,13 +753,52 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
 
   const switchPlanningPeriod = useCallback(
     async (periodId: string) => {
-      if (!activeClientId || periodId === workspaceRef.current.activePlanningPeriodId) return;
+      if (!activeClientId) return;
+      const current = workspaceRef.current;
+      if (
+        periodId === current.activePlanningPeriodId &&
+        current.periodEditMode !== "view_archived"
+      ) {
+        return;
+      }
+
+      const period = current.planningPeriods.find((p) => p.id === periodId);
+      if (!period) return;
+
+      if (period.status === "archived") {
+        if (useApiStorage) {
+          try {
+            markLocalSync(activeClientId, ["periods", "workspace"]);
+            const dto = await fetchWorkspace(activeClientId, periodId);
+            const ws = withPeriodEditMode(apiWorkspaceToClientWorkspace(dto), "view_archived");
+            beginRemoteWorkspaceApply();
+            try {
+              setWorkspace(ws);
+              workspaceRef.current = ws;
+              const fp = workspaceApiPatchFingerprint(ws);
+              if (fp) markWorkspacePatchSynced(activeClientId, fp);
+            } finally {
+              endRemoteWorkspaceApply();
+            }
+          } catch (err) {
+            console.error("[AuraGrid] Falha ao visualizar roteiro:", err);
+            toast.error("Não foi possível carregar o roteiro.");
+          }
+          return;
+        }
+
+        const next = viewLocalPlanningPeriod(current, periodId);
+        setWorkspace(next);
+        workspaceRef.current = next;
+        flushSave(activeClientId, next);
+        return;
+      }
 
       if (useApiStorage) {
         try {
           markLocalSync(activeClientId, ["periods", "workspace"]);
-          const { workspace: dto } = await activatePlanningPeriodApi(activeClientId, periodId);
-          const ws = apiWorkspaceToClientWorkspace(dto);
+          const dto = await fetchWorkspace(activeClientId, periodId);
+          const ws = withPeriodEditMode(apiWorkspaceToClientWorkspace(dto), "active");
           beginRemoteWorkspaceApply();
           try {
             setWorkspace(ws);
@@ -747,13 +815,134 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const next = switchLocalPlanningPeriod(workspaceRef.current, periodId);
+      const next = withPeriodEditMode(switchLocalPlanningPeriod(current, periodId), "active");
       setWorkspace(next);
       workspaceRef.current = next;
       flushSave(activeClientId, next);
     },
     [activeClientId, flushSave, useApiStorage]
   );
+
+  const viewPlanningPeriod = useCallback(
+    async (periodId: string) => {
+      if (!activeClientId) return;
+      const period = workspaceRef.current.planningPeriods.find((p) => p.id === periodId);
+      if (!period || period.status !== "archived") {
+        await switchPlanningPeriod(periodId);
+        return;
+      }
+
+      if (useApiStorage) {
+        try {
+          markLocalSync(activeClientId, ["periods", "workspace"]);
+          const dto = await fetchWorkspace(activeClientId, periodId);
+          const ws = withPeriodEditMode(apiWorkspaceToClientWorkspace(dto), "view_archived");
+          beginRemoteWorkspaceApply();
+          try {
+            setWorkspace(ws);
+            workspaceRef.current = ws;
+            const fp = workspaceApiPatchFingerprint(ws);
+            if (fp) markWorkspacePatchSynced(activeClientId, fp);
+          } finally {
+            endRemoteWorkspaceApply();
+          }
+        } catch (err) {
+          console.error("[AuraGrid] Falha ao visualizar roteiro:", err);
+          toast.error("Não foi possível carregar o roteiro.");
+        }
+        return;
+      }
+
+      const next = viewLocalPlanningPeriod(workspaceRef.current, periodId);
+      setWorkspace(next);
+      workspaceRef.current = next;
+      flushSave(activeClientId, next);
+    },
+    [activeClientId, flushSave, switchPlanningPeriod, useApiStorage]
+  );
+
+  const reactivatePlanningPeriod = useCallback(
+    async (periodId: string) => {
+      if (!activeClientId) return;
+      const current = workspaceRef.current;
+      if (
+        periodId === current.activePlanningPeriodId &&
+        current.periodEditMode !== "view_archived" &&
+        current.periodEditMode !== "edit_archived"
+      ) {
+        return;
+      }
+
+      if (useApiStorage) {
+        try {
+          markLocalSync(activeClientId, ["periods", "workspace"]);
+          const { workspace: dto } = await activatePlanningPeriodApi(activeClientId, periodId);
+          const ws = withPeriodEditMode(apiWorkspaceToClientWorkspace(dto), "active");
+          beginRemoteWorkspaceApply();
+          try {
+            setWorkspace(ws);
+            workspaceRef.current = ws;
+            const fp = workspaceApiPatchFingerprint(ws);
+            if (fp) markWorkspacePatchSynced(activeClientId, fp);
+          } finally {
+            endRemoteWorkspaceApply();
+          }
+          broadcastSyncChanged(activeClientId, ["periods", "workspace"]);
+        } catch (err) {
+          console.error("[AuraGrid] Falha ao reativar roteiro:", err);
+          toast.error("Não foi possível reativar o roteiro.");
+        }
+        return;
+      }
+
+      const next = reactivateLocalPlanningPeriod(current, periodId);
+      setWorkspace(next);
+      workspaceRef.current = next;
+      flushSave(activeClientId, next);
+    },
+    [activeClientId, flushSave, useApiStorage]
+  );
+
+  const editArchivedPlanningPeriod = useCallback(
+    async (periodId: string) => {
+      if (!activeClientId) return;
+      const period = workspaceRef.current.planningPeriods.find((p) => p.id === periodId);
+      if (!period || period.status !== "archived") return;
+
+      if (useApiStorage) {
+        try {
+          markLocalSync(activeClientId, ["periods", "workspace"]);
+          const dto = await fetchWorkspace(activeClientId, periodId);
+          const ws = withPeriodEditMode(apiWorkspaceToClientWorkspace(dto), "edit_archived");
+          beginRemoteWorkspaceApply();
+          try {
+            setWorkspace(ws);
+            workspaceRef.current = ws;
+            const fp = workspaceApiPatchFingerprint(ws);
+            if (fp) markWorkspacePatchSynced(activeClientId, fp);
+          } finally {
+            endRemoteWorkspaceApply();
+          }
+        } catch (err) {
+          console.error("[AuraGrid] Falha ao editar roteiro arquivado:", err);
+          toast.error("Não foi possível carregar o roteiro para edição.");
+        }
+        return;
+      }
+
+      const next = editArchivedLocalPlanningPeriod(workspaceRef.current, periodId);
+      setWorkspace(next);
+      workspaceRef.current = next;
+      flushSave(activeClientId, next);
+    },
+    [activeClientId, flushSave, useApiStorage]
+  );
+
+  const exitArchivedEdit = useCallback(async () => {
+    const current = workspaceRef.current;
+    if (current.periodEditMode !== "edit_archived") return;
+    await viewPlanningPeriod(current.activePlanningPeriodId);
+  }, [viewPlanningPeriod]);
 
   const createPlanningPeriod = useCallback(
     async (options: { label?: string; startDate?: string; sourcePeriodId?: string }) => {
@@ -762,7 +951,11 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       if (useApiStorage) {
         try {
           const api = getApiHelpers();
-          if (api?.flushWorkspaceNow && !workspaceRef.current.isReadOnly) {
+          if (
+            api?.flushWorkspaceNow &&
+            (!workspaceRef.current.isReadOnly ||
+              workspaceRef.current.periodEditMode === "edit_archived")
+          ) {
             await api.flushWorkspaceNow(workspaceRef.current);
           }
           const { workspace: dto } = await createPlanningPeriodApi(activeClientId, options);
@@ -818,8 +1011,12 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
         const dto = await fetchWorkspace(activeClientId);
         const ws = apiWorkspaceToClientWorkspace(dto);
 
+        const preserveLocalWorkspace =
+          workspaceRef.current.isReadOnly ||
+          workspaceRef.current.periodEditMode === "edit_archived";
+
         if (kind === "activeSwitch") {
-          if (workspaceRef.current.isReadOnly) {
+          if (preserveLocalWorkspace) {
             setWorkspace((prev) => ({ ...prev, planningPeriods: ws.planningPeriods }));
           } else if (ws.activePlanningPeriodId !== workspaceRef.current.activePlanningPeriodId) {
             setWorkspace(ws);
@@ -902,7 +1099,12 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       activePlanningPeriodId: workspace.activePlanningPeriodId,
       planningPeriods: workspace.planningPeriods,
       isReadOnly: workspace.isReadOnly ?? false,
+      periodEditMode: workspace.periodEditMode ?? "active",
       switchPlanningPeriod,
+      viewPlanningPeriod,
+      reactivatePlanningPeriod,
+      editArchivedPlanningPeriod,
+      exitArchivedEdit,
       createPlanningPeriod,
       duplicatePlanningPeriod,
       applyRemoteRegistry,
@@ -937,6 +1139,10 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       persistWorkspaceNow,
       getPostsSnapshot,
       switchPlanningPeriod,
+      viewPlanningPeriod,
+      reactivatePlanningPeriod,
+      editArchivedPlanningPeriod,
+      exitArchivedEdit,
       createPlanningPeriod,
       duplicatePlanningPeriod,
       applyRemoteRegistry,

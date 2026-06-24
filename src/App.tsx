@@ -129,6 +129,7 @@ import { PopularCalendarioPanel } from "./components/posts/PopularCalendarioPane
 import { PostsWorkflowBar } from "./components/posts/PostsWorkflowBar";
 import {
   PlanningPeriodReadOnlyBanner,
+  PlanningPeriodArchivedEditBanner,
   PlanningPeriodSelector,
 } from "./components/posts/PlanningPeriodSelector";
 import { NewPlanningPeriodModal } from "./components/posts/NewPlanningPeriodModal";
@@ -248,7 +249,11 @@ export default function App() {
     activePlanningPeriodId,
     planningPeriods,
     isReadOnly,
+    periodEditMode,
     switchPlanningPeriod,
+    reactivatePlanningPeriod,
+    editArchivedPlanningPeriod,
+    exitArchivedEdit,
     createPlanningPeriod,
     duplicatePlanningPeriod,
     switchClient,
@@ -353,7 +358,7 @@ export default function App() {
       if (!useApiStorage || !activeClientId) return;
       const slices = slicesFromDomains(domains);
       if (!needsWorkspaceFetch(slices)) return;
-      if (isReadOnly) {
+      if (isReadOnly || periodEditMode === "edit_archived") {
         if (slices.workspace) slices.workspace = false;
         if (slices.brandGem) slices.brandGem = false;
       }
@@ -390,6 +395,7 @@ export default function App() {
       activeClientId,
       activePlanningPeriodId,
       isReadOnly,
+      periodEditMode,
       setCatalog,
       setBrandGem,
       setStartDate,
@@ -3236,6 +3242,7 @@ export default function App() {
               periods={planningPeriods}
               activePeriodId={activePlanningPeriodId}
               isReadOnly={isReadOnly}
+              periodEditMode={periodEditMode}
               hideDuplicateAction={isReadOnly}
               onSelect={(periodId) => {
                 void navigateClient({ periodId }, { replace: true, skipDirtyGuard: true });
@@ -3259,12 +3266,36 @@ export default function App() {
               }
             />
 
-            {isReadOnly && (
+            {isReadOnly && periodEditMode === "view_archived" && (
               <PlanningPeriodReadOnlyBanner
                 periodLabel={activePeriodLabel}
+                onReactivate={async () => {
+                  if (
+                    !(await confirmDialog({
+                      message: `O roteiro ativo atual será arquivado. Deseja reativar «${activePeriodLabel}»?`,
+                      variant: "danger",
+                      confirmLabel: "Reativar",
+                    }))
+                  ) {
+                    return;
+                  }
+                  await reactivatePlanningPeriod(activePlanningPeriodId);
+                }}
+                onEditInPlace={() => {
+                  void editArchivedPlanningPeriod(activePlanningPeriodId);
+                }}
                 onDuplicate={() => {
                   setDuplicateSourcePeriodId(activePlanningPeriodId);
                   setShowNewPlanningPeriodModal(true);
+                }}
+              />
+            )}
+
+            {periodEditMode === "edit_archived" && (
+              <PlanningPeriodArchivedEditBanner
+                periodLabel={activePeriodLabel}
+                onExitEdit={() => {
+                  void exitArchivedEdit();
                 }}
               />
             )}

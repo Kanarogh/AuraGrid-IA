@@ -391,18 +391,23 @@ export async function archivePeriod(clientId: string, periodId: string) {
 export async function updatePeriod(
   clientId: string,
   periodId: string,
-  patch: { label?: string; startDate?: string; campaignContext?: string }
+  patch: { label?: string; startDate?: string; campaignContext?: string },
+  options?: { allowArchived?: boolean }
 ) {
   const db = getDb();
   const period = await getPeriodForClient(clientId, periodId);
   if (!period) throw new Error("Roteiro não encontrado.");
-  if (period.status === "archived") {
+  if (period.status === "archived" && !options?.allowArchived) {
     throw new Error("Roteiros arquivados são somente leitura.");
   }
 
   const now = new Date();
   const updates: Partial<typeof planningPeriods.$inferInsert> = {};
-  if (typeof patch.label === "string" && patch.label.trim()) {
+  if (
+    typeof patch.label === "string" &&
+    patch.label.trim() &&
+    period.status !== "archived"
+  ) {
     const nextLabel = patch.label.trim();
     if (nextLabel !== period.label) updates.label = nextLabel;
   }

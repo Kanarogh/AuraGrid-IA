@@ -23,6 +23,8 @@ export type ClientRegistry = {
   clients: ClientMeta[];
 };
 
+export type PlanningPeriodEditMode = "active" | "view_archived" | "edit_archived";
+
 export type ClientWorkspace = {
   version: 1;
   brandGem: BrandGem;
@@ -33,6 +35,7 @@ export type ClientWorkspace = {
   planningPeriods: PlanningPeriod[];
   periodSnapshots?: Record<string, PeriodSnapshot>;
   isReadOnly?: boolean;
+  periodEditMode?: PlanningPeriodEditMode;
   canva: {
     pages: CanvaGridPage[];
     activePageId: string;

@@ -58,6 +58,7 @@ export function apiWorkspaceToClientWorkspace(dto: ApiWorkspaceResponse): Client
     activePlanningPeriodId: dto.activePlanningPeriodId,
     planningPeriods: dto.planningPeriods ?? [],
     isReadOnly: dto.isReadOnly ?? false,
+    periodEditMode: dto.isReadOnly ? "view_archived" : "active",
     canva: {
       ...dto.canva,
       pages: normalizedPages,

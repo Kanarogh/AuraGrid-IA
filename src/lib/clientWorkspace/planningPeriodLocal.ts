@@ -86,6 +86,7 @@ export function switchLocalPlanningPeriod(
     ...next,
     activePlanningPeriodId: periodId,
     isReadOnly: period.status === "archived",
+    periodEditMode: period.status === "archived" ? "view_archived" : "active",
     brandGem: {
       ...next.brandGem,
       campaignContext: period.campaignContext ?? next.brandGem.campaignContext ?? "",
@@ -179,9 +180,54 @@ export function createLocalPlanningPeriod(
     planningPeriods: [newPeriod, ...planningPeriods],
     periodSnapshots: snapshots,
     isReadOnly: false,
+    periodEditMode: "active",
   };
 
   return next;
+}
+
+/** Visualiza roteiro arquivado sem reativar (somente leitura). */
+export function viewLocalPlanningPeriod(ws: ClientWorkspace, periodId: string): ClientWorkspace {
+  const next = switchLocalPlanningPeriod(ws, periodId);
+  const period = next.planningPeriods.find((p) => p.id === periodId);
+  if (!period || period.status !== "archived") return next;
+  return { ...next, isReadOnly: true, periodEditMode: "view_archived" };
+}
+
+/** Reativa roteiro arquivado (arquiva o ativo atual). */
+export function reactivateLocalPlanningPeriod(
+  ws: ClientWorkspace,
+  periodId: string
+): ClientWorkspace {
+  const period = ws.planningPeriods.find((p) => p.id === periodId);
+  if (!period) return ws;
+
+  const now = new Date().toISOString();
+  let next = persistActivePeriodSnapshot(ws);
+  const planningPeriods = next.planningPeriods.map((p) => {
+    if (p.id === periodId) {
+      return { ...p, status: "active" as const, archivedAt: undefined, updatedAt: now };
+    }
+    if (p.status === "active") {
+      return { ...p, status: "archived" as const, archivedAt: now, updatedAt: now };
+    }
+    return p;
+  });
+
+  next = { ...next, planningPeriods };
+  next = switchLocalPlanningPeriod(next, periodId);
+  return { ...next, isReadOnly: false, periodEditMode: "active" };
+}
+
+/** Edita roteiro arquivado sem alterar qual período está ativo no cliente. */
+export function editArchivedLocalPlanningPeriod(
+  ws: ClientWorkspace,
+  periodId: string
+): ClientWorkspace {
+  const period = ws.planningPeriods.find((p) => p.id === periodId);
+  if (!period || period.status !== "archived") return ws;
+  const next = switchLocalPlanningPeriod(ws, periodId);
+  return { ...next, isReadOnly: false, periodEditMode: "edit_archived" };
 }
 
 export function resetLocalActivePeriod(ws: ClientWorkspace, meta: ClientMeta): ClientWorkspace {

@@ -1,8 +1,9 @@
 "use client";
 
-import { CalendarRange, ChevronDown, Copy, Plus } from "lucide-react";
+import { CalendarRange, ChevronDown, Copy, Pencil, Plus, RotateCcw, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { PlanningPeriod } from "../../lib/planningConstants";
+import type { PlanningPeriodEditMode } from "../../lib/clientWorkspace/types";
 import { Button } from "../ui/Button";
 import { cn } from "../../lib/cn";
 
@@ -12,10 +13,17 @@ function statusLabel(status: PlanningPeriod["status"]) {
   return "Rascunho";
 }
 
+function modeIndicator(mode: PlanningPeriodEditMode, periodStatus: PlanningPeriod["status"]) {
+  if (mode === "edit_archived") return "Editando arquivado";
+  if (mode === "view_archived" || periodStatus === "archived") return "Visualizando";
+  return null;
+}
+
 export function PlanningPeriodSelector({
   periods,
   activePeriodId,
   isReadOnly,
+  periodEditMode = "active",
   onSelect,
   onCreateNew,
   onDuplicate,
@@ -25,6 +33,7 @@ export function PlanningPeriodSelector({
   periods: PlanningPeriod[];
   activePeriodId: string;
   isReadOnly: boolean;
+  periodEditMode?: PlanningPeriodEditMode;
   onSelect: (periodId: string) => void;
   onCreateNew: () => void;
   onDuplicate?: (sourcePeriodId: string) => void;
@@ -34,6 +43,7 @@ export function PlanningPeriodSelector({
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const active = periods.find((p) => p.id === activePeriodId) ?? periods[0];
+  const modeLabel = active ? modeIndicator(periodEditMode, active.status) : null;
 
   const sorted = [...periods].sort(
     (a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
@@ -99,6 +109,18 @@ export function PlanningPeriodSelector({
                   {statusLabel(active.status)}
                 </span>
               )}
+              {modeLabel && (
+                <span
+                  className={cn(
+                    "inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                    periodEditMode === "edit_archived"
+                      ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
+                      : "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                  )}
+                >
+                  {modeLabel}
+                </span>
+              )}
               {isReadOnly && (
                 <span className="text-amber-600 dark:text-amber-400 font-medium">
                   Somente leitura
@@ -108,8 +130,8 @@ export function PlanningPeriodSelector({
           </div>
         </div>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0 sm:self-start">
-            {isReadOnly && onDuplicate && active && !hideDuplicateAction && (
+        <div className="flex flex-wrap items-center gap-2 shrink-0 sm:self-start">
+          {isReadOnly && onDuplicate && active && !hideDuplicateAction && (
             <Button
               variant="secondary"
               size="sm"
@@ -181,20 +203,55 @@ export function PlanningPeriodSelector({
 
 export function PlanningPeriodReadOnlyBanner({
   periodLabel,
+  onReactivate,
+  onEditInPlace,
   onDuplicate,
 }: {
   periodLabel: string;
+  onReactivate: () => void;
+  onEditInPlace: () => void;
   onDuplicate: () => void;
 }) {
   return (
-    <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex flex-col gap-3">
       <p className="text-sm text-ag-text">
-        Você está visualizando o roteiro arquivado <strong>{periodLabel}</strong>. Edição
-        desabilitada — exporte ou duplique como base para um novo mês.
+        Você está visualizando o roteiro arquivado <strong>{periodLabel}</strong>. Escolha como
+        prosseguir:
       </p>
-      <Button variant="secondary" size="sm" onClick={onDuplicate} className="shrink-0">
-        <Copy className="h-3.5 w-3.5" />
-        Duplicar para novo mês
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="primary" size="sm" onClick={onReactivate}>
+          <RotateCcw className="h-3.5 w-3.5" />
+          Reativar roteiro
+        </Button>
+        <Button variant="secondary" size="sm" onClick={onEditInPlace}>
+          <Pencil className="h-3.5 w-3.5" />
+          Editar sem trocar o ativo
+        </Button>
+        <Button variant="secondary" size="sm" onClick={onDuplicate}>
+          <Copy className="h-3.5 w-3.5" />
+          Duplicar como base
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+export function PlanningPeriodArchivedEditBanner({
+  periodLabel,
+  onExitEdit,
+}: {
+  periodLabel: string;
+  onExitEdit: () => void;
+}) {
+  return (
+    <div className="mb-4 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <p className="text-sm text-ag-text">
+        Você está editando o roteiro arquivado <strong>{periodLabel}</strong>. O roteiro ativo do
+        cliente não foi alterado.
+      </p>
+      <Button variant="secondary" size="sm" onClick={onExitEdit} className="shrink-0">
+        <X className="h-3.5 w-3.5" />
+        Encerrar edição
       </Button>
     </div>
   );
