@@ -10,6 +10,11 @@ export async function register() {
     try {
       await runMigrations();
       console.info("[AuraGrid] PostgreSQL conectado e migrations aplicadas.");
+      const { isServerSyncDebugEnabled } = await import("./server/sync/syncDebugLog");
+      const syncFlag = process.env.SYNC_DEBUG ?? process.env.NEXT_PUBLIC_SYNC_DEBUG ?? "(não definido)";
+      console.log(
+        `[AuraGrid:sync] terminal debug ${isServerSyncDebugEnabled() ? "ON" : "OFF"} (SYNC_DEBUG=${syncFlag})`
+      );
       const { isPgvectorAvailable } = await import("./server/db/pgvector");
       if (!(await isPgvectorAvailable())) {
         console.warn(
@@ -33,8 +38,4 @@ export async function register() {
     console.error("[AuraGrid] Falha ao carregar configurações de IA:", err);
   }
 
-  const { isServerSyncDebugEnabled } = await import("./server/sync/syncDebugLog");
-  console.log(
-    `[AuraGrid:sync] terminal debug ${isServerSyncDebugEnabled() ? "ON" : "OFF"} — SYNC_DEBUG=1 para ativar em produção`
-  );
 }
