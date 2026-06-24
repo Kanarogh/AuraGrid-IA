@@ -3912,7 +3912,7 @@ export default function App() {
                           src={item.image}
                           alt={item.label}
                           imgClassName="object-contain pointer-events-none"
-                          priority={index < 18}
+                          priority={index < 12}
                         />
                         {item.image && (
                           <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover/img:bg-black/35 transition-colors opacity-0 group-hover/img:opacity-100 pointer-events-none">
@@ -4135,7 +4135,7 @@ export default function App() {
                             src={item.image}
                             alt={item.label}
                             imgClassName="object-contain pointer-events-none"
-                            priority={index < 18}
+                            priority={index < 12}
                           />
                           {item.image && (
                             <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover/img:bg-black/35 transition-colors opacity-0 group-hover/img:opacity-100 pointer-events-none">

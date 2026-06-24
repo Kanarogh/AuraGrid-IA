@@ -82,6 +82,29 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   return res;
 }
 
+/** GET de binários (mídia) — sem Content-Type JSON que quebra alguns proxies. */
+export async function apiFetchMedia(path: string): Promise<Response> {
+  const headers = new Headers();
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+
+  let res = await fetch(path, { headers, credentials: "include" });
+
+  if (res.status === 401) {
+    if (!refreshPromise) {
+      refreshPromise = refreshAccessToken().finally(() => {
+        refreshPromise = null;
+      });
+    }
+    const newToken = await refreshPromise;
+    if (newToken) {
+      headers.set("Authorization", `Bearer ${newToken}`);
+      res = await fetch(path, { headers, credentials: "include" });
+    }
+  }
+
+  return res;
+}
+
 export async function readApiJson<T>(res: Response): Promise<T> {
   const data = (await res.json()) as T & { error?: string };
   if (!res.ok) {

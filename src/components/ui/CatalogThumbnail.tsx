@@ -1,16 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ImageOff, RefreshCw } from "lucide-react";
 import {
   catalogMediaDisplayUrl,
+  clearCatalogMediaCacheFor,
   mediaPathFromSrc,
   peekCatalogMediaUrl,
   requestCatalogMediaUrl,
 } from "../../lib/catalogMediaLoader";
 import { cn } from "../../lib/cn";
 
-function useLazyInView(rootMargin = "400px", eager = false) {
+const AUTO_RETRIES = 8;
+
+function useLazyInView(rootMargin = "300px", eager = false) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(eager);
 
@@ -56,68 +59,79 @@ export function CatalogThumbnail({
   variant?: "thumb" | "full";
 }) {
   const eager = priority || !lazy;
-  const { ref, visible } = useLazyInView("400px", eager);
+  const { ref, visible } = useLazyInView("300px", eager);
   const retryCountRef = useRef(0);
+  const loadGenRef = useRef(0);
 
-  const directUrl = useMemo(() => {
+  const [displaySrc, setDisplaySrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const resolveDirectUrl = useCallback(() => {
     if (!src) return null;
     if (!mediaPathFromSrc(src)) return src;
     return peekCatalogMediaUrl(src, variant) ?? catalogMediaDisplayUrl(src, variant);
   }, [src, variant]);
 
-  const [displaySrc, setDisplaySrc] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [usingFallback, setUsingFallback] = useState(false);
-
   useEffect(() => {
+    loadGenRef.current += 1;
     retryCountRef.current = 0;
     setFailed(false);
     setLoaded(false);
-    setUsingFallback(false);
+    setLoading(false);
     setDisplaySrc(null);
   }, [src, variant]);
 
+  const loadViaFetch = useCallback(
+    (force = false) => {
+      if (!src || !mediaPathFromSrc(src)) return;
+      const gen = loadGenRef.current;
+      setLoading(true);
+      setFailed(false);
+
+      if (force) clearCatalogMediaCacheFor(src);
+
+      void requestCatalogMediaUrl(src, {
+        priority: priority ? 12 : 6,
+        variant,
+      })
+        .then((url) => {
+          if (gen !== loadGenRef.current) return;
+          setDisplaySrc(url);
+          setLoading(false);
+        })
+        .catch(() => {
+          if (gen !== loadGenRef.current) return;
+          if (retryCountRef.current < AUTO_RETRIES) {
+            retryCountRef.current += 1;
+            const delay = 500 + retryCountRef.current * 450;
+            window.setTimeout(() => loadViaFetch(false), delay);
+            return;
+          }
+          setFailed(true);
+          setLoading(false);
+        });
+    },
+    [src, priority, variant]
+  );
+
   useEffect(() => {
     if (!src || !visible) return;
-    setDisplaySrc(directUrl);
-  }, [src, visible, directUrl]);
-
-  const loadViaFetch = useCallback(() => {
-    if (!src || !mediaPathFromSrc(src)) return;
-    setUsingFallback(true);
-    setFailed(false);
-    setLoaded(false);
-    void requestCatalogMediaUrl(src, {
-      priority: priority ? 10 : 5,
-      variant,
-    })
-      .then((url) => {
-        setDisplaySrc(url);
-        setUsingFallback(false);
-      })
-      .catch(() => {
-        if (retryCountRef.current < 2) {
-          retryCountRef.current += 1;
-          window.setTimeout(loadViaFetch, 600 * retryCountRef.current);
-          return;
-        }
-        setFailed(true);
-        setUsingFallback(false);
-      });
-  }, [src, priority, variant]);
+    setDisplaySrc(resolveDirectUrl());
+  }, [src, visible, resolveDirectUrl]);
 
   const handleImgError = useCallback(() => {
-    loadViaFetch();
+    loadViaFetch(false);
   }, [loadViaFetch]);
 
   const handleRetry = useCallback(() => {
     retryCountRef.current = 0;
     setFailed(false);
     setLoaded(false);
-    if (directUrl) setDisplaySrc(directUrl);
-    else loadViaFetch();
-  }, [directUrl, loadViaFetch]);
+    setDisplaySrc(resolveDirectUrl());
+    loadViaFetch(true);
+  }, [resolveDirectUrl, loadViaFetch]);
 
   if (!src) {
     return (
@@ -163,7 +177,7 @@ export function CatalogThumbnail({
     );
   }
 
-  const showSkeleton = visible && (!loaded || !displaySrc || usingFallback);
+  const showSkeleton = visible && (!loaded || !displaySrc || loading);
 
   return (
     <div ref={ref} className={cn("relative h-full w-full overflow-hidden", className)}>
@@ -174,16 +188,17 @@ export function CatalogThumbnail({
       )}
       {visible && displaySrc ? (
         <img
+          key={displaySrc}
           src={displaySrc}
           alt={alt}
           referrerPolicy="no-referrer"
           draggable={false}
           decoding="async"
           loading={eager ? "eager" : "lazy"}
-          fetchPriority={priority ? "high" : "auto"}
+          fetchPriority={priority ? "high" : "low"}
           className={cn(
             "h-full w-full object-cover transition-opacity duration-200",
-            loaded && !usingFallback ? "opacity-100" : "opacity-0",
+            loaded && !loading ? "opacity-100" : "opacity-0",
             imgClassName
           )}
           onLoad={() => setLoaded(true)}

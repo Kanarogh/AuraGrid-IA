@@ -29,9 +29,16 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     let contentType = mimeType;
 
     if (requestedWidth > 0 && Number.isFinite(requestedWidth)) {
-      const resized = await resizeMediaBuffer(buffer, mimeType, requestedWidth);
-      body = resized.buffer;
-      contentType = resized.mimeType;
+      try {
+        const resized = await resizeMediaBuffer(buffer, mimeType, requestedWidth);
+        body = resized.buffer;
+        contentType = resized.mimeType;
+      } catch (resizeErr) {
+        console.warn(
+          "[media] resize falhou, servindo original:",
+          resizeErr instanceof Error ? resizeErr.message : resizeErr
+        );
+      }
     }
 
     return new NextResponse(new Uint8Array(body), {
