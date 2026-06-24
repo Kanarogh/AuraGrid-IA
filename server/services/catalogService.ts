@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { GEMINI_EMBEDDING_DIMENSIONS, getGeminiEmbeddingModel } from "../ai/matchConfig";
 import { getDb, getSqlClient } from "../db/client";
 import { isPgvectorAvailable } from "../db/pgvector";
@@ -396,7 +396,7 @@ export async function resetStaleProcessingCatalogItems(
       and(
         periodWhere(clientId, periodId),
         eq(catalogItems.enrichmentStatus, "processing"),
-        sql`${catalogItems.updatedAt} < ${threshold}`
+        lt(catalogItems.updatedAt, threshold)
       )
     )
     .returning({ id: catalogItems.id });

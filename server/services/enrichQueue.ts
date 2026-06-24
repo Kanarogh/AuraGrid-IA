@@ -89,7 +89,14 @@ async function runCatalogEnrichmentInner(
   let quotaExceeded = false;
   try {
     await ensureRuntimeAiSettingsLoaded();
-    await resetStaleProcessingCatalogItems(clientId);
+    try {
+      await resetStaleProcessingCatalogItems(clientId);
+    } catch (err) {
+      console.warn(
+        "[enrich] reset de processing órfão ignorado:",
+        err instanceof Error ? err.message : err
+      );
+    }
     const activeProvider = providerId ?? getAiProviderId();
     console.info(`[enrich] provedor=${activeProvider} (indexação JSON)`);
 

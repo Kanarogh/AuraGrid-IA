@@ -29,7 +29,14 @@ export async function GET(req: NextRequest, { params }: Ctx) {
       return NextResponse.json({ enriching: true, progress });
     }
 
-    await resetStaleProcessingCatalogItems(clientId);
+    try {
+      await resetStaleProcessingCatalogItems(clientId);
+    } catch (err) {
+      console.warn(
+        "[enrich/status] reset de processing órfão ignorado:",
+        err instanceof Error ? err.message : err
+      );
+    }
     const snapshot = await getCatalogEnrichmentSnapshot(clientId);
 
     if (isSnapshotEnriching(snapshot)) {
