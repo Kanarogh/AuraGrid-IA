@@ -68,7 +68,9 @@ function constrainChangedToSignal(
   changed: SyncDomain[],
   signalDomains?: SyncDomain[]
 ): SyncDomain[] {
-  if (!signalDomains?.length) return changed;
+  if (!signalDomains?.length) {
+    return changed.filter((d) => d === "workspace" || d === "catalog");
+  }
   return changed.filter((d) => signalDomains.includes(d));
 }
 
@@ -105,6 +107,7 @@ export function useRemoteSyncCoordinator({
   const onRemoteAppliedRef = useRef(onRemoteApplied);
   onRemoteAppliedRef.current = onRemoteApplied;
   const isEnrichingRef = useRef(false);
+  const syncInFlightRef = useRef(false);
 
   const [isEnriching, setIsEnriching] = useState(false);
   const [enrichProgress, setEnrichProgress] = useState<EnrichProgressState | null>(null);
@@ -166,7 +169,10 @@ export function useRemoteSyncCoordinator({
   const syncNow = useCallback(
     async (signalDomains?: SyncDomain[]) => {
       if (!enabled || !clientId || !periodId) return null;
+      if (syncInFlightRef.current) return null;
+      syncInFlightRef.current = true;
 
+      try {
       const mergedSignal = mergeSyncDomains(signalDomains ?? []);
       if (mergedSignal.length && isLocalSyncEcho(clientId, mergedSignal)) {
         await refreshTokensOnly();
@@ -206,6 +212,9 @@ export function useRemoteSyncCoordinator({
       } catch {
         if (reloadPromise) await reloadPromise.catch(() => {});
         return null;
+      }
+      } finally {
+        syncInFlightRef.current = false;
       }
     },
     [enabled, clientId, periodId, diffTokens, applyDomainChanges, refreshTokensOnly]

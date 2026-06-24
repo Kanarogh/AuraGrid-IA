@@ -346,6 +346,116 @@ function sanitizeCatalogRefId(raw: unknown, validCatalogIds: Set<string>): strin
   return validCatalogIds.has(raw) ? raw : null;
 }
 
+type BrandGemPatchInput = {
+  name: string;
+  description: string;
+  instructions: string;
+  campaignContext?: string;
+  captionParams?: unknown;
+  footer?: unknown;
+};
+
+function brandGemFingerprint(gem: BrandGemPatchInput): string {
+  return JSON.stringify({
+    name: (gem.name ?? "").trim(),
+    description: gem.description ?? "",
+    instructions: gem.instructions ?? "",
+    captionParams: gem.captionParams ?? {},
+    footer: gem.footer ?? {},
+  });
+}
+
+/** Persiste gem enviada no PATCH do workspace sem bump/notify se nada mudou. */
+async function syncBrandGemFromWorkspacePatch(
+  userId: string,
+  clientId: string,
+  gem: BrandGemPatchInput
+): Promise<boolean> {
+  const db = getDb();
+  const activePeriodId = await ensureClientHasActivePeriod(clientId);
+
+  if (await isPeriodReadOnly(clientId, activePeriodId)) {
+    throw new Error("Roteiro arquivado é somente leitura.");
+  }
+
+  const trimmedName = gem.name.trim() || clientId;
+  const nextFp = brandGemFingerprint(gem);
+
+  const [existing] = await db
+    .select()
+    .from(brandGems)
+    .where(eq(brandGems.clientId, clientId))
+    .limit(1);
+
+  const prevFp = existing
+    ? brandGemFingerprint({
+        name: existing.name,
+        description: existing.description,
+        instructions: existing.instructions,
+        captionParams: existing.captionParams,
+        footer: existing.footer,
+      })
+    : "";
+
+  const campaignContext =
+    typeof gem.campaignContext === "string" ? gem.campaignContext : undefined;
+
+  let periodContextChanged = false;
+  if (campaignContext !== undefined) {
+    const [periodRow] = await db
+      .select({ campaignContext: planningPeriods.campaignContext })
+      .from(planningPeriods)
+      .where(eq(planningPeriods.id, activePeriodId))
+      .limit(1);
+    periodContextChanged = (periodRow?.campaignContext ?? "") !== campaignContext;
+  }
+
+  const gemChanged = !existing || nextFp !== prevFp;
+  if (!gemChanged && !periodContextChanged) {
+    return false;
+  }
+
+  if (gemChanged) {
+    const savedAt = new Date();
+    await db
+      .insert(brandGems)
+      .values({
+        clientId,
+        name: trimmedName,
+        description: gem.description,
+        instructions: gem.instructions,
+        campaignContext: "",
+        captionParams: gem.captionParams ?? {},
+        footer: gem.footer ?? {},
+        savedAt,
+      })
+      .onConflictDoUpdate({
+        target: brandGems.clientId,
+        set: {
+          name: trimmedName,
+          description: gem.description,
+          instructions: gem.instructions,
+          captionParams: gem.captionParams ?? {},
+          footer: gem.footer ?? {},
+          savedAt,
+        },
+      });
+
+    if (!existing || existing.name !== trimmedName) {
+      await db
+        .update(clients)
+        .set({ name: trimmedName, updatedAt: new Date() })
+        .where(and(eq(clients.id, clientId), eq(clients.ownerUserId, userId)));
+    }
+  }
+
+  if (periodContextChanged && campaignContext !== undefined) {
+    await updatePeriod(clientId, activePeriodId, { campaignContext });
+  }
+
+  return gemChanged || periodContextChanged;
+}
+
 export async function saveBrandGem(
   userId: string,
   clientId: string,
@@ -420,11 +530,23 @@ export async function patchWorkspace(
   }
 
   if (typeof patch.startDate === "string") {
-    await updatePeriod(clientId, periodId, { startDate: patch.startDate });
+    const [periodRow] = await db
+      .select({ startDate: planningPeriods.startDate })
+      .from(planningPeriods)
+      .where(eq(planningPeriods.id, periodId))
+      .limit(1);
+    if (periodRow && String(periodRow.startDate) !== patch.startDate) {
+      await updatePeriod(clientId, periodId, { startDate: patch.startDate });
+    }
   }
 
+  let brandGemChanged = false;
   if (patch.brandGem && typeof patch.brandGem === "object") {
-    await saveBrandGem(userId, clientId, patch.brandGem as Parameters<typeof saveBrandGem>[2]);
+    brandGemChanged = await syncBrandGemFromWorkspacePatch(
+      userId,
+      clientId,
+      patch.brandGem as BrandGemPatchInput
+    );
   }
 
   if (patch.ui && typeof patch.ui === "object") {
@@ -637,9 +759,7 @@ export async function patchWorkspace(
   }
 
   const domains: ("workspace" | "brandGem")[] = ["workspace"];
-  if (patch.brandGem && typeof patch.brandGem === "object") {
-    domains.push("brandGem");
-  }
+  if (brandGemChanged) domains.push("brandGem");
   void emitClientSync(userId, clientId, domains, periodId);
 }
 

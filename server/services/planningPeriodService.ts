@@ -401,24 +401,30 @@ export async function updatePeriod(
   }
 
   const now = new Date();
-  const updates: Partial<typeof planningPeriods.$inferInsert> = { updatedAt: now };
+  const updates: Partial<typeof planningPeriods.$inferInsert> = {};
   if (typeof patch.label === "string" && patch.label.trim()) {
-    updates.label = patch.label.trim();
+    const nextLabel = patch.label.trim();
+    if (nextLabel !== period.label) updates.label = nextLabel;
   }
-  if (typeof patch.startDate === "string") {
+  if (typeof patch.startDate === "string" && patch.startDate !== period.startDate) {
     updates.startDate = patch.startDate;
   }
-  if (typeof patch.campaignContext === "string") {
+  if (typeof patch.campaignContext === "string" && patch.campaignContext !== period.campaignContext) {
     updates.campaignContext = patch.campaignContext;
   }
 
+  if (!Object.keys(updates).length) {
+    return toPeriodDto(period);
+  }
+
+  updates.updatedAt = now;
   await db.update(planningPeriods).set(updates).where(eq(planningPeriods.id, periodId));
 
   const activeId = await getActivePeriodId(clientId);
-  if (activeId === periodId && typeof patch.startDate === "string") {
+  if (activeId === periodId && updates.startDate) {
     await db
       .update(clients)
-      .set({ startDate: patch.startDate, updatedAt: now })
+      .set({ startDate: updates.startDate, updatedAt: now })
       .where(eq(clients.id, clientId));
   }
 

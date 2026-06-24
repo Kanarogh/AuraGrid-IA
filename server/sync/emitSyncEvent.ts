@@ -7,7 +7,6 @@ import {
   type SyncEnrichProgress,
   type SyncEventPayload,
 } from "./syncEvents";
-import { dispatchSyncEvent } from "./syncEventHub";
 
 const ownerCache = new Map<string, string>();
 
@@ -36,7 +35,6 @@ export async function emitSyncEvent(payload: SyncEventPayload): Promise<void> {
     const sql = getSqlClient();
     const json = JSON.stringify(payload);
     await sql`SELECT pg_notify(${SYNC_NOTIFY_CHANNEL}, ${json})`;
-    dispatchSyncEvent(payload);
   } catch (err) {
     console.warn("[sync] pg_notify falhou:", err instanceof Error ? err.message : err);
   }

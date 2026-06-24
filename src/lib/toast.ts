@@ -10,6 +10,9 @@ export type ToastItem = {
 type Listener = (toasts: ToastItem[]) => void;
 
 const MAX_TOASTS = 5;
+const TOAST_DEDUPE_MS = 12_000;
+let lastToastMessage = "";
+let lastToastMessageAt = 0;
 const DEFAULT_DURATION: Record<ToastType, number> = {
   success: 4500,
   info: 5000,
@@ -34,6 +37,13 @@ function scheduleDismiss(id: string, duration: number) {
 }
 
 function push(type: ToastType, message: string, duration?: number) {
+  const now = Date.now();
+  if (message === lastToastMessage && now - lastToastMessageAt < TOAST_DEDUPE_MS) {
+    return "";
+  }
+  lastToastMessage = message;
+  lastToastMessageAt = now;
+
   const id =
     typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
