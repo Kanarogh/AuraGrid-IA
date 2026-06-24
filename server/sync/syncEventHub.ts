@@ -29,6 +29,26 @@ type Subscriber = {
 let nextId = 1;
 const subscribers = new Map<string, Subscriber>();
 let listenerReady = false;
+const recentDispatchKeys = new Map<string, number>();
+const DISPATCH_DEDUPE_MS = 300;
+
+function dispatchDedupeKey(payload: SyncEventPayload): string {
+  return JSON.stringify(payload);
+}
+
+function shouldDispatchPayload(payload: SyncEventPayload): boolean {
+  const key = dispatchDedupeKey(payload);
+  const now = Date.now();
+  const last = recentDispatchKeys.get(key);
+  if (last != null && now - last < DISPATCH_DEDUPE_MS) return false;
+  recentDispatchKeys.set(key, now);
+  if (recentDispatchKeys.size > 200) {
+    for (const [k, t] of recentDispatchKeys) {
+      if (now - t > DISPATCH_DEDUPE_MS) recentDispatchKeys.delete(k);
+    }
+  }
+  return true;
+}
 
 function matchesSubscriber(sub: Subscriber, payload: SyncEventPayload): boolean {
   if (sub.userId !== payload.ownerUserId) return false;
@@ -50,12 +70,19 @@ function matchesSubscriber(sub: Subscriber, payload: SyncEventPayload): boolean 
 }
 
 export function dispatchSyncEvent(payload: SyncEventPayload): void {
+  if (!shouldDispatchPayload(payload)) return;
+
+  const enrichProgressOnly =
+    payload.enrich?.enriching === true && payload.enrich.progress != null;
+
   for (const sub of subscribers.values()) {
     if (!matchesSubscriber(sub, payload)) continue;
     if (payload.enrich) {
       sub.send({ type: "enrich", payload });
     }
-    sub.send({ type: "revision", payload });
+    if (!enrichProgressOnly) {
+      sub.send({ type: "revision", payload });
+    }
   }
 }
 

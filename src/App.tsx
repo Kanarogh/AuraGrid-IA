@@ -413,6 +413,7 @@ export default function App() {
       },
     },
     onRemoteApplied: (domains: SyncDomain[]) => {
+      if (!domains.some((d) => d === "registry" || d === "periods")) return;
       const labels = domains.map((d) => SYNC_DOMAIN_LABELS[d]).join(", ");
       toast.info(`Atualizado de outro dispositivo: ${labels}`);
     },

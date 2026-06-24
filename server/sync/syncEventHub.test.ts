@@ -53,7 +53,7 @@ test("registry reaches all streams of the user", () => {
   assert.equal(clientB, 2);
 });
 
-test("enrich emits enrich and revision", () => {
+test("enrich progress emits enrich only", () => {
   resetSyncEventHubForTests();
   const types: string[] = [];
   subscribeSyncStream("user1", "clientA", "pp1", (e) => types.push(e.type));
@@ -64,7 +64,28 @@ test("enrich emits enrich and revision", () => {
     domains: ["catalog"],
     enrich: { enriching: true, progress: { index: 1, total: 3, itemId: "c1", label: "A" } },
   });
-  assert.deepEqual(types, ["enrich", "revision"]);
+  assert.deepEqual(types, ["enrich"]);
+});
+
+test("enrich start and end emit revision", () => {
+  resetSyncEventHubForTests();
+  const types: string[] = [];
+  subscribeSyncStream("user1", "clientA", "pp1", (e) => types.push(e.type));
+  dispatchSyncEvent({
+    v: 1,
+    ownerUserId: "user1",
+    clientId: "clientA",
+    domains: ["catalog"],
+    enrich: { enriching: true },
+  });
+  dispatchSyncEvent({
+    v: 1,
+    ownerUserId: "user1",
+    clientId: "clientA",
+    domains: ["catalog"],
+    enrich: { enriching: false },
+  });
+  assert.deepEqual(types, ["enrich", "revision", "enrich", "revision"]);
 });
 
 console.log("syncEventHub: all passed");

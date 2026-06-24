@@ -23,9 +23,10 @@ import {
 import { createEmptyRegistry, createOrphanWorkspace } from "../lib/clientWorkspace";
 import { emitCloudSaveStatus } from "../lib/cloudSaveStatus";
 import { broadcastSyncChanged } from "../lib/sync/broadcast";
+import { markLocalSync } from "../lib/sync/localSyncAck";
 import { setWorkspaceSavePending } from "../lib/sync/workspaceSaveGuard";
 
-const SAVE_DEBOUNCE_MS = 400;
+const SAVE_DEBOUNCE_MS = 200;
 
 function buildWorkspacePatch(ws: ClientWorkspace) {
   if (ws.isReadOnly) return null;
@@ -42,6 +43,7 @@ function buildWorkspacePatch(ws: ClientWorkspace) {
 function flushWorkspacePatch(clientId: string, ws: ClientWorkspace) {
   const patch = buildWorkspacePatch(ws);
   if (!patch) return;
+  markLocalSync(clientId, ["workspace"]);
   broadcastSyncChanged(clientId, ["workspace"]);
   const token = getAccessToken();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -143,6 +145,7 @@ export function ApiWorkspaceSync() {
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     setWorkspaceSavePending(true);
+    markLocalSync(activeClientId, ["workspace"]);
     saveTimerRef.current = setTimeout(() => {
       saveTimerRef.current = null;
       const ws = workspaceRef.current;
@@ -219,6 +222,7 @@ export function ApiWorkspaceSync() {
         saveTimerRef.current = null;
       }
       setWorkspaceSavePending(true);
+      markLocalSync(activeClientId, ["workspace"]);
       emitCloudSaveStatus("saving");
       try {
         const patch = buildWorkspacePatch(ws);

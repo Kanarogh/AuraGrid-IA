@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   nextSseReconnectDelay,
+  shouldNotifyRemoteApply,
   shouldUseFallbackPoll,
   mergeSyncDomains,
 } from "./realtimeCoordinator";
@@ -33,6 +34,13 @@ test("mergeSyncDomains dedupes", () => {
     "workspace",
     "catalog",
   ]);
+});
+
+test("shouldNotifyRemoteApply skips grid/catalog noise", () => {
+  assert.equal(shouldNotifyRemoteApply(["workspace"], false), false);
+  assert.equal(shouldNotifyRemoteApply(["catalog"], true), false);
+  assert.equal(shouldNotifyRemoteApply(["registry"], false), true);
+  assert.equal(shouldNotifyRemoteApply(["periods"], false), true);
 });
 
 console.log("realtimeCoordinator: all passed");

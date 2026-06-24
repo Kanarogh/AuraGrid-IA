@@ -5,11 +5,15 @@ import { fetchSyncRevisionApi } from "../lib/api/workspaceApi";
 import {
   openSyncEventSource,
   type SyncStreamEnrichEvent,
+  type SyncStreamRevisionEvent,
 } from "../lib/api/syncStreamApi";
 import { broadcastSyncChanged, subscribeSyncChanged } from "../lib/sync/broadcast";
+import { isLocalSyncEcho, markLocalSync } from "../lib/sync/localSyncAck";
 import { isSyncPullPaused } from "../lib/sync/mutationGuard";
 import {
+  mergeSyncDomains,
   nextSseReconnectDelay,
+  shouldNotifyRemoteApply,
   shouldUseFallbackPoll,
   SYNC_FALLBACK_POLL_MS,
   SYNC_REVISION_DEBOUNCE_MS,
@@ -52,6 +56,26 @@ function isDomainPaused(domain: SyncDomain): boolean {
   return isSyncPullPaused(domain);
 }
 
+function filterDomainsDuringEnrich(
+  domains: SyncDomain[],
+  isEnriching: boolean
+): SyncDomain[] {
+  if (!isEnriching) return domains;
+  return domains.filter((d) => d !== "catalog");
+}
+
+function parseRevisionDomains(raw: string): SyncDomain[] {
+  try {
+    const data = JSON.parse(raw) as SyncStreamRevisionEvent;
+    if (!Array.isArray(data.domains)) return [];
+    return data.domains.filter((d): d is SyncDomain =>
+      ["catalog", "workspace", "brandGem", "periods", "registry"].includes(d)
+    );
+  } catch {
+    return [];
+  }
+}
+
 export function useRemoteSyncCoordinator({
   enabled,
   clientId,
@@ -72,37 +96,54 @@ export function useRemoteSyncCoordinator({
   handlersRef.current = handlers;
   const onRemoteAppliedRef = useRef(onRemoteApplied);
   onRemoteAppliedRef.current = onRemoteApplied;
+  const isEnrichingRef = useRef(false);
 
   const [isEnriching, setIsEnriching] = useState(false);
   const [enrichProgress, setEnrichProgress] = useState<EnrichProgressState | null>(null);
+  isEnrichingRef.current = isEnriching;
 
-  const applyDomainChanges = useCallback(async (result: DiffSyncRevisionResult) => {
-    const { changed, periodTokenChange } = result;
-    if (!changed.length) return;
-    const h = handlersRef.current;
-
-    if (h.onDomainsChange) {
-      await h.onDomainsChange(changed, { periodTokenChange });
-    } else {
-      if (changed.includes("registry") && h.onRegistryChange) {
-        await h.onRegistryChange();
-      }
-      if (changed.includes("periods") && h.onPeriodsChange && periodTokenChange) {
-        await h.onPeriodsChange(periodTokenChange);
-      }
-      if (changed.includes("brandGem") && h.onBrandGemChange) {
-        await h.onBrandGemChange();
-      }
-      if (changed.includes("workspace") && h.onWorkspaceChange) {
-        await h.onWorkspaceChange();
-      }
-      if (changed.includes("catalog") && h.onCatalogChange) {
-        await h.onCatalogChange();
-      }
+  const refreshTokensOnly = useCallback(async () => {
+    if (!enabled || !clientId || !periodId) return;
+    try {
+      const rev = await fetchSyncRevisionApi(clientId, periodId);
+      lastTokensRef.current = tokensFromSyncRevision(rev);
+    } catch {
+      /* ignore */
     }
+  }, [enabled, clientId, periodId]);
 
-    onRemoteAppliedRef.current?.(changed);
-  }, []);
+  const applyDomainChanges = useCallback(
+    async (result: DiffSyncRevisionResult, notify = true) => {
+      const changed = filterDomainsDuringEnrich(result.changed, isEnrichingRef.current);
+      if (!changed.length) return;
+      const h = handlersRef.current;
+
+      if (h.onDomainsChange) {
+        await h.onDomainsChange(changed, { periodTokenChange: result.periodTokenChange });
+      } else {
+        if (changed.includes("registry") && h.onRegistryChange) {
+          await h.onRegistryChange();
+        }
+        if (changed.includes("periods") && h.onPeriodsChange && result.periodTokenChange) {
+          await h.onPeriodsChange(result.periodTokenChange);
+        }
+        if (changed.includes("brandGem") && h.onBrandGemChange) {
+          await h.onBrandGemChange();
+        }
+        if (changed.includes("workspace") && h.onWorkspaceChange) {
+          await h.onWorkspaceChange();
+        }
+        if (changed.includes("catalog") && h.onCatalogChange) {
+          await h.onCatalogChange();
+        }
+      }
+
+      if (notify && shouldNotifyRemoteApply(changed, isEnrichingRef.current)) {
+        onRemoteAppliedRef.current?.(changed);
+      }
+    },
+    []
+  );
 
   const diffTokens = useCallback((next: SyncRevisionTokens): DiffSyncRevisionResult => {
     const prev = lastTokensRef.current;
@@ -115,18 +156,59 @@ export function useRemoteSyncCoordinator({
     return result;
   }, []);
 
-  const syncNow = useCallback(async () => {
-    if (!enabled || !clientId || !periodId) return null;
-    try {
-      const rev = await fetchSyncRevisionApi(clientId, periodId);
-      const tokens = tokensFromSyncRevision(rev);
-      const result = diffTokens(tokens);
-      if (result.changed.length) await applyDomainChanges(result);
-      return rev;
-    } catch {
-      return null;
-    }
-  }, [enabled, clientId, periodId, diffTokens, applyDomainChanges]);
+  const syncNow = useCallback(
+    async (signalDomains?: SyncDomain[]) => {
+      if (!enabled || !clientId || !periodId) return null;
+
+      const mergedSignal = mergeSyncDomains(signalDomains ?? []);
+      if (mergedSignal.length && isLocalSyncEcho(clientId, mergedSignal)) {
+        await refreshTokensOnly();
+        return null;
+      }
+
+      const optimisticDomains = filterDomainsDuringEnrich(mergedSignal, isEnrichingRef.current);
+      const h = handlersRef.current;
+      const revPromise = fetchSyncRevisionApi(clientId, periodId);
+      const reloadPromise =
+        optimisticDomains.length && h.onDomainsChange
+          ? h.onDomainsChange(optimisticDomains)
+          : null;
+
+      try {
+        const rev = await revPromise;
+        const tokens = tokensFromSyncRevision(rev);
+        const result = diffTokens(tokens);
+
+        if (reloadPromise) {
+          await reloadPromise;
+          const structural = filterDomainsDuringEnrich(result.changed, isEnrichingRef.current).filter(
+            (d) => d === "periods" || d === "registry"
+          );
+          if (structural.length && h.onDomainsChange) {
+            await h.onDomainsChange(structural, { periodTokenChange: result.periodTokenChange });
+          }
+          if (
+            shouldNotifyRemoteApply(
+              mergeSyncDomains([...optimisticDomains, ...structural]),
+              isEnrichingRef.current
+            )
+          ) {
+            onRemoteAppliedRef.current?.(mergeSyncDomains([...optimisticDomains, ...structural]));
+          }
+          return rev;
+        }
+
+        if (result.changed.length) {
+          await applyDomainChanges(result);
+        }
+        return rev;
+      } catch {
+        if (reloadPromise) await reloadPromise.catch(() => {});
+        return null;
+      }
+    },
+    [enabled, clientId, periodId, diffTokens, applyDomainChanges, refreshTokensOnly]
+  );
 
   const setKnownTokens = useCallback((tokens: Partial<SyncRevisionTokens>) => {
     lastTokensRef.current = {
@@ -141,6 +223,7 @@ export function useRemoteSyncCoordinator({
   const publishSyncChange = useCallback(
     async (domains: SyncDomain[]) => {
       if (!enabled || !clientId || !periodId) return;
+      markLocalSync(clientId, domains);
       try {
         const rev = await fetchSyncRevisionApi(clientId, periodId);
         const tokens = tokensFromSyncRevision(rev);
@@ -156,15 +239,21 @@ export function useRemoteSyncCoordinator({
   const handleEnrichEvent = useCallback((data: SyncStreamEnrichEvent) => {
     setIsEnriching(data.enriching);
     setEnrichProgress(data.progress ?? null);
+    if (!data.enriching) {
+      isEnrichingRef.current = false;
+    }
   }, []);
 
   const startEnrichLocal = useCallback(() => {
     setIsEnriching(true);
-  }, []);
+    isEnrichingRef.current = true;
+    markLocalSync(clientId, ["catalog"]);
+  }, [clientId]);
 
   const stopEnrichLocal = useCallback(() => {
     setIsEnriching(false);
     setEnrichProgress(null);
+    isEnrichingRef.current = false;
   }, []);
 
   useEffect(() => {
@@ -178,11 +267,17 @@ export function useRemoteSyncCoordinator({
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     let fallbackInterval: ReturnType<typeof setInterval> | null = null;
     let sseOpen = false;
+    let pendingDomains: SyncDomain[] = [];
 
-    const scheduleSync = () => {
+    const scheduleSync = (signalDomains?: SyncDomain[]) => {
+      if (signalDomains?.length) {
+        pendingDomains = mergeSyncDomains([...pendingDomains, ...signalDomains]);
+      }
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        void syncNow();
+        const domains = pendingDomains;
+        pendingDomains = [];
+        void syncNow(domains.length ? domains : undefined);
       }, SYNC_REVISION_DEBOUNCE_MS);
     };
 
@@ -196,16 +291,17 @@ export function useRemoteSyncCoordinator({
         reconnectAttempt = 0;
       };
 
-      sse.addEventListener("revision", () => {
-        scheduleSync();
+      sse.addEventListener("revision", (event) => {
+        const domains = parseRevisionDomains((event as MessageEvent).data);
+        scheduleSync(domains);
       });
 
       sse.addEventListener("enrich", (event) => {
         try {
           const data = JSON.parse((event as MessageEvent).data) as SyncStreamEnrichEvent;
           handleEnrichEvent(data);
-          if (data.enriching) {
-            scheduleSync();
+          if (!data.enriching) {
+            scheduleSync(["catalog"]);
           }
         } catch {
           /* ignore */
@@ -258,9 +354,9 @@ export function useRemoteSyncCoordinator({
   useEffect(() => {
     if (!enabled || !clientId) return;
 
-    return subscribeSyncChanged((changedClientId) => {
+    return subscribeSyncChanged((changedClientId, domains) => {
       if (changedClientId !== clientId) return;
-      void syncNow();
+      void syncNow(domains);
     });
   }, [enabled, clientId, syncNow]);
 
