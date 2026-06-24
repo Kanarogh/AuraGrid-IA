@@ -4,7 +4,7 @@ import type { NextConfig } from "next";
 const buildWorkerCount = Number(process.env.NEXT_BUILD_CPUS ?? "1");
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["postgres", "@aws-sdk/client-s3"],
+  serverExternalPackages: ["postgres", "@aws-sdk/client-s3", "sharp"],
   typescript: {
     ignoreBuildErrors: true,
   },

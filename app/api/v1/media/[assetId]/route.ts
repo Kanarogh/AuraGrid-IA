@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { assertClientAccess, getOptionalUser, getOptionalUserFromRequest } from "@/server/http/auth";
 import { errorResponse } from "@/server/http/respond";
 import { getMediaBuffer, deleteMediaAsset } from "@/server/services/mediaService";
+import { resizeMediaBuffer } from "@/server/services/mediaResize";
 import { getDb } from "@/server/db/client";
 import { mediaAssets } from "@/server/db/schema";
 
@@ -21,11 +22,26 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     const { buffer, mimeType, clientId } = await getMediaBuffer(assetId);
     await assertClientAccess(user, clientId);
 
-    return new NextResponse(new Uint8Array(buffer), {
+    const widthParam = req.nextUrl.searchParams.get("w");
+    const requestedWidth = widthParam ? Number.parseInt(widthParam, 10) : 0;
+
+    let body: Buffer = buffer;
+    let contentType = mimeType;
+
+    if (requestedWidth > 0 && Number.isFinite(requestedWidth)) {
+      const resized = await resizeMediaBuffer(buffer, mimeType, requestedWidth);
+      body = resized.buffer;
+      contentType = resized.mimeType;
+    }
+
+    return new NextResponse(new Uint8Array(body), {
       status: 200,
       headers: {
-        "Content-Type": mimeType,
-        "Cache-Control": "private, max-age=3600",
+        "Content-Type": contentType,
+        "Cache-Control":
+          requestedWidth > 0
+            ? "private, max-age=86400, stale-while-revalidate=604800"
+            : "private, max-age=3600",
       },
     });
   } catch (err) {

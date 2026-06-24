@@ -1,27 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ImageOff } from "lucide-react";
-import { apiFetch } from "../../lib/api/apiClient";
+import { requestCatalogMediaUrl, mediaPathFromSrc } from "../../lib/catalogMediaLoader";
 import { cn } from "../../lib/cn";
 
-const blobCache = new Map<string, string>();
+function useLazyInView(rootMargin = "280px", eager = false) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(eager);
 
-function mediaPathFromSrc(src: string): string | null {
-  if (src.startsWith("/api/v1/media/")) return src.split("?")[0]!;
-  return null;
-}
+  useEffect(() => {
+    if (eager || visible) return;
+    const el = ref.current;
+    if (!el) return;
 
-async function fetchMediaBlobUrl(path: string): Promise<string> {
-  const cached = blobCache.get(path);
-  if (cached) return cached;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin }
+    );
 
-  const res = await apiFetch(path);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const blob = await res.blob();
-  const objectUrl = URL.createObjectURL(blob);
-  blobCache.set(path, objectUrl);
-  return objectUrl;
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [eager, visible]);
+
+  return { ref, visible };
 }
 
 export function CatalogThumbnail({
@@ -30,52 +37,64 @@ export function CatalogThumbnail({
   className,
   imgClassName,
   fallbackLabel,
+  priority = false,
+  lazy = true,
+  variant = "thumb",
 }: {
   src: string | null | undefined;
   alt: string;
   className?: string;
   imgClassName?: string;
   fallbackLabel?: string;
+  /** Primeira dobra — carrega antes e com prioridade maior na fila. */
+  priority?: boolean;
+  /** Quando false, carrega imediatamente (slots Canva visíveis, etc.). */
+  lazy?: boolean;
+  /** thumb = preview leve; full = resolução original (lightbox, zoom). */
+  variant?: "thumb" | "full";
 }) {
-  const [displaySrc, setDisplaySrc] = useState<string | null>(src ?? null);
+  const eager = priority || !lazy;
+  const { ref, visible } = useLazyInView("280px", eager);
+  const [displaySrc, setDisplaySrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     setFailed(false);
-    setLoading(false);
-    setDisplaySrc(src ?? null);
-  }, [src]);
+    setLoaded(false);
+    setDisplaySrc(null);
+  }, [src, variant]);
 
   useEffect(() => {
-    if (!failed || !src) return;
-    const path = mediaPathFromSrc(src);
-    if (!path) return;
+    if (!src || !visible) return;
 
     let cancelled = false;
-    setLoading(true);
-    void fetchMediaBlobUrl(path)
+
+    if (!mediaPathFromSrc(src)) {
+      setDisplaySrc(src);
+      return;
+    }
+
+    void requestCatalogMediaUrl(src, {
+      priority: priority ? 10 : 0,
+      variant,
+    })
       .then((url) => {
-        if (!cancelled) {
-          setDisplaySrc(url);
-          setFailed(false);
-        }
+        if (!cancelled) setDisplaySrc(url);
       })
       .catch(() => {
         if (!cancelled) setFailed(true);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [failed, src]);
+  }, [src, visible, priority, variant]);
 
   if (!src || failed) {
     return (
       <div
+        ref={ref}
         className={cn(
           "flex h-full w-full flex-col items-center justify-center gap-1 bg-ag-surface-3 p-2 text-center",
           className
@@ -91,21 +110,35 @@ export function CatalogThumbnail({
     );
   }
 
+  const showSkeleton = !loaded || !displaySrc;
+
   return (
-    <div className={cn("relative h-full w-full", className)}>
-      {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-ag-surface-3/80">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-ag-accent border-t-transparent" />
+    <div ref={ref} className={cn("relative h-full w-full overflow-hidden", className)}>
+      {showSkeleton && (
+        <div
+          className="absolute inset-0 bg-ag-surface-3"
+          aria-hidden
+        >
+          <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-ag-surface-3 via-ag-surface-2 to-ag-surface-3" />
         </div>
       )}
-      <img
-        src={displaySrc ?? undefined}
-        alt={alt}
-        referrerPolicy="no-referrer"
-        draggable={false}
-        className={cn("h-full w-full object-cover", imgClassName)}
-        onError={() => setFailed(true)}
-      />
+      {displaySrc ? (
+        <img
+          src={displaySrc}
+          alt={alt}
+          referrerPolicy="no-referrer"
+          draggable={false}
+          decoding="async"
+          fetchPriority={priority ? "high" : "auto"}
+          className={cn(
+            "h-full w-full object-cover transition-opacity duration-300",
+            loaded ? "opacity-100" : "opacity-0",
+            imgClassName
+          )}
+          onLoad={() => setLoaded(true)}
+          onError={() => setFailed(true)}
+        />
+      ) : null}
     </div>
   );
 }

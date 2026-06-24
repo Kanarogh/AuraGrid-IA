@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Minus, Plus, X, ZoomIn } from "lucide-react";
+import { requestCatalogMediaUrl, mediaPathFromSrc } from "../../lib/catalogMediaLoader";
 import { cn } from "../../lib/cn";
 
 const ZOOM_STEPS = [1, 1.25, 1.5, 2, 2.5, 3] as const;
@@ -17,6 +18,7 @@ export function CanvaGridLightbox({
 }) {
   const [zoomIndex, setZoomIndex] = useState(0);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
+  const [displaySrc, setDisplaySrc] = useState(image);
   const [canPan, setCanPan] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -44,6 +46,22 @@ export function CanvaGridLightbox({
     setNaturalSize(null);
     setZoomIndex(0);
     setIsDragging(false);
+    setDisplaySrc(image);
+
+    if (!mediaPathFromSrc(image)) return;
+
+    let cancelled = false;
+    void requestCatalogMediaUrl(image, { priority: 10, variant: "full" })
+      .then((url) => {
+        if (!cancelled) setDisplaySrc(url);
+      })
+      .catch(() => {
+        if (!cancelled) setDisplaySrc(image);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [image]);
 
   useEffect(() => {
@@ -167,7 +185,7 @@ export function CanvaGridLightbox({
       >
         <div className="min-w-full min-h-full flex items-center justify-center">
           <img
-            src={image}
+            src={displaySrc}
             alt={label || "Look ampliado"}
             draggable={false}
             onLoad={(e) => {

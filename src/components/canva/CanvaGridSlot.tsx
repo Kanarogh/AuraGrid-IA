@@ -72,6 +72,7 @@ export function CanvaGridSlot({
             src={displayImage}
             alt={slot.label || `Look ${slotNumber}`}
             imgClassName="object-cover"
+            lazy={false}
           />
           {slot.matchedCatalogId && slot.label && (
             <div className="absolute bottom-0 inset-x-0 bg-black/55 backdrop-blur-[2px] text-[8px] font-medium text-white text-center py-1 px-1 truncate pointer-events-none">
