@@ -53,6 +53,7 @@ import {
   saveBrandGemApi,
 } from "../lib/api/workspaceApi";
 import { broadcastSyncChanged } from "../lib/sync/broadcast";
+import { markLocalSync } from "../lib/sync/localSyncAck";
 import { classifyPeriodsRemoteChange } from "../lib/sync/periodsRevision";
 import {
   beginRemoteWorkspaceApply,
@@ -727,10 +728,18 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
 
       if (useApiStorage) {
         try {
+          markLocalSync(activeClientId, ["periods", "workspace"]);
           const { workspace: dto } = await activatePlanningPeriodApi(activeClientId, periodId);
           const ws = apiWorkspaceToClientWorkspace(dto);
-          setWorkspace(ws);
-          workspaceRef.current = ws;
+          beginRemoteWorkspaceApply();
+          try {
+            setWorkspace(ws);
+            workspaceRef.current = ws;
+            const fp = workspaceApiPatchFingerprint(ws);
+            if (fp) markWorkspacePatchSynced(activeClientId, fp);
+          } finally {
+            endRemoteWorkspaceApply();
+          }
         } catch (err) {
           console.error("[AuraGrid] Falha ao trocar roteiro:", err);
           toast.error("Não foi possível carregar o roteiro.");

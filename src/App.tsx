@@ -202,9 +202,11 @@ import { type SyncDomain } from "./lib/sync/types";
 import {
   beginRemoteWorkspaceApply,
   endRemoteWorkspaceApply,
+  isApplyingRemoteWorkspace,
   markWorkspacePatchSynced,
 } from "./lib/sync/remoteApplyGuard";
 import { workspaceApiPatchFingerprint } from "./lib/clientWorkspace/apiWorkspacePatch";
+import { stripTransientPostFields } from "./lib/clientWorkspace/persistence";
 import {
   needsWorkspaceFetch,
   slicesFromDomains,
@@ -738,8 +740,9 @@ export default function App() {
   ]);
 
   useEffect(() => {
+    if (workspace.ui?.activePreviewId === activePreviewId) return;
     setUiPrefs({ activePreviewId });
-  }, [activePreviewId, setUiPrefs]);
+  }, [activePreviewId, setUiPrefs, workspace.ui?.activePreviewId]);
 
   // Drag and drop states
   const [catalogDragOver, setCatalogDragOver] = useState(false);
@@ -783,9 +786,13 @@ export default function App() {
         { reversed: canvaGridReversed, distribution: distributionPrefs }
       );
 
+      const prevFp = JSON.stringify(prevPosts.map(stripTransientPostFields));
+      const nextFp = JSON.stringify(finalizedList.map(stripTransientPostFields));
+      if (prevFp === nextFp) return prevPosts;
+
       const firstWithImg =
         finalizedList.find((p) => p && p.image !== null) || finalizedList[0];
-      if (firstWithImg) {
+      if (firstWithImg && firstWithImg.id !== activePreviewId) {
         setTimeout(() => setActivePreviewId(firstWithImg.id), 50);
       }
 
@@ -845,6 +852,7 @@ export default function App() {
   // Handle Automatic Synchronization of Canva Grid into Roteiros
   useEffect(() => {
     if (useApiStorage && !apiWorkspaceReadyRef.current) return;
+    if (isApplyingRemoteWorkspace()) return;
     if (autoSyncCanva) {
       syncCanvaGridToTimeline(canvaPages, false);
     }
