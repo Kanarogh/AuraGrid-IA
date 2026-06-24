@@ -117,7 +117,7 @@ export function CanvaTimelineSyncPanel({
 
 export function CanvaGridOrderHint({ onOpenRoteiros }: { onOpenRoteiros: () => void }) {
   return (
-    <p className="text-xs text-ag-muted leading-relaxed">
+    <span className="block text-xs text-ag-muted leading-relaxed">
       A ordem das fotos no grid alimenta o roteiro de 30 dias. Sincronização automática e manual ficam em{" "}
       <button
         type="button"
@@ -127,6 +127,6 @@ export function CanvaGridOrderHint({ onOpenRoteiros }: { onOpenRoteiros: () => v
         Roteiros e legendas
       </button>
       .
-    </p>
+    </span>
   );
 }

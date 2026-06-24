@@ -234,7 +234,7 @@ export type SyncRevisionDto = {
 
 export async function fetchSyncRevisionApi(clientId: string, periodId?: string) {
   const qs = periodId ? `?periodId=${encodeURIComponent(periodId)}` : "";
-  const res = await apiFetch(`/api/v1/clients/${clientId}/sync/revision${qs}`);
+  const res = await apiFetch(`/api/v1/clients/${clientId}/sync-revision${qs}`);
   return readApiJson<SyncRevisionDto>(res);
 }
 

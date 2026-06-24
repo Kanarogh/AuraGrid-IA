@@ -6,7 +6,7 @@ export function buildSyncStreamUrl(clientId: string, periodId: string): string {
   const token = getAccessToken();
   if (token) qs.set("token", token);
   const query = qs.toString();
-  return `/api/v1/clients/${clientId}/sync/stream${query ? `?${query}` : ""}`;
+  return `/api/v1/clients/${clientId}/sync-stream${query ? `?${query}` : ""}`;
 }
 
 export function openSyncEventSource(clientId: string, periodId: string): EventSource {
