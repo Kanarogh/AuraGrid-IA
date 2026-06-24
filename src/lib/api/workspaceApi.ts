@@ -222,6 +222,22 @@ export type CatalogRevision = {
   processingCount: number;
 };
 
+export type SyncRevisionDto = {
+  periodId: string;
+  catalog: CatalogRevision;
+  workspace: string;
+  brandGem: string;
+  periods: string;
+  registry: string;
+  clientUpdatedAt: string;
+};
+
+export async function fetchSyncRevisionApi(clientId: string, periodId?: string) {
+  const qs = periodId ? `?periodId=${encodeURIComponent(periodId)}` : "";
+  const res = await apiFetch(`/api/v1/clients/${clientId}/sync/revision${qs}`);
+  return readApiJson<SyncRevisionDto>(res);
+}
+
 export async function fetchCatalogRevisionApi(clientId: string) {
   const res = await apiFetch(`/api/v1/clients/${clientId}/catalog/revision`);
   return readApiJson<CatalogRevision>(res);

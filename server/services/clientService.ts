@@ -9,6 +9,7 @@ import {
   clientUiPrefs,
   clients,
   plannedPosts,
+  planningPeriods,
   userClientState,
 } from "../db/schema";
 import { mediaPublicUrl } from "./mediaService";
@@ -631,6 +632,11 @@ export async function patchWorkspace(
   }
 
   await db.update(clients).set({ updatedAt: new Date() }).where(eq(clients.id, clientId));
+
+  await db
+    .update(planningPeriods)
+    .set({ updatedAt: new Date() })
+    .where(eq(planningPeriods.id, periodId));
 }
 
 export async function resetClientWorkspace(userId: string, clientId: string) {

@@ -22,6 +22,8 @@ import {
 } from "../lib/clientWorkspace/persistence";
 import { createEmptyRegistry, createOrphanWorkspace } from "../lib/clientWorkspace";
 import { emitCloudSaveStatus } from "../lib/cloudSaveStatus";
+import { broadcastSyncChanged } from "../lib/sync/broadcast";
+import { setWorkspaceSavePending } from "../lib/sync/workspaceSaveGuard";
 
 const SAVE_DEBOUNCE_MS = 400;
 
@@ -139,21 +141,34 @@ export function ApiWorkspaceSync() {
     if (!loadedRef.current) return;
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    setWorkspaceSavePending(true);
     saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
       const ws = workspaceRef.current;
       const patch = buildWorkspacePatch(ws);
-      if (!patch) return;
+      if (!patch) {
+        setWorkspaceSavePending(false);
+        return;
+      }
       emitCloudSaveStatus("saving");
       void patchWorkspaceApi(activeClientId, patch)
-        .then(() => emitCloudSaveStatus("saved"))
+        .then(() => {
+          emitCloudSaveStatus("saved");
+          broadcastSyncChanged(activeClientId, ["workspace"]);
+        })
         .catch((err) => {
           console.error("[AuraGrid] Falha ao salvar workspace:", err);
           emitCloudSaveStatus("error");
-        });
+        })
+        .finally(() => setWorkspaceSavePending(false));
     }, SAVE_DEBOUNCE_MS);
 
     return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+        setWorkspaceSavePending(false);
+      }
     };
   }, [workspace, activeClientId, storageMode, user?.id]);
 
@@ -202,15 +217,19 @@ export function ApiWorkspaceSync() {
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
       }
+      setWorkspaceSavePending(true);
       emitCloudSaveStatus("saving");
       try {
         const patch = buildWorkspacePatch(ws);
         if (!patch) return;
         await patchWorkspaceApi(activeClientId, patch);
         emitCloudSaveStatus("saved");
+        broadcastSyncChanged(activeClientId, ["workspace"]);
       } catch (err) {
         emitCloudSaveStatus("error");
         throw err;
+      } finally {
+        setWorkspaceSavePending(false);
       }
     };
 

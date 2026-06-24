@@ -44,6 +44,7 @@ import { useAuth, getCachedAuthBootstrap } from "./AuthContext";
 import { isStorageModeResolved, resolveInitialStorageMode } from "../lib/storageMode";
 import { getApiHelpers, type ApiRegistryEvent } from "./ApiWorkspaceSync";
 import {
+  activatePlanningPeriodApi,
   apiWorkspaceToClientWorkspace,
   createPlanningPeriodApi,
   fetchRegistry,
@@ -51,6 +52,7 @@ import {
   renameClientApi,
   saveBrandGemApi,
 } from "../lib/api/workspaceApi";
+import { broadcastSyncChanged } from "../lib/sync/broadcast";
 import {
   createLocalPlanningPeriod,
   persistActivePeriodSnapshot,
@@ -101,6 +103,8 @@ type ClientWorkspaceContextValue = {
     sourcePeriodId: string,
     options?: { label?: string; startDate?: string }
   ) => Promise<void>;
+  applyRemoteRegistry: () => Promise<void>;
+  applyRemotePlanningPeriods: () => Promise<void>;
   useApiStorage: boolean;
   workspaceHydrated: boolean;
 };
@@ -562,6 +566,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
             c.id === activeClientId ? touchMeta({ ...c, name: trimmedName }) : c
           ),
         }));
+        broadcastSyncChanged(activeClientId, ["brandGem"]);
         return savedAt;
       } catch (err) {
         console.error("[AuraGrid] Falha ao salvar Gem na nuvem:", err);
@@ -593,6 +598,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
           const ws = api.toWorkspace(dto);
           setWorkspace(ws);
           workspaceRef.current = ws;
+          broadcastSyncChanged(created.id, ["registry"]);
         })();
         return slug?.trim() || slugifyClientName(name);
       }
@@ -631,6 +637,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
             if (clientId === activeClientId) {
               setBrandGem((g) => ({ ...g, name: trimmed }));
             }
+            broadcastSyncChanged(clientId, ["registry"]);
           } catch (err) {
             console.error("[AuraGrid] Falha ao renomear cliente:", err);
             toast.error("Não foi possível renomear o cliente na nuvem.");
@@ -675,6 +682,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
             setWorkspace(orphan);
             workspaceRef.current = orphan;
           }
+          broadcastSyncChanged(clientId, ["registry"]);
           aiQueue.cancelPending();
         })();
         return true;
@@ -709,7 +717,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
 
       if (useApiStorage) {
         try {
-          const dto = await fetchWorkspace(activeClientId, periodId);
+          const { workspace: dto } = await activatePlanningPeriodApi(activeClientId, periodId);
           const ws = apiWorkspaceToClientWorkspace(dto);
           setWorkspace(ws);
           workspaceRef.current = ws;
@@ -742,6 +750,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
           const ws = api ? api.toWorkspace(dto) : apiWorkspaceToClientWorkspace(dto);
           setWorkspace(ws);
           workspaceRef.current = ws;
+          broadcastSyncChanged(activeClientId, ["periods", "workspace"]);
           toast.success("Novo roteiro criado.");
         } catch (err) {
           console.error("[AuraGrid] Falha ao criar roteiro:", err);
@@ -768,6 +777,25 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
     },
     [createPlanningPeriod]
   );
+
+  const applyRemoteRegistry = useCallback(async () => {
+    if (!useApiStorage) return;
+    const reg = await fetchRegistry();
+    setRegistry(reg);
+  }, [useApiStorage]);
+
+  const applyRemotePlanningPeriods = useCallback(async () => {
+    if (!useApiStorage || !activeClientId) return;
+    const dto = await fetchWorkspace(
+      activeClientId,
+      workspaceRef.current.activePlanningPeriodId
+    );
+    const ws = apiWorkspaceToClientWorkspace(dto);
+    setWorkspace((prev) => ({
+      ...prev,
+      planningPeriods: ws.planningPeriods,
+    }));
+  }, [activeClientId, useApiStorage]);
 
   const resetActiveClient = useCallback(() => {
     if (!hasActiveClient) return;
@@ -830,6 +858,8 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       switchPlanningPeriod,
       createPlanningPeriod,
       duplicatePlanningPeriod,
+      applyRemoteRegistry,
+      applyRemotePlanningPeriods,
       useApiStorage,
       workspaceHydrated,
     }),
@@ -862,6 +892,8 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       switchPlanningPeriod,
       createPlanningPeriod,
       duplicatePlanningPeriod,
+      applyRemoteRegistry,
+      applyRemotePlanningPeriods,
       useApiStorage,
       workspaceHydrated,
     ]

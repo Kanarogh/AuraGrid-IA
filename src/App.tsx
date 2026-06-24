@@ -54,7 +54,6 @@ import {
   clearGridCatalogApi,
   deleteCatalogItemApi,
   enrichCatalogApi,
-  fetchCatalogRevisionApi,
   fetchWorkspace,
   stopEnrichCatalogApi,
   uploadMediaApi,
@@ -194,12 +193,12 @@ import {
   estimateUploadEtaSeconds,
 } from "./lib/uploadProgress";
 import { useCatalogEnrichmentWatcher } from "./hooks/useCatalogEnrichmentWatcher";
-import { useCatalogSyncWatcher } from "./hooks/useCatalogSyncWatcher";
-import { broadcastCatalogChanged } from "./lib/catalogBroadcast";
+import { useRemoteSyncCoordinator } from "./hooks/useRemoteSyncCoordinator";
 import {
-  beginCatalogMutation,
-  endCatalogMutation,
-} from "./lib/catalogMutationGuard";
+  beginSyncDomain,
+  endSyncDomain,
+} from "./lib/sync/mutationGuard";
+import { SYNC_DOMAIN_LABELS } from "./lib/sync/types";
 import { CatalogEnrichProgressPanel } from "./components/catalog/CatalogEnrichProgressPanel";
 import { CatalogUploadProgressPanel } from "./components/catalog/CatalogUploadProgressPanel";
 
@@ -218,6 +217,7 @@ export default function App() {
     setCatalog,
     setPosts,
     setStartDate,
+    setBrandGem,
     saveBrandGem,
     setCanvaPages,
     setActiveCanvaPageId,
@@ -238,6 +238,8 @@ export default function App() {
     createPlanningPeriod,
     duplicatePlanningPeriod,
     switchClient,
+    applyRemoteRegistry,
+    applyRemotePlanningPeriods,
   } = useClientWorkspace();
 
   const activeClientIdRef = useRef(activeClientId);
@@ -334,10 +336,52 @@ export default function App() {
 
   const reloadCatalogFromApi = useCallback(async () => {
     if (!useApiStorage || !activeClientId) return;
-    const dto = await fetchWorkspace(activeClientId);
+    const dto = await fetchWorkspace(activeClientId, activePlanningPeriodId);
     const ws = apiWorkspaceToClientWorkspace(dto);
     setCatalog(ws.catalog);
-  }, [useApiStorage, activeClientId, setCatalog]);
+  }, [useApiStorage, activeClientId, activePlanningPeriodId, setCatalog]);
+
+  const reloadWorkspaceContentFromApi = useCallback(async () => {
+    if (!useApiStorage || !activeClientId || isReadOnly) return;
+    const dto = await fetchWorkspace(activeClientId, activePlanningPeriodId);
+    const ws = apiWorkspaceToClientWorkspace(dto);
+    setPosts(ws.posts);
+    setStartDate(ws.startDate);
+    setCanvaPages(ws.canva.pages);
+    setActiveCanvaPageId(ws.canva.activePageId);
+    setAutoSyncCanva(ws.canva.autoSync);
+    setCanvaGridReversed(ws.canva.reversed);
+    setCanvaGridFormat(ws.canva.gridFormat ?? "square");
+    setCanvaGridMaxWidth(ws.canva.gridMaxWidth ?? 480);
+  }, [
+    useApiStorage,
+    activeClientId,
+    activePlanningPeriodId,
+    isReadOnly,
+    setPosts,
+    setStartDate,
+    setCanvaPages,
+    setActiveCanvaPageId,
+    setAutoSyncCanva,
+    setCanvaGridReversed,
+    setCanvaGridFormat,
+    setCanvaGridMaxWidth,
+  ]);
+
+  const reloadBrandGemFromApi = useCallback(async () => {
+    if (!useApiStorage || !activeClientId || isReadOnly) return;
+    const dto = await fetchWorkspace(activeClientId, activePlanningPeriodId);
+    const ws = apiWorkspaceToClientWorkspace(dto);
+    setBrandGem(ws.brandGem);
+    setStartDate(ws.startDate);
+  }, [
+    useApiStorage,
+    activeClientId,
+    activePlanningPeriodId,
+    isReadOnly,
+    setBrandGem,
+    setStartDate,
+  ]);
 
   const {
     isEnriching: isEnrichingCatalog,
@@ -351,23 +395,23 @@ export default function App() {
     onCatalogReload: reloadCatalogFromApi,
   });
 
-  const { setKnownRevision: setKnownCatalogRevision } = useCatalogSyncWatcher({
+  const { publishSyncChange } = useRemoteSyncCoordinator({
     enabled: useApiStorage,
     clientId: activeClientId ?? "",
+    periodId: activePlanningPeriodId ?? "",
     workspaceHydrated,
-    onCatalogReload: reloadCatalogFromApi,
+    handlers: {
+      onCatalogChange: reloadCatalogFromApi,
+      onWorkspaceChange: reloadWorkspaceContentFromApi,
+      onBrandGemChange: reloadBrandGemFromApi,
+      onPeriodsChange: applyRemotePlanningPeriods,
+      onRegistryChange: applyRemoteRegistry,
+    },
+    onRemoteApplied: (domains) => {
+      const labels = domains.map((d) => SYNC_DOMAIN_LABELS[d]).join(", ");
+      toast.info(`Atualizado de outro dispositivo: ${labels}`);
+    },
   });
-
-  const publishCatalogChange = useCallback(async () => {
-    if (!useApiStorage || !activeClientId) return;
-    try {
-      const rev = await fetchCatalogRevisionApi(activeClientId);
-      setKnownCatalogRevision(rev.revision);
-      broadcastCatalogChanged(activeClientId, rev.revision);
-    } catch {
-      /* ignore */
-    }
-  }, [useApiStorage, activeClientId, setKnownCatalogRevision]);
 
   const catalogEnrichProgressLabel = catalogEnrichProgress
     ? `Indexando ${catalogEnrichProgress.index}/${catalogEnrichProgress.total} — ${catalogEnrichProgress.label} (um por vez)`
@@ -406,6 +450,13 @@ export default function App() {
   const [captionBatchProgress, setCaptionBatchProgress] = useState<CaptionBatchProgress | null>(
     null
   );
+  useEffect(() => {
+    if (!useApiStorage) return;
+    const workspaceBusy = isProcessingAll || captionBatchProgress !== null;
+    if (workspaceBusy) beginSyncDomain("workspace");
+    else endSyncDomain("workspace");
+    return () => endSyncDomain("workspace");
+  }, [isProcessingAll, captionBatchProgress, useApiStorage]);
   const captionBatchAbortRef = useRef<AbortController | null>(null);
   const captionGenerateAbortRef = useRef<AbortController | null>(null);
   const batchCaptionHooksRef = useRef<string[]>([]);
@@ -1510,7 +1561,7 @@ export default function App() {
 
   const reloadWorkspaceFromApi = async () => {
     if (!useApiStorage || !activeClientId) return;
-    const dto = await fetchWorkspace(activeClientId);
+    const dto = await fetchWorkspace(activeClientId, activePlanningPeriodId);
     const ws = apiWorkspaceToClientWorkspace(dto);
     setCatalog(ws.catalog);
     setPosts(ws.posts);
@@ -1526,7 +1577,9 @@ export default function App() {
 
   const stopCatalogEnrichment = () => {
     if (useApiStorage && activeClientId) {
-      void stopEnrichCatalogApi(activeClientId).then(() => reloadWorkspaceFromApi());
+      void stopEnrichCatalogApi(activeClientId)
+        .then(() => reloadWorkspaceFromApi())
+        .then(() => publishSyncChange(["catalog"]));
       stopCatalogEnrichPolling();
       return;
     }
@@ -1552,12 +1605,12 @@ export default function App() {
       catalogRef.current = next;
       return next;
     });
-    beginCatalogMutation();
+    beginSyncDomain("catalog");
     try {
       await enrichCatalogApi(activeClientId, ids.length ? ids : undefined);
-      void publishCatalogChange();
+      void publishSyncChange(["catalog"]);
     } finally {
-      endCatalogMutation();
+      endSyncDomain("catalog");
     }
     startCatalogEnrichPolling();
   };
@@ -1617,7 +1670,7 @@ export default function App() {
 
     try {
       if (useApiStorage && activeClientId) {
-        beginCatalogMutation();
+        beginSyncDomain("catalog");
         let uploadSucceeded = false;
         try {
         const { items, errors, cancelled } = await uploadCatalogCandidatesSequential(
@@ -1646,7 +1699,7 @@ export default function App() {
           }
           setCatalogUploadProgress(null);
           if (uploadSucceeded) {
-            void publishCatalogChange();
+            void publishSyncChange(["catalog"]);
           }
           return;
         }
@@ -1690,10 +1743,10 @@ export default function App() {
           );
         }
         if (uploadSucceeded) {
-          void publishCatalogChange();
+          void publishSyncChange(["catalog"]);
         }
         } finally {
-          endCatalogMutation();
+          endSyncDomain("catalog");
         }
         scheduleCatalogUploadDismiss();
         return;
@@ -1905,19 +1958,23 @@ export default function App() {
       return;
     }
     if (useApiStorage && activeClientId) {
+      beginSyncDomain("catalog");
       try {
         await clearGridCatalogApi(activeClientId);
         await reloadWorkspaceFromApi();
+        void publishSyncChange(["catalog"]);
       } catch (err) {
         console.error("Erro ao limpar peças de grid:", err);
         toast.error("Não foi possível remover as peças de grid na nuvem.");
+      } finally {
+        endSyncDomain("catalog");
       }
       return;
     }
 
     const gridIds = new Set(gridCatalog.map((c) => c.id));
     setCatalog((prev) => prev.filter((c) => !gridIds.has(c.id)));
-  }, [gridCatalog, setCatalog, useApiStorage, activeClientId]);
+  }, [gridCatalog, setCatalog, useApiStorage, activeClientId, publishSyncChange]);
 
   // Upload Look image for a planned sequence day
   const handlePostPhotoUpload = async (postId: string, file: File) => {
@@ -2659,6 +2716,8 @@ export default function App() {
     }
 
     if (useApiStorage && activeClientId) {
+      beginSyncDomain("catalog");
+      try {
       const blob = await (await fetch(newCatalogImage)).blob();
       const media = await uploadMediaApi(activeClientId, blob, "catalog");
       const itemId = "cat_" + Date.now();
@@ -2681,6 +2740,10 @@ export default function App() {
       setNewCatalogLabel("");
       setNewCatalogImage(null);
       setShowCatalogModal(false);
+      void publishSyncChange(["catalog"]);
+      } finally {
+        endSyncDomain("catalog");
+      }
       return;
     }
 
@@ -2715,13 +2778,17 @@ export default function App() {
     }
 
     if (useApiStorage && activeClientId) {
+      beginSyncDomain("catalog");
       try {
         await deleteCatalogItemApi(activeClientId, id);
         await reloadWorkspaceFromApi();
         setProfileViewItem((current) => (current?.id === id ? null : current));
+        void publishSyncChange(["catalog"]);
       } catch (err) {
         console.error("Erro ao excluir item do catálogo:", err);
         toast.error("Não foi possível excluir esta referência na nuvem.");
+      } finally {
+        endSyncDomain("catalog");
       }
       return;
     }
@@ -2754,9 +2821,15 @@ export default function App() {
 
     stopCatalogEnrichment();
     if (useApiStorage && activeClientId) {
-      await clearCatalogApi(activeClientId);
-      await reloadWorkspaceFromApi();
-      setProfileViewItem(null);
+      beginSyncDomain("catalog");
+      try {
+        await clearCatalogApi(activeClientId);
+        await reloadWorkspaceFromApi();
+        setProfileViewItem(null);
+        void publishSyncChange(["catalog"]);
+      } finally {
+        endSyncDomain("catalog");
+      }
       return;
     }
 
@@ -2815,11 +2888,11 @@ export default function App() {
       setProfileViewItem((current) => (current && idSet.has(current.id) ? null : current));
 
       if (useApiStorage && activeClientId) {
-        beginCatalogMutation();
+        beginSyncDomain("catalog");
         try {
           await clearCatalogEnrichmentsApi(activeClientId, ids);
           await reloadWorkspaceFromApi();
-          void publishCatalogChange();
+          void publishSyncChange(["catalog"]);
         } catch (err) {
           let clearedOnServer = false;
           try {
@@ -2831,7 +2904,7 @@ export default function App() {
               return item && !hasCatalogEnrichmentData(item);
             });
             if (clearedOnServer) {
-              void publishCatalogChange();
+              void publishSyncChange(["catalog"]);
             }
           } catch {
             /* reload falhou */
@@ -2841,11 +2914,11 @@ export default function App() {
             toast.error(`Não foi possível limpar as indexações no servidor:\n${msg}`);
           }
         } finally {
-          endCatalogMutation();
+          endSyncDomain("catalog");
         }
       }
     },
-    [setCatalog, useApiStorage, activeClientId, publishCatalogChange]
+    [setCatalog, useApiStorage, activeClientId, publishSyncChange]
   );
 
   const clearAllCatalogEnrichments = useCallback(() => {
