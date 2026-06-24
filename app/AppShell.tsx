@@ -15,6 +15,7 @@ import { AppNavigationProvider } from "../src/lib/appRouting";
 import { AppRouteBootstrap } from "../src/components/app/AppRouteBootstrap";
 import { initTheme } from "../src/hooks/useTheme";
 import { initAccent } from "../src/hooks/useAccent";
+import "../src/lib/sync/syncDebugLog";
 
 function AppNavigationShell({ children }: { children: React.ReactNode }) {
   const { effectiveActiveClientId } = useClientWorkspace();

@@ -294,7 +294,17 @@ export function useRemoteSyncCoordinator({
   }, []);
 
   useEffect(() => {
-    if (!enabled || !clientId || !periodId || !workspaceHydrated) return;
+    if (!enabled || !clientId || !periodId || !workspaceHydrated) {
+      syncDebugLog("sync.disabled", {
+        enabled,
+        clientId: clientId || "(vazio)",
+        periodId: periodId || "(vazio)",
+        workspaceHydrated,
+      });
+      return;
+    }
+
+    syncDebugLog("sync.start", { phase: "coordinator-init", clientId, periodId });
 
     lastTokensRef.current = null;
     let cancelled = false;
