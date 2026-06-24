@@ -141,7 +141,13 @@ export function CanvaGridSlot({
               <IconButton label="Trocar posição" size="sm" variant="surface" onClick={onStartSwap}>
                 <span className="text-[9px] font-bold">⇄</span>
               </IconButton>
-              <IconButton label="Remover foto" size="sm" variant="danger" onClick={onRemove}>
+              <IconButton
+                label="Remover foto"
+                size="sm"
+                variant="surface"
+                className="text-ag-danger hover:bg-ag-danger/10 hover:border-ag-danger/30"
+                onClick={onRemove}
+              >
                 <X className="h-3 w-3" />
               </IconButton>
             </>
