@@ -7,6 +7,7 @@ import {
   type SyncEnrichProgress,
   type SyncEventPayload,
 } from "./syncEvents";
+import { serverSyncDebugLog } from "./syncDebugLog";
 
 const ownerCache = new Map<string, string>();
 
@@ -29,12 +30,21 @@ export async function resolveOwnerUserId(clientId: string): Promise<string | nul
 }
 
 export async function emitSyncEvent(payload: SyncEventPayload): Promise<void> {
-  if (!isDatabaseConfigured()) return;
+  if (!isDatabaseConfigured()) {
+    serverSyncDebugLog("notify.skip", { reason: "no-database" });
+    return;
+  }
 
   try {
     const sql = getSqlClient();
     const json = JSON.stringify(payload);
     await sql`SELECT pg_notify(${SYNC_NOTIFY_CHANNEL}, ${json})`;
+    serverSyncDebugLog("notify.emit", {
+      clientId: payload.clientId,
+      domains: payload.domains,
+      periodId: payload.periodId,
+      enrich: payload.enrich?.enriching,
+    });
   } catch (err) {
     console.warn("[sync] pg_notify falhou:", err instanceof Error ? err.message : err);
   }

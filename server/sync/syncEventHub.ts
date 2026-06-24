@@ -12,6 +12,7 @@ import {
   SYNC_NOTIFY_CHANNEL,
   type SyncEventPayload,
 } from "./syncEvents";
+import { serverSyncDebugLog } from "./syncDebugLog";
 
 export type SseOutboundEvent =
   | { type: "connected" }
@@ -75,8 +76,10 @@ export function dispatchSyncEvent(payload: SyncEventPayload): void {
   const enrichProgressOnly =
     payload.enrich?.enriching === true && payload.enrich.progress != null;
 
+  let delivered = 0;
   for (const sub of subscribers.values()) {
     if (!matchesSubscriber(sub, payload)) continue;
+    delivered += 1;
     if (payload.enrich) {
       sub.send({ type: "enrich", payload });
     }
@@ -84,6 +87,13 @@ export function dispatchSyncEvent(payload: SyncEventPayload): void {
       sub.send({ type: "revision", payload });
     }
   }
+
+  serverSyncDebugLog("hub.dispatch", {
+    clientId: payload.clientId,
+    domains: payload.domains,
+    subscribers: delivered,
+    enrichOnly: enrichProgressOnly,
+  });
 }
 
 function onNotify(raw: string): void {

@@ -24,6 +24,7 @@ import {
   type SyncRevisionTokens,
 } from "../lib/sync/types";
 import { isWorkspaceSavePending } from "../lib/sync/workspaceSaveGuard";
+import { syncDebugLog } from "../lib/sync/syncDebugLog";
 
 export type PeriodsChangeContext = {
   prevToken: string;
@@ -175,9 +176,16 @@ export function useRemoteSyncCoordinator({
       try {
       const mergedSignal = mergeSyncDomains(signalDomains ?? []);
       if (mergedSignal.length && isLocalSyncEcho(clientId, mergedSignal)) {
+        syncDebugLog("sync.echo", { clientId, signal: mergedSignal });
         await refreshTokensOnly();
         return null;
       }
+
+      syncDebugLog("sync.start", {
+        clientId,
+        periodId,
+        signal: mergedSignal.length ? mergedSignal : "(fallback)",
+      });
 
       const optimisticDomains = filterDomainsDuringEnrich(mergedSignal, isEnrichingRef.current);
       const h = handlersRef.current;
@@ -192,6 +200,12 @@ export function useRemoteSyncCoordinator({
         const tokens = tokensFromSyncRevision(rev);
         const result = diffTokens(tokens);
 
+        syncDebugLog("sync.diff", {
+          changed: result.changed,
+          signal: mergedSignal.length ? mergedSignal : undefined,
+          periodSwitch: result.periodTokenChange ? true : undefined,
+        });
+
         if (reloadPromise) {
           await reloadPromise;
           const structural = filterDomainsDuringEnrich(
@@ -199,17 +213,30 @@ export function useRemoteSyncCoordinator({
             isEnrichingRef.current
           ).filter((d) => d === "periods" || d === "registry");
           if (structural.length && h.onDomainsChange) {
+            syncDebugLog("sync.apply", { domains: structural, via: "structural" });
             await h.onDomainsChange(structural, { periodTokenChange: result.periodTokenChange });
           }
+          syncDebugLog("sync.done", { via: "optimistic" });
           return rev;
         }
 
         const toApply = constrainChangedToSignal(result.changed, mergedSignal);
         if (toApply.length) {
+          syncDebugLog("sync.apply", { domains: toApply, via: "diff" });
           await applyDomainChanges({ ...result, changed: toApply }, mergedSignal);
+        } else if (result.changed.length) {
+          syncDebugLog("sync.skip", {
+            reason: "filtered",
+            raw: result.changed,
+            signal: mergedSignal,
+          });
         }
+        syncDebugLog("sync.done", { via: "diff" });
         return rev;
-      } catch {
+      } catch (err) {
+        syncDebugLog("sync.fail", {
+          message: err instanceof Error ? err.message : String(err),
+        });
         if (reloadPromise) await reloadPromise.catch(() => {});
         return null;
       }
@@ -283,6 +310,11 @@ export function useRemoteSyncCoordinator({
       if (signalDomains?.length) {
         pendingDomains = mergeSyncDomains([...pendingDomains, ...signalDomains]);
       }
+      syncDebugLog("sync.schedule", {
+        clientId,
+        pending: pendingDomains,
+        incoming: signalDomains,
+      });
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         const domains = pendingDomains;
@@ -299,16 +331,23 @@ export function useRemoteSyncCoordinator({
       sse.onopen = () => {
         sseOpen = true;
         reconnectAttempt = 0;
+        syncDebugLog("sse.open", { clientId, periodId });
       };
 
       sse.addEventListener("revision", (event) => {
         const domains = parseRevisionDomains((event as MessageEvent).data);
+        syncDebugLog("sse.revision", { clientId, domains });
         scheduleSync(domains);
       });
 
       sse.addEventListener("enrich", (event) => {
         try {
           const data = JSON.parse((event as MessageEvent).data) as SyncStreamEnrichEvent;
+          syncDebugLog("sse.enrich", {
+            enriching: data.enriching,
+            index: data.progress?.index,
+            total: data.progress?.total,
+          });
           handleEnrichEvent(data);
           if (!data.enriching) {
             scheduleSync(["catalog"]);
@@ -320,11 +359,13 @@ export function useRemoteSyncCoordinator({
 
       sse.onerror = () => {
         sseOpen = false;
+        syncDebugLog("sse.error", { clientId, reconnectAttempt: reconnectAttempt + 1 });
         sse?.close();
         sse = null;
         if (cancelled) return;
         reconnectAttempt += 1;
         const delay = nextSseReconnectDelay(reconnectAttempt);
+        syncDebugLog("sse.reconnect", { delayMs: delay });
         reconnectTimer = setTimeout(connectSse, delay);
       };
     };
@@ -366,6 +407,7 @@ export function useRemoteSyncCoordinator({
 
     return subscribeSyncChanged((changedClientId, domains) => {
       if (changedClientId !== clientId) return;
+      syncDebugLog("broadcast.in", { clientId, domains });
       void syncNow(domains);
     });
   }, [enabled, clientId, syncNow]);

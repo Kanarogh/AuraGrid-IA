@@ -28,6 +28,7 @@ import {
   updatePeriod,
 } from "./planningPeriodService";
 import { emitClientSync, emitRegistrySync } from "../sync/emitSyncEvent";
+import { serverSyncDebugLog } from "../sync/syncDebugLog";
 
 function slugify(name: string): string {
   const base = name
@@ -760,6 +761,12 @@ export async function patchWorkspace(
 
   const domains: ("workspace" | "brandGem")[] = ["workspace"];
   if (brandGemChanged) domains.push("brandGem");
+  serverSyncDebugLog("patch.workspace", {
+    clientId,
+    periodId,
+    domains,
+    brandGemChanged,
+  });
   void emitClientSync(userId, clientId, domains, periodId);
 }
 

@@ -30,6 +30,7 @@ import {
   markWorkspacePatchSynced,
 } from "../lib/sync/remoteApplyGuard";
 import { setWorkspaceSavePending } from "../lib/sync/workspaceSaveGuard";
+import { syncDebugLog } from "../lib/sync/syncDebugLog";
 
 const SAVE_DEBOUNCE_MS = 200;
 
@@ -155,9 +156,11 @@ export function ApiWorkspaceSync() {
       }
       const fingerprint = JSON.stringify(patch);
       if (isWorkspacePatchAlreadySynced(activeClientId, fingerprint)) {
+        syncDebugLog("save.skip", { clientId: activeClientId, reason: "fingerprint-match" });
         setWorkspaceSavePending(false);
         return;
       }
+      syncDebugLog("save.patch", { clientId: activeClientId, debounceMs: SAVE_DEBOUNCE_MS });
       emitCloudSaveStatus("saving");
       void patchWorkspaceApi(activeClientId, patch)
         .then(() => {

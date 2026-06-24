@@ -6,6 +6,7 @@ import {
   unsubscribeSyncStream,
   type SseOutboundEvent,
 } from "@/server/sync/syncEventHub";
+import { serverSyncDebugLog } from "@/server/sync/syncDebugLog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,9 +56,19 @@ export async function GET(req: NextRequest, { params }: Ctx) {
             return;
           }
           if (event.type === "enrich") {
+            serverSyncDebugLog("sse.event", {
+              clientId,
+              type: "enrich",
+              enriching: event.payload.enrich?.enriching,
+            });
             send(encodeSse("enrich", event.payload.enrich ?? { enriching: false }));
             return;
           }
+          serverSyncDebugLog("sse.event", {
+            clientId,
+            type: "revision",
+            domains: event.payload.domains,
+          });
           send(
             encodeSse("revision", {
               domains: event.payload.domains,
@@ -67,6 +78,12 @@ export async function GET(req: NextRequest, { params }: Ctx) {
         };
 
         subscriberId = subscribeSyncStream(user.id, clientId, periodId, onEvent);
+        serverSyncDebugLog("sse.connect", {
+          userId: user.id,
+          clientId,
+          periodId,
+          subscriberId,
+        });
         send(encodeSse("connected", { ok: true }));
 
         heartbeat = setInterval(() => {
@@ -76,7 +93,10 @@ export async function GET(req: NextRequest, { params }: Ctx) {
       cancel() {
         closed = true;
         if (heartbeat) clearInterval(heartbeat);
-        if (subscriberId) unsubscribeSyncStream(subscriberId);
+        if (subscriberId) {
+          serverSyncDebugLog("sse.disconnect", { clientId, subscriberId });
+          unsubscribeSyncStream(subscriberId);
+        }
       },
     });
 

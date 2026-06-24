@@ -209,6 +209,7 @@ import {
   needsWorkspaceFetch,
   slicesFromDomains,
 } from "./lib/sync/workspaceReloadCoordinator";
+import { syncDebugLog } from "./lib/sync/syncDebugLog";
 import { CatalogEnrichProgressPanel } from "./components/catalog/CatalogEnrichProgressPanel";
 import { CatalogUploadProgressPanel } from "./components/catalog/CatalogUploadProgressPanel";
 
@@ -356,6 +357,7 @@ export default function App() {
       if (!needsWorkspaceFetch(slices)) return;
 
       beginRemoteWorkspaceApply();
+      syncDebugLog("sync.apply", { domains, via: "remote-reload" });
       try {
         const dto = await fetchWorkspace(activeClientId, activePlanningPeriodId);
         const ws = apiWorkspaceToClientWorkspace(dto);
