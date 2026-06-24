@@ -30,6 +30,7 @@ type Subscriber = {
 let nextId = 1;
 const subscribers = new Map<string, Subscriber>();
 let listenerReady = false;
+let listenerInit: Promise<void> | null = null;
 const recentDispatchKeys = new Map<string, number>();
 const DISPATCH_DEDUPE_MS = 300;
 
@@ -112,9 +113,13 @@ function onNotify(raw: string): void {
 
 export async function ensureSyncListener(): Promise<void> {
   if (listenerReady) return;
-  await ensureListenChannel(SYNC_NOTIFY_CHANNEL, onNotify);
-  listenerReady = true;
-  serverSyncDebugLog("listen.ready", { channel: SYNC_NOTIFY_CHANNEL });
+  if (!listenerInit) {
+    listenerInit = ensureListenChannel(SYNC_NOTIFY_CHANNEL, onNotify).then(() => {
+      listenerReady = true;
+      serverSyncDebugLog("listen.ready", { channel: SYNC_NOTIFY_CHANNEL });
+    });
+  }
+  await listenerInit;
 }
 
 export function subscribeSyncStream(
@@ -141,4 +146,5 @@ export function getSyncSubscriberCount(): number {
 export function resetSyncEventHubForTests(): void {
   subscribers.clear();
   listenerReady = false;
+  listenerInit = null;
 }

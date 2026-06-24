@@ -161,17 +161,17 @@ export function ApiWorkspaceSync() {
         return;
       }
       syncDebugLog("save.patch", { clientId: activeClientId, debounceMs: SAVE_DEBOUNCE_MS });
-      emitCloudSaveStatus("saving");
+      markLocalSync(activeClientId, ["workspace"]);
+      if (!isApplyingRemoteWorkspace()) emitCloudSaveStatus("saving");
       void patchWorkspaceApi(activeClientId, patch)
         .then(() => {
           markWorkspacePatchSynced(activeClientId, fingerprint);
-          emitCloudSaveStatus("saved");
-          markLocalSync(activeClientId, ["workspace"]);
+          if (!isApplyingRemoteWorkspace()) emitCloudSaveStatus("saved");
           broadcastSyncChanged(activeClientId, ["workspace"]);
         })
         .catch((err) => {
           console.error("[AuraGrid] Falha ao salvar workspace:", err);
-          emitCloudSaveStatus("error");
+          if (!isApplyingRemoteWorkspace()) emitCloudSaveStatus("error");
         })
         .finally(() => setWorkspaceSavePending(false));
     }, SAVE_DEBOUNCE_MS);
@@ -232,7 +232,7 @@ export function ApiWorkspaceSync() {
       }
       setWorkspaceSavePending(true);
       markLocalSync(activeClientId, ["workspace"]);
-      emitCloudSaveStatus("saving");
+      if (!isApplyingRemoteWorkspace()) emitCloudSaveStatus("saving");
       try {
         const patch = buildWorkspacePatch(ws);
         if (!patch) return;
@@ -240,10 +240,10 @@ export function ApiWorkspaceSync() {
         if (isWorkspacePatchAlreadySynced(activeClientId, fingerprint)) return;
         await patchWorkspaceApi(activeClientId, patch);
         markWorkspacePatchSynced(activeClientId, fingerprint);
-        emitCloudSaveStatus("saved");
+        if (!isApplyingRemoteWorkspace()) emitCloudSaveStatus("saved");
         broadcastSyncChanged(activeClientId, ["workspace"]);
       } catch (err) {
-        emitCloudSaveStatus("error");
+        if (!isApplyingRemoteWorkspace()) emitCloudSaveStatus("error");
         throw err;
       } finally {
         setWorkspaceSavePending(false);

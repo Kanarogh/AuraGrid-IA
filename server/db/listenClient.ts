@@ -4,6 +4,7 @@ import { postgresConnectOptions } from "./postgresOptions";
 
 let listenSql: ReturnType<typeof postgres> | null = null;
 let listenStarted = false;
+let listenInit: Promise<void> | null = null;
 
 export function getListenClient(): ReturnType<typeof postgres> | null {
   if (!isDatabaseConfigured()) return null;
@@ -20,8 +21,12 @@ export async function ensureListenChannel(
   const sql = getListenClient();
   if (!sql) return;
   if (listenStarted) return;
-  listenStarted = true;
-  await sql.listen(channel, onNotify);
+  if (!listenInit) {
+    listenInit = sql.listen(channel, onNotify).then(() => {
+      listenStarted = true;
+    });
+  }
+  await listenInit;
 }
 
 export async function closeListenClient(): Promise<void> {
@@ -29,5 +34,6 @@ export async function closeListenClient(): Promise<void> {
     await listenSql.end({ timeout: 5 });
     listenSql = null;
     listenStarted = false;
+    listenInit = null;
   }
 }
