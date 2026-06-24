@@ -60,13 +60,15 @@ test("buildPeriodsRevisionToken encodes list fingerprint", () => {
   assert.equal(token, "pp_1:2026-06-20T12:00:00.000Z:3");
 });
 
-test("buildRegistryRevisionToken encodes active client and count", () => {
-  const token = buildRegistryRevisionToken(
-    "client_a",
-    "2026-06-20T12:00:00.000Z",
-    2
-  );
-  assert.equal(token, "client_a:2026-06-20T12:00:00.000Z:2");
+test("buildRegistryRevisionToken encodes maxUpdatedAt and count", () => {
+  const token = buildRegistryRevisionToken("2026-06-20T12:00:00.000Z", 2);
+  assert.equal(token, "2026-06-20T12:00:00.000Z:2");
+});
+
+test("buildRegistryRevisionToken ignores active client switch", () => {
+  const before = buildRegistryRevisionToken("2026-06-20T12:00:00.000Z", 2);
+  const after = buildRegistryRevisionToken("2026-06-20T12:00:00.000Z", 2);
+  assert.equal(before, after);
 });
 
 console.log("syncRevision: all passed");

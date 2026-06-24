@@ -13,10 +13,7 @@ import {
   getCatalogRevision,
   type CatalogRevision,
 } from "./catalogService";
-import {
-  getActiveClientId,
-  listClientsForUser,
-} from "./clientService";
+import { listClientsForUser } from "./clientService";
 import {
   ensureClientHasActivePeriod,
   listPeriodsForClient,
@@ -64,11 +61,10 @@ export function buildPeriodsRevisionToken(
 }
 
 export function buildRegistryRevisionToken(
-  activeClientId: string,
   maxUpdatedAt: string | null,
   count: number
 ): string {
-  return `${activeClientId}:${maxUpdatedAt ?? "0"}:${count}`;
+  return `${maxUpdatedAt ?? "0"}:${count}`;
 }
 
 export async function getSyncRevision(
@@ -155,14 +151,8 @@ export async function getSyncRevision(
   );
 
   const clientList = await listClientsForUser(userId);
-  const activeClientId =
-    (await getActiveClientId(userId)) ?? clientList[0]?.id ?? "";
   const maxClientUpdated = clientList[0]?.updatedAt.toISOString() ?? null;
-  const registry = buildRegistryRevisionToken(
-    activeClientId,
-    maxClientUpdated,
-    clientList.length
-  );
+  const registry = buildRegistryRevisionToken(maxClientUpdated, clientList.length);
 
   return {
     periodId,

@@ -53,6 +53,7 @@ import {
   saveBrandGemApi,
 } from "../lib/api/workspaceApi";
 import { broadcastSyncChanged } from "../lib/sync/broadcast";
+import { classifyPeriodsRemoteChange } from "../lib/sync/periodsRevision";
 import {
   createLocalPlanningPeriod,
   persistActivePeriodSnapshot,
@@ -104,7 +105,10 @@ type ClientWorkspaceContextValue = {
     options?: { label?: string; startDate?: string }
   ) => Promise<void>;
   applyRemoteRegistry: () => Promise<void>;
-  applyRemotePlanningPeriods: () => Promise<void>;
+  applyRemotePlanningPeriods: (ctx: {
+    prevToken: string;
+    nextToken: string;
+  }) => Promise<void>;
   useApiStorage: boolean;
   workspaceHydrated: boolean;
 };
@@ -780,22 +784,39 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
 
   const applyRemoteRegistry = useCallback(async () => {
     if (!useApiStorage) return;
-    const reg = await fetchRegistry();
-    setRegistry(reg);
+    const remote = await fetchRegistry();
+    setRegistry((prev) => ({
+      ...remote,
+      activeClientId:
+        prev.activeClientId && remote.clients.some((c) => c.id === prev.activeClientId)
+          ? prev.activeClientId
+          : remote.activeClientId || remote.clients[0]?.id || "",
+    }));
   }, [useApiStorage]);
 
-  const applyRemotePlanningPeriods = useCallback(async () => {
-    if (!useApiStorage || !activeClientId) return;
-    const dto = await fetchWorkspace(
-      activeClientId,
-      workspaceRef.current.activePlanningPeriodId
-    );
-    const ws = apiWorkspaceToClientWorkspace(dto);
-    setWorkspace((prev) => ({
-      ...prev,
-      planningPeriods: ws.planningPeriods,
-    }));
-  }, [activeClientId, useApiStorage]);
+  const applyRemotePlanningPeriods = useCallback(
+    async (ctx: { prevToken: string; nextToken: string }) => {
+      if (!useApiStorage || !activeClientId) return;
+      const kind = classifyPeriodsRemoteChange(ctx.prevToken, ctx.nextToken);
+      const dto = await fetchWorkspace(activeClientId);
+      const ws = apiWorkspaceToClientWorkspace(dto);
+
+      if (kind === "activeSwitch") {
+        if (workspaceRef.current.isReadOnly) {
+          setWorkspace((prev) => ({ ...prev, planningPeriods: ws.planningPeriods }));
+          return;
+        }
+        if (ws.activePlanningPeriodId !== workspaceRef.current.activePlanningPeriodId) {
+          setWorkspace(ws);
+          workspaceRef.current = ws;
+          return;
+        }
+      }
+
+      setWorkspace((prev) => ({ ...prev, planningPeriods: ws.planningPeriods }));
+    },
+    [activeClientId, useApiStorage]
+  );
 
   const resetActiveClient = useCallback(() => {
     if (!hasActiveClient) return;
@@ -808,6 +829,12 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
           const ws = api.toWorkspace(dto);
           setWorkspace(ws);
           workspaceRef.current = ws;
+          broadcastSyncChanged(activeClientId, [
+            "catalog",
+            "workspace",
+            "brandGem",
+            "periods",
+          ]);
           toast.success("Cliente resetado na nuvem.");
         } catch (err) {
           console.error("[AuraGrid] Falha ao resetar cliente:", err);

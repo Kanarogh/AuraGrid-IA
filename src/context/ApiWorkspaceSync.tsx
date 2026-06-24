@@ -42,6 +42,7 @@ function buildWorkspacePatch(ws: ClientWorkspace) {
 function flushWorkspacePatch(clientId: string, ws: ClientWorkspace) {
   const patch = buildWorkspacePatch(ws);
   if (!patch) return;
+  broadcastSyncChanged(clientId, ["workspace"]);
   const token = getAccessToken();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;

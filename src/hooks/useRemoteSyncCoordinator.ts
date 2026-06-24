@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { fetchSyncRevisionApi } from "../lib/api/workspaceApi";
 import { broadcastSyncChanged, subscribeSyncChanged } from "../lib/sync/broadcast";
 import { isSyncPullPaused } from "../lib/sync/mutationGuard";
+import { diffSyncRevisionTokens, type DiffSyncRevisionResult } from "../lib/sync/revisionDiff";
 import {
   tokensFromSyncRevision,
   type SyncDomain,
@@ -43,11 +44,16 @@ function isDomainPaused(domain: SyncDomain): boolean {
   return isSyncPullPaused(domain);
 }
 
+export type PeriodsChangeContext = {
+  prevToken: string;
+  nextToken: string;
+};
+
 export type RemoteSyncHandlers = {
   onCatalogChange?: () => Promise<void>;
   onWorkspaceChange?: () => Promise<void>;
   onBrandGemChange?: () => Promise<void>;
-  onPeriodsChange?: () => Promise<void>;
+  onPeriodsChange?: (ctx: PeriodsChangeContext) => Promise<void>;
   onRegistryChange?: () => Promise<void>;
 };
 
@@ -72,14 +78,15 @@ export function useRemoteSyncCoordinator({
   const onRemoteAppliedRef = useRef(onRemoteApplied);
   onRemoteAppliedRef.current = onRemoteApplied;
 
-  const applyDomainChanges = useCallback(async (changed: SyncDomain[]) => {
+  const applyDomainChanges = useCallback(async (result: DiffSyncRevisionResult) => {
+    const { changed, periodTokenChange } = result;
     if (!changed.length) return;
     const h = handlersRef.current;
     if (changed.includes("registry") && h.onRegistryChange) {
       await h.onRegistryChange();
     }
-    if (changed.includes("periods") && h.onPeriodsChange) {
-      await h.onPeriodsChange();
+    if (changed.includes("periods") && h.onPeriodsChange && periodTokenChange) {
+      await h.onPeriodsChange(periodTokenChange);
     }
     if (changed.includes("brandGem") && h.onBrandGemChange) {
       await h.onBrandGemChange();
@@ -93,42 +100,24 @@ export function useRemoteSyncCoordinator({
     onRemoteAppliedRef.current?.(changed);
   }, []);
 
-  const diffTokens = useCallback(
-    (next: SyncRevisionTokens): SyncDomain[] => {
-      const prev = lastTokensRef.current;
-      if (!prev) {
-        lastTokensRef.current = next;
-        return [];
-      }
-      const changed: SyncDomain[] = [];
-      if (next.catalog !== prev.catalog && !isDomainPaused("catalog")) {
-        changed.push("catalog");
-      }
-      if (next.workspace !== prev.workspace && !isDomainPaused("workspace")) {
-        changed.push("workspace");
-      }
-      if (next.brandGem !== prev.brandGem && !isDomainPaused("brandGem")) {
-        changed.push("brandGem");
-      }
-      if (next.periods !== prev.periods && !isDomainPaused("periods")) {
-        changed.push("periods");
-      }
-      if (next.registry !== prev.registry && !isDomainPaused("registry")) {
-        changed.push("registry");
-      }
+  const diffTokens = useCallback((next: SyncRevisionTokens): DiffSyncRevisionResult => {
+    const prev = lastTokensRef.current;
+    if (!prev) {
       lastTokensRef.current = next;
-      return changed;
-    },
-    []
-  );
+      return { changed: [] };
+    }
+    const result = diffSyncRevisionTokens(prev, next, isDomainPaused);
+    lastTokensRef.current = next;
+    return result;
+  }, []);
 
   const syncNow = useCallback(async () => {
     if (!enabled || !clientId || !periodId) return null;
     try {
       const rev = await fetchSyncRevisionApi(clientId, periodId);
       const tokens = tokensFromSyncRevision(rev);
-      const changed = diffTokens(tokens);
-      if (changed.length) await applyDomainChanges(changed);
+      const result = diffTokens(tokens);
+      if (result.changed.length) await applyDomainChanges(result);
       return rev;
     } catch {
       return null;
@@ -170,8 +159,8 @@ export function useRemoteSyncCoordinator({
               const rev = await fetchSyncRevisionApi(targetClientId, targetPeriodId);
               if (signal.aborted) break;
               const tokens = tokensFromSyncRevision(rev);
-              const changed = diffTokens(tokens);
-              if (changed.length) await applyDomainChanges(changed);
+              const result = diffTokens(tokens);
+              if (result.changed.length) await applyDomainChanges(result);
             } catch {
               /* rede — próximo tick */
             }

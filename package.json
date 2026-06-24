@@ -13,7 +13,7 @@
     "test:navigation": "tsx src/lib/appRouting/navigation.test.ts",
     "test:enrich-status": "tsx server/services/catalogEnrichmentSnapshot.test.ts",
     "test:catalog-sync": "tsx server/services/catalogRevision.test.ts",
-    "test:sync-revision": "tsx server/services/syncRevision.test.ts && tsx src/lib/sync/syncTokens.test.ts && tsx src/lib/sync/mutationGuard.test.ts",
+    "test:sync-revision": "tsx server/services/syncRevision.test.ts && tsx src/lib/sync/syncTokens.test.ts && tsx src/lib/sync/mutationGuard.test.ts && tsx src/lib/sync/revisionDiff.test.ts && tsx src/lib/sync/periodsRevision.test.ts",
     "docker:infra": "docker compose -f docker-compose.dev.yml up -d",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down"
