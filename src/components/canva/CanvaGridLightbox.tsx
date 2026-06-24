@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Minus, Plus, X, ZoomIn } from "lucide-react";
-import { requestCatalogMediaUrl, mediaPathFromSrc } from "../../lib/catalogMediaLoader";
+import { Loader2, Minus, Plus, X, ZoomIn } from "lucide-react";
+import {
+  catalogMediaDisplayUrl,
+  mediaPathFromSrc,
+  peekCatalogMediaUrl,
+  requestCatalogMediaUrl,
+} from "../../lib/catalogMediaLoader";
 import { cn } from "../../lib/cn";
 
 const ZOOM_STEPS = [1, 1.25, 1.5, 2, 2.5, 3] as const;
@@ -18,7 +23,14 @@ export function CanvaGridLightbox({
 }) {
   const [zoomIndex, setZoomIndex] = useState(0);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
-  const [displaySrc, setDisplaySrc] = useState(image);
+  const [displaySrc, setDisplaySrc] = useState<string>(() => {
+    if (!mediaPathFromSrc(image)) return image;
+    return (
+      peekCatalogMediaUrl(image, "thumb") ??
+      catalogMediaDisplayUrl(image, "thumb")
+    );
+  });
+  const [isFullRes, setIsFullRes] = useState(false);
   const [canPan, setCanPan] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -46,18 +58,44 @@ export function CanvaGridLightbox({
     setNaturalSize(null);
     setZoomIndex(0);
     setIsDragging(false);
-    setDisplaySrc(image);
+    setIsFullRes(false);
 
-    if (!mediaPathFromSrc(image)) return;
+    if (!mediaPathFromSrc(image)) {
+      setDisplaySrc(image);
+      setIsFullRes(true);
+      return;
+    }
+
+    const thumb =
+      peekCatalogMediaUrl(image, "thumb") ?? catalogMediaDisplayUrl(image, "thumb");
+    setDisplaySrc(thumb);
+
+    const fullDirect = catalogMediaDisplayUrl(image, "full");
+    const cachedFull = peekCatalogMediaUrl(image, "full");
+    if (cachedFull) {
+      setDisplaySrc(cachedFull);
+      setIsFullRes(true);
+      return;
+    }
 
     let cancelled = false;
-    void requestCatalogMediaUrl(image, { priority: 10, variant: "full" })
-      .then((url) => {
-        if (!cancelled) setDisplaySrc(url);
-      })
-      .catch(() => {
-        if (!cancelled) setDisplaySrc(image);
-      });
+
+    const upgrade = (url: string) => {
+      if (cancelled) return;
+      setDisplaySrc(url);
+      setIsFullRes(true);
+    };
+
+    const probe = new Image();
+    probe.onload = () => upgrade(fullDirect);
+    probe.onerror = () => {
+      void requestCatalogMediaUrl(image, { priority: 30, variant: "full" })
+        .then(upgrade)
+        .catch(() => {
+          /* mantém thumb visível */
+        });
+    };
+    probe.src = fullDirect;
 
     return () => {
       cancelled = true;
@@ -139,6 +177,12 @@ export function CanvaGridLightbox({
           {label && (
             <span className="truncate max-w-[min(50vw,28rem)] text-white/70">— {label}</span>
           )}
+          {!isFullRes && (
+            <span className="flex items-center gap-1 text-[10px] text-white/50 shrink-0">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              HD…
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
@@ -188,13 +232,15 @@ export function CanvaGridLightbox({
             src={displaySrc}
             alt={label || "Look ampliado"}
             draggable={false}
+            decoding="async"
+            fetchPriority="high"
             onLoad={(e) => {
               const img = e.currentTarget;
               setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
             }}
             className={cn(
               "rounded-sm shadow-2xl object-contain select-none",
-              "transition-[width,height] duration-150 ease-out",
+              "transition-[width,height,opacity] duration-200 ease-out",
               !naturalSize &&
                 "max-w-[min(96vw,calc(100vh-5rem))] max-h-[min(96vw,calc(100vh-5rem))] w-auto h-auto"
             )}

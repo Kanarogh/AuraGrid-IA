@@ -1,14 +1,17 @@
 import { apiFetch } from "./api/apiClient";
 
-export const CATALOG_THUMB_WIDTH = 480;
-const MAX_CONCURRENT = 6;
+export const CATALOG_THUMB_WIDTH = 400;
+const MAX_CONCURRENT = 8;
+const MAX_RETRIES = 3;
 
 const blobCache = new Map<string, string>();
-let inFlight = 0;
+const inFlight = new Map<string, Promise<string>>();
+let activeFetches = 0;
 
 type QueueJob = {
   url: string;
   priority: number;
+  retries: number;
   resolve: (url: string) => void;
   reject: (err: unknown) => void;
 };
@@ -30,41 +33,73 @@ export function catalogMediaDisplayUrl(
   return `${path}?w=${CATALOG_THUMB_WIDTH}`;
 }
 
-function enqueue(url: string, priority: number): Promise<string> {
-  const cached = blobCache.get(url);
-  if (cached) return Promise.resolve(cached);
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
-  return new Promise((resolve, reject) => {
-    queue.push({ url, priority, resolve, reject });
-    queue.sort((a, b) => b.priority - a.priority);
-    pumpQueue();
-  });
+async function fetchToBlobUrl(url: string, attempt = 0): Promise<string> {
+  const cached = blobCache.get(url);
+  if (cached) return cached;
+
+  try {
+    const res = await apiFetch(url);
+    if (!res.ok) {
+      const retryable = res.status === 429 || res.status >= 500;
+      if (retryable && attempt < MAX_RETRIES) {
+        await sleep(400 * (attempt + 1));
+        return fetchToBlobUrl(url, attempt + 1);
+      }
+      throw new Error(`HTTP ${res.status}`);
+    }
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    blobCache.set(url, objectUrl);
+    return objectUrl;
+  } catch (err) {
+    if (attempt < MAX_RETRIES) {
+      await sleep(400 * (attempt + 1));
+      return fetchToBlobUrl(url, attempt + 1);
+    }
+    throw err;
+  }
 }
 
 function pumpQueue(): void {
-  while (inFlight < MAX_CONCURRENT && queue.length > 0) {
+  while (activeFetches < MAX_CONCURRENT && queue.length > 0) {
     const job = queue.shift()!;
-    inFlight += 1;
+    activeFetches += 1;
 
-    void apiFetch(job.url)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.blob();
-      })
-      .then((blob) => {
-        const objectUrl = URL.createObjectURL(blob);
-        blobCache.set(job.url, objectUrl);
-        job.resolve(objectUrl);
+    void fetchToBlobUrl(job.url)
+      .then((url) => {
+        job.resolve(url);
       })
       .catch(job.reject)
       .finally(() => {
-        inFlight -= 1;
+        activeFetches -= 1;
+        inFlight.delete(job.url);
         pumpQueue();
       });
   }
 }
 
-/** Carrega mídia da API com fila limitada e cache em memória (blob URLs). */
+function enqueue(url: string, priority: number): Promise<string> {
+  const cached = blobCache.get(url);
+  if (cached) return Promise.resolve(cached);
+
+  const pending = inFlight.get(url);
+  if (pending) return pending;
+
+  const promise = new Promise<string>((resolve, reject) => {
+    queue.push({ url, priority, retries: 0, resolve, reject });
+    queue.sort((a, b) => b.priority - a.priority);
+    pumpQueue();
+  });
+
+  inFlight.set(url, promise);
+  return promise;
+}
+
+/** Fallback autenticado (blob) quando `<img src>` direto falha. */
 export function requestCatalogMediaUrl(
   src: string,
   options?: { priority?: number; variant?: "thumb" | "full" }
@@ -86,4 +121,13 @@ export function peekCatalogMediaUrl(
   const path = mediaPathFromSrc(src);
   if (!path) return null;
   return blobCache.get(catalogMediaDisplayUrl(path, variant)) ?? null;
+}
+
+/** Pré-carrega full-res com prioridade alta (hover / lightbox). */
+export function preloadCatalogMedia(
+  src: string,
+  variant: "thumb" | "full" = "full"
+): void {
+  if (!mediaPathFromSrc(src)) return;
+  void requestCatalogMediaUrl(src, { priority: 20, variant });
 }

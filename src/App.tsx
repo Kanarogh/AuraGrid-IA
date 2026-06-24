@@ -135,6 +135,7 @@ import { NewPlanningPeriodModal } from "./components/posts/NewPlanningPeriodModa
 import { StudioSection } from "./components/ui/StudioSection";
 import { Button } from "./components/ui/Button";
 import { CatalogThumbnail } from "./components/ui/CatalogThumbnail";
+import { preloadCatalogMedia } from "./lib/catalogMediaLoader";
 import { EmptyState } from "./components/ui/EmptyState";
 import { FeedInstagramPreview } from "./components/feed/FeedInstagramPreview";
 import { getCaptionBatchStats, getPendingCaptionPosts } from "./lib/captionBatch";
@@ -3891,6 +3892,7 @@ export default function App() {
                   <div 
                     key={item.id}
                     className="border rounded-2xl p-3 flex flex-col gap-2.5 relative group transition-all shadow-xs bg-ag-surface-2 border-ag-border hover:border-ag-border"
+                    onMouseEnter={() => item.image && preloadCatalogMedia(item.image, "full")}
                   >
                     
                     {/* Visual aspect */}
@@ -3910,7 +3912,7 @@ export default function App() {
                           src={item.image}
                           alt={item.label}
                           imgClassName="object-contain pointer-events-none"
-                          priority={index < 12}
+                          priority={index < 18}
                         />
                         {item.image && (
                           <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover/img:bg-black/35 transition-colors opacity-0 group-hover/img:opacity-100 pointer-events-none">
@@ -4115,6 +4117,7 @@ export default function App() {
                     <div
                       key={item.id}
                       className="border rounded-2xl p-3 flex flex-col gap-2 relative group bg-ag-surface-2 border-ag-border hover:border-ag-accent/30 transition-all"
+                      onMouseEnter={() => item.image && preloadCatalogMedia(item.image, "full")}
                     >
                       <div className="aspect-[3/4] rounded-xl overflow-hidden relative flex items-center justify-center bg-ag-surface-1 border border-ag-border group/img">
                         <button
@@ -4132,7 +4135,7 @@ export default function App() {
                             src={item.image}
                             alt={item.label}
                             imgClassName="object-contain pointer-events-none"
-                            priority={index < 12}
+                            priority={index < 18}
                           />
                           {item.image && (
                             <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover/img:bg-black/35 transition-colors opacity-0 group-hover/img:opacity-100 pointer-events-none">
