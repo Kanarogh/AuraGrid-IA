@@ -1,9 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchSyncRevisionApi } from "../lib/api/workspaceApi";
+import {
+  openSyncEventSource,
+  type SyncStreamEnrichEvent,
+} from "../lib/api/syncStreamApi";
 import { broadcastSyncChanged, subscribeSyncChanged } from "../lib/sync/broadcast";
 import { isSyncPullPaused } from "../lib/sync/mutationGuard";
+import {
+  nextSseReconnectDelay,
+  shouldUseFallbackPoll,
+  SYNC_FALLBACK_POLL_MS,
+  SYNC_REVISION_DEBOUNCE_MS,
+} from "../lib/sync/realtimeCoordinator";
 import { diffSyncRevisionTokens, type DiffSyncRevisionResult } from "../lib/sync/revisionDiff";
 import {
   tokensFromSyncRevision,
@@ -11,38 +21,6 @@ import {
   type SyncRevisionTokens,
 } from "../lib/sync/types";
 import { isWorkspaceSavePending } from "../lib/sync/workspaceSaveGuard";
-
-const POLL_INTERVAL_MS = 5000;
-
-const activePollers = new Map<string, AbortController>();
-
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    if (signal?.aborted) return resolve();
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timer);
-        resolve();
-      },
-      { once: true }
-    );
-  });
-}
-
-function isTabVisible(): boolean {
-  return typeof document === "undefined" || document.visibilityState === "visible";
-}
-
-function pollKey(clientId: string, periodId: string): string {
-  return `${clientId}:${periodId}`;
-}
-
-function isDomainPaused(domain: SyncDomain): boolean {
-  if (domain === "workspace" && isWorkspaceSavePending()) return true;
-  return isSyncPullPaused(domain);
-}
 
 export type PeriodsChangeContext = {
   prevToken: string;
@@ -55,7 +33,24 @@ export type RemoteSyncHandlers = {
   onBrandGemChange?: () => Promise<void>;
   onPeriodsChange?: (ctx: PeriodsChangeContext) => Promise<void>;
   onRegistryChange?: () => Promise<void>;
+  /** Preferencial: um único fetch por tick quando vários domínios mudam. */
+  onDomainsChange?: (
+    domains: SyncDomain[],
+    ctx?: { periodTokenChange?: PeriodsChangeContext }
+  ) => Promise<void>;
 };
+
+export type EnrichProgressState = {
+  index: number;
+  total: number;
+  itemId: string;
+  label: string;
+};
+
+function isDomainPaused(domain: SyncDomain): boolean {
+  if (domain === "workspace" && isWorkspaceSavePending()) return true;
+  return isSyncPullPaused(domain);
+}
 
 export function useRemoteSyncCoordinator({
   enabled,
@@ -78,25 +73,34 @@ export function useRemoteSyncCoordinator({
   const onRemoteAppliedRef = useRef(onRemoteApplied);
   onRemoteAppliedRef.current = onRemoteApplied;
 
+  const [isEnriching, setIsEnriching] = useState(false);
+  const [enrichProgress, setEnrichProgress] = useState<EnrichProgressState | null>(null);
+
   const applyDomainChanges = useCallback(async (result: DiffSyncRevisionResult) => {
     const { changed, periodTokenChange } = result;
     if (!changed.length) return;
     const h = handlersRef.current;
-    if (changed.includes("registry") && h.onRegistryChange) {
-      await h.onRegistryChange();
+
+    if (h.onDomainsChange) {
+      await h.onDomainsChange(changed, { periodTokenChange });
+    } else {
+      if (changed.includes("registry") && h.onRegistryChange) {
+        await h.onRegistryChange();
+      }
+      if (changed.includes("periods") && h.onPeriodsChange && periodTokenChange) {
+        await h.onPeriodsChange(periodTokenChange);
+      }
+      if (changed.includes("brandGem") && h.onBrandGemChange) {
+        await h.onBrandGemChange();
+      }
+      if (changed.includes("workspace") && h.onWorkspaceChange) {
+        await h.onWorkspaceChange();
+      }
+      if (changed.includes("catalog") && h.onCatalogChange) {
+        await h.onCatalogChange();
+      }
     }
-    if (changed.includes("periods") && h.onPeriodsChange && periodTokenChange) {
-      await h.onPeriodsChange(periodTokenChange);
-    }
-    if (changed.includes("brandGem") && h.onBrandGemChange) {
-      await h.onBrandGemChange();
-    }
-    if (changed.includes("workspace") && h.onWorkspaceChange) {
-      await h.onWorkspaceChange();
-    }
-    if (changed.includes("catalog") && h.onCatalogChange) {
-      await h.onCatalogChange();
-    }
+
     onRemoteAppliedRef.current?.(changed);
   }, []);
 
@@ -149,55 +153,82 @@ export function useRemoteSyncCoordinator({
     [enabled, clientId, periodId, setKnownTokens]
   );
 
-  const runPollLoop = useCallback(
-    async (key: string, targetClientId: string, targetPeriodId: string, signal: AbortSignal) => {
-      try {
-        for (;;) {
-          if (signal.aborted) break;
-          if (isTabVisible()) {
-            try {
-              const rev = await fetchSyncRevisionApi(targetClientId, targetPeriodId);
-              if (signal.aborted) break;
-              const tokens = tokensFromSyncRevision(rev);
-              const result = diffTokens(tokens);
-              if (result.changed.length) await applyDomainChanges(result);
-            } catch {
-              /* rede — próximo tick */
-            }
-          }
-          await sleep(POLL_INTERVAL_MS, signal);
-        }
-      } catch {
-        /* abort */
-      }
-    },
-    [diffTokens, applyDomainChanges]
-  );
+  const handleEnrichEvent = useCallback((data: SyncStreamEnrichEvent) => {
+    setIsEnriching(data.enriching);
+    setEnrichProgress(data.progress ?? null);
+  }, []);
 
-  const ensurePolling = useCallback(
-    (targetClientId: string, targetPeriodId: string) => {
-      if (!enabled || !targetClientId || !targetPeriodId) return;
-      const key = pollKey(targetClientId, targetPeriodId);
-      if (activePollers.has(key)) return;
+  const startEnrichLocal = useCallback(() => {
+    setIsEnriching(true);
+  }, []);
 
-      const controller = new AbortController();
-      activePollers.set(key, controller);
-      void runPollLoop(key, targetClientId, targetPeriodId, controller.signal).finally(() => {
-        if (activePollers.get(key) === controller) {
-          activePollers.delete(key);
-        }
-      });
-    },
-    [enabled, runPollLoop]
-  );
+  const stopEnrichLocal = useCallback(() => {
+    setIsEnriching(false);
+    setEnrichProgress(null);
+  }, []);
 
   useEffect(() => {
     if (!enabled || !clientId || !periodId || !workspaceHydrated) return;
 
     lastTokensRef.current = null;
-    ensurePolling(clientId, periodId);
-
     let cancelled = false;
+    let sse: EventSource | null = null;
+    let reconnectAttempt = 0;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let fallbackInterval: ReturnType<typeof setInterval> | null = null;
+    let sseOpen = false;
+
+    const scheduleSync = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        void syncNow();
+      }, SYNC_REVISION_DEBOUNCE_MS);
+    };
+
+    const connectSse = () => {
+      if (cancelled) return;
+      sse?.close();
+      sse = openSyncEventSource(clientId, periodId);
+
+      sse.onopen = () => {
+        sseOpen = true;
+        reconnectAttempt = 0;
+      };
+
+      sse.addEventListener("revision", () => {
+        scheduleSync();
+      });
+
+      sse.addEventListener("enrich", (event) => {
+        try {
+          const data = JSON.parse((event as MessageEvent).data) as SyncStreamEnrichEvent;
+          handleEnrichEvent(data);
+          if (data.enriching) {
+            scheduleSync();
+          }
+        } catch {
+          /* ignore */
+        }
+      });
+
+      sse.onerror = () => {
+        sseOpen = false;
+        sse?.close();
+        sse = null;
+        if (cancelled) return;
+        reconnectAttempt += 1;
+        const delay = nextSseReconnectDelay(reconnectAttempt);
+        reconnectTimer = setTimeout(connectSse, delay);
+      };
+    };
+
+    connectSse();
+
+    fallbackInterval = setInterval(() => {
+      if (shouldUseFallbackPoll(sseOpen)) void syncNow();
+    }, SYNC_FALLBACK_POLL_MS);
+
     void (async () => {
       try {
         const rev = await fetchSyncRevisionApi(clientId, periodId);
@@ -210,19 +241,25 @@ export function useRemoteSyncCoordinator({
 
     return () => {
       cancelled = true;
-      const key = pollKey(clientId, periodId);
-      activePollers.get(key)?.abort();
-      activePollers.delete(key);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (fallbackInterval) clearInterval(fallbackInterval);
+      sse?.close();
     };
-  }, [enabled, clientId, periodId, workspaceHydrated, ensurePolling]);
+  }, [
+    enabled,
+    clientId,
+    periodId,
+    workspaceHydrated,
+    syncNow,
+    handleEnrichEvent,
+  ]);
 
   useEffect(() => {
     if (!enabled || !clientId) return;
 
-    return subscribeSyncChanged((changedClientId, domains) => {
+    return subscribeSyncChanged((changedClientId) => {
       if (changedClientId !== clientId) return;
-      const blocked = domains.every((d) => isDomainPaused(d));
-      if (blocked) return;
       void syncNow();
     });
   }, [enabled, clientId, syncNow]);
@@ -231,5 +268,12 @@ export function useRemoteSyncCoordinator({
     syncNow,
     setKnownTokens,
     publishSyncChange,
+    isEnriching,
+    enrichProgress,
+    startEnrichLocal,
+    stopEnrichLocal,
   };
 }
+
+/** @deprecated use useRemoteSyncCoordinator — nome legado mantido. */
+export const useRealtimeSyncCoordinator = useRemoteSyncCoordinator;

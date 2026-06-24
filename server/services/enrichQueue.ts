@@ -15,6 +15,8 @@ import {
   updateCatalogItem,
 } from "./catalogService";
 import { mediaAssetToDataUrl } from "./mediaService";
+import { ensureClientHasActivePeriod } from "./planningPeriodService";
+import { emitEnrichProgress } from "../sync/emitSyncEvent";
 
 const ENRICH_DELAY_MS = 5000;
 const ENRICH_RETRY_DELAY_MS = 5000;
@@ -70,7 +72,7 @@ export async function runCatalogEnrichment(
   providerId?: AiProviderId,
   userId?: string
 ): Promise<{ quotaExceeded: boolean; cancelled: boolean }> {
-  const execute = () => runCatalogEnrichmentInner(clientId, itemIds, providerId);
+  const execute = () => runCatalogEnrichmentInner(clientId, itemIds, providerId, userId);
   if (userId) return withUserAiContext(userId, execute);
   return execute();
 }
@@ -78,7 +80,8 @@ export async function runCatalogEnrichment(
 async function runCatalogEnrichmentInner(
   clientId: string,
   itemIds?: string[],
-  providerId?: AiProviderId
+  providerId?: AiProviderId,
+  userId?: string
 ): Promise<{ quotaExceeded: boolean; cancelled: boolean }> {
   const key = queueKey(clientId);
   stopCatalogEnrichment(clientId);
@@ -87,7 +90,12 @@ async function runCatalogEnrichmentInner(
   queues.set(key, { running: true, abort, progress: null });
 
   let quotaExceeded = false;
+  let periodId: string | undefined;
   try {
+    if (userId) {
+      periodId = await ensureClientHasActivePeriod(clientId);
+      void emitEnrichProgress(userId, clientId, periodId, true);
+    }
     await ensureRuntimeAiSettingsLoaded();
     try {
       await resetStaleProcessingCatalogItems(clientId);
@@ -128,6 +136,14 @@ async function runCatalogEnrichmentInner(
           label: item.label,
         },
       });
+      if (userId) {
+        void emitEnrichProgress(userId, clientId, periodId, true, {
+          index: imageIndex,
+          total,
+          itemId: item.id,
+          label: item.label,
+        });
+      }
 
       await updateCatalogItem(clientId, item.id, {
         visualProfile: null,
@@ -214,6 +230,9 @@ async function runCatalogEnrichmentInner(
     return { quotaExceeded, cancelled: abort.signal.aborted };
   } finally {
     queues.set(key, { running: false, abort: null, progress: null });
+    if (userId) {
+      void emitEnrichProgress(userId, clientId, periodId, false);
+    }
   }
 }
 

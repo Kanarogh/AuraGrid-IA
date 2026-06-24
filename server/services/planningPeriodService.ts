@@ -16,6 +16,17 @@ import {
   defaultPosts,
   periodLabelFromDate,
 } from "./planningDefaults";
+import { emitClientSync, emitEnrichProgress, resolveOwnerUserId } from "../sync/emitSyncEvent";
+import type { SyncDomain } from "../sync/syncEvents";
+
+async function notifyPeriodChange(
+  clientId: string,
+  domains: SyncDomain[],
+  periodId?: string
+): Promise<void> {
+  const ownerId = await resolveOwnerUserId(clientId);
+  if (ownerId) void emitClientSync(ownerId, clientId, domains, periodId);
+}
 
 export type PlanningPeriodStatus = "active" | "archived" | "draft";
 
@@ -322,6 +333,9 @@ export async function createPeriod(
     .where(eq(planningPeriods.id, periodId))
     .limit(1);
   if (!row) throw new Error("Falha ao criar roteiro.");
+  const domains: SyncDomain[] = ["periods"];
+  if (options.activate !== false) domains.push("workspace");
+  void notifyPeriodChange(clientId, domains, periodId);
   return toPeriodDto(row);
 }
 
@@ -347,6 +361,7 @@ export async function activatePeriod(clientId: string, periodId: string) {
     })
     .where(eq(clients.id, clientId));
 
+  void notifyPeriodChange(clientId, ["periods", "workspace"], periodId);
   return toPeriodDto({ ...period, status: "active", archivedAt: null, updatedAt: now });
 }
 
@@ -412,6 +427,7 @@ export async function updatePeriod(
     .from(planningPeriods)
     .where(eq(planningPeriods.id, periodId))
     .limit(1);
+  void notifyPeriodChange(clientId, ["periods"], periodId);
   return toPeriodDto(updated!);
 }
 

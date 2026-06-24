@@ -5,6 +5,7 @@ import { isPgvectorAvailable } from "../db/pgvector";
 import { catalogItems } from "../db/schema";
 import { ensureClientHasActivePeriod } from "./planningPeriodService";
 import { mediaPublicUrl, deleteMediaAssetsIfUnreferenced } from "./mediaService";
+import { emitClientSync, resolveOwnerUserId } from "../sync/emitSyncEvent";
 
 async function resolvePeriodId(clientId: string, planningPeriodId?: string | null) {
   return planningPeriodId ?? (await ensureClientHasActivePeriod(clientId));
@@ -12,6 +13,11 @@ async function resolvePeriodId(clientId: string, planningPeriodId?: string | nul
 
 function periodWhere(clientId: string, periodId: string) {
   return and(eq(catalogItems.clientId, clientId), eq(catalogItems.planningPeriodId, periodId));
+}
+
+async function notifyCatalogChange(clientId: string, periodId: string): Promise<void> {
+  const ownerId = await resolveOwnerUserId(clientId);
+  if (ownerId) void emitClientSync(ownerId, clientId, ["catalog"], periodId);
 }
 
 export async function listCatalogItems(clientId: string, planningPeriodId?: string | null) {
@@ -71,7 +77,9 @@ export async function createCatalogItem(input: {
       enrichmentStatus: "pending",
     })
     .returning();
-  return mapCatalogRow(row!);
+  const item = mapCatalogRow(row!);
+  void notifyCatalogChange(input.clientId, periodId);
+  return item;
 }
 
 export async function updateCatalogItem(
@@ -119,6 +127,7 @@ export async function deleteCatalogItem(
   if (item?.imageAssetId) {
     await deleteMediaAssetsIfUnreferenced([item.imageAssetId]);
   }
+  void notifyCatalogChange(clientId, periodId);
 }
 
 export async function clearCatalog(clientId: string, planningPeriodId?: string | null) {
@@ -136,6 +145,7 @@ export async function clearCatalog(clientId: string, planningPeriodId?: string |
   if (assetIds.length > 0) {
     await deleteMediaAssetsIfUnreferenced(assetIds);
   }
+  void notifyCatalogChange(clientId, periodId);
 }
 
 export async function clearGridCatalog(clientId: string, planningPeriodId?: string | null) {
@@ -157,6 +167,7 @@ export async function clearGridCatalog(clientId: string, planningPeriodId?: stri
   if (assetIds.length > 0) {
     await deleteMediaAssetsIfUnreferenced(assetIds);
   }
+  void notifyCatalogChange(clientId, periodId);
 }
 
 export async function clearCatalogEnrichments(
@@ -215,6 +226,7 @@ export async function clearCatalogEnrichments(
     );
   }
 
+  void notifyCatalogChange(clientId, periodId);
   return { embeddingsCleared };
 }
 

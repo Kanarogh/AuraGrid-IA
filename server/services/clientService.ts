@@ -27,6 +27,7 @@ import {
   resetPeriod,
   updatePeriod,
 } from "./planningPeriodService";
+import { emitClientSync, emitRegistrySync } from "../sync/emitSyncEvent";
 
 function slugify(name: string): string {
   const base = name
@@ -111,6 +112,7 @@ export async function createClientForUser(userId: string, name: string, slug?: s
       set: { activeClientId: id },
     });
 
+  void emitRegistrySync(userId, id);
   return { id, name: displayName };
 }
 
@@ -134,6 +136,7 @@ export async function renameClient(userId: string, clientId: string, name: strin
     .set({ name: trimmed, updatedAt: new Date() })
     .where(and(eq(clients.id, clientId), eq(clients.ownerUserId, userId)));
   await db.update(brandGems).set({ name: trimmed }).where(eq(brandGems.clientId, clientId));
+  void emitRegistrySync(userId, clientId);
 }
 
 export async function softDeleteClient(userId: string, clientId: string) {
@@ -150,6 +153,7 @@ export async function softDeleteClient(userId: string, clientId: string) {
     if (next) await setActiveClient(userId, next);
     else await db.delete(userClientState).where(eq(userClientState.userId, userId));
   }
+  void emitRegistrySync(userId, clientId);
 }
 
 export async function loadWorkspaceDto(
@@ -396,6 +400,7 @@ export async function saveBrandGem(
     .set({ name: trimmedName, updatedAt: new Date() })
     .where(and(eq(clients.id, clientId), eq(clients.ownerUserId, userId)));
 
+  void emitClientSync(userId, clientId, ["brandGem"], activePeriodId);
   return savedAt.toISOString();
 }
 
@@ -637,6 +642,12 @@ export async function patchWorkspace(
     .update(planningPeriods)
     .set({ updatedAt: new Date() })
     .where(eq(planningPeriods.id, periodId));
+
+  const domains: ("workspace" | "brandGem")[] = ["workspace"];
+  if (patch.brandGem && typeof patch.brandGem === "object") {
+    domains.push("brandGem");
+  }
+  void emitClientSync(userId, clientId, domains, periodId);
 }
 
 export async function resetClientWorkspace(userId: string, clientId: string) {
@@ -664,6 +675,8 @@ export async function resetClientWorkspace(userId: string, clientId: string) {
       savedAt: null,
     })
     .where(eq(brandGems.clientId, clientId));
+
+  void emitClientSync(userId, clientId, ["catalog", "workspace", "brandGem", "periods"], periodId);
 }
 
 export { getActivePeriodId };

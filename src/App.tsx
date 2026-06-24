@@ -198,7 +198,11 @@ import {
   beginSyncDomain,
   endSyncDomain,
 } from "./lib/sync/mutationGuard";
-import { SYNC_DOMAIN_LABELS } from "./lib/sync/types";
+import { SYNC_DOMAIN_LABELS, type SyncDomain } from "./lib/sync/types";
+import {
+  needsWorkspaceFetch,
+  slicesFromDomains,
+} from "./lib/sync/workspaceReloadCoordinator";
 import { CatalogEnrichProgressPanel } from "./components/catalog/CatalogEnrichProgressPanel";
 import { CatalogUploadProgressPanel } from "./components/catalog/CatalogUploadProgressPanel";
 
@@ -334,83 +338,95 @@ export default function App() {
     });
   }, [activeClientId, setCatalog, useApiStorage]);
 
-  const reloadCatalogFromApi = useCallback(async () => {
-    if (!useApiStorage || !activeClientId) return;
-    const dto = await fetchWorkspace(activeClientId, activePlanningPeriodId);
-    const ws = apiWorkspaceToClientWorkspace(dto);
-    setCatalog(ws.catalog);
-  }, [useApiStorage, activeClientId, activePlanningPeriodId, setCatalog]);
-
-  const reloadWorkspaceContentFromApi = useCallback(async () => {
-    if (!useApiStorage || !activeClientId || isReadOnly) return;
-    const dto = await fetchWorkspace(activeClientId, activePlanningPeriodId);
-    const ws = apiWorkspaceToClientWorkspace(dto);
-    setPosts(ws.posts);
-    setStartDate(ws.startDate);
-    setCanvaPages(ws.canva.pages);
-    setActiveCanvaPageId(ws.canva.activePageId);
-    setAutoSyncCanva(ws.canva.autoSync);
-    setCanvaGridReversed(ws.canva.reversed);
-    setCanvaGridFormat(ws.canva.gridFormat ?? "square");
-    setCanvaGridMaxWidth(ws.canva.gridMaxWidth ?? 480);
-  }, [
-    useApiStorage,
-    activeClientId,
-    activePlanningPeriodId,
-    isReadOnly,
-    setPosts,
-    setStartDate,
-    setCanvaPages,
-    setActiveCanvaPageId,
-    setAutoSyncCanva,
-    setCanvaGridReversed,
-    setCanvaGridFormat,
-    setCanvaGridMaxWidth,
-  ]);
-
-  const reloadBrandGemFromApi = useCallback(async () => {
-    if (!useApiStorage || !activeClientId || isReadOnly) return;
-    const dto = await fetchWorkspace(activeClientId, activePlanningPeriodId);
-    const ws = apiWorkspaceToClientWorkspace(dto);
-    setBrandGem(ws.brandGem);
-    setStartDate(ws.startDate);
-  }, [
-    useApiStorage,
-    activeClientId,
-    activePlanningPeriodId,
-    isReadOnly,
-    setBrandGem,
-    setStartDate,
-  ]);
+  const reloadWorkspaceSlices = useCallback(
+    async (domains: Array<"catalog" | "workspace" | "brandGem">) => {
+      if (!useApiStorage || !activeClientId) return;
+      const slices = slicesFromDomains(domains);
+      if (!needsWorkspaceFetch(slices)) return;
+      if (isReadOnly) {
+        if (slices.workspace) slices.workspace = false;
+        if (slices.brandGem) slices.brandGem = false;
+      }
+      if (!needsWorkspaceFetch(slices)) return;
+      const dto = await fetchWorkspace(activeClientId, activePlanningPeriodId);
+      const ws = apiWorkspaceToClientWorkspace(dto);
+      if (slices.catalog) setCatalog(ws.catalog);
+      if (slices.brandGem) {
+        setBrandGem(ws.brandGem);
+        setStartDate(ws.startDate);
+      }
+      if (slices.workspace) {
+        setPosts(ws.posts);
+        setStartDate(ws.startDate);
+        setCanvaPages(ws.canva.pages);
+        setActiveCanvaPageId(ws.canva.activePageId);
+        setAutoSyncCanva(ws.canva.autoSync);
+        setCanvaGridReversed(ws.canva.reversed);
+        setCanvaGridFormat(ws.canva.gridFormat ?? "square");
+        setCanvaGridMaxWidth(ws.canva.gridMaxWidth ?? 480);
+      }
+    },
+    [
+      useApiStorage,
+      activeClientId,
+      activePlanningPeriodId,
+      isReadOnly,
+      setCatalog,
+      setBrandGem,
+      setStartDate,
+      setPosts,
+      setCanvaPages,
+      setActiveCanvaPageId,
+      setAutoSyncCanva,
+      setCanvaGridReversed,
+      setCanvaGridFormat,
+      setCanvaGridMaxWidth,
+    ]
+  );
 
   const {
     isEnriching: isEnrichingCatalog,
-    progress: catalogEnrichProgress,
-    startPolling: startCatalogEnrichPolling,
-    stopLocalPolling: stopCatalogEnrichPolling,
-  } = useCatalogEnrichmentWatcher({
-    enabled: useApiStorage,
-    clientId: activeClientId ?? "",
-    workspaceHydrated,
-    onCatalogReload: reloadCatalogFromApi,
-  });
-
-  const { publishSyncChange } = useRemoteSyncCoordinator({
+    enrichProgress: catalogEnrichProgress,
+    startEnrichLocal: startCatalogEnrichPolling,
+    stopEnrichLocal: stopCatalogEnrichPolling,
+    publishSyncChange,
+  } = useRemoteSyncCoordinator({
     enabled: useApiStorage,
     clientId: activeClientId ?? "",
     periodId: activePlanningPeriodId ?? "",
     workspaceHydrated,
     handlers: {
-      onCatalogChange: reloadCatalogFromApi,
-      onWorkspaceChange: reloadWorkspaceContentFromApi,
-      onBrandGemChange: reloadBrandGemFromApi,
-      onPeriodsChange: applyRemotePlanningPeriods,
-      onRegistryChange: applyRemoteRegistry,
+      onDomainsChange: async (domains, ctx) => {
+        if (domains.includes("periods") && ctx?.periodTokenChange) {
+          await applyRemotePlanningPeriods(ctx.periodTokenChange);
+        }
+        if (domains.includes("registry")) {
+          await applyRemoteRegistry();
+        }
+        const workspaceDomains = domains.filter(
+          (d): d is "catalog" | "workspace" | "brandGem" =>
+            d === "catalog" || d === "workspace" || d === "brandGem"
+        );
+        if (workspaceDomains.length) {
+          await reloadWorkspaceSlices(workspaceDomains);
+        }
+      },
     },
-    onRemoteApplied: (domains) => {
+    onRemoteApplied: (domains: SyncDomain[]) => {
       const labels = domains.map((d) => SYNC_DOMAIN_LABELS[d]).join(", ");
       toast.info(`Atualizado de outro dispositivo: ${labels}`);
     },
+  });
+
+  useCatalogEnrichmentWatcher({
+    enabled: useApiStorage,
+    clientId: activeClientId ?? "",
+    workspaceHydrated,
+    onCatalogReload: async () => reloadWorkspaceSlices(["catalog"]),
+    isEnriching: isEnrichingCatalog,
+    enrichProgress: catalogEnrichProgress,
+    startEnrichLocal: startCatalogEnrichPolling,
+    stopEnrichLocal: stopCatalogEnrichPolling,
   });
 
   const catalogEnrichProgressLabel = catalogEnrichProgress
