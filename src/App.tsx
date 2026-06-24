@@ -140,6 +140,7 @@ import { preloadCatalogMedia } from "./lib/catalogMediaLoader";
 import { EmptyState } from "./components/ui/EmptyState";
 import { FeedInstagramPreview } from "./components/feed/FeedInstagramPreview";
 import { getCaptionBatchStats, getPendingCaptionPosts } from "./lib/captionBatch";
+import { countIndexedReferences } from "./lib/referenceWorkflow";
 import { mergeRecentCaptionSignals } from "./lib/recentCaptionHooks";
 import { isHookTooSimilar } from "./lib/captionSimilarity";
 import { readJsonResponse } from "./lib/apiResponse";
@@ -462,6 +463,11 @@ export default function App() {
   const captionBatchStats = useMemo(
     () => getCaptionBatchStats(posts, catalog, usesReferences),
     [posts, catalog, usesReferences]
+  );
+
+  const indexedReferenceCount = useMemo(
+    () => countIndexedReferences(catalog),
+    [catalog]
   );
 
   const dashboardMetrics = useDashboardMetrics({
@@ -3253,6 +3259,7 @@ export default function App() {
             onSettingsTabChange={handleSettingsTabChange}
             defaultUsesReferences={activeClient.defaultUsesReferences}
             usesReferences={usesReferences}
+            indexedReferenceCount={indexedReferenceCount}
             onDefaultUsesReferencesChange={setDefaultUsesReferences}
           />
         )}
@@ -3271,6 +3278,9 @@ export default function App() {
                 planningPeriods.find((p) => p.id === activePlanningPeriodId)?.usesReferences ??
                 null
               }
+              clientDefaultUsesReferences={activeClient.defaultUsesReferences}
+              indexedReferenceCount={indexedReferenceCount}
+              storedReferenceCount={referenceCatalog.length}
               onPeriodUsesReferencesChange={setPeriodUsesReferences}
               hideDuplicateAction={isReadOnly}
               onSelect={(periodId) => {
@@ -3366,6 +3376,7 @@ export default function App() {
                   progress={captionBatchProgress}
                   brandGemReady={brandGemReady}
                   brandGemMissingFields={brandGemMissingFields}
+                  usesReferences={usesReferences}
                   onOpenGemSettings={() => void handleNavigate("settings")}
                   onGeneratePending={handleRunAllMatching}
                   onRegenerateErrors={handleRegenerateCaptionErrors}
@@ -3707,10 +3718,12 @@ export default function App() {
                   <LayoutGrid className="h-4 w-4" />
                   Usar no Grid Canva
                 </Button>
-                <Button variant="accent" size="sm" onClick={() => setShowCatalogModal(true)}>
-                  <Plus className="h-4 w-4" />
-                  Nova referência
-                </Button>
+                {usesReferences && (
+                  <Button variant="accent" size="sm" onClick={() => setShowCatalogModal(true)}>
+                    <Plus className="h-4 w-4" />
+                    Nova referência
+                  </Button>
+                )}
                 {referenceCatalog.length > 0 && routeCatalogTab === "references" && (
                   <Button
                     variant="danger"
@@ -3726,13 +3739,19 @@ export default function App() {
             }
           >
             <p className="text-sm text-ag-muted leading-relaxed max-w-3xl mb-4">
-              Referências indexadas para match de IA e peças visuais para o Grid Canva.
-              {!serverEnrichReady && (
+              {usesReferences ? (
+                <>
+                  Referências indexadas para match de IA e peças visuais para o Grid Canva.
+                </>
+              ) : (
+                <>Peças visuais para o Grid Canva. Referências indexadas permanecem guardadas e ficam ocultas enquanto o workflow estiver desligado.</>
+              )}
+              {!usesReferences ? null : !serverEnrichReady ? (
                 <span className="block mt-2 text-ag-danger text-xs p-2 rounded-lg bg-ag-danger/10 border border-ag-danger/25">
                   Reinicie com <strong>npm run dev</strong> para ativar indexação.
                 </span>
-              )}
-              {isEnrichingCatalog && (
+              ) : null}
+              {usesReferences && isEnrichingCatalog && (
                 <span className="flex items-center gap-2 mt-2 text-ag-accent text-xs">
                   <RefreshCw className="h-3.5 w-3.5 animate-spin shrink-0" />
                   <span className="min-w-0">{catalogEnrichProgressLabel}</span>

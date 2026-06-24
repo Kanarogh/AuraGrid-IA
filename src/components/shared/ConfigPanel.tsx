@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { confirmDialog } from "../../lib/confirmDialog";
+import { buildDisableReferencesConfirmMessage } from "../../lib/referenceWorkflow";
 import {
   AlertCircle,
   Building,
@@ -79,6 +81,7 @@ export function ConfigPanel({
   onDefaultUsesReferencesChange,
   defaultUsesReferences = true,
   usesReferences = true,
+  indexedReferenceCount = 0,
 }: {
   open?: boolean;
   variant?: "panel" | "page";
@@ -93,6 +96,7 @@ export function ConfigPanel({
   defaultUsesReferences?: boolean;
   onDefaultUsesReferencesChange?: (value: boolean) => void | Promise<void>;
   usesReferences?: boolean;
+  indexedReferenceCount?: number;
 }) {
   const { storageMode } = useAuth();
   const [footerOpen, setFooterOpen] = useState(true);
@@ -445,14 +449,31 @@ export function ConfigPanel({
                 type="checkbox"
                 className="mt-1"
                 checked={defaultUsesReferences !== false}
-                onChange={(e) => void onDefaultUsesReferencesChange(e.target.checked)}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  void (async () => {
+                    if (
+                      !next &&
+                      defaultUsesReferences !== false &&
+                      indexedReferenceCount > 0
+                    ) {
+                      const ok = await confirmDialog({
+                        message: buildDisableReferencesConfirmMessage(indexedReferenceCount),
+                        confirmLabel: "Desativar",
+                      });
+                      if (!ok) return;
+                    }
+                    await onDefaultUsesReferencesChange?.(next);
+                  })();
+                }}
               />
               <span className="text-sm text-ag-text leading-relaxed">
                 <strong>Usar referências de catálogo</strong> (indexação JSON e match por código)
                 <span className="block text-xs text-ag-muted mt-1 font-normal">
                   Desligado: legendas usam só a foto do post + Gem da marca. Indexação, busca por
                   referência e aba de referências ficam ocultas. Cada roteiro pode sobrescrever
-                  isso.
+                  isso. Referências e indexações existentes são mantidas; ao reativar, voltam a
+                  aparecer.
                 </span>
               </span>
             </label>

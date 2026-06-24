@@ -4,6 +4,11 @@ import { CalendarRange, ChevronDown, Copy, Pencil, Plus, RotateCcw, X } from "lu
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { PlanningPeriod } from "../../lib/planningConstants";
 import type { PlanningPeriodEditMode } from "../../lib/clientWorkspace/types";
+import { confirmDialog } from "../../lib/confirmDialog";
+import {
+  buildDisableReferencesConfirmMessage,
+  resolveUsesReferences,
+} from "../../lib/referenceWorkflow";
 import { Button } from "../ui/Button";
 import { cn } from "../../lib/cn";
 
@@ -26,6 +31,9 @@ export function PlanningPeriodSelector({
   periodEditMode = "active",
   usesReferences = true,
   periodUsesReferencesOverride,
+  clientDefaultUsesReferences = true,
+  indexedReferenceCount = 0,
+  storedReferenceCount = 0,
   onPeriodUsesReferencesChange,
   onSelect,
   onCreateNew,
@@ -39,6 +47,9 @@ export function PlanningPeriodSelector({
   periodEditMode?: PlanningPeriodEditMode;
   usesReferences?: boolean;
   periodUsesReferencesOverride?: boolean | null;
+  clientDefaultUsesReferences?: boolean;
+  indexedReferenceCount?: number;
+  storedReferenceCount?: number;
   onPeriodUsesReferencesChange?: (value: boolean | null) => void;
   onSelect: (periodId: string) => void;
   onCreateNew: () => void;
@@ -153,9 +164,28 @@ export function PlanningPeriodSelector({
                   }
                   onChange={(e) => {
                     const v = e.target.value;
-                    void onPeriodUsesReferencesChange(
-                      v === "on" ? true : v === "off" ? false : null
-                    );
+                    const nextOverride =
+                      v === "on" ? true : v === "off" ? false : null;
+                    void (async () => {
+                      const nextEffective = resolveUsesReferences(
+                        clientDefaultUsesReferences,
+                        nextOverride
+                      );
+                      if (
+                        usesReferences &&
+                        !nextEffective &&
+                        indexedReferenceCount > 0
+                      ) {
+                        const ok = await confirmDialog({
+                          message: buildDisableReferencesConfirmMessage(
+                            indexedReferenceCount
+                          ),
+                          confirmLabel: "Desativar",
+                        });
+                        if (!ok) return;
+                      }
+                      await onPeriodUsesReferencesChange?.(nextOverride);
+                    })();
                   }}
                   className="rounded-lg border border-ag-border bg-ag-surface px-2 py-1 text-xs text-ag-text"
                 >
@@ -163,6 +193,15 @@ export function PlanningPeriodSelector({
                   <option value="on">Com referências</option>
                   <option value="off">Sem referências</option>
                 </select>
+                {!usesReferences && storedReferenceCount > 0 && (
+                  <p className="text-[10px] text-ag-muted w-full">
+                    {storedReferenceCount} referência
+                    {storedReferenceCount !== 1 ? "s" : ""} deste roteiro{" "}
+                    {storedReferenceCount === 1 ? "está" : "estão"} guardada
+                    {storedReferenceCount !== 1 ? "s" : ""} e oculta
+                    {storedReferenceCount !== 1 ? "s" : ""}.
+                  </p>
+                )}
               </div>
             )}
           </div>

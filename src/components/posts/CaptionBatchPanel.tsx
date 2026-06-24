@@ -22,6 +22,7 @@ export function CaptionBatchPanel({
   progress,
   brandGemReady = true,
   brandGemMissingFields = "",
+  usesReferences = true,
   onOpenGemSettings,
   onGeneratePending,
   onRegenerateErrors,
@@ -34,6 +35,7 @@ export function CaptionBatchPanel({
   progress: CaptionBatchProgress | null;
   brandGemReady?: boolean;
   brandGemMissingFields?: string;
+  usesReferences?: boolean;
   onOpenGemSettings?: () => void;
   onGeneratePending: () => void;
   onRegenerateErrors: () => void;
@@ -47,7 +49,59 @@ export function CaptionBatchPanel({
       : 0;
 
   const canGenerate = stats.pending > 0 && !isRunning && brandGemReady;
-  const catalogWarning = stats.catalogTotal > 0 && !stats.catalogReady;
+  const catalogWarning =
+    usesReferences && stats.catalogTotal > 0 && !stats.catalogReady;
+  const workflowSteps = usesReferences
+    ? [
+        {
+          n: 1,
+          title: "Fotos nos posts",
+          done: stats.withImage === stats.total && stats.total > 0,
+          detail: `${stats.withImage}/${stats.total}`,
+        },
+        {
+          n: 2,
+          title: "Catálogo indexado",
+          done: stats.catalogTotal === 0 || stats.catalogReady,
+          warn: catalogWarning,
+          detail:
+            stats.catalogTotal === 0
+              ? "Sem refs."
+              : `${stats.catalogIndexed}/${stats.catalogTotal}`,
+        },
+        {
+          n: 3,
+          title: "Legendas geradas",
+          done: stats.generated > 0 && stats.pending === 0,
+          detail: `${stats.generated} prontas`,
+        },
+        {
+          n: 4,
+          title: "Aprovadas",
+          done: stats.confirmed === stats.total && stats.total > 0,
+          detail: `${stats.confirmed}/${stats.total}`,
+        },
+      ]
+    : [
+        {
+          n: 1,
+          title: "Fotos nos posts",
+          done: stats.withImage === stats.total && stats.total > 0,
+          detail: `${stats.withImage}/${stats.total}`,
+        },
+        {
+          n: 2,
+          title: "Legendas geradas",
+          done: stats.generated > 0 && stats.pending === 0,
+          detail: `${stats.generated} prontas`,
+        },
+        {
+          n: 3,
+          title: "Aprovadas",
+          done: stats.confirmed === stats.total && stats.total > 0,
+          detail: `${stats.confirmed}/${stats.total}`,
+        },
+      ];
 
   if (compact) {
     return (
@@ -93,7 +147,9 @@ export function CaptionBatchPanel({
             Gerar legendas com IA
           </h2>
           <p className="text-xs text-ag-muted mt-1 max-w-xl">
-            Fotos → catálogo indexado → legendas → revisão. Configure tom e rodapé no Gem (Configurações).
+            {usesReferences
+              ? "Fotos → catálogo indexado → legendas → revisão. Configure tom e rodapé no Gem (Configurações)."
+              : "Fotos → legendas → revisão (sem match de referências). Configure tom e rodapé no Gem (Configurações)."}
           </p>
           <p className="text-[10px] text-ag-muted/90 mt-1.5 max-w-xl">
             O rodapé (endereço, hashtags, CTA) é igual em todos os posts por configuração do Gem. O texto
@@ -106,36 +162,21 @@ export function CaptionBatchPanel({
         </Button>
       </div>
 
-      <ol className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
-        <Step
-          n={1}
-          title="Fotos nos posts"
-          done={stats.withImage === stats.total && stats.total > 0}
-          detail={`${stats.withImage}/${stats.total}`}
-        />
-        <Step
-          n={2}
-          title="Catálogo indexado"
-          done={stats.catalogTotal === 0 || stats.catalogReady}
-          warn={catalogWarning}
-          detail={
-            stats.catalogTotal === 0
-              ? "Sem refs."
-              : `${stats.catalogIndexed}/${stats.catalogTotal}`
-          }
-        />
-        <Step
-          n={3}
-          title="Legendas geradas"
-          done={stats.generated > 0 && stats.pending === 0}
-          detail={`${stats.generated} prontas`}
-        />
-        <Step
-          n={4}
-          title="Aprovadas"
-          done={stats.confirmed === stats.total && stats.total > 0}
-          detail={`${stats.confirmed}/${stats.total}`}
-        />
+      <ol
+        className={`grid gap-2 text-[10px] ${
+          usesReferences ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3"
+        }`}
+      >
+        {workflowSteps.map((step) => (
+          <Step
+            key={step.n}
+            n={step.n}
+            title={step.title}
+            done={step.done}
+            warn={"warn" in step ? step.warn : undefined}
+            detail={step.detail}
+          />
+        ))}
       </ol>
 
       <div className="flex flex-wrap gap-2 text-[10px] font-mono">
@@ -169,7 +210,7 @@ export function CaptionBatchPanel({
         </div>
       )}
 
-      {catalogWarning && (
+      {catalogWarning && usesReferences && (
         <div className="flex gap-2 text-xs text-ag-warning bg-ag-warning/10 border border-ag-warning/25 rounded-xl p-3">
           <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
           <p>

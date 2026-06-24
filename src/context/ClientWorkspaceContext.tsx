@@ -73,7 +73,10 @@ import {
 } from "../lib/clientWorkspace/planningPeriodLocal";
 import type { PlanningPeriod } from "../lib/planningConstants";
 import type { PlanningPeriodEditMode } from "../lib/clientWorkspace/types";
-import { effectiveUsesReferencesFromParts } from "../lib/referenceWorkflow";
+import {
+  countIndexedReferences,
+  effectiveUsesReferencesFromParts,
+} from "../lib/referenceWorkflow";
 
 type ClientWorkspaceContextValue = {
   registry: ClientRegistry;
@@ -967,6 +970,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
   const setDefaultUsesReferences = useCallback(
     async (value: boolean) => {
       if (!activeClientId) return;
+      const prevEffective = workspaceRef.current.usesReferences;
       const apply = (prev: ClientWorkspace) => {
         const next = withResolvedUsesReferences(
           { ...prev, defaultUsesReferences: value },
@@ -995,10 +999,20 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
         } catch (err) {
           console.error("[AuraGrid] Falha ao salvar preferência de referências:", err);
           toast.error("Não foi possível salvar a preferência.");
+          return;
         }
-        return;
+      } else {
+        flushSave(activeClientId, workspaceRef.current);
       }
-      flushSave(activeClientId, workspaceRef.current);
+      const nextEffective = workspaceRef.current.usesReferences;
+      if (!prevEffective && nextEffective) {
+        const indexed = countIndexedReferences(workspaceRef.current.catalog);
+        if (indexed > 0) {
+          toast.success(
+            `Referências reativadas — ${indexed} item${indexed !== 1 ? "s" : ""} indexado${indexed !== 1 ? "s" : ""} disponível${indexed !== 1 ? "eis" : ""}.`
+          );
+        }
+      }
     },
     [activeClientId, flushSave, useApiStorage]
   );
@@ -1007,6 +1021,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
     async (value: boolean | null) => {
       if (!activeClientId) return;
       const periodId = workspaceRef.current.activePlanningPeriodId;
+      const prevEffective = workspaceRef.current.usesReferences;
       setWorkspace((prev) => {
         const planningPeriods = prev.planningPeriods.map((p) =>
           p.id === periodId ? { ...p, usesReferences: value } : p
@@ -1025,10 +1040,20 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
         } catch (err) {
           console.error("[AuraGrid] Falha ao salvar roteiro:", err);
           toast.error("Não foi possível salvar a preferência do roteiro.");
+          return;
         }
-        return;
+      } else {
+        flushSave(activeClientId, workspaceRef.current);
       }
-      flushSave(activeClientId, workspaceRef.current);
+      const nextEffective = workspaceRef.current.usesReferences;
+      if (!prevEffective && nextEffective) {
+        const indexed = countIndexedReferences(workspaceRef.current.catalog);
+        if (indexed > 0) {
+          toast.success(
+            `Referências reativadas — ${indexed} item${indexed !== 1 ? "s" : ""} indexado${indexed !== 1 ? "s" : ""} disponível${indexed !== 1 ? "eis" : ""}.`
+          );
+        }
+      }
     },
     [activeClientId, flushSave, useApiStorage]
   );
