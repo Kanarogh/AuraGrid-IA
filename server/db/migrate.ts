@@ -12,6 +12,7 @@ const MIGRATION_FILES = [
   "0003_catalog_embeddings",
   "0004_user_ai_preferences_models",
   "0005_planning_periods",
+  "0006_uses_references",
 ] as const;
 
 async function waitForPostgres(url: string, attempts = 30, delayMs = 1000): Promise<void> {
