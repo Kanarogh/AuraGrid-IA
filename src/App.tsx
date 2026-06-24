@@ -204,10 +204,6 @@ import {
   endRemoteWorkspaceApply,
   markWorkspacePatchSynced,
 } from "./lib/sync/remoteApplyGuard";
-import {
-  remoteSyncToastMessage,
-  shouldShowRemoteSyncToast,
-} from "./lib/sync/remoteSyncToast";
 import { workspaceApiPatchFingerprint } from "./lib/clientWorkspace/apiWorkspacePatch";
 import {
   needsWorkspaceFetch,
@@ -429,10 +425,6 @@ export default function App() {
           await reloadWorkspaceSlices(workspaceDomains);
         }
       },
-    },
-    onRemoteApplied: (domains: SyncDomain[]) => {
-      if (!shouldShowRemoteSyncToast(domains)) return;
-      toast.info(remoteSyncToastMessage(domains));
     },
   });
 

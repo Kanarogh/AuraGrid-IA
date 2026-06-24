@@ -17,7 +17,6 @@ import {
   SYNC_FALLBACK_POLL_MS,
   SYNC_REVISION_DEBOUNCE_MS,
 } from "../lib/sync/realtimeCoordinator";
-import { notifyDomainsForToast } from "../lib/sync/remoteSyncToast";
 import { diffSyncRevisionTokens, type DiffSyncRevisionResult } from "../lib/sync/revisionDiff";
 import {
   tokensFromSyncRevision,
@@ -62,6 +61,15 @@ function filterDomainsDuringEnrich(
 ): SyncDomain[] {
   if (!isEnriching) return domains;
   return domains.filter((d) => d !== "catalog");
+}
+
+/** NOTIFY lista domínios reais — ignora tokens colaterais (ex.: periods/registry após save do grid). */
+function constrainChangedToSignal(
+  changed: SyncDomain[],
+  signalDomains?: SyncDomain[]
+): SyncDomain[] {
+  if (!signalDomains?.length) return changed;
+  return changed.filter((d) => signalDomains.includes(d));
 }
 
 function parseRevisionDomains(raw: string): SyncDomain[] {
@@ -113,8 +121,11 @@ export function useRemoteSyncCoordinator({
   }, [enabled, clientId, periodId]);
 
   const applyDomainChanges = useCallback(
-    async (result: DiffSyncRevisionResult, notify = true) => {
-      const changed = filterDomainsDuringEnrich(result.changed, isEnrichingRef.current);
+    async (result: DiffSyncRevisionResult, signalDomains?: SyncDomain[]) => {
+      const changed = filterDomainsDuringEnrich(
+        constrainChangedToSignal(result.changed, signalDomains),
+        isEnrichingRef.current
+      );
       if (!changed.length) return;
       const h = handlersRef.current;
 
@@ -135,13 +146,6 @@ export function useRemoteSyncCoordinator({
         }
         if (changed.includes("catalog") && h.onCatalogChange) {
           await h.onCatalogChange();
-        }
-      }
-
-      if (notify) {
-        const toastDomains = notifyDomainsForToast(changed);
-        if (toastDomains.length) {
-          onRemoteAppliedRef.current?.(toastDomains);
         }
       }
     },
@@ -184,21 +188,19 @@ export function useRemoteSyncCoordinator({
 
         if (reloadPromise) {
           await reloadPromise;
-          const structural = filterDomainsDuringEnrich(result.changed, isEnrichingRef.current).filter(
-            (d) => d === "periods" || d === "registry"
-          );
+          const structural = filterDomainsDuringEnrich(
+            constrainChangedToSignal(result.changed, mergedSignal),
+            isEnrichingRef.current
+          ).filter((d) => d === "periods" || d === "registry");
           if (structural.length && h.onDomainsChange) {
             await h.onDomainsChange(structural, { periodTokenChange: result.periodTokenChange });
-          }
-          const toastDomains = notifyDomainsForToast(structural);
-          if (toastDomains.length) {
-            onRemoteAppliedRef.current?.(toastDomains);
           }
           return rev;
         }
 
-        if (result.changed.length) {
-          await applyDomainChanges(result);
+        const toApply = constrainChangedToSignal(result.changed, mergedSignal);
+        if (toApply.length) {
+          await applyDomainChanges({ ...result, changed: toApply }, mergedSignal);
         }
         return rev;
       } catch {

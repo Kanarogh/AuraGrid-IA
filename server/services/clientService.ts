@@ -636,13 +636,6 @@ export async function patchWorkspace(
     }
   }
 
-  await db.update(clients).set({ updatedAt: new Date() }).where(eq(clients.id, clientId));
-
-  await db
-    .update(planningPeriods)
-    .set({ updatedAt: new Date() })
-    .where(eq(planningPeriods.id, periodId));
-
   const domains: ("workspace" | "brandGem")[] = ["workspace"];
   if (patch.brandGem && typeof patch.brandGem === "object") {
     domains.push("brandGem");
