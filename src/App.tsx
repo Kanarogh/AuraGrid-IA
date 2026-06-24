@@ -198,7 +198,17 @@ import {
   beginSyncDomain,
   endSyncDomain,
 } from "./lib/sync/mutationGuard";
-import { SYNC_DOMAIN_LABELS, type SyncDomain } from "./lib/sync/types";
+import { type SyncDomain } from "./lib/sync/types";
+import {
+  beginRemoteWorkspaceApply,
+  endRemoteWorkspaceApply,
+  markWorkspacePatchSynced,
+} from "./lib/sync/remoteApplyGuard";
+import {
+  remoteSyncToastMessage,
+  shouldShowRemoteSyncToast,
+} from "./lib/sync/remoteSyncToast";
+import { workspaceApiPatchFingerprint } from "./lib/clientWorkspace/apiWorkspacePatch";
 import {
   needsWorkspaceFetch,
   slicesFromDomains,
@@ -348,22 +358,30 @@ export default function App() {
         if (slices.brandGem) slices.brandGem = false;
       }
       if (!needsWorkspaceFetch(slices)) return;
-      const dto = await fetchWorkspace(activeClientId, activePlanningPeriodId);
-      const ws = apiWorkspaceToClientWorkspace(dto);
-      if (slices.catalog) setCatalog(ws.catalog);
-      if (slices.brandGem) {
-        setBrandGem(ws.brandGem);
-        setStartDate(ws.startDate);
-      }
-      if (slices.workspace) {
-        setPosts(ws.posts);
-        setStartDate(ws.startDate);
-        setCanvaPages(ws.canva.pages);
-        setActiveCanvaPageId(ws.canva.activePageId);
-        setAutoSyncCanva(ws.canva.autoSync);
-        setCanvaGridReversed(ws.canva.reversed);
-        setCanvaGridFormat(ws.canva.gridFormat ?? "square");
-        setCanvaGridMaxWidth(ws.canva.gridMaxWidth ?? 480);
+
+      beginRemoteWorkspaceApply();
+      try {
+        const dto = await fetchWorkspace(activeClientId, activePlanningPeriodId);
+        const ws = apiWorkspaceToClientWorkspace(dto);
+        if (slices.catalog) setCatalog(ws.catalog);
+        if (slices.brandGem) {
+          setBrandGem(ws.brandGem);
+          setStartDate(ws.startDate);
+        }
+        if (slices.workspace) {
+          setPosts(ws.posts);
+          setStartDate(ws.startDate);
+          setCanvaPages(ws.canva.pages);
+          setActiveCanvaPageId(ws.canva.activePageId);
+          setAutoSyncCanva(ws.canva.autoSync);
+          setCanvaGridReversed(ws.canva.reversed);
+          setCanvaGridFormat(ws.canva.gridFormat ?? "square");
+          setCanvaGridMaxWidth(ws.canva.gridMaxWidth ?? 480);
+        }
+        const fp = workspaceApiPatchFingerprint(ws);
+        if (fp) markWorkspacePatchSynced(activeClientId, fp);
+      } finally {
+        endRemoteWorkspaceApply();
       }
     },
     [
@@ -413,9 +431,8 @@ export default function App() {
       },
     },
     onRemoteApplied: (domains: SyncDomain[]) => {
-      if (!domains.some((d) => d === "registry" || d === "periods")) return;
-      const labels = domains.map((d) => SYNC_DOMAIN_LABELS[d]).join(", ");
-      toast.info(`Atualizado de outro dispositivo: ${labels}`);
+      if (!shouldShowRemoteSyncToast(domains)) return;
+      toast.info(remoteSyncToastMessage(domains));
     },
   });
 

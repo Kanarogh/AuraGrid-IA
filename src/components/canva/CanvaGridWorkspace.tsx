@@ -186,7 +186,7 @@ export function CanvaGridWorkspace({
         )}
       >
         {/* Main canvas column */}
-        <div className="flex-1 min-w-0 space-y-4 w-full">
+        <div className="@container/canva-main flex-1 min-w-0 space-y-4 w-full">
           <CanvaPageStrip
             pages={pages}
             activePageId={activePageId}
@@ -198,60 +198,76 @@ export function CanvaGridWorkspace({
           />
 
           {/* Page toolbar */}
-          <div className="ag-card p-4 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <LayoutGrid className="h-4 w-4 text-ag-accent shrink-0" />
-                  <h3 className="font-display text-lg font-semibold text-ag-text tracking-tight truncate">
+          <div className="ag-card p-4 space-y-3 @container/canva-toolbar">
+            <div className="min-w-0 border-b border-ag-border/50 pb-3">
+              <div className="flex items-start gap-2.5">
+                <LayoutGrid className="h-4 w-4 text-ag-accent shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-display text-base @lg/canva-toolbar:text-lg font-semibold text-ag-text tracking-tight leading-snug">
                     {activePage.name}
                   </h3>
-                </div>
-                <p className="text-xs text-ag-muted mt-1">
-                  {filledCount} de 12 slots preenchidos · {canvaGridFormatMeta.ratioLabel} (
-                  {canvaGridFormatMeta.dimensions}px)
-                </p>
-                {cloudSave && (
-                  <p className="text-[10.5px] text-ag-muted mt-1 leading-relaxed">
-                    Cada foto no grid é salva na nuvem ao ser colocada. O catálogo é um acervo
-                    separado — arraste looks para os slots para montar o feed.
+                  <p className="text-xs text-ag-muted mt-0.5">
+                    {filledCount} de 12 slots preenchidos · {canvaGridFormatMeta.ratioLabel} (
+                    {canvaGridFormatMeta.dimensions}px)
                   </p>
-                )}
+                  {cloudSave && (
+                    <p className="text-[10.5px] text-ag-muted mt-1.5 leading-relaxed">
+                      Cada foto no grid é salva na nuvem ao ser colocada. O catálogo é um acervo
+                      separado — arraste looks para os slots para montar o feed.
+                    </p>
+                  )}
+                </div>
               </div>
+            </div>
 
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
-                <input
-                  ref={batchInputRef}
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files?.length) onBatchUpload(e.target.files);
-                    e.target.value = "";
-                  }}
-                />
-                <Button
-                  variant="accent"
-                  size="sm"
-                  onClick={() => batchInputRef.current?.click()}
-                >
-                  <Upload className="h-3.5 w-3.5" />
-                  Lote 1–12
-                </Button>
-                <Button variant="secondary" size="sm" onClick={() => onDuplicatePage(activePage.id)}>
-                  <Copy className="h-3.5 w-3.5" />
-                  Duplicar
-                </Button>
-                <Button variant="secondary" size="sm" onClick={() => onClearPage(activePage.id)}>
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  Limpar
-                </Button>
-                <Button variant="danger" size="sm" onClick={() => onDeletePage(activePage.id)}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Excluir
-                </Button>
-              </div>
+            <div className="grid grid-cols-2 @xl/canva-toolbar:grid-cols-4 gap-2">
+              <input
+                ref={batchInputRef}
+                type="file"
+                multiple
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files?.length) onBatchUpload(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+              <Button
+                variant="accent"
+                size="sm"
+                className="w-full justify-center"
+                onClick={() => batchInputRef.current?.click()}
+              >
+                <Upload className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">Lote 1–12</span>
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="w-full justify-center"
+                onClick={() => onDuplicatePage(activePage.id)}
+              >
+                <Copy className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">Duplicar</span>
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="w-full justify-center"
+                onClick={() => onClearPage(activePage.id)}
+              >
+                <RotateCcw className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">Limpar</span>
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                className="w-full justify-center"
+                onClick={() => onDeletePage(activePage.id)}
+              >
+                <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">Excluir</span>
+              </Button>
             </div>
 
             {swapSourceSlotId && (

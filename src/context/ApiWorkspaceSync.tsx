@@ -16,28 +16,25 @@ import {
   saveBrandGemApi,
 } from "../lib/api/workspaceApi";
 import type { ClientRegistry, ClientWorkspace } from "../lib/clientWorkspace";
-import {
-  compactCanvaForApiPatch,
-  stripTransientPostFields,
-} from "../lib/clientWorkspace/persistence";
 import { createEmptyRegistry, createOrphanWorkspace } from "../lib/clientWorkspace";
+import {
+  buildWorkspaceApiPatch,
+  workspaceApiPatchFingerprint,
+} from "../lib/clientWorkspace/apiWorkspacePatch";
 import { emitCloudSaveStatus } from "../lib/cloudSaveStatus";
 import { broadcastSyncChanged } from "../lib/sync/broadcast";
 import { markLocalSync } from "../lib/sync/localSyncAck";
+import {
+  isApplyingRemoteWorkspace,
+  isWorkspacePatchAlreadySynced,
+  markWorkspacePatchSynced,
+} from "../lib/sync/remoteApplyGuard";
 import { setWorkspaceSavePending } from "../lib/sync/workspaceSaveGuard";
 
 const SAVE_DEBOUNCE_MS = 200;
 
 function buildWorkspacePatch(ws: ClientWorkspace) {
-  if (ws.isReadOnly) return null;
-  return {
-    brandGem: ws.brandGem,
-    startDate: ws.startDate,
-    planningPeriodId: ws.activePlanningPeriodId,
-    posts: ws.posts.map(stripTransientPostFields),
-    canva: compactCanvaForApiPatch(ws.canva),
-    ui: ws.ui,
-  };
+  return buildWorkspaceApiPatch(ws);
 }
 
 function flushWorkspacePatch(clientId: string, ws: ClientWorkspace) {
@@ -110,6 +107,8 @@ export function ApiWorkspaceSync() {
         const dto = await fetchWorkspace(clientId);
         if (cancelled) return;
         const ws = apiWorkspaceToClientWorkspace(dto);
+        const fp = workspaceApiPatchFingerprint(ws);
+        if (fp) markWorkspacePatchSynced(clientId, fp);
         window.dispatchEvent(
           new CustomEvent("auragrid:api-registry", {
             detail: { registry: reg, workspace: ws },
@@ -142,10 +141,10 @@ export function ApiWorkspaceSync() {
   useEffect(() => {
     if (storageMode !== "postgresql" || !user || !activeClientId || skipSaveRef.current) return;
     if (!loadedRef.current) return;
+    if (isApplyingRemoteWorkspace()) return;
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     setWorkspaceSavePending(true);
-    markLocalSync(activeClientId, ["workspace"]);
     saveTimerRef.current = setTimeout(() => {
       saveTimerRef.current = null;
       const ws = workspaceRef.current;
@@ -154,10 +153,17 @@ export function ApiWorkspaceSync() {
         setWorkspaceSavePending(false);
         return;
       }
+      const fingerprint = JSON.stringify(patch);
+      if (isWorkspacePatchAlreadySynced(activeClientId, fingerprint)) {
+        setWorkspaceSavePending(false);
+        return;
+      }
       emitCloudSaveStatus("saving");
       void patchWorkspaceApi(activeClientId, patch)
         .then(() => {
+          markWorkspacePatchSynced(activeClientId, fingerprint);
           emitCloudSaveStatus("saved");
+          markLocalSync(activeClientId, ["workspace"]);
           broadcastSyncChanged(activeClientId, ["workspace"]);
         })
         .catch((err) => {
@@ -227,7 +233,10 @@ export function ApiWorkspaceSync() {
       try {
         const patch = buildWorkspacePatch(ws);
         if (!patch) return;
+        const fingerprint = JSON.stringify(patch);
+        if (isWorkspacePatchAlreadySynced(activeClientId, fingerprint)) return;
         await patchWorkspaceApi(activeClientId, patch);
+        markWorkspacePatchSynced(activeClientId, fingerprint);
         emitCloudSaveStatus("saved");
         broadcastSyncChanged(activeClientId, ["workspace"]);
       } catch (err) {

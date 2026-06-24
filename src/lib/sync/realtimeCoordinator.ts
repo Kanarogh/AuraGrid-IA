@@ -17,13 +17,3 @@ export function mergeSyncDomains(domains: SyncDomain[]): SyncDomain[] {
 export function shouldUseFallbackPoll(sseOpen: boolean): boolean {
   return !sseOpen;
 }
-
-/** Toast só para mudanças estruturais — grid/catálogo atualizam silenciosamente. */
-export function shouldNotifyRemoteApply(
-  domains: SyncDomain[],
-  isEnriching: boolean
-): boolean {
-  if (!domains.length) return false;
-  if (isEnriching && domains.every((d) => d === "catalog")) return false;
-  return domains.some((d) => d === "registry" || d === "periods");
-}

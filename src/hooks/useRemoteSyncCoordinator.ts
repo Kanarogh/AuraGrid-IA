@@ -13,11 +13,11 @@ import { isSyncPullPaused } from "../lib/sync/mutationGuard";
 import {
   mergeSyncDomains,
   nextSseReconnectDelay,
-  shouldNotifyRemoteApply,
   shouldUseFallbackPoll,
   SYNC_FALLBACK_POLL_MS,
   SYNC_REVISION_DEBOUNCE_MS,
 } from "../lib/sync/realtimeCoordinator";
+import { notifyDomainsForToast } from "../lib/sync/remoteSyncToast";
 import { diffSyncRevisionTokens, type DiffSyncRevisionResult } from "../lib/sync/revisionDiff";
 import {
   tokensFromSyncRevision,
@@ -138,8 +138,11 @@ export function useRemoteSyncCoordinator({
         }
       }
 
-      if (notify && shouldNotifyRemoteApply(changed, isEnrichingRef.current)) {
-        onRemoteAppliedRef.current?.(changed);
+      if (notify) {
+        const toastDomains = notifyDomainsForToast(changed);
+        if (toastDomains.length) {
+          onRemoteAppliedRef.current?.(toastDomains);
+        }
       }
     },
     []
@@ -187,13 +190,9 @@ export function useRemoteSyncCoordinator({
           if (structural.length && h.onDomainsChange) {
             await h.onDomainsChange(structural, { periodTokenChange: result.periodTokenChange });
           }
-          if (
-            shouldNotifyRemoteApply(
-              mergeSyncDomains([...optimisticDomains, ...structural]),
-              isEnrichingRef.current
-            )
-          ) {
-            onRemoteAppliedRef.current?.(mergeSyncDomains([...optimisticDomains, ...structural]));
+          const toastDomains = notifyDomainsForToast(structural);
+          if (toastDomains.length) {
+            onRemoteAppliedRef.current?.(toastDomains);
           }
           return rev;
         }

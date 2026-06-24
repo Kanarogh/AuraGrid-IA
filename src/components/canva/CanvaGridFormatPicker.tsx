@@ -9,17 +9,23 @@ export function CanvaGridFormatPicker({
   value,
   onChange,
   variant = "default",
+  className,
 }: {
   value: CanvaGridFormatId;
   onChange: (format: CanvaGridFormatId) => void;
   variant?: "default" | "compact";
+  className?: string;
 }) {
   if (variant === "compact") {
     return (
       <div
         role="radiogroup"
         aria-label="Formato do grid"
-        className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-ag-border bg-ag-surface-2 p-1"
+        className={cn(
+          "rounded-xl border border-ag-border bg-ag-surface-2 p-1",
+          "grid grid-cols-4 gap-1 w-full @lg/canvas-toolbar:inline-flex @lg/canvas-toolbar:w-auto @lg/canvas-toolbar:flex-wrap @lg/canvas-toolbar:items-center",
+          className
+        )}
       >
         {CANVA_GRID_FORMATS.map((format) => {
           const active = value === format.id;
@@ -32,14 +38,15 @@ export function CanvaGridFormatPicker({
               title={`${format.label} · ${format.dimensions}px`}
               onClick={() => onChange(format.id)}
               className={cn(
-                "rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all cursor-pointer ag-focus-ring",
+                "rounded-lg px-1.5 py-1.5 text-[11px] @lg/canvas-toolbar:text-xs font-semibold transition-all cursor-pointer ag-focus-ring text-center",
+                "@lg/canvas-toolbar:px-2.5",
                 active
                   ? "bg-ag-surface-1 text-ag-text shadow-sm ring-1 ring-ag-accent/20"
                   : "text-ag-muted hover:text-ag-text"
               )}
             >
               <span className="font-mono">{format.ratioLabel}</span>
-              <span className="hidden sm:inline text-ag-muted font-normal ml-1">
+              <span className="hidden @lg/canvas-toolbar:inline text-ag-muted font-normal ml-1">
                 {format.label}
               </span>
             </button>

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import {
   nextSseReconnectDelay,
-  shouldNotifyRemoteApply,
   shouldUseFallbackPoll,
   mergeSyncDomains,
 } from "./realtimeCoordinator";
+import { shouldShowRemoteSyncToast } from "./remoteSyncToast";
 
 function test(name: string, fn: () => void) {
   try {
@@ -36,11 +36,12 @@ test("mergeSyncDomains dedupes", () => {
   ]);
 });
 
-test("shouldNotifyRemoteApply skips grid/catalog noise", () => {
-  assert.equal(shouldNotifyRemoteApply(["workspace"], false), false);
-  assert.equal(shouldNotifyRemoteApply(["catalog"], true), false);
-  assert.equal(shouldNotifyRemoteApply(["registry"], false), true);
-  assert.equal(shouldNotifyRemoteApply(["periods"], false), true);
+test("shouldShowRemoteSyncToast skips grid noise and throttles", () => {
+  assert.equal(shouldShowRemoteSyncToast(["workspace"]), false);
+  assert.equal(shouldShowRemoteSyncToast(["catalog"]), false);
+  assert.equal(shouldShowRemoteSyncToast(["registry"]), true);
+  assert.equal(shouldShowRemoteSyncToast(["registry"]), false);
+  assert.equal(shouldShowRemoteSyncToast(["periods"]), true);
 });
 
 console.log("realtimeCoordinator: all passed");

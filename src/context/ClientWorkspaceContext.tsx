@@ -55,6 +55,12 @@ import {
 import { broadcastSyncChanged } from "../lib/sync/broadcast";
 import { classifyPeriodsRemoteChange } from "../lib/sync/periodsRevision";
 import {
+  beginRemoteWorkspaceApply,
+  endRemoteWorkspaceApply,
+  markWorkspacePatchSynced,
+} from "../lib/sync/remoteApplyGuard";
+import { workspaceApiPatchFingerprint } from "../lib/clientWorkspace/apiWorkspacePatch";
+import {
   createLocalPlanningPeriod,
   persistActivePeriodSnapshot,
   resetLocalActivePeriod,
@@ -797,23 +803,28 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
   const applyRemotePlanningPeriods = useCallback(
     async (ctx: { prevToken: string; nextToken: string }) => {
       if (!useApiStorage || !activeClientId) return;
-      const kind = classifyPeriodsRemoteChange(ctx.prevToken, ctx.nextToken);
-      const dto = await fetchWorkspace(activeClientId);
-      const ws = apiWorkspaceToClientWorkspace(dto);
+      beginRemoteWorkspaceApply();
+      try {
+        const kind = classifyPeriodsRemoteChange(ctx.prevToken, ctx.nextToken);
+        const dto = await fetchWorkspace(activeClientId);
+        const ws = apiWorkspaceToClientWorkspace(dto);
 
-      if (kind === "activeSwitch") {
-        if (workspaceRef.current.isReadOnly) {
+        if (kind === "activeSwitch") {
+          if (workspaceRef.current.isReadOnly) {
+            setWorkspace((prev) => ({ ...prev, planningPeriods: ws.planningPeriods }));
+          } else if (ws.activePlanningPeriodId !== workspaceRef.current.activePlanningPeriodId) {
+            setWorkspace(ws);
+            workspaceRef.current = ws;
+          }
+        } else {
           setWorkspace((prev) => ({ ...prev, planningPeriods: ws.planningPeriods }));
-          return;
         }
-        if (ws.activePlanningPeriodId !== workspaceRef.current.activePlanningPeriodId) {
-          setWorkspace(ws);
-          workspaceRef.current = ws;
-          return;
-        }
-      }
 
-      setWorkspace((prev) => ({ ...prev, planningPeriods: ws.planningPeriods }));
+        const fp = workspaceApiPatchFingerprint(ws);
+        if (fp) markWorkspacePatchSynced(activeClientId, fp);
+      } finally {
+        endRemoteWorkspaceApply();
+      }
     },
     [activeClientId, useApiStorage]
   );
