@@ -21,6 +21,7 @@ export type SyncDebugEvent =
 type SyncDebugPayload = Record<string, unknown>;
 
 const STORAGE_KEY = "auragrid:sync-debug";
+const RELAY_URL = "/api/v1/sync/debug-log";
 
 export function isSyncDebugEnabled(): boolean {
   if (typeof window === "undefined") return false;
@@ -40,10 +41,28 @@ export function isSyncDebugEnabled(): boolean {
   return process.env.NODE_ENV !== "production";
 }
 
+function relayToTerminal(event: SyncDebugEvent, payload?: SyncDebugPayload): void {
+  if (typeof window === "undefined") return;
+  try {
+    void fetch(RELAY_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      keepalive: true,
+      body: JSON.stringify({ event, payload }),
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
 export function enableSyncDebug(reload = false): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(STORAGE_KEY, "1");
-  console.log("[AuraGrid:sync] Debug ON — recarregue a página se os logs não aparecerem.");
+  console.log(
+    "[AuraGrid:sync] Debug ON — logs no browser + terminal (se SYNC_DEBUG=1 no servidor)"
+  );
+  relayToTerminal("sync.start", { phase: "debug-enabled" });
   if (reload) window.location.reload();
 }
 
@@ -62,7 +81,7 @@ export function printSyncDebugHelp(): void {
 
   const on = isSyncDebugEnabled();
   console.log(
-    `[AuraGrid:sync] Debug ${on ? "ON" : "OFF"} — ativar: localStorage.setItem("${STORAGE_KEY}","1") e F5 | ou __auragridSyncDebug.enable()`
+    `[AuraGrid:sync] Debug ${on ? "ON" : "OFF"} — browser: __auragridSyncDebug.enable() | terminal: SYNC_DEBUG=1 no servidor + enable()`
   );
 }
 
@@ -80,6 +99,8 @@ export function syncDebugLog(
   } else {
     console.log(prefix);
   }
+
+  relayToTerminal(event, payload);
 }
 
 if (typeof window !== "undefined") {

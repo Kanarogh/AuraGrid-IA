@@ -32,4 +32,9 @@ export async function register() {
   } catch (err) {
     console.error("[AuraGrid] Falha ao carregar configurações de IA:", err);
   }
+
+  const { isServerSyncDebugEnabled } = await import("./server/sync/syncDebugLog");
+  console.log(
+    `[AuraGrid:sync] terminal debug ${isServerSyncDebugEnabled() ? "ON" : "OFF"} — SYNC_DEBUG=1 para ativar em produção`
+  );
 }

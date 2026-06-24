@@ -98,13 +98,23 @@ export function dispatchSyncEvent(payload: SyncEventPayload): void {
 
 function onNotify(raw: string): void {
   const payload = parseSyncEventPayload(raw);
-  if (payload) dispatchSyncEvent(payload);
+  if (!payload) {
+    serverSyncDebugLog("listen.parse-fail", { raw: raw.slice(0, 120) });
+    return;
+  }
+  serverSyncDebugLog("listen.notify", {
+    clientId: payload.clientId,
+    domains: payload.domains,
+    periodId: payload.periodId,
+  });
+  dispatchSyncEvent(payload);
 }
 
 export async function ensureSyncListener(): Promise<void> {
   if (listenerReady) return;
   await ensureListenChannel(SYNC_NOTIFY_CHANNEL, onNotify);
   listenerReady = true;
+  serverSyncDebugLog("listen.ready", { channel: SYNC_NOTIFY_CHANNEL });
 }
 
 export function subscribeSyncStream(

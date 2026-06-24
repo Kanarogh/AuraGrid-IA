@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { assertClientAccess, requireUser } from "@/server/http/auth";
 import { errorResponse } from "@/server/http/respond";
 import { loadWorkspaceDto, patchWorkspace } from "@/server/services/clientService";
+import { serverSyncDebugLog } from "@/server/sync/syncDebugLog";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,12 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     const { clientId } = await params;
     await assertClientAccess(user, clientId);
     const body = (await req.json().catch(() => ({}))) ?? {};
+    serverSyncDebugLog("patch.request", {
+      clientId,
+      hasCanva: !!body.canva,
+      hasPosts: Array.isArray(body.posts),
+      hasBrandGem: !!body.brandGem,
+    });
     await patchWorkspace(user.id, clientId, body);
     const periodId =
       typeof body.planningPeriodId === "string"
