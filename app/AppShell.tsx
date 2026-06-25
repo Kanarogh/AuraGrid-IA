@@ -13,6 +13,7 @@ import { AppBootstrapGate } from "../src/components/app/AppBootstrapGate";
 import { NotificationProvider } from "../src/components/ui/NotificationProvider";
 import { AppNavigationProvider } from "../src/lib/appRouting";
 import { AppRouteBootstrap } from "../src/components/app/AppRouteBootstrap";
+import { PlanningPeriodModalProvider } from "../src/components/layout/planningPeriodModalContext";
 import { initTheme } from "../src/hooks/useTheme";
 import { initAccent } from "../src/hooks/useAccent";
 import "../src/lib/sync/syncDebugLog";
@@ -21,7 +22,7 @@ function AppNavigationShell({ children }: { children: React.ReactNode }) {
   const { effectiveActiveClientId } = useClientWorkspace();
   return (
     <AppNavigationProvider defaultClientId={effectiveActiveClientId}>
-      {children}
+      <PlanningPeriodModalProvider>{children}</PlanningPeriodModalProvider>
     </AppNavigationProvider>
   );
 }

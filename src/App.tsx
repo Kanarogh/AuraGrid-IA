@@ -131,9 +131,8 @@ import { PostsWorkflowBar } from "./components/posts/PostsWorkflowBar";
 import {
   PlanningPeriodReadOnlyBanner,
   PlanningPeriodArchivedEditBanner,
-  PlanningPeriodSelector,
 } from "./components/posts/PlanningPeriodSelector";
-import { NewPlanningPeriodModal } from "./components/posts/NewPlanningPeriodModal";
+import { usePlanningPeriodModal } from "./components/layout/planningPeriodModalContext";
 import { StudioSection } from "./components/ui/StudioSection";
 import { Button } from "./components/ui/Button";
 import { CatalogThumbnail } from "./components/ui/CatalogThumbnail";
@@ -260,15 +259,14 @@ export default function App() {
     reactivatePlanningPeriod,
     editArchivedPlanningPeriod,
     exitArchivedEdit,
-    createPlanningPeriod,
-    duplicatePlanningPeriod,
     switchClient,
     applyRemoteRegistry,
     applyRemotePlanningPeriods,
     usesReferences,
     setDefaultUsesReferences,
-    setPeriodUsesReferences,
   } = useClientWorkspace();
+
+  const { openNewPlanningPeriod } = usePlanningPeriodModal();
 
   const activeClientIdRef = useRef(activeClientId);
   activeClientIdRef.current = activeClientId;
@@ -730,8 +728,6 @@ export default function App() {
   const [isRefining, setIsRefining] = useState<{ [postId: string]: boolean }>({});
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isExportingCanvaPdf, setIsExportingCanvaPdf] = useState(false);
-  const [showNewPlanningPeriodModal, setShowNewPlanningPeriodModal] = useState(false);
-  const [duplicateSourcePeriodId, setDuplicateSourcePeriodId] = useState<string | undefined>();
 
   const prevClientIdRef = useRef(activeClientId);
 
@@ -3303,33 +3299,6 @@ export default function App() {
 
         {hasActiveClient && onClientRoute && routeSection === "content_schedule" && (
           <div className="ag-workspace-section">
-            <PlanningPeriodSelector
-              periods={planningPeriods}
-              activePeriodId={activePlanningPeriodId}
-              isReadOnly={isReadOnly}
-              periodEditMode={periodEditMode}
-              usesReferences={usesReferences}
-              periodUsesReferencesOverride={
-                planningPeriods.find((p) => p.id === activePlanningPeriodId)?.usesReferences ??
-                null
-              }
-              clientDefaultUsesReferences={activeClient.defaultUsesReferences}
-              indexedReferenceCount={indexedReferenceCount}
-              storedReferenceCount={referenceCatalog.length}
-              onPeriodUsesReferencesChange={setPeriodUsesReferences}
-              hideDuplicateAction={isReadOnly}
-              onSelect={(periodId) => {
-                void navigateClient({ periodId }, { replace: true, skipDirtyGuard: true });
-              }}
-              onCreateNew={() => {
-                setDuplicateSourcePeriodId(undefined);
-                setShowNewPlanningPeriodModal(true);
-              }}
-              onDuplicate={(sourceId) => {
-                setDuplicateSourcePeriodId(sourceId);
-                setShowNewPlanningPeriodModal(true);
-              }}
-            />
             <ContentScheduleWorkspace
               items={contentSchedule}
               brandGem={brandGem}
@@ -3351,41 +3320,12 @@ export default function App() {
           <div className="ag-workspace-section">
             <PostsWorkflowBar stats={captionBatchStats} />
 
-            <PlanningPeriodSelector
-              periods={planningPeriods}
-              activePeriodId={activePlanningPeriodId}
-              isReadOnly={isReadOnly}
-              periodEditMode={periodEditMode}
-              usesReferences={usesReferences}
-              periodUsesReferencesOverride={
-                planningPeriods.find((p) => p.id === activePlanningPeriodId)?.usesReferences ??
-                null
-              }
-              clientDefaultUsesReferences={activeClient.defaultUsesReferences}
-              indexedReferenceCount={indexedReferenceCount}
-              storedReferenceCount={referenceCatalog.length}
-              onPeriodUsesReferencesChange={setPeriodUsesReferences}
-              hideDuplicateAction={isReadOnly}
-              onSelect={(periodId) => {
-                void navigateClient({ periodId }, { replace: true, skipDirtyGuard: true });
-              }}
-              onCreateNew={() => {
-                setDuplicateSourcePeriodId(undefined);
-                setShowNewPlanningPeriodModal(true);
-              }}
-              onDuplicate={(sourceId) => {
-                setDuplicateSourcePeriodId(sourceId);
-                setShowNewPlanningPeriodModal(true);
-              }}
-              toolbar={
-                <PostsWorkspaceToolbar
-                  activeTab={routePostsTab}
-                  onTabChange={handlePostsWorkTabChange}
-                  onExportTxt={handleExportTxt}
-                  onExportPdf={handleExportPdf}
-                  isExportingPdf={isExportingPdf}
-                />
-              }
+            <PostsWorkspaceToolbar
+              activeTab={routePostsTab}
+              onTabChange={handlePostsWorkTabChange}
+              onExportTxt={handleExportTxt}
+              onExportPdf={handleExportPdf}
+              isExportingPdf={isExportingPdf}
             />
 
             {isReadOnly && periodEditMode === "view_archived" && (
@@ -3407,8 +3347,7 @@ export default function App() {
                   void editArchivedPlanningPeriod(activePlanningPeriodId);
                 }}
                 onDuplicate={() => {
-                  setDuplicateSourcePeriodId(activePlanningPeriodId);
-                  setShowNewPlanningPeriodModal(true);
+                  openNewPlanningPeriod(activePlanningPeriodId);
                 }}
               />
             )}
@@ -4394,19 +4333,6 @@ export default function App() {
         }}
         onPickFile={() => catalogFileInputRef.current?.click()}
         onSave={createCatalogItem}
-      />
-
-      <NewPlanningPeriodModal
-        open={showNewPlanningPeriodModal}
-        onClose={() => {
-          setShowNewPlanningPeriodModal(false);
-          setDuplicateSourcePeriodId(undefined);
-        }}
-        periods={planningPeriods}
-        defaultSourcePeriodId={duplicateSourcePeriodId}
-        onSubmit={async (options) => {
-          await createPlanningPeriod(options);
-        }}
       />
 
       <input

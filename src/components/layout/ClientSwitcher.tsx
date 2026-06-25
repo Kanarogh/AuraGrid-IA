@@ -9,6 +9,7 @@ import { confirmDialog } from "../../lib/confirmDialog";
 import { promptDialog } from "../../lib/promptDialog";
 import { NewClientModal } from "../clients/NewClientModal";
 import { useAppNavigation } from "../../lib/appRouting";
+import { PlanningPeriodSidebarPanel, shortPeriodLabel } from "./PlanningPeriodSidebarPanel";
 
 const MENU_WIDTH = 176;
 
@@ -134,6 +135,7 @@ export function ClientSwitcher({
     deleteClient,
     renameClient,
     hasActiveClient,
+    workspace,
   } = useClientWorkspace();
   const { navigateRoute } = useAppNavigation();
   const [modalOpen, setModalOpen] = useState(false);
@@ -143,6 +145,20 @@ export function ClientSwitcher({
   const collapsedPopoverRef = useRef<HTMLDivElement>(null);
 
   const menuClient = menuClientId ? clients.find((c) => c.id === menuClientId) : null;
+
+  const activePeriod =
+    workspace.planningPeriods.find((p) => p.id === workspace.activePlanningPeriodId) ??
+    workspace.planningPeriods[0];
+  const collapsedPeriodHint =
+    hasActiveClient && activePeriod
+      ? shortPeriodLabel(activePeriod.label, activePeriod.startDate)
+      : null;
+  const collapsedAvatarTitle =
+    hasActiveClient && activePeriod
+      ? `${activeClient.name} · ${activePeriod.label}`
+      : hasActiveClient
+        ? activeClient.name
+        : "Clientes";
 
   useEffect(() => {
     if (!collapsedPopoverOpen) return;
@@ -187,11 +203,11 @@ export function ClientSwitcher({
       <>
         <div
           ref={collapsedPopoverRef}
-          className="px-2 py-3 border-b border-ag-border flex flex-col items-center gap-2 shrink-0 relative"
+          className="px-2 py-3 border-b border-ag-border flex flex-col items-center gap-1.5 shrink-0 relative"
         >
           <button
             type="button"
-            title={hasActiveClient ? activeClient.name : "Clientes"}
+            title={collapsedAvatarTitle}
             aria-expanded={collapsedPopoverOpen}
             aria-haspopup="listbox"
             className="h-9 w-9 rounded-full bg-gradient-to-br from-ag-accent to-ag-accent-strong flex items-center justify-center text-sm font-bold text-ag-accent-fg cursor-pointer ring-2 ring-transparent hover:ring-ag-accent/30"
@@ -199,39 +215,51 @@ export function ClientSwitcher({
           >
             {hasActiveClient ? gemInitial(activeClient.name) : <Plus className="h-4 w-4" />}
           </button>
+          {collapsedPeriodHint && (
+            <span
+              className="max-w-[2.75rem] text-[8px] font-semibold leading-tight text-center text-ag-muted truncate"
+              title={activePeriod?.label}
+            >
+              {collapsedPeriodHint}
+            </span>
+          )}
           {collapsedPopoverOpen && (
             <div
               role="listbox"
-              className="absolute left-full top-0 ml-2 z-[80] w-48 rounded-xl border border-ag-border bg-ag-surface-1 shadow-lg py-1 max-h-64 overflow-y-auto ag-scrollbar-thin"
+              className="absolute left-full top-0 ml-2 z-[80] w-56 rounded-xl border border-ag-border bg-ag-surface-1 shadow-lg flex flex-col max-h-[min(70vh,26rem)] overflow-hidden"
             >
-              {clients.map((client) => (
-                <button
-                  key={client.id}
-                  type="button"
-                  role="option"
-                  aria-selected={client.id === activeClientId}
-                  onClick={() => {
-                    void navigateRoute({ clientId: client.id });
-                    setCollapsedPopoverOpen(false);
-                  }}
-                  className={cn(
-                    "w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-ag-surface-2 cursor-pointer",
-                    client.id === activeClientId && "bg-ag-accent/10 text-ag-accent"
-                  )}
-                >
-                  <span className="h-6 w-6 rounded-full bg-ag-accent text-ag-accent-fg text-[10px] font-bold flex items-center justify-center shrink-0">
-                    {gemInitial(client.name)}
-                  </span>
-                  <span className="truncate">{client.name}</span>
-                </button>
-              ))}
+              <ul className="overflow-y-auto py-1 ag-scrollbar-thin shrink min-h-0">
+                {clients.map((client) => (
+                  <li key={client.id}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={client.id === activeClientId}
+                      onClick={() => {
+                        void navigateRoute({ clientId: client.id });
+                        setCollapsedPopoverOpen(false);
+                      }}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-ag-surface-2 cursor-pointer",
+                        client.id === activeClientId && "bg-ag-accent/10 text-ag-accent"
+                      )}
+                    >
+                      <span className="h-6 w-6 rounded-full bg-ag-accent text-ag-accent-fg text-[10px] font-bold flex items-center justify-center shrink-0">
+                        {gemInitial(client.name)}
+                      </span>
+                      <span className="truncate">{client.name}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {hasActiveClient && <PlanningPeriodSidebarPanel variant="popover" />}
               <button
                 type="button"
                 onClick={() => {
                   setCollapsedPopoverOpen(false);
                   setModalOpen(true);
                 }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs text-ag-accent hover:bg-ag-surface-2 cursor-pointer border-t border-ag-border mt-1"
+                className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs text-ag-accent hover:bg-ag-surface-2 cursor-pointer border-t border-ag-border shrink-0"
               >
                 <Plus className="h-3.5 w-3.5" />
                 Novo cliente
@@ -350,6 +378,7 @@ export function ClientSwitcher({
             );
           })}
         </ul>
+        <PlanningPeriodSidebarPanel />
       </div>
 
       {menuClient && (
