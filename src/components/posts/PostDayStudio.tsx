@@ -130,7 +130,7 @@ export function PostDayStudio({
 
           <div className="flex-1 min-w-[140px]">
             <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-ag-muted">
-              Roteiro editorial · {position}/{total}
+              Planejamento editorial · {position}/{total}
             </p>
             <div className="flex items-baseline gap-3 flex-wrap">
               <h2 className="font-display text-3xl sm:text-4xl font-semibold text-ag-text leading-none tracking-tight">
@@ -343,6 +343,29 @@ export function PostDayStudio({
               )}
             </Button>
           </div>
+
+          {post.structuredCopy && (
+            <details className="group rounded-xl border border-ag-accent/25 bg-ag-accent/5 open:bg-ag-accent/10 mb-3" open>
+              <summary className="px-4 py-2.5 cursor-pointer text-xs font-medium text-ag-text flex items-center gap-2 list-none">
+                Copy do cronograma
+                <ChevronRight className="h-3.5 w-3.5 ml-auto text-ag-muted group-open:rotate-90 transition-transform" />
+              </summary>
+              <dl className="px-4 pb-3 space-y-2 text-xs">
+                <div>
+                  <dt className="text-ag-muted font-mono uppercase tracking-wider text-[10px]">Headline</dt>
+                  <dd className="text-ag-text mt-0.5">{post.structuredCopy.headline}</dd>
+                </div>
+                <div>
+                  <dt className="text-ag-muted font-mono uppercase tracking-wider text-[10px]">Frase de Apoio</dt>
+                  <dd className="text-ag-text mt-0.5">{post.structuredCopy.subtitle}</dd>
+                </div>
+                <div>
+                  <dt className="text-ag-muted font-mono uppercase tracking-wider text-[10px]">CTA</dt>
+                  <dd className="text-ag-text mt-0.5">{post.structuredCopy.cta}</dd>
+                </div>
+              </dl>
+            </details>
+          )}
 
           {post.reasoning && (
             <details className="group rounded-xl border border-ag-border/60 bg-ag-surface-2/40 open:bg-ag-accent/5">

@@ -137,7 +137,7 @@ function drawPageFooter(pdf: jsPDF, exportedAt: string) {
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(6);
   pdf.setTextColor(148, 163, 184);
-  pdf.text("AuraGrid · Planejamento visual", MARGIN, y);
+  pdf.text("AuraStudio IA · Planejamento visual", MARGIN, y);
   pdf.text(`4:5 · ${exportedAt}`, PAGE_W - MARGIN, y, { align: "right" });
 }
 
@@ -261,7 +261,7 @@ export async function buildRoteiroPdf(options: {
 
   pdf.setProperties({
     title: `Roteiro — ${brandName}`,
-    subject: "Planejamento editorial AuraGrid",
+    subject: "Planejamento editorial AuraStudio IA",
   });
 
   pages.forEach((pagePosts, pageIndex) => {

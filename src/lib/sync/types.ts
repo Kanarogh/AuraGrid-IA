@@ -37,8 +37,8 @@ export function tokensFromSyncRevision(rev: SyncRevisionDto): SyncRevisionTokens
 
 export const SYNC_DOMAIN_LABELS: Record<SyncDomain, string> = {
   catalog: "Catálogo",
-  workspace: "Roteiro",
+  workspace: "Planejamento",
   brandGem: "Gem da marca",
-  periods: "Roteiros",
+  periods: "Planejamentos",
   registry: "Clientes",
 };

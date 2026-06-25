@@ -1,6 +1,6 @@
 import type { AppSection } from "../../components/layout/AppSidebar";
 import type { CanvaGridFormatId } from "../canvaGridFormats";
-import type { BrandGem, CanvaGridPage, CatalogItem, PlannedPost } from "../../types";
+import type { BrandGem, CanvaGridPage, CatalogItem, ContentScheduleItem, PlannedPost } from "../../types";
 import type { PlanningPeriod } from "../planningConstants";
 import type { PeriodSnapshot } from "./planningPeriodLocal";
 import type { DistributionPrefs } from "../smartDistribution";
@@ -32,6 +32,7 @@ export type ClientWorkspace = {
   brandGem: BrandGem;
   catalog: CatalogItem[];
   posts: PlannedPost[];
+  contentSchedule: ContentScheduleItem[];
   startDate: string;
   activePlanningPeriodId: string;
   planningPeriods: PlanningPeriod[];

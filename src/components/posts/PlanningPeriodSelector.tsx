@@ -93,7 +93,7 @@ export function PlanningPeriodSelector({
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-mono uppercase tracking-wider text-ag-muted font-semibold">
-              Roteiro / planejamento
+              Planejamento
             </p>
             <button
               type="button"
@@ -103,7 +103,7 @@ export function PlanningPeriodSelector({
               className="mt-1 flex items-center gap-2 text-left w-full group max-w-full"
             >
               <span className="font-display text-lg font-semibold text-ag-text truncate">
-                {active?.label ?? "Roteiro"}
+                {active?.label ?? "Planejamento"}
               </span>
               <ChevronDown
                 className={cn(
@@ -196,7 +196,7 @@ export function PlanningPeriodSelector({
                 {!usesReferences && storedReferenceCount > 0 && (
                   <p className="text-[10px] text-ag-muted w-full">
                     {storedReferenceCount} referência
-                    {storedReferenceCount !== 1 ? "s" : ""} deste roteiro{" "}
+                    {storedReferenceCount !== 1 ? "s" : ""} deste planejamento{" "}
                     {storedReferenceCount === 1 ? "está" : "estão"} guardada
                     {storedReferenceCount !== 1 ? "s" : ""} e oculta
                     {storedReferenceCount !== 1 ? "s" : ""}.
@@ -220,7 +220,7 @@ export function PlanningPeriodSelector({
           )}
           <Button variant="primary" size="sm" onClick={onCreateNew}>
             <Plus className="h-3.5 w-3.5" />
-            Novo roteiro
+            Novo planejamento
           </Button>
         </div>
       </div>
@@ -292,13 +292,13 @@ export function PlanningPeriodReadOnlyBanner({
   return (
     <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex flex-col gap-3">
       <p className="text-sm text-ag-text">
-        Você está visualizando o roteiro arquivado <strong>{periodLabel}</strong>. Escolha como
+        Você está visualizando o planejamento arquivado <strong>{periodLabel}</strong>. Escolha como
         prosseguir:
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="primary" size="sm" onClick={onReactivate}>
           <RotateCcw className="h-3.5 w-3.5" />
-          Reativar roteiro
+          Reativar planejamento
         </Button>
         <Button variant="secondary" size="sm" onClick={onEditInPlace}>
           <Pencil className="h-3.5 w-3.5" />
@@ -323,7 +323,7 @@ export function PlanningPeriodArchivedEditBanner({
   return (
     <div className="mb-4 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <p className="text-sm text-ag-text">
-        Você está editando o roteiro arquivado <strong>{periodLabel}</strong>. O roteiro ativo do
+        Você está editando o planejamento arquivado <strong>{periodLabel}</strong>. O planejamento ativo do
         cliente não foi alterado.
       </p>
       <Button variant="secondary" size="sm" onClick={onExitEdit} className="shrink-0">

@@ -349,7 +349,8 @@ AuraGrid-IA/
 │   │   ├── schema.ts         # Schema Drizzle
 │   │   ├── migrate.ts        # Runner de migrations
 │   │   └── migrations/
-│   │       └── 0000_initial.sql
+│   │       ├── 0000_initial.sql
+│   │       └── 0007_content_schedule.sql   # cronograma + structured_copy nos posts
 │   ├── routes/               # auth, clients, catalog, media…
 │   └── services/             # auth, catalog, media (MinIO), enrichQueue
 └── src/
@@ -376,6 +377,20 @@ AuraGrid-IA/
 
 ---
 
+## Fluxo de trabalho recomendado
+
+Ordem sugerida no workspace de cada marca:
+
+1. **Configurações** — Gem da marca, instruções e contexto de campanha.
+2. **Cronograma de Conteúdo** (`/c/:id/cronograma`) — gera copy mensal estruturado (headline, CTA, legenda, hashtags) para posts de arte e stories **antes** de produzir as artes.
+3. **Designer (externo)** — artes criadas fora do app com base no cronograma exportado (TXT).
+4. **Catálogo / Grid Canva** — referências e montagem das páginas de 12 fotos.
+5. **Planejamento e legendas** (`/c/:id/roteiros`) — calendário de 30 dias; use **Enviar ao Planejamento** no cronograma para preencher dias com copy aprovado.
+
+> A URL `/roteiros` foi mantida por compatibilidade; na interface o nome exibido é **Planejamento**.
+
+---
+
 ## Produção (notas)
 
 - Troque `JWT_SECRET` por um valor longo e aleatório.
@@ -397,16 +412,35 @@ O `squarecloud.app` na raiz define o deploy:
 ```
 DISPLAY_NAME=AuraGrid IA
 MAIN=next.config.ts
-MEMORY=1024
+MEMORY=2048
 VERSION=recommended
 AUTORESTART=true
-START=npm run build && npm run start
+START=NODE_OPTIONS=--max-old-space-size=1536 npm run build && npm run db:migrate && npm run start
 SUBDOMAIN=auragrid
 ```
 
-- `START` roda `next build` e depois `next start -p 80` (a porta 80 é exigida para websites no Square Cloud).
-- `MEMORY` ≥ 512 MB; sugerido **1024+** por causa do build do Next e da fila de indexação.
+- `START` roda `next build`, **`npm run db:migrate`** (aplica migrations pendentes, incluindo `0007_content_schedule.sql`) e depois `next start -p 80` (a porta 80 é exigida para websites no Square Cloud).
+- `MEMORY` ≥ 512 MB; sugerido **2048** por causa do build do Next e da fila de indexação.
 - `AUTORESTART=true` para o processo voltar sozinho após falhas.
+
+### Migration 0007 (Cronograma de Conteúdo)
+
+Obrigatória para persistência do cronograma na nuvem. Adiciona:
+
+- `planning_periods.content_schedule` (jsonb) — itens do cronograma mensal
+- `planned_posts.structured_copy` (jsonb) — copy estruturado vindo do cronograma
+- `planned_posts.caption_from_schedule` (boolean) — protege legenda enviada pelo cronograma
+
+As migrations rodam de duas formas redundantes em produção:
+
+1. **`instrumentation.ts`** — no boot do Next.js (`register()` chama `runMigrations()`).
+2. **`squarecloud.app` START** — `npm run db:migrate` após o build.
+
+Em desenvolvimento local, após `npm run docker:infra`, execute manualmente:
+
+```bash
+npm run db:migrate
+```
 
 ### Passos
 
@@ -424,7 +458,7 @@ SUBDOMAIN=auragrid
 
    > Para R2/S3 com domínio (porta 443 + SSL), o `forcePathStyle` já está habilitado em `mediaService.ts`. Crie o bucket previamente no provedor.
 3. **JWT e IA:** defina `JWT_SECRET` forte e ao menos uma chave de IA (`GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`).
-4. **Migrations:** rodam automaticamente no boot via `instrumentation.ts` (`register()` chama `runMigrations()`), desde que `DATABASE_URL` esteja definida.
+4. **Migrations:** ver seção [Migration 0007](#migration-0007-cronograma-de-conteúdo) acima. Com `DATABASE_URL` definida, `instrumentation.ts` também aplica migrations no boot.
 5. **Upload do projeto:** gere o `.zip` **sem** `node_modules` e **sem** `.next` (o Square Cloud instala dependências e o `START` faz o build). O `.gitignore` já exclui ambos.
 
 ### Health em produção

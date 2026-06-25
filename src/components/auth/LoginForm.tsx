@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useAuth } from "../../context/AuthContext";
+import { APP_NAME } from "../../lib/appBranding";
 
 export function LoginForm({
   onSuccess,
@@ -34,7 +35,7 @@ export function LoginForm({
   return (
     <div className="min-h-screen flex items-center justify-center bg-ag-bg px-4">
       <div className="w-full max-w-md rounded-2xl border border-ag-border bg-ag-surface p-8 shadow-xl">
-        <h1 className="text-xl font-bold text-ag-text mb-1">AuraGrid IA</h1>
+        <h1 className="text-xl font-bold text-ag-text mb-1">{APP_NAME}</h1>
         <p className="text-sm text-ag-muted mb-6">
           {mode === "login" ? "Entre na sua conta" : "Crie sua conta"}
         </p>

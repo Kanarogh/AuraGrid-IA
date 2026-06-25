@@ -39,7 +39,7 @@ import {
 } from "../lib/clientWorkspace";
 import { notifyStorageSaveFailure } from "../lib/clientWorkspace/saveNotify";
 import { toast } from "../lib/toast";
-import type { BrandGem, CanvaGridPage, CatalogItem, PlannedPost } from "../types";
+import type { BrandGem, CanvaGridPage, CatalogItem, ContentScheduleItem, PlannedPost } from "../types";
 import { useAuth, getCachedAuthBootstrap } from "./AuthContext";
 import { isStorageModeResolved, resolveInitialStorageMode } from "../lib/storageMode";
 import { getApiHelpers, type ApiRegistryEvent } from "./ApiWorkspaceSync";
@@ -89,6 +89,7 @@ type ClientWorkspaceContextValue = {
   workspace: ClientWorkspace;
   setCatalog: Dispatch<SetStateAction<CatalogItem[]>>;
   setPosts: Dispatch<SetStateAction<PlannedPost[]>>;
+  setContentSchedule: Dispatch<SetStateAction<ContentScheduleItem[]>>;
   setStartDate: Dispatch<SetStateAction<string>>;
   setBrandGem: Dispatch<SetStateAction<BrandGem>>;
   setCanvaPages: Dispatch<SetStateAction<CanvaGridPage[]>>;
@@ -436,6 +437,22 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const setContentSchedule: Dispatch<SetStateAction<ContentScheduleItem[]>> = useCallback(
+    (action) => {
+      setWorkspace((prev) => {
+        if (prev.isReadOnly) return prev;
+        const next: ClientWorkspace = {
+          ...prev,
+          contentSchedule:
+            typeof action === "function" ? action(prev.contentSchedule ?? []) : action,
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+    },
+    []
+  );
+
   const getPostsSnapshot = useCallback((): PlannedPost[] => {
     return workspaceRef.current.posts;
   }, []);
@@ -584,7 +601,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
     async (gem: BrandGem): Promise<string | null> => {
       if (!activeClientId) return null;
       if (workspaceRef.current.isReadOnly) {
-        toast.error("Roteiro arquivado é somente leitura.");
+        toast.error("Planejamento arquivado é somente leitura.");
         return null;
       }
       const normalized: BrandGem = { ...gem, id: activeClientId };
@@ -805,7 +822,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
             }
           } catch (err) {
             console.error("[AuraGrid] Falha ao visualizar roteiro:", err);
-            toast.error("Não foi possível carregar o roteiro.");
+            toast.error("Não foi possível carregar o planejamento.");
           }
           return;
         }
@@ -833,7 +850,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
           }
         } catch (err) {
           console.error("[AuraGrid] Falha ao trocar roteiro:", err);
-          toast.error("Não foi possível carregar o roteiro.");
+          toast.error("Não foi possível carregar o planejamento.");
         }
         return;
       }
@@ -871,7 +888,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
           }
         } catch (err) {
           console.error("[AuraGrid] Falha ao visualizar roteiro:", err);
-          toast.error("Não foi possível carregar o roteiro.");
+          toast.error("Não foi possível carregar o planejamento.");
         }
         return;
       }
@@ -913,7 +930,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
           broadcastSyncChanged(activeClientId, ["periods", "workspace"]);
         } catch (err) {
           console.error("[AuraGrid] Falha ao reativar roteiro:", err);
-          toast.error("Não foi possível reativar o roteiro.");
+          toast.error("Não foi possível reativar o planejamento.");
         }
         return;
       }
@@ -948,7 +965,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
           }
         } catch (err) {
           console.error("[AuraGrid] Falha ao editar roteiro arquivado:", err);
-          toast.error("Não foi possível carregar o roteiro para edição.");
+          toast.error("Não foi possível carregar o planejamento para edição.");
         }
         return;
       }
@@ -1039,7 +1056,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
           broadcastSyncChanged(activeClientId, ["periods", "workspace"]);
         } catch (err) {
           console.error("[AuraGrid] Falha ao salvar roteiro:", err);
-          toast.error("Não foi possível salvar a preferência do roteiro.");
+          toast.error("Não foi possível salvar a preferência do planejamento.");
           return;
         }
       } else {
@@ -1077,10 +1094,10 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
           setWorkspace(ws);
           workspaceRef.current = ws;
           broadcastSyncChanged(activeClientId, ["periods", "workspace"]);
-          toast.success("Novo roteiro criado.");
+          toast.success("Novo planejamento criado.");
         } catch (err) {
           console.error("[AuraGrid] Falha ao criar roteiro:", err);
-          toast.error("Não foi possível criar o roteiro.");
+          toast.error("Não foi possível criar o planejamento.");
         }
         return;
       }
@@ -1089,7 +1106,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       setWorkspace(next);
       workspaceRef.current = next;
       flushSave(activeClientId, next);
-      toast.success("Novo roteiro criado.");
+      toast.success("Novo planejamento criado.");
     },
     [activeClient, activeClientId, flushSave, useApiStorage]
   );
@@ -1193,6 +1210,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       workspace,
       setCatalog,
       setPosts,
+      setContentSchedule,
       setStartDate,
       setBrandGem,
       setCanvaPages,
@@ -1238,6 +1256,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       workspace,
       setCatalog,
       setPosts,
+      setContentSchedule,
       setStartDate,
       setBrandGem,
       setCanvaPages,

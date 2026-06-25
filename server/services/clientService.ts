@@ -14,7 +14,7 @@ import {
 } from "../db/schema";
 import { mediaPublicUrl } from "./mediaService";
 import {
-  DEFAULT_START_DATE,
+  defaultPlanningStartDate,
   defaultCanvaPages,
   defaultPosts,
 } from "./planningDefaults";
@@ -90,7 +90,7 @@ export async function createClientForUser(userId: string, name: string, slug?: s
     ownerUserId: userId,
     name: displayName,
     instagramHandle: id.replace(/-/g, "_"),
-    startDate: DEFAULT_START_DATE,
+    startDate: defaultPlanningStartDate(),
     createdAt: now,
     updatedAt: now,
   });
@@ -105,7 +105,7 @@ export async function createClientForUser(userId: string, name: string, slug?: s
     footer: { structure: "", address: "", contact: "", hashtags: "", extra: "", customFields: [] },
   });
 
-  await createInitialPeriodForClient(id, DEFAULT_START_DATE);
+  await createInitialPeriodForClient(id, defaultPlanningStartDate());
 
   await db
     .insert(userClientState)
@@ -227,6 +227,16 @@ export async function loadWorkspaceDto(
     .where(and(eq(clientUiPrefs.userId, userId), eq(clientUiPrefs.clientId, clientId)))
     .limit(1);
 
+  const [periodRow] = await db
+    .select()
+    .from(planningPeriods)
+    .where(eq(planningPeriods.id, activePeriodId))
+    .limit(1);
+
+  const contentScheduleDto = Array.isArray(periodRow?.contentSchedule)
+    ? periodRow.contentSchedule
+    : [];
+
   const catalogDto = catalog.map((c) => ({
     id: c.id,
     label: c.label,
@@ -299,6 +309,8 @@ export async function loadWorkspaceDto(
         ? { pageId: findPageForSlot(slots, p.canvaSlotId), slotId: p.canvaSlotId }
         : null,
       captionFromImageOnly: p.captionFromImageOnly,
+      structuredCopy: p.structuredCopy ?? undefined,
+      captionFromSchedule: p.captionFromSchedule ?? false,
     })
   );
 
@@ -323,6 +335,7 @@ export async function loadWorkspaceDto(
     },
     catalog: catalogDto,
     posts: postsDto,
+    contentSchedule: contentScheduleDto,
     startDate: periodStartDate,
     activePlanningPeriodId: activePeriodId,
     planningPeriods: planningPeriodsList,
@@ -700,6 +713,16 @@ export async function patchWorkspace(
     }
   }
 
+  if (Array.isArray(patch.contentSchedule)) {
+    await db
+      .update(planningPeriods)
+      .set({
+        contentSchedule: patch.contentSchedule,
+        updatedAt: new Date(),
+      })
+      .where(eq(planningPeriods.id, periodId));
+  }
+
   if (Array.isArray(patch.posts)) {
     const sentPostIds = new Set<string>();
     const postsArr = patch.posts as Array<Record<string, unknown>>;
@@ -722,6 +745,14 @@ export async function patchWorkspace(
       const isConfirmed = typeof post.isConfirmed === "boolean" ? post.isConfirmed : false;
       const captionFromImageOnly =
         typeof post.captionFromImageOnly === "boolean" ? post.captionFromImageOnly : false;
+      const captionFromSchedule =
+        typeof post.captionFromSchedule === "boolean" ? post.captionFromSchedule : false;
+      const structuredCopy =
+        post.structuredCopy !== null &&
+        typeof post.structuredCopy === "object" &&
+        !Array.isArray(post.structuredCopy)
+          ? post.structuredCopy
+          : null;
       const lastError =
         post.error === null || typeof post.error === "string"
           ? (post.error as string | null)
@@ -754,6 +785,8 @@ export async function patchWorkspace(
           isGenerated,
           isConfirmed,
           captionFromImageOnly,
+          captionFromSchedule,
+          structuredCopy,
           lastError,
           imageAssetId,
           canvaSlotId,
@@ -769,6 +802,8 @@ export async function patchWorkspace(
             isGenerated,
             isConfirmed,
             captionFromImageOnly,
+            captionFromSchedule,
+            structuredCopy,
             lastError,
             imageAssetId,
             canvaSlotId,
@@ -789,6 +824,11 @@ export async function patchWorkspace(
           );
       }
     }
+
+    await db
+      .update(planningPeriods)
+      .set({ updatedAt: new Date() })
+      .where(eq(planningPeriods.id, periodId));
   }
 
   const domains: ("workspace" | "brandGem")[] = ["workspace"];

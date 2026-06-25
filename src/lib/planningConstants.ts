@@ -1,4 +1,15 @@
-export const DEFAULT_START_DATE = "2026-05-24";
+/** Data local YYYY-MM-DD — dia de hoje no fuso do navegador. */
+export function defaultPlanningStartDate(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** @deprecated use defaultPlanningStartDate() */
+export const DEFAULT_START_DATE = defaultPlanningStartDate();
+
 export const POST_COUNT = 30;
 
 export type PlanningPeriodStatus = "active" | "archived" | "draft";
@@ -28,13 +39,13 @@ export function periodLabelFromDate(startDate: string): string {
     const monthName = d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
     return monthName.charAt(0).toUpperCase() + monthName.slice(1);
   } catch {
-    return "Roteiro";
+    return "Planejamento";
   }
 }
 
 export function createDefaultPlanningPeriod(
   clientId: string,
-  startDate = DEFAULT_START_DATE
+  startDate = defaultPlanningStartDate()
 ): PlanningPeriod {
   const now = new Date().toISOString();
   return {

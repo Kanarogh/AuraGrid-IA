@@ -1,4 +1,4 @@
-# AuraGrid IA
+# AuraStudio IA
 
 Planejamento Instagram com catálogo de referências, grid Canva, roteiro 30 dias e geração de legendas via IA.
 

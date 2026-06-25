@@ -28,11 +28,28 @@ test("buildWorkspaceRevisionToken encodes period stats", () => {
     slotCount: 9,
     pageCount: 1,
     canvaSettingsKey: "page1|true|false|square|480",
+    contentScheduleKey: "21:4096",
   });
   assert.equal(
     token,
-    "pp_1:2026-06-20T12:00:00.000Z:2026-07-01:7:9:1:page1|true|false|square|480:2026-06-20T11:00:00.000Z"
+    "pp_1:2026-06-20T12:00:00.000Z:2026-07-01:7:9:1:page1|true|false|square|480:21:4096:2026-06-20T11:00:00.000Z"
   );
+});
+
+test("buildWorkspaceRevisionToken changes when content schedule changes", () => {
+  const base = {
+    periodId: "pp_1",
+    periodUpdatedAt: "2026-06-20T12:00:00.000Z",
+    clientUpdatedAt: "2026-06-20T11:00:00.000Z",
+    startDate: "2026-07-01",
+    postCount: 3,
+    slotCount: 0,
+    pageCount: 1,
+    canvaSettingsKey: "0",
+  };
+  const before = buildWorkspaceRevisionToken({ ...base, contentScheduleKey: "0:0" });
+  const after = buildWorkspaceRevisionToken({ ...base, contentScheduleKey: "5:1200" });
+  assert.notEqual(before, after);
 });
 
 test("buildWorkspaceRevisionToken changes when post count changes", () => {

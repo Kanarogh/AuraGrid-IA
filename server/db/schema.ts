@@ -63,6 +63,7 @@ export const planningPeriods = pgTable(
     status: text("status").notNull().default("active"),
     campaignContext: text("campaign_context").notNull().default(""),
     usesReferences: boolean("uses_references"),
+    contentSchedule: jsonb("content_schedule").notNull().default([]),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
@@ -270,6 +271,8 @@ export const plannedPosts = pgTable(
     isGenerated: boolean("is_generated").notNull().default(false),
     isConfirmed: boolean("is_confirmed").notNull().default(false),
     captionFromImageOnly: boolean("caption_from_image_only").notNull().default(false),
+    structuredCopy: jsonb("structured_copy"),
+    captionFromSchedule: boolean("caption_from_schedule").notNull().default(false),
     lastError: text("last_error"),
   },
   (t) => [primaryKey({ columns: [t.planningPeriodId, t.id] })]

@@ -1,7 +1,7 @@
 import { normalizeCaptionGenerationParams } from "../captionParams";
 import { recalculatePostDates } from "../dates";
 import {
-  DEFAULT_START_DATE,
+  defaultPlanningStartDate,
   createDefaultPlanningPeriod,
   periodLabelFromDate,
   type PlanningPeriod,
@@ -18,6 +18,7 @@ export type PeriodSnapshot = {
   posts: ClientWorkspace["posts"];
   catalog: ClientWorkspace["catalog"];
   canva: ClientWorkspace["canva"];
+  contentSchedule: ClientWorkspace["contentSchedule"];
   startDate: string;
   campaignContext: string;
   usesReferences?: boolean | null;
@@ -28,6 +29,7 @@ function snapshotFromWorkspace(ws: ClientWorkspace): PeriodSnapshot {
     posts: ws.posts,
     catalog: ws.catalog,
     canva: ws.canva,
+    contentSchedule: ws.contentSchedule,
     startDate: ws.startDate,
     campaignContext: ws.brandGem.campaignContext ?? "",
     usesReferences: ws.planningPeriods.find((p) => p.id === ws.activePlanningPeriodId)
@@ -41,6 +43,7 @@ function applySnapshot(ws: ClientWorkspace, snapshot: PeriodSnapshot): ClientWor
     posts: snapshot.posts,
     catalog: snapshot.catalog,
     canva: snapshot.canva,
+    contentSchedule: snapshot.contentSchedule ?? [],
     startDate: snapshot.startDate,
     brandGem: {
       ...ws.brandGem,
@@ -73,6 +76,7 @@ export function switchLocalPlanningPeriod(
     next = applySnapshot(next, {
       posts: recalculatePostDates(period.startDate, createEmptyPosts()),
       catalog: [],
+      contentSchedule: [],
       canva: {
         pages: createDefaultCanvaPages(),
         activePageId: "page_4",
@@ -110,6 +114,10 @@ function cloneSnapshot(snapshot: PeriodSnapshot): PeriodSnapshot {
       ...c,
       id: `${c.id}_dup_${Date.now()}`,
     })),
+    contentSchedule: (snapshot.contentSchedule ?? []).map((item) => ({
+      ...item,
+      id: `${item.id}_dup_${Date.now()}`,
+    })),
     canva: {
       ...snapshot.canva,
       pages: snapshot.canva.pages.map((page) => ({
@@ -132,7 +140,7 @@ export function createLocalPlanningPeriod(
     usesReferences?: boolean | null;
   }
 ): ClientWorkspace {
-  const startDate = options.startDate ?? DEFAULT_START_DATE;
+  const startDate = options.startDate ?? defaultPlanningStartDate();
   const label = options.label?.trim() || periodLabelFromDate(startDate);
   const now = new Date().toISOString();
   const newPeriodId = `${meta.id}__period_${Date.now()}`;
@@ -169,6 +177,7 @@ export function createLocalPlanningPeriod(
       : {
           posts: recalculatePostDates(startDate, createEmptyPosts()),
           catalog: [],
+          contentSchedule: [],
           canva: createEmptyWorkspace(meta).canva,
           startDate,
           campaignContext: sourceMeta?.campaignContext ?? "",
@@ -179,6 +188,7 @@ export function createLocalPlanningPeriod(
     snapshot = {
       posts: recalculatePostDates(startDate, createEmptyPosts()),
       catalog: [],
+      contentSchedule: [],
       canva: empty.canva,
       startDate,
       campaignContext: "",
@@ -249,6 +259,7 @@ export function resetLocalActivePeriod(ws: ClientWorkspace, meta: ClientMeta): C
   const snapshot: PeriodSnapshot = {
     posts: recalculatePostDates(ws.startDate, createEmptyPosts()),
     catalog: [],
+    contentSchedule: [],
     canva: empty.canva,
     startDate: ws.startDate,
     campaignContext: "",

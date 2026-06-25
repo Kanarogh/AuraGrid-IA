@@ -7,7 +7,7 @@ import {
 } from "../../data/preloaded";
 import { recalculatePostDates } from "../dates";
 import type { CatalogItem, CanvaGridPage, PlannedPost } from "../../types";
-import { createDefaultPlanningPeriod } from "../planningConstants";
+import { createDefaultPlanningPeriod, defaultPlanningStartDate } from "../planningConstants";
 import { createClientMeta, createDefaultCanvaPages, createEmptyWorkspace } from "./factory";
 import { loadRegistry, loadWorkspace, saveRegistry, saveWorkspace } from "./storage";
 import type { ClientRegistry, ClientWorkspace } from "./types";
@@ -39,7 +39,7 @@ function readLegacyCanvaPages(): CanvaGridPage[] {
 }
 
 function buildLegacyWorkspace(): ClientWorkspace {
-  const startDate = localStorage.getItem("palak_start_date") || "2026-05-24";
+  const startDate = localStorage.getItem("palak_start_date") || defaultPlanningStartDate();
 
   let catalog: CatalogItem[] = PRELOADED_CATALOG;
   try {
@@ -76,6 +76,7 @@ function buildLegacyWorkspace(): ClientWorkspace {
     brandGem: brandGem.name ? brandGem : createEmptyBrandGem(LEGACY_PALAK_ID, "Palak"),
     catalog,
     posts,
+    contentSchedule: [],
     startDate,
     activePlanningPeriodId: defaultPeriod.id,
     planningPeriods: [defaultPeriod],

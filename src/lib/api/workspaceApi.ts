@@ -1,5 +1,5 @@
 import { normalizeCanvaPages } from "../canva";
-import type { BrandGem, CatalogItem, PlannedPost } from "../../types";
+import type { BrandGem, CatalogItem, ContentScheduleItem, PlannedPost } from "../../types";
 import type { ClientRegistry, ClientWorkspace } from "../clientWorkspace/types";
 import type { ClientMeta } from "../clientWorkspace/types";
 import type { PlanningPeriod } from "../planningConstants";
@@ -14,6 +14,7 @@ export type ApiWorkspaceResponse = {
   brandGem: BrandGem;
   catalog: CatalogItem[];
   posts: PlannedPost[];
+  contentSchedule?: ContentScheduleItem[];
   startDate: string;
   activePlanningPeriodId: string;
   planningPeriods: PlanningPeriod[];
@@ -56,6 +57,7 @@ export function apiWorkspaceToClientWorkspace(dto: ApiWorkspaceResponse): Client
         ...p,
         image: resolveMediaUrl(typeof p.image === "string" ? p.image : null),
       })),
+    contentSchedule: Array.isArray(dto.contentSchedule) ? dto.contentSchedule : [],
     startDate: dto.startDate,
     activePlanningPeriodId: dto.activePlanningPeriodId,
     planningPeriods: dto.planningPeriods ?? [],

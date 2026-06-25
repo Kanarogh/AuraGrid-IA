@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import "../src/index.css";
+import { APP_NAME } from "../src/lib/appBranding";
 
 export const metadata: Metadata = {
-  title: "AuraGrid Intelligence",
+  title: APP_NAME,
   description: "Planejamento de Instagram para marcas de moda com IA.",
 };
 

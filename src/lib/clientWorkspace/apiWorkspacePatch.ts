@@ -8,6 +8,7 @@ export function buildWorkspaceApiPatch(ws: ClientWorkspace) {
     startDate: ws.startDate,
     planningPeriodId: ws.activePlanningPeriodId,
     posts: ws.posts.map(stripTransientPostFields),
+    contentSchedule: ws.contentSchedule ?? [],
     canva: compactCanvaForApiPatch(ws.canva),
     ui: ws.ui,
   };

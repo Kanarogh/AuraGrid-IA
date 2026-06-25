@@ -38,8 +38,10 @@ export function buildWorkspaceRevisionToken(params: {
   slotCount: number;
   pageCount: number;
   canvaSettingsKey: string;
+  contentScheduleKey?: string;
 }): string {
-  return `${params.periodId}:${params.periodUpdatedAt ?? "0"}:${params.startDate}:${params.postCount}:${params.slotCount}:${params.pageCount}:${params.canvaSettingsKey}:${params.clientUpdatedAt}`;
+  const scheduleKey = params.contentScheduleKey ?? "0";
+  return `${params.periodId}:${params.periodUpdatedAt ?? "0"}:${params.startDate}:${params.postCount}:${params.slotCount}:${params.pageCount}:${params.canvaSettingsKey}:${scheduleKey}:${params.clientUpdatedAt}`;
 }
 
 export function buildBrandGemRevisionToken(
@@ -116,6 +118,11 @@ export async function getSyncRevision(
     ? `${canvaCfg.activePageId}|${canvaCfg.autoSync}|${canvaCfg.reversed}|${canvaCfg.gridFormat}|${canvaCfg.gridMaxWidth}`
     : "0";
 
+  const cs = periodRow?.contentSchedule;
+  const contentScheduleKey = Array.isArray(cs)
+    ? `${cs.length}:${JSON.stringify(cs).length}`
+    : "0";
+
   const workspace = buildWorkspaceRevisionToken({
     periodId,
     periodUpdatedAt: periodRow?.updatedAt?.toISOString() ?? null,
@@ -125,6 +132,7 @@ export async function getSyncRevision(
     slotCount: slotStats?.count ?? 0,
     pageCount: pageStats?.count ?? 0,
     canvaSettingsKey,
+    contentScheduleKey,
   });
 
   const [gemRow] = await db

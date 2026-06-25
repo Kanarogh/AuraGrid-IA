@@ -124,6 +124,20 @@ test("posts tab change clears postId", () => {
   assert.equal(buildClientPath(next), "/c/palak-br/roteiros/calendario");
 });
 
+test("content_schedule round-trip", () => {
+  const route: ClientRoute = {
+    clientId: "palak-br",
+    section: "content_schedule",
+  };
+  const path = buildClientPath(route);
+  assert.equal(path, "/c/palak-br/cronograma");
+  const parsed = parseAppPath(path);
+  assert.equal(parsed.kind, "client");
+  if (parsed.kind !== "client") return;
+  assert.equal(parsed.route.section, "content_schedule");
+  assert.equal(pathsEqual(parsed.route, route), true);
+});
+
 test("buildDashboardPath", () => {
   assert.equal(buildDashboardPath(), "/dashboard");
 });

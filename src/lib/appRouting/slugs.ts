@@ -3,6 +3,7 @@ import type { PostsWorkTab } from "../../components/posts/PostsWorkspaceToolbar"
 import type { CatalogTab, SettingsTab } from "./types";
 
 export const SECTION_SLUGS: Record<AppSection, string> = {
+  content_schedule: "cronograma",
   posts: "roteiros",
   canva_grid: "grid-canva",
   feed_simulator: "feed",

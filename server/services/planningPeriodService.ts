@@ -10,7 +10,7 @@ import {
   planningPeriods,
 } from "../db/schema";
 import {
-  DEFAULT_START_DATE,
+  defaultPlanningStartDate,
   defaultCanvaPages,
   defaultPeriodId,
   defaultPosts,
@@ -161,6 +161,12 @@ async function duplicatePeriodData(
 ) {
   const db = getDb();
 
+  const [sourcePeriodRow] = await db
+    .select({ contentSchedule: planningPeriods.contentSchedule })
+    .from(planningPeriods)
+    .where(eq(planningPeriods.id, sourcePeriodId))
+    .limit(1);
+
   const sourceCatalog = await db
     .select()
     .from(catalogItems)
@@ -264,14 +270,24 @@ async function duplicatePeriodData(
       isGenerated: post.isGenerated,
       isConfirmed: post.isConfirmed,
       captionFromImageOnly: post.captionFromImageOnly,
+      structuredCopy: post.structuredCopy,
+      captionFromSchedule: post.captionFromSchedule,
       lastError: post.lastError,
     });
   }
+
+  await db
+    .update(planningPeriods)
+    .set({
+      contentSchedule: sourcePeriodRow?.contentSchedule ?? [],
+      updatedAt: new Date(),
+    })
+    .where(eq(planningPeriods.id, targetPeriodId));
 }
 
 export async function createInitialPeriodForClient(
   clientId: string,
-  startDate = DEFAULT_START_DATE,
+  startDate = defaultPlanningStartDate(),
   campaignContext = ""
 ) {
   const db = getDb();
@@ -311,7 +327,7 @@ export async function createPeriod(
   } = {}
 ) {
   const db = getDb();
-  const startDate = options.startDate ?? DEFAULT_START_DATE;
+  const startDate = options.startDate ?? defaultPlanningStartDate();
   const label = options.label?.trim() || periodLabelFromDate(startDate);
   const periodId = uniquePeriodId(clientId);
   const now = new Date();
@@ -504,7 +520,7 @@ export async function resetPeriod(clientId: string, periodId: string) {
   const now = new Date();
   await db
     .update(planningPeriods)
-    .set({ campaignContext: "", updatedAt: now })
+    .set({ campaignContext: "", contentSchedule: [], updatedAt: now })
     .where(eq(planningPeriods.id, periodId));
 }
 
@@ -516,7 +532,7 @@ export async function isPeriodReadOnly(clientId: string, periodId: string): Prom
 export async function ensureClientHasActivePeriod(clientId: string, startDate?: string) {
   const activeId = await getActivePeriodId(clientId);
   if (activeId) return activeId;
-  return createInitialPeriodForClient(clientId, startDate ?? DEFAULT_START_DATE);
+  return createInitialPeriodForClient(clientId, startDate ?? defaultPlanningStartDate());
 }
 
 export async function loadPeriodsSummary(clientId: string) {

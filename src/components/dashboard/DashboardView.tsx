@@ -40,7 +40,7 @@ export function DashboardView({
   isReadOnly,
   metrics,
   isLoading,
-  onContinueRoteiro,
+  onContinueWorkspace,
   onNavigateSection,
   onSelectClient,
   onConfigureGem,
@@ -55,7 +55,7 @@ export function DashboardView({
   isReadOnly: boolean;
   metrics: DashboardMetrics;
   isLoading?: boolean;
-  onContinueRoteiro: () => void;
+  onContinueWorkspace: () => void;
   onNavigateSection: (section: AppSection) => void;
   onSelectClient: (clientId: string) => void;
   onConfigureGem: () => void;
@@ -106,8 +106,8 @@ export function DashboardView({
                 <Badge tone="warning">{brandGemMissingCount} campos no Gem</Badge>
               )}
               {isReadOnly && <Badge tone="neutral">Arquivado</Badge>}
-              <Button variant="accent" size="md" onClick={onContinueRoteiro}>
-                Continuar roteiro
+              <Button variant="accent" size="md" onClick={onContinueWorkspace}>
+                Continuar workspace
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
@@ -177,7 +177,7 @@ export function DashboardView({
             Produção
           </p>
           <h2 className="font-display text-lg font-semibold text-ag-text mt-1">
-            Pipeline do roteiro
+            Pipeline do planejamento
           </h2>
         </div>
         <PostsWorkflowBar stats={captionBatchStats} />

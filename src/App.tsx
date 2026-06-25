@@ -62,6 +62,7 @@ import {
   resolveCatalogItemImage,
   resolveMediaUrl,
 } from "./lib/api/workspaceApi";
+import { APP_NAME } from "./lib/appBranding";
 import { exportRoteiroPdf } from "./lib/exportRoteiroPdf";
 import { exportCanvaGridPdf } from "./lib/exportCanvaGridPdf";
 import { ensurePersistedImage, extractMediaAssetId } from "./lib/api/persistMedia";
@@ -217,6 +218,7 @@ import {
   slicesFromDomains,
 } from "./lib/sync/workspaceReloadCoordinator";
 import { syncDebugLog } from "./lib/sync/syncDebugLog";
+import { ContentScheduleWorkspace } from "./components/contentSchedule/ContentScheduleWorkspace";
 import { CatalogEnrichProgressPanel } from "./components/catalog/CatalogEnrichProgressPanel";
 import { CatalogUploadProgressPanel } from "./components/catalog/CatalogUploadProgressPanel";
 
@@ -234,6 +236,7 @@ export default function App() {
     workspace,
     setCatalog,
     setPosts,
+    setContentSchedule,
     setStartDate,
     setBrandGem,
     saveBrandGem,
@@ -282,10 +285,11 @@ export default function App() {
 
   const catalog = workspace.catalog;
   const posts = workspace.posts;
+  const contentSchedule = workspace.contentSchedule ?? [];
   const startDate = workspace.startDate;
   const brandGem = workspace.brandGem;
   const activePeriodLabel =
-    planningPeriods.find((p) => p.id === activePlanningPeriodId)?.label ?? "Roteiro";
+    planningPeriods.find((p) => p.id === activePlanningPeriodId)?.label ?? "Planejamento";
   const brandGemReady = useMemo(() => isBrandGemReadyForCaptions(brandGem), [brandGem]);
   const brandGemMissingFields = useMemo(
     () => formatMissingBrandGemFields(brandGem),
@@ -394,6 +398,7 @@ export default function App() {
         if (slices.workspace) {
           setPosts(ws.posts);
           setStartDate(ws.startDate);
+          setContentSchedule(ws.contentSchedule ?? []);
           setCanvaPages(ws.canva.pages);
           setActiveCanvaPageId(ws.canva.activePageId);
           setAutoSyncCanva(ws.canva.autoSync);
@@ -417,6 +422,7 @@ export default function App() {
       setBrandGem,
       setStartDate,
       setPosts,
+      setContentSchedule,
       setCanvaPages,
       setActiveCanvaPageId,
       setAutoSyncCanva,
@@ -824,7 +830,7 @@ export default function App() {
     if (showAlert) {
       await saveWorkspaceNow();
       toast.success(
-        `Sequência do Canva sincronizada com sucesso no Roteiro de 30 Dias!\n- ${validCount} looks organizados sequencialmente.\n- Legendas e aprovações existentes nos dias foram preservadas.`
+        `Sequência do Canva sincronizada com sucesso no planejamento de 30 dias!\n- ${validCount} looks organizados sequencialmente.\n- Legendas e aprovações existentes nos dias foram preservadas.`
       );
     }
   };
@@ -892,7 +898,7 @@ export default function App() {
     if (!hasActiveClient) return;
     if (
       !(await confirmDialog({
-        message: `Resetar o roteiro ativo de «${activeClient.name}»? Catálogo, posts e Canva deste roteiro voltam ao vazio. Roteiros arquivados são preservados.`,
+        message: `Resetar o planejamento ativo de «${activeClient.name}»? Catálogo, posts e Canva deste planejamento voltam ao vazio. Planejamentos arquivados são preservados.`,
         variant: "danger",
         confirmLabel: "Resetar",
       }))
@@ -1958,7 +1964,7 @@ export default function App() {
       message:
         `O navegador (Chrome/Brave) vai pedir permissão para ler os arquivos da pasta — ` +
         `na janela «Fazer upload de X arquivos», clique em Fazer upload. ` +
-        `Isso é proteção do navegador; o AuraGrid não controla essa tela.\n\n` +
+        `Isso é proteção do navegador; o ${APP_NAME} não controla essa tela.\n\n` +
         `Dica: arrastar a pasta para a área tracejada costuma ser mais rápido e evita um passo.\n\n` +
         `Continuar para selecionar a pasta de ${noun}?`,
       confirmLabel: "Selecionar pasta",
@@ -2151,6 +2157,19 @@ export default function App() {
 
     if (post.isGenerating) return {};
 
+    if (
+      post.captionFromSchedule &&
+      post.caption.trim() &&
+      !options?.force
+    ) {
+      const replaceOk = await confirmDialog({
+        message:
+          "Este dia já tem legenda vinda do Cronograma de Conteúdo. Gerar uma nova legenda com IA vai substituir esse texto. Continuar?",
+        confirmLabel: "Substituir legenda",
+      });
+      if (!replaceOk) return {};
+    }
+
     const recordBatchCaptionHook = (caption: string) => {
       const hook = extractMainCaptionText(caption, brandGem.footer).trim();
       if (!hook) return;
@@ -2302,6 +2321,7 @@ export default function App() {
                   isGenerating: false,
                   isGenerated: true,
                   error: null,
+                  captionFromSchedule: false,
                 }
               : p
           )
@@ -2872,7 +2892,7 @@ export default function App() {
     const count = referenceCatalog.length;
     if (
       !(await confirmDialog({
-        message: `Excluir todo o catálogo (${count} referência${count === 1 ? "" : "s"})?\n\nTodas as fotos e indexações serão removidas. Vínculos de referência nos roteiros também serão desfeitos.\n\nEsta ação não pode ser desfeita.`,
+        message: `Excluir todo o catálogo (${count} referência${count === 1 ? "" : "s"})?\n\nTodas as fotos e indexações serão removidas. Vínculos de referência nos planejamentos também serão desfeitos.\n\nEsta ação não pode ser desfeita.`,
         variant: "danger",
         confirmLabel: "Excluir tudo",
       }))
@@ -3168,24 +3188,30 @@ export default function App() {
               <li className="flex gap-2">
                 <span className="font-bold text-ag-accent shrink-0">1.</span>
                 <span>
-                  <strong className="text-ag-text">Catálogo</strong> — importe e indexe referências
+                  <strong className="text-ag-text">Cronograma</strong> — gere copy mensal com IA
                 </span>
               </li>
               <li className="flex gap-2">
                 <span className="font-bold text-ag-accent shrink-0">2.</span>
                 <span>
-                  <strong className="text-ag-text">Grid Canva</strong> — monte páginas de 12 fotos
+                  <strong className="text-ag-text">Catálogo</strong> — importe e indexe referências
                 </span>
               </li>
               <li className="flex gap-2">
                 <span className="font-bold text-ag-accent shrink-0">3.</span>
                 <span>
-                  <strong className="text-ag-text">Roteiros</strong> — sincronize, gere e aprove
-                  legendas
+                  <strong className="text-ag-text">Grid Canva</strong> — monte páginas de 12 fotos
                 </span>
               </li>
               <li className="flex gap-2">
                 <span className="font-bold text-ag-accent shrink-0">4.</span>
+                <span>
+                  <strong className="text-ag-text">Planejamento</strong> — sincronize, gere e aprove
+                  legendas
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span className="font-bold text-ag-accent shrink-0">5.</span>
                 <span>
                   <strong className="text-ag-text">Configurações</strong> — configure o Gem da
                   marca
@@ -3206,13 +3232,17 @@ export default function App() {
             metrics={dashboardMetrics}
             isLoading={useApiStorage && !workspaceHydrated}
             usesReferences={usesReferences}
-            onContinueRoteiro={() =>
+            onContinueWorkspace={() => {
+              const section =
+                brandGemReady && contentSchedule.length === 0
+                  ? "content_schedule"
+                  : "posts";
               void navigateClient({
                 clientId: effectiveActiveClientId,
-                section: "posts",
-                postsTab: "day",
-              })
-            }
+                section,
+                postsTab: section === "posts" ? "day" : undefined,
+              });
+            }}
             onNavigateSection={(section) =>
               void navigateClient({ clientId: effectiveActiveClientId, section })
             }
@@ -3233,7 +3263,7 @@ export default function App() {
         {hasActiveClient && parsedLocation.kind === "welcome" && (
           <div className="flex flex-col items-center justify-center min-h-[45vh] gap-6 px-4 text-center max-w-lg mx-auto">
             <h2 className="font-display text-2xl font-semibold text-ag-text">
-              Bem-vindo ao AuraGrid
+              Bem-vindo ao {APP_NAME}
             </h2>
             <p className="text-sm text-ag-muted">
               Você já tem clientes cadastrados. Entre no workspace para continuar de onde parou.
@@ -3269,6 +3299,52 @@ export default function App() {
             indexedReferenceCount={indexedReferenceCount}
             onDefaultUsesReferencesChange={setDefaultUsesReferences}
           />
+        )}
+
+        {hasActiveClient && onClientRoute && routeSection === "content_schedule" && (
+          <div className="ag-workspace-section">
+            <PlanningPeriodSelector
+              periods={planningPeriods}
+              activePeriodId={activePlanningPeriodId}
+              isReadOnly={isReadOnly}
+              periodEditMode={periodEditMode}
+              usesReferences={usesReferences}
+              periodUsesReferencesOverride={
+                planningPeriods.find((p) => p.id === activePlanningPeriodId)?.usesReferences ??
+                null
+              }
+              clientDefaultUsesReferences={activeClient.defaultUsesReferences}
+              indexedReferenceCount={indexedReferenceCount}
+              storedReferenceCount={referenceCatalog.length}
+              onPeriodUsesReferencesChange={setPeriodUsesReferences}
+              hideDuplicateAction={isReadOnly}
+              onSelect={(periodId) => {
+                void navigateClient({ periodId }, { replace: true, skipDirtyGuard: true });
+              }}
+              onCreateNew={() => {
+                setDuplicateSourcePeriodId(undefined);
+                setShowNewPlanningPeriodModal(true);
+              }}
+              onDuplicate={(sourceId) => {
+                setDuplicateSourcePeriodId(sourceId);
+                setShowNewPlanningPeriodModal(true);
+              }}
+            />
+            <ContentScheduleWorkspace
+              items={contentSchedule}
+              brandGem={brandGem}
+              brandGemReady={brandGemReady}
+              startDate={startDate}
+              periodLabel={activePeriodLabel}
+              isReadOnly={isReadOnly}
+              posts={posts}
+              onItemsChange={setContentSchedule}
+              onPushToPlanning={(nextPosts, nextItems) => {
+                setPosts(nextPosts);
+                setContentSchedule(nextItems);
+              }}
+            />
+          </div>
         )}
 
         {hasActiveClient && onClientRoute && routeSection === "posts" && (
@@ -3318,7 +3394,7 @@ export default function App() {
                 onReactivate={async () => {
                   if (
                     !(await confirmDialog({
-                      message: `O roteiro ativo atual será arquivado. Deseja reativar «${activePeriodLabel}»?`,
+                      message: `O planejamento ativo atual será arquivado. Deseja reativar «${activePeriodLabel}»?`,
                       variant: "danger",
                       confirmLabel: "Reativar",
                     }))
@@ -3492,7 +3568,7 @@ export default function App() {
               />
             ) : routePostsTab === "day" ? (
               <div className="ag-card p-8 text-center text-sm text-ag-muted">
-                Nenhum post no roteiro. Use a aba <strong>Setup</strong> para popular o calendário.
+                Nenhum post no planejamento. Use a aba <strong>Setup</strong> para popular o calendário.
               </div>
             ) : routePostsTab === "calendar" ? (
               <EditorialGridView
@@ -3608,7 +3684,7 @@ export default function App() {
             }
           >
             <p className="text-sm text-ag-muted mb-4 leading-relaxed max-w-3xl">
-              Monte páginas de 12 fotos, organize looks e envie para o roteiro de 30 dias.{" "}
+              Monte páginas de 12 fotos, organize looks e envie para o planejamento de 30 dias.{" "}
               <CanvaGridOrderHint onOpenRoteiros={() => void handleNavigate("posts")} />
             </p>
             <CanvaGridWorkspace
@@ -3963,7 +4039,7 @@ export default function App() {
                 <ImageIcon className="h-8 w-8 text-ag-muted mx-auto animate-pulse mb-1" />
                 <p className="text-xs font-semibold text-ag-muted">Nenhuma referência no acervo</p>
                 <p className="text-[10px] text-ag-muted mt-1">
-                  Use &quot;Subir Pasta de Referências&quot; ou &quot;Adicionar Único&quot; para cadastrar looks que a IA usará no match dos roteiros.
+                  Use &quot;Subir Pasta de Referências&quot; ou &quot;Adicionar Único&quot; para cadastrar looks que a IA usará no match dos planejamentos.
                 </p>
               </div>
             ) : (

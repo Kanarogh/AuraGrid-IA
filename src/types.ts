@@ -88,6 +88,36 @@ export interface BrandGem {
   footer: RepeatingText;
 }
 
+/** Copy estruturado gerado no Cronograma de Conteúdo */
+export type ContentScheduleSection = "posts" | "stories";
+
+export type ContentScheduleItemStatus = "draft" | "approved" | "handed_off" | "done";
+
+export interface ContentScheduleStoryExtras {
+  pollOptions?: [string, string];
+  onScreenText?: string;
+}
+
+export interface StructuredPostCopy {
+  name: string;
+  postType: string;
+  section: ContentScheduleSection;
+  headline: string;
+  subtitle: string;
+  cta: string;
+  legenda: string;
+  hashtags: string;
+  storyExtras?: ContentScheduleStoryExtras;
+}
+
+export interface ContentScheduleItem extends StructuredPostCopy {
+  id: string;
+  order: number;
+  scheduledDate?: string;
+  status: ContentScheduleItemStatus;
+  linkedPostId?: string;
+}
+
 export interface PlannedPost {
   id: string;
   dayNumber: number;
@@ -105,6 +135,10 @@ export interface PlannedPost {
   canvaSlotRef?: { pageId: string; slotId: string } | null;
   /** Arte/gráfico com texto — legenda pela imagem, sem comparar catálogo de vestidos */
   captionFromImageOnly?: boolean;
+  /** Copy do cronograma vinculado a este dia */
+  structuredCopy?: StructuredPostCopy;
+  /** Legenda veio do cronograma — pedir confirmação antes de sobrescrever na IA */
+  captionFromSchedule?: boolean;
 }
 
 export interface CanvaGridSlot {

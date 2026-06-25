@@ -15,7 +15,7 @@ import type { BrandGem, CanvaGridPage, PlannedPost } from "../../types";
 import type { ClientMeta, ClientWorkspace } from "./types";
 
 import {
-  DEFAULT_START_DATE,
+  defaultPlanningStartDate,
   POST_COUNT,
   createDefaultPlanningPeriod,
   defaultPeriodId,
@@ -102,7 +102,7 @@ export function createOrphanWorkspace(): ClientWorkspace {
 }
 
 export function createEmptyWorkspace(meta: ClientMeta): ClientWorkspace {
-  const startDate = DEFAULT_START_DATE;
+  const startDate = defaultPlanningStartDate();
   const posts = recalculatePostDates(startDate, createEmptyPosts());
   const defaultPages = createDefaultCanvaPages();
   const defaultPeriod = createDefaultPlanningPeriod(meta.id, startDate);
@@ -111,6 +111,7 @@ export function createEmptyWorkspace(meta: ClientMeta): ClientWorkspace {
     brandGem: createBrandGemForClient(meta.id, meta.name),
     catalog: [],
     posts,
+    contentSchedule: [],
     startDate,
     activePlanningPeriodId: defaultPeriod.id,
     planningPeriods: [defaultPeriod],
@@ -199,6 +200,7 @@ export function normalizeWorkspace(
     },
     catalog: Array.isArray(raw.catalog) ? raw.catalog : empty.catalog,
     posts: Array.isArray(raw.posts) && raw.posts.length > 0 ? raw.posts : empty.posts,
+    contentSchedule: Array.isArray(raw.contentSchedule) ? raw.contentSchedule : empty.contentSchedule,
     startDate: activePeriod.startDate ?? empty.startDate,
     activePlanningPeriodId,
     planningPeriods,

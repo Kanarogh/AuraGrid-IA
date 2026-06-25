@@ -156,6 +156,7 @@ function parseClientSegments(
     }
     case "feed_simulator":
     case "reference_finder":
+    case "content_schedule":
       return rest.length === 0 ? route : null;
     default:
       return null;

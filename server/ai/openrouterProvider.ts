@@ -160,7 +160,7 @@ async function openrouterChat(
       Authorization: `Bearer ${getApiKey()}`,
       "Content-Type": "application/json",
       "HTTP-Referer": getAppUrl(),
-      "X-Title": "AuraGrid",
+      "X-Title": "AuraStudio IA",
     },
     body: JSON.stringify(body),
   });

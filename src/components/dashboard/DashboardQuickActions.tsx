@@ -4,6 +4,7 @@ import { cn } from "../../lib/cn";
 import { ChevronRight } from "lucide-react";
 
 const QUICK_SECTIONS: AppSection[] = [
+  "content_schedule",
   "posts",
   "canva_grid",
   "feed_simulator",

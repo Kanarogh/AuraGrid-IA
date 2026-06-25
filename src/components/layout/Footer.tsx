@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useClientWorkspace } from "../../context/ClientWorkspaceContext";
+import { APP_NAME } from "../../lib/appBranding";
 import {
   CLOUD_SAVE_EVENT,
   type CloudSaveStatus,
@@ -55,7 +56,7 @@ export function Footer() {
   return (
     <footer className="px-3 sm:px-4 lg:px-5 py-5 mt-6 border-t border-ag-border flex flex-col sm:flex-row justify-between gap-3 text-xs text-ag-muted w-full">
       <span>
-        © {new Date().getFullYear()} AuraGrid Intelligence — planejamento premium para moda.
+        © {new Date().getFullYear()} {APP_NAME} — planejamento premium para moda.
       </span>
       <span
         className={

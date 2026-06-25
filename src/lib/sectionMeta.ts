@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import {
+  CalendarRange,
   Grid,
   LayoutGrid,
   ScanSearch,
@@ -9,6 +10,7 @@ import {
 } from "lucide-react";
 
 export type AppSection =
+  | "content_schedule"
   | "posts"
   | "canva_grid"
   | "feed_simulator"
@@ -35,8 +37,14 @@ export const NAV_GROUPS: NavGroup[] = [
     title: "Workspace",
     items: [
       {
+        id: "content_schedule",
+        label: "Cronograma de Conteúdo",
+        description: "Gere copy mensal com IA antes do planejamento",
+        icon: CalendarRange,
+      },
+      {
         id: "posts",
-        label: "Roteiros e legendas",
+        label: "Planejamento e legendas",
         description: "Planeje, gere e aprove legendas",
         icon: Sliders,
       },
@@ -100,8 +108,9 @@ export function getNavGroups(usesReferences = true): NavGroup[] {
 }
 
 export const SECTION_SUBTITLES: Record<AppSection, string> = {
+  content_schedule: "Gere o cronograma mensal de copy com IA",
   posts: "Planeje, gere e aprove legendas do mês",
-  canva_grid: "Monte páginas de 12 fotos e envie para o roteiro",
+  canva_grid: "Monte páginas de 12 fotos e envie para o planejamento",
   feed_simulator: "Veja como o feed fica no Instagram",
   catalog: "Gerencie referências indexadas e peças de grid",
   reference_finder: "Identifique o código de uma peça a partir de uma foto",

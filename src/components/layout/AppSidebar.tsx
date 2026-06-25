@@ -9,7 +9,7 @@ import {
   X,
 } from "lucide-react";
 import { Badge } from "../ui/Badge";
-import { cn } from "../../lib/cn";
+import { APP_NAME_SHORT } from "../../lib/appBranding";
 import { ClientSwitcher } from "./ClientSwitcher";
 import { WorkspaceStatusBar } from "./WorkspaceStatusBar";
 import { useAuth } from "../../context/AuthContext";
@@ -167,10 +167,10 @@ export function AppSidebar({
         {!isCollapsed && (
           <div className="min-w-0 flex-1">
             <p className="font-display text-base sm:text-lg font-semibold text-ag-text leading-tight tracking-tight truncate">
-              AuraGrid
+              {APP_NAME_SHORT}
             </p>
             <p className="text-[10px] uppercase tracking-widest text-ag-muted font-mono">
-              Intelligence
+              IA
             </p>
           </div>
         )}
