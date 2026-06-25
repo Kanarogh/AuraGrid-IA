@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Badge } from "../ui/Badge";
 import { APP_NAME_SHORT } from "../../lib/appBranding";
+import { cn } from "../../lib/cn";
 import { ClientSwitcher } from "./ClientSwitcher";
 import { WorkspaceStatusBar } from "./WorkspaceStatusBar";
 import { useAuth } from "../../context/AuthContext";
