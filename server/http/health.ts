@@ -1,4 +1,5 @@
 import { checkDatabaseConnection, isDatabaseConfigured } from "../db/client";
+import { getMigrationStatus } from "../db/migrationStatus";
 import { isOfflineStorageAllowed, resolveStorageMode } from "../config/deploy";
 import { checkMinioConnection, isMediaStorageConfigured } from "../services/mediaService";
 import { getMediaStorageProvider } from "../config/mediaStorage";
@@ -9,9 +10,10 @@ export async function buildExtendedHealth() {
   const dbConfigured = isDatabaseConfigured();
   const minioConfigured = isMediaStorageConfigured();
   const storageProvider = getMediaStorageProvider();
-  const [dbOk, minioOk] = await Promise.all([
-    dbConfigured ? checkDatabaseConnection() : Promise.resolve(false),
+  const dbOk = dbConfigured ? await checkDatabaseConnection() : false;
+  const [minioOk, migrations] = await Promise.all([
     minioConfigured ? checkMinioConnection() : Promise.resolve(false),
+    dbConfigured && dbOk ? getMigrationStatus().catch(() => null) : Promise.resolve(null),
   ]);
 
   return {
@@ -27,6 +29,13 @@ export async function buildExtendedHealth() {
         ok: minioOk,
         provider: storageProvider,
       },
+      migrations: migrations
+        ? {
+            pending: migrations.pending,
+            contentScheduleReady: migrations.contentScheduleReady,
+            ok: migrations.pending.length === 0,
+          }
+        : null,
     },
     apiVersion: 7,
   };

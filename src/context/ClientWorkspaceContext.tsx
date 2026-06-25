@@ -137,6 +137,8 @@ type ClientWorkspaceContextValue = {
   }) => Promise<void>;
   useApiStorage: boolean;
   workspaceHydrated: boolean;
+  workspaceLoadError: string | null;
+  retryWorkspaceLoad: () => void;
 };
 
 const ClientWorkspaceContext = createContext<ClientWorkspaceContextValue | null>(null);
@@ -208,6 +210,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       : createOrphanWorkspace()
   );
   const [workspaceHydrated, setWorkspaceHydrated] = useState(false);
+  const [workspaceLoadError, setWorkspaceLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading || !isStorageModeResolved(storageMode)) return;
@@ -229,7 +232,14 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
     }
 
     setWorkspaceHydrated(false);
+    setWorkspaceLoadError(null);
   }, [useApiStorage, user?.id, authLoading, storageMode, user]);
+
+  const retryWorkspaceLoad = useCallback(() => {
+    setWorkspaceLoadError(null);
+    setWorkspaceHydrated(false);
+    window.dispatchEvent(new CustomEvent("auragrid:api-reload-request"));
+  }, []);
 
   useEffect(() => {
     if (!useApiStorage) return;
@@ -243,10 +253,22 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       setRegistry(normalizedReg);
       setWorkspace(ws);
       workspaceRef.current = ws;
+      setWorkspaceLoadError(null);
       setWorkspaceHydrated(true);
     };
+    const onLoadFailed = (e: Event) => {
+      const message =
+        (e as CustomEvent<{ message?: string }>).detail.message ??
+        "Falha ao carregar workspace da nuvem.";
+      setWorkspaceLoadError(message);
+      setWorkspaceHydrated(false);
+    };
     window.addEventListener("auragrid:api-registry", onApiRegistry);
-    return () => window.removeEventListener("auragrid:api-registry", onApiRegistry);
+    window.addEventListener("auragrid:api-load-failed", onLoadFailed);
+    return () => {
+      window.removeEventListener("auragrid:api-registry", onApiRegistry);
+      window.removeEventListener("auragrid:api-load-failed", onLoadFailed);
+    };
   }, [useApiStorage]);
 
   const hasActiveClient = registry.clients.length > 0;
@@ -1246,6 +1268,8 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       applyRemotePlanningPeriods,
       useApiStorage,
       workspaceHydrated,
+      workspaceLoadError,
+      retryWorkspaceLoad,
     }),
     [
       registry,
@@ -1287,6 +1311,8 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       applyRemotePlanningPeriods,
       useApiStorage,
       workspaceHydrated,
+      workspaceLoadError,
+      retryWorkspaceLoad,
     ]
   );
 

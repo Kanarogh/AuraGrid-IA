@@ -8,13 +8,16 @@ import { buildLoginPath } from "../../lib/appRouting";
 import { isStorageModeResolved } from "../../lib/storageMode";
 import { AppBootstrapSplash } from "./AppBootstrapSplash";
 
+import { WorkspaceLoadErrorPanel } from "./WorkspaceLoadErrorPanel";
+
 /**
  * Gate único de bootstrap: health → auth → workspace.
  * Substitui spinners empilhados em AuthGate + App.
  */
 export function AppBootstrapGate({ children }: { children: React.ReactNode }) {
   const { user, loading, storageMode } = useAuth();
-  const { useApiStorage, workspaceHydrated } = useClientWorkspace();
+  const { useApiStorage, workspaceHydrated, workspaceLoadError, retryWorkspaceLoad } =
+    useClientWorkspace();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -36,6 +39,12 @@ export function AppBootstrapGate({ children }: { children: React.ReactNode }) {
   if (storageMode === "postgresql" && !user) {
     if (pathname === "/login") return null;
     return <AppBootstrapSplash status="redirecting" />;
+  }
+
+  if (useApiStorage && workspaceLoadError) {
+    return (
+      <WorkspaceLoadErrorPanel message={workspaceLoadError} onRetry={retryWorkspaceLoad} />
+    );
   }
 
   if (useApiStorage && !workspaceHydrated) {

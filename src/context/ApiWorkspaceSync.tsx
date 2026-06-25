@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "./AuthContext";
 import { useClientWorkspace } from "./ClientWorkspaceContext";
 import { getAccessToken } from "../lib/api/apiClient";
@@ -33,6 +33,25 @@ import { setWorkspaceSavePending } from "../lib/sync/workspaceSaveGuard";
 import { syncDebugLog } from "../lib/sync/syncDebugLog";
 
 const SAVE_DEBOUNCE_MS = 200;
+const LOAD_RETRIES = 3;
+const LOAD_RETRY_DELAY_MS = 800;
+
+async function sleep(ms: number) {
+  await new Promise((r) => setTimeout(r, ms));
+}
+
+async function fetchWorkspaceWithRetry(clientId: string) {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= LOAD_RETRIES; attempt++) {
+    try {
+      return await fetchWorkspace(clientId);
+    } catch (err) {
+      lastErr = err;
+      if (attempt < LOAD_RETRIES) await sleep(LOAD_RETRY_DELAY_MS);
+    }
+  }
+  throw lastErr;
+}
 
 function buildWorkspacePatch(ws: ClientWorkspace) {
   return buildWorkspaceApiPatch(ws);
@@ -81,7 +100,14 @@ export function ApiWorkspaceSync() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workspaceRef = useRef(workspace);
   const skipSaveRef = useRef(true);
+  const [reloadNonce, setReloadNonce] = useState(0);
   workspaceRef.current = workspace;
+
+  useEffect(() => {
+    const onReload = () => setReloadNonce((n) => n + 1);
+    window.addEventListener("auragrid:api-reload-request", onReload);
+    return () => window.removeEventListener("auragrid:api-reload-request", onReload);
+  }, []);
 
   // Bootstrap from API
   useEffect(() => {
@@ -105,7 +131,7 @@ export function ApiWorkspaceSync() {
           skipSaveRef.current = false;
           return;
         }
-        const dto = await fetchWorkspace(clientId);
+        const dto = await fetchWorkspaceWithRetry(clientId);
         if (cancelled) return;
         const ws = apiWorkspaceToClientWorkspace(dto);
         const fp = workspaceApiPatchFingerprint(ws);
@@ -122,13 +148,13 @@ export function ApiWorkspaceSync() {
       } catch (err) {
         console.error("[AuraGrid] Falha ao carregar workspace da API:", err);
         if (!cancelled) {
+          const message =
+            err instanceof Error ? err.message : "Falha ao carregar workspace da nuvem.";
           window.dispatchEvent(
-            new CustomEvent("auragrid:api-registry", {
-              detail: { registry: createEmptyRegistry(), workspace: createOrphanWorkspace() },
-            })
+            new CustomEvent("auragrid:api-load-failed", { detail: { message } })
           );
-          loadedRef.current = true;
-          skipSaveRef.current = false;
+          loadedRef.current = false;
+          skipSaveRef.current = true;
         }
       }
     })();
@@ -136,7 +162,7 @@ export function ApiWorkspaceSync() {
     return () => {
       cancelled = true;
     };
-  }, [storageMode, user?.id]);
+  }, [storageMode, user?.id, reloadNonce]);
 
   // Debounced PATCH
   useEffect(() => {

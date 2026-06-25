@@ -3,17 +3,8 @@ import fs from "fs/promises";
 import path from "path";
 import postgres from "postgres";
 import { envString } from "../config/env";
+import { MIGRATION_FILES } from "./migrationCatalog";
 import { postgresConnectOptions } from "./postgresOptions";
-
-const MIGRATION_FILES = [
-  "0000_initial",
-  "0001_campaign_context",
-  "0002_planned_posts_multi",
-  "0003_catalog_embeddings",
-  "0004_user_ai_preferences_models",
-  "0005_planning_periods",
-  "0006_uses_references",
-] as const;
 
 async function waitForPostgres(url: string, attempts = 30, delayMs = 1000): Promise<void> {
   for (let i = 1; i <= attempts; i++) {
