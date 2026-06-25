@@ -41,6 +41,8 @@
 .light {
   color-scheme: light;
   --ag-topbar-height: 4rem;
+  --ag-sidebar-width-expanded: 280px;
+  --ag-sidebar-width-collapsed: 72px;
   --ag-bg: #f5f5f3;
   --ag-surface-1: #ffffff;
   --ag-surface-2: #f0f0ed;
@@ -61,6 +63,8 @@
 .dark {
   color-scheme: dark;
   --ag-topbar-height: 4rem;
+  --ag-sidebar-width-expanded: 280px;
+  --ag-sidebar-width-collapsed: 72px;
   --ag-bg: #08080b;
   --ag-surface-1: #111117;
   --ag-surface-2: #18181f;

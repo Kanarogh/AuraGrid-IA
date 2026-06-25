@@ -1,26 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import {
-  LogOut,
-  LayoutDashboard,
-  MoreHorizontal,
-  PanelLeftClose,
-  PanelLeftOpen,
-  RotateCcw,
-  X,
-} from "lucide-react";
-import { Badge } from "../ui/Badge";
-import { APP_NAME_SHORT } from "../../lib/appBranding";
+"use client";
+
+import { useEffect, useRef } from "react";
 import { cn } from "../../lib/cn";
-import { ClientSwitcher } from "./ClientSwitcher";
-import { WorkspaceStatusBar } from "./WorkspaceStatusBar";
-import { useAuth } from "../../context/AuthContext";
-import {
-  getNavGroups,
-  type AppSection,
-  type NavItem,
-} from "../../lib/sectionMeta";
-import { confirmDialog } from "../../lib/confirmDialog";
 import { useFocusTrap } from "../../lib/useFocusTrap";
+import type { AppSection } from "../../lib/sectionMeta";
+import { SidebarBrand } from "./sidebar/SidebarBrand";
+import { ClientHub } from "./sidebar/ClientHub";
+import { SidebarNav } from "./sidebar/SidebarNav";
+import { SidebarFooter } from "./sidebar/SidebarFooter";
 
 export type { AppSection } from "../../lib/sectionMeta";
 export {
@@ -73,35 +60,10 @@ export function AppSidebar({
   onReset: () => void;
   onClientCreated?: (clientId: string) => void;
   hasActiveClient: boolean;
+  usesReferences?: boolean;
 }) {
-  const { storageMode, user, logout } = useAuth();
-  const [moreOpen, setMoreOpen] = useState(false);
-  const moreRef = useRef<HTMLDivElement>(null);
   const asideRef = useRef<HTMLElement>(null);
-  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
-  /** Drawer mobile sempre expandido; recolhido só no desktop. */
   const isCollapsed = collapsed && !mobileOpen;
-
-  const groups = getNavGroups(usesReferences).map((g) => ({
-    ...g,
-    items: g.items.map((item) => {
-      if (item.id === "catalog" && catalogCount > 0) {
-        return { ...item, badge: catalogCount } as NavItem & { badge?: number };
-      }
-      return item;
-    }),
-  }));
-
-  useEffect(() => {
-    if (!moreOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
-        setMoreOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [moreOpen]);
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -119,292 +81,8 @@ export function AppSidebar({
     const focusable = asideRef.current.querySelectorAll<HTMLElement>(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
     );
-    const first = focusable[0];
-    first?.focus();
+    focusable[0]?.focus();
   }, [mobileOpen]);
-
-  const handleReset = async () => {
-    setMoreOpen(false);
-    if (
-      !(await confirmDialog({
-        title: "Reiniciar roteiro ativo?",
-        message:
-          "Isso apaga posts, Canva e catálogo do roteiro ativo. Roteiros arquivados são preservados.",
-        variant: "danger",
-        confirmLabel: "Continuar",
-      }))
-    ) {
-      return;
-    }
-    if (
-      !(await confirmDialog({
-        title: "Confirmação final",
-        message: "Esta ação não pode ser desfeita. Deseja realmente reiniciar?",
-        variant: "danger",
-        confirmLabel: "Reiniciar agora",
-      }))
-    ) {
-      return;
-    }
-    onReset();
-  };
-
-  const sidebarContent = (
-    <div className="flex flex-col h-full">
-      <div
-        className={cn(
-          "flex items-center gap-3 border-b border-ag-border shrink-0",
-          isCollapsed ? "justify-center p-3 sm:p-4" : "px-4 sm:px-5 py-3 sm:py-4"
-        )}
-      >
-        <div
-          className="h-9 w-9 rounded-xl text-ag-accent-fg flex items-center justify-center font-display font-bold text-lg shrink-0 shadow-sm"
-          style={{
-            background: "linear-gradient(135deg, var(--ag-accent), var(--ag-accent-strong))",
-          }}
-        >
-          A
-        </div>
-        {!isCollapsed && (
-          <div className="min-w-0 flex-1">
-            <p className="font-display text-base sm:text-lg font-semibold text-ag-text leading-tight tracking-tight truncate">
-              {APP_NAME_SHORT}
-            </p>
-            <p className="text-[10px] uppercase tracking-widest text-ag-muted font-mono">
-              IA
-            </p>
-          </div>
-        )}
-        {!isCollapsed && (
-          <button
-            type="button"
-            onClick={onMobileClose}
-            className="lg:hidden p-2 rounded-lg text-ag-muted hover:bg-ag-surface-2 hover:text-ag-text cursor-pointer shrink-0"
-            aria-label="Fechar menu"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        )}
-      </div>
-
-      <ClientSwitcher collapsed={isCollapsed} onClientCreated={onClientCreated} />
-
-      <nav
-        className="flex-1 overflow-y-auto py-3 sm:py-4 px-2 ag-scrollbar-thin space-y-4 sm:space-y-5 overscroll-contain"
-        aria-label="Navegação principal"
-      >
-        <div>
-          {!isCollapsed && (
-            <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-widest text-ag-muted">
-              Início
-            </p>
-          )}
-          <ul className="space-y-0.5">
-            <li>
-              <button
-                type="button"
-                onClick={() => {
-                  onNavigateDashboard?.();
-                  onMobileClose();
-                }}
-                className={cn(
-                  "w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors cursor-pointer ag-focus-ring",
-                  isDashboardActive
-                    ? "bg-ag-accent text-ag-accent-fg shadow-sm"
-                    : "text-ag-text hover:bg-ag-surface-3",
-                  isCollapsed && "justify-center px-2"
-                )}
-                title={isCollapsed ? "Início" : undefined}
-              >
-                <LayoutDashboard className="h-[18px] w-[18px] shrink-0" />
-                {!isCollapsed && <span className="truncate">Dashboard</span>}
-              </button>
-            </li>
-          </ul>
-        </div>
-
-        {groups.map((group) => (
-          <div key={group.title}>
-            {!isCollapsed && (
-              <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-widest text-ag-muted">
-                {group.title}
-              </p>
-            )}
-            <ul className="space-y-0.5">
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                const isActive = !isDashboardActive && active === item.id;
-                const badge = "badge" in item ? (item as { badge?: number }).badge : undefined;
-                const disabled = !hasActiveClient;
-                return (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      aria-current={isActive ? "page" : undefined}
-                      onClick={() => {
-                        if (disabled) return;
-                        onNavigate(item.id);
-                        onMobileClose();
-                      }}
-                      title={
-                        isCollapsed
-                          ? disabled
-                            ? "Crie um cliente primeiro"
-                            : item.label
-                          : disabled
-                            ? "Crie um cliente para acessar"
-                            : undefined
-                      }
-                      className={cn(
-                        "group w-full flex items-center gap-3 rounded-xl text-left transition-all duration-200 relative",
-                        isCollapsed ? "justify-center p-2.5" : "px-3 py-2.5 max-lg:min-h-[44px]",
-                        disabled && "opacity-45 cursor-not-allowed",
-                        !disabled && "cursor-pointer",
-                        isActive
-                          ? "bg-ag-accent text-ag-accent-fg shadow-sm"
-                          : !disabled && "text-ag-text hover:bg-ag-surface-3"
-                      )}
-                    >
-                      {isActive && !isCollapsed && (
-                        <span
-                          className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-ag-accent-fg/80"
-                          aria-hidden
-                        />
-                      )}
-                      <span className="relative shrink-0">
-                        <Icon
-                          className={cn(
-                            "h-4 w-4 transition-colors",
-                            isActive ? "text-ag-accent-fg" : "text-ag-muted group-hover:text-ag-text"
-                          )}
-                        />
-                      </span>
-                      {!isCollapsed && (
-                        <span
-                          className={cn(
-                            "flex-1 min-w-0",
-                            item.nested && "pl-1 border-l-2 border-ag-border/40 ml-0.5"
-                          )}
-                        >
-                          <span className="text-sm font-medium block truncate">{item.label}</span>
-                          {item.description && (
-                            <span
-                              className={cn(
-                                "text-[10px] block truncate",
-                                isActive ? "text-ag-accent-fg/80" : "text-ag-muted"
-                              )}
-                            >
-                              {item.description}
-                            </span>
-                          )}
-                        </span>
-                      )}
-                      {!isCollapsed && badge !== undefined && (
-                        <span
-                          className={cn(
-                            "text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md",
-                            isActive
-                              ? "bg-ag-accent-fg/20 text-ag-accent-fg"
-                              : "bg-ag-surface-3 text-ag-muted"
-                          )}
-                        >
-                          {badge}
-                        </span>
-                      )}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
-      </nav>
-
-      <div
-        className={cn(
-          "border-t border-ag-border p-2 sm:p-3 space-y-1.5 sm:space-y-2 shrink-0 pb-[max(0.5rem,env(safe-area-inset-bottom))]",
-          isCollapsed && "flex flex-col items-center"
-        )}
-      >
-        <WorkspaceStatusBar
-          brandGemReady={brandGemReady}
-          brandGemMissingCount={brandGemMissingCount}
-          collapsed={isCollapsed}
-          onOpenSettings={onNavigate}
-        />
-
-        <div className={cn("relative", isCollapsed ? "" : "w-full")} ref={moreRef}>
-          <button
-            type="button"
-            onClick={() => setMoreOpen((o) => !o)}
-            aria-expanded={moreOpen}
-            aria-haspopup="menu"
-            title="Mais opções"
-            className={cn(
-              "flex items-center gap-2 text-xs text-ag-muted hover:text-ag-text hover:bg-ag-surface-3 rounded-lg transition-colors cursor-pointer max-lg:min-h-[44px]",
-              isCollapsed ? "p-2" : "w-full px-3 py-2"
-            )}
-          >
-            <MoreHorizontal className="h-3.5 w-3.5" />
-            {!isCollapsed && <span>Mais opções</span>}
-          </button>
-          {moreOpen && (
-            <div
-              role="menu"
-              className={cn(
-                "absolute bottom-full mb-1 rounded-lg border border-ag-border bg-ag-surface-1 shadow-lg py-1 text-xs z-50 min-w-[11rem]",
-                isCollapsed ? "left-0" : "left-0 right-0"
-              )}
-            >
-              <button
-                type="button"
-                role="menuitem"
-                disabled={!hasActiveClient}
-                onClick={() => void handleReset()}
-                className="w-full px-3 py-2 text-left text-ag-danger hover:bg-ag-danger/10 cursor-pointer disabled:opacity-40 flex items-center gap-2"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                Reiniciar roteiro
-              </button>
-              {storageMode === "postgresql" && user && (
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setMoreOpen(false);
-                    void logout();
-                  }}
-                  className="w-full px-3 py-2 text-left hover:bg-ag-surface-2 cursor-pointer flex items-center gap-2"
-                >
-                  <LogOut className="h-3.5 w-3.5" />
-                  Sair ({user.displayName})
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        <button
-          type="button"
-          onClick={onToggleCollapsed}
-          className={cn(
-            "hidden lg:flex items-center gap-2 text-xs text-ag-muted hover:text-ag-text hover:bg-ag-surface-3 rounded-lg transition-colors cursor-pointer",
-            collapsed ? "p-2" : "w-full px-3 py-2"
-          )}
-        >
-          {collapsed ? (
-            <PanelLeftOpen className="h-4 w-4" />
-          ) : (
-            <>
-              <PanelLeftClose className="h-4 w-4" />
-              <span>Recolher menu</span>
-            </>
-          )}
-        </button>
-      </div>
-    </div>
-  );
 
   return (
     <>
@@ -421,12 +99,40 @@ export function AppSidebar({
         ref={asideRef}
         className={cn(
           "fixed lg:sticky top-0 z-50 lg:z-30 h-[100dvh] shrink-0 border-r border-ag-border bg-ag-surface-1 flex flex-col transition-all duration-200",
-          isCollapsed ? "w-[72px]" : "w-[min(100vw-2rem,280px)] lg:w-[260px]",
+          isCollapsed ? "w-[var(--ag-sidebar-width-collapsed)]" : "w-[min(100vw-1rem,var(--ag-sidebar-width-expanded))] lg:w-[var(--ag-sidebar-width-expanded)]",
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
         aria-label="Menu lateral"
       >
-        {sidebarContent}
+        <SidebarBrand collapsed={isCollapsed} onMobileClose={onMobileClose} />
+
+        <ClientHub
+          collapsed={isCollapsed}
+          onClientCreated={onClientCreated}
+          brandGemReady={brandGemReady}
+        />
+
+        <SidebarNav
+          active={active}
+          isDashboardActive={isDashboardActive}
+          collapsed={isCollapsed}
+          hasActiveClient={hasActiveClient}
+          usesReferences={usesReferences}
+          catalogCount={catalogCount}
+          onNavigate={onNavigate}
+          onNavigateDashboard={onNavigateDashboard}
+          onMobileClose={onMobileClose}
+        />
+
+        <SidebarFooter
+          collapsed={isCollapsed}
+          hasActiveClient={hasActiveClient}
+          brandGemReady={brandGemReady}
+          brandGemMissingCount={brandGemMissingCount}
+          onOpenSettings={onNavigate}
+          onReset={onReset}
+          onToggleCollapsed={onToggleCollapsed}
+        />
       </aside>
     </>
   );

@@ -29,12 +29,18 @@ export type NavItem = {
 
 export type NavGroup = {
   title: string;
+  /** Friendly label shown in sidebar (sentence case) */
+  navLabel?: string;
+  /** Visual treatment in sidebar */
+  variant?: "default" | "planning";
   items: NavItem[];
 };
 
 export const NAV_GROUPS: NavGroup[] = [
   {
     title: "Workspace",
+    navLabel: "Planejar",
+    variant: "planning",
     items: [
       {
         id: "content_schedule",
@@ -52,6 +58,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     title: "Produção",
+    navLabel: "Produzir",
     items: [
       {
         id: "canva_grid",
@@ -69,6 +76,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     title: "Acervo",
+    navLabel: "Acervo",
     items: [
       {
         id: "catalog",
@@ -87,6 +95,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     title: "Conta",
+    navLabel: "Conta",
     items: [
       {
         id: "settings",
