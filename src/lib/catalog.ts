@@ -162,3 +162,32 @@ export function prepareCatalogItemForEnrichment(item: CatalogItem): CatalogItem 
     ...clearCatalogEnrichmentPatch(),
   });
 }
+
+/** Mescla itens por id (incoming vence) e remove duplicatas visuais na ordem do lote. */
+export function mergeCatalogItems(
+  existing: CatalogItem[],
+  incoming: CatalogItem[],
+  options?: { prependIncoming?: boolean }
+): CatalogItem[] {
+  if (incoming.length === 0) return existing;
+  const incomingById = new Map(
+    incoming.map((item) => [item.id, normalizeCatalogItem(item)])
+  );
+  const kept = existing.filter((item) => !incomingById.has(item.id));
+  const resolvedIncoming = incoming.map((item) => incomingById.get(item.id)!);
+  return options?.prependIncoming === false
+    ? [...kept, ...resolvedIncoming]
+    : [...resolvedIncoming, ...kept];
+}
+
+/** Garante lista sem ids repetidos (primeira ocorrência vence). */
+export function dedupeCatalogItems(items: CatalogItem[]): CatalogItem[] {
+  const seen = new Set<string>();
+  const out: CatalogItem[] = [];
+  for (const item of items) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    out.push(item);
+  }
+  return out;
+}

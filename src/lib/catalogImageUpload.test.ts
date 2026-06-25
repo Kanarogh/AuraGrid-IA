@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { mergeCatalogItems } from "./catalog";
+import type { CatalogItem } from "../types";
 import {
+  dedupeCatalogImageFiles,
   isCatalogImageFile,
   labelFromCatalogImageFile,
   prepareCatalogUploadCandidates,
@@ -45,5 +48,23 @@ describe("catalogImageUpload", () => {
   it("usa só a pasta quando o arquivo tem nome genérico", () => {
     const file = mockFile("IMG_0001.jpg", "Fotos(6)/PLK 8016/IMG_0001.jpg");
     expect(referenceLabelFromFolderAndFile(file)).toBe("PLK 8016");
+  });
+
+  it("remove arquivos duplicados no mesmo lote", () => {
+    const file = mockFile("a.jpg", "grid/a.jpg", 1200);
+    const dup = mockFile("a.jpg", "grid/a.jpg", 1200);
+    expect(dedupeCatalogImageFiles([file, dup])).toHaveLength(1);
+    expect(prepareCatalogUploadCandidates([file, dup], { asReference: false })).toHaveLength(1);
+  });
+});
+
+describe("mergeCatalogItems", () => {
+  const base = { id: "cat_1", label: "A", image: "x", isReference: false } as CatalogItem;
+
+  it("substitui por id e coloca incoming na frente", () => {
+    const updated = { ...base, label: "A2" };
+    const merged = mergeCatalogItems([base, { id: "cat_2", label: "B" } as CatalogItem], [updated]);
+    expect(merged.map((i) => i.id)).toEqual(["cat_1", "cat_2"]);
+    expect(merged[0]?.label).toBe("A2");
   });
 });

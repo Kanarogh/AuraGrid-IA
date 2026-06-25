@@ -12,6 +12,22 @@ export function getFileRelativePath(file: File): string {
   return rel?.replace(/\\/g, "/") ?? file.name;
 }
 
+function catalogFileDedupeKey(file: File): string {
+  return `${getFileRelativePath(file)}|${file.size}|${file.lastModified}`;
+}
+
+export function dedupeCatalogImageFiles(files: File[]): File[] {
+  const seen = new Set<string>();
+  const out: File[] = [];
+  for (const file of files) {
+    const key = catalogFileDedupeKey(file);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(file);
+  }
+  return out;
+}
+
 export function isCatalogImageFile(file: File): boolean {
   const baseName = file.name.trim();
   if (!baseName || baseName.startsWith(".")) return false;
@@ -89,7 +105,7 @@ export function prepareCatalogUploadCandidates(
   files: File[],
   options: { asReference: boolean }
 ): CatalogUploadCandidate[] {
-  const images = files.filter(isCatalogImageFile);
+  const images = dedupeCatalogImageFiles(files.filter(isCatalogImageFile));
   if (images.length === 0) return [];
 
   const hasNestedPaths = images.some((f) => getFileRelativePath(f).includes("/"));
@@ -149,7 +165,7 @@ async function readDirectoryEntries(
 /** Arrastar pasta no Windows não preenche files recursivamente — percorre com webkitGetAsEntry. */
 export async function collectFilesFromDataTransfer(dt: DataTransfer): Promise<File[]> {
   const items = dt.items;
-  if (!items?.length) return Array.from(dt.files);
+  if (!items?.length) return dedupeCatalogImageFiles(Array.from(dt.files));
 
   const entries: FileSystemEntry[] = [];
   for (let i = 0; i < items.length; i++) {
@@ -157,7 +173,7 @@ export async function collectFilesFromDataTransfer(dt: DataTransfer): Promise<Fi
     if (entry) entries.push(entry);
   }
 
-  if (entries.length === 0) return Array.from(dt.files);
+  if (entries.length === 0) return dedupeCatalogImageFiles(Array.from(dt.files));
 
   const files: File[] = [];
   await Promise.all(
@@ -173,7 +189,8 @@ export async function collectFilesFromDataTransfer(dt: DataTransfer): Promise<Fi
     })
   );
 
-  return files.length > 0 ? files : Array.from(dt.files);
+  const collected = files.length > 0 ? files : Array.from(dt.files);
+  return dedupeCatalogImageFiles(collected);
 }
 
 export function enableFolderPickerInput(input: HTMLInputElement | null) {

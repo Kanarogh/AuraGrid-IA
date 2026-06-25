@@ -187,7 +187,9 @@ export function useRemoteSyncCoordinator({
         signal: mergedSignal.length ? mergedSignal : "(fallback)",
       });
 
-      const optimisticDomains = filterDomainsDuringEnrich(mergedSignal, isEnrichingRef.current);
+      const optimisticDomains = filterDomainsDuringEnrich(mergedSignal, isEnrichingRef.current).filter(
+        (d) => !isDomainPaused(d)
+      );
       const h = handlersRef.current;
       const revPromise = fetchSyncRevisionApi(clientId, periodId);
       const reloadPromise =

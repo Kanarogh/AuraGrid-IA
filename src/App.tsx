@@ -170,6 +170,8 @@ import {
   isCatalogItemIndexed,
   isReferenceCatalogItem,
   normalizeCatalogItem,
+  mergeCatalogItems,
+  dedupeCatalogItems,
   prepareCatalogItemForEnrichment,
 } from "./lib/catalog";
 import {
@@ -375,7 +377,16 @@ export default function App() {
       try {
         const dto = await fetchWorkspace(activeClientId, activePlanningPeriodId);
         const ws = apiWorkspaceToClientWorkspace(dto);
-        if (slices.catalog) setCatalog(ws.catalog);
+        if (slices.catalog) {
+          setCatalog(
+            dedupeCatalogItems(
+              ws.catalog.map((item) => ({
+                ...item,
+                image: resolveCatalogItemImage(item) ?? item.image,
+              }))
+            )
+          );
+        }
         if (slices.brandGem) {
           setBrandGem(ws.brandGem);
           setStartDate(ws.startDate);
@@ -1737,16 +1748,15 @@ export default function App() {
           }
         );
 
-        if (items.length > 0) {
-          setCatalog((prev) => [
-            ...items.map((c) => ({ ...c, image: resolveCatalogItemImage(c) })),
-            ...prev,
-          ]);
-        }
+        const syncUploadedCatalog = async () => {
+          if (items.length === 0) return;
+          await reloadWorkspaceSlices(["catalog"]);
+        };
 
         if (cancelled || controller.signal.aborted) {
           if (items.length > 0) {
             uploadSucceeded = true;
+            await syncUploadedCatalog();
             toast.info(
               `Envio interrompido. ${items.length} arquivo(s) já foram salvos no catálogo.`
             );
@@ -1785,6 +1795,7 @@ export default function App() {
 
         if (succeeded > 0) {
           uploadSucceeded = true;
+          await syncUploadedCatalog();
           toast.success(
             asReference
               ? `${succeeded} referência(s) adicionada(s).`
@@ -1879,7 +1890,7 @@ export default function App() {
 
       if (newItems.length > 0) {
         setCatalog((prev) => {
-          const next = [...newItems, ...prev];
+          const next = mergeCatalogItems(prev, newItems);
           catalogRef.current = next;
           return next;
         });
@@ -2789,8 +2800,11 @@ export default function App() {
           imageAssetId: media.id,
         }),
       });
-      const item = (await res.json()) as CatalogItem;
-      setCatalog((prev) => [{ ...item, image: resolveCatalogItemImage(item) }, ...prev]);
+      if (!res.ok) {
+        toast.error("Não foi possível salvar a referência na nuvem.");
+        return;
+      }
+      await reloadWorkspaceSlices(["catalog"]);
       setNewCatalogLabel("");
       setNewCatalogImage(null);
       setShowCatalogModal(false);
