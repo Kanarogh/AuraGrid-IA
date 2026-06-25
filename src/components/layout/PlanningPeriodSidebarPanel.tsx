@@ -3,7 +3,7 @@
 import { CalendarRange, ChevronDown, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { PlanningPeriod } from "../../lib/planningConstants";
-import { catalogReadyForTextMatch } from "../../lib/catalogEnrichment";
+import { isCatalogItemIndexed } from "../../lib/catalog";
 import { useClientWorkspace } from "../../context/ClientWorkspaceContext";
 import { useAppNavigation } from "../../lib/appRouting";
 import { confirmDialog } from "../../lib/confirmDialog";
@@ -62,9 +62,7 @@ export function PlanningPeriodSidebarPanel({
     planningPeriods.find((p) => p.id === activePlanningPeriodId) ?? planningPeriods[0];
   const periodUsesReferencesOverride = active?.usesReferences ?? null;
   const referenceCatalog = catalog.filter((c) => c.isReference !== false);
-  const indexedReferenceCount = referenceCatalog.filter((c) =>
-    catalogReadyForTextMatch(c)
-  ).length;
+  const indexedReferenceCount = referenceCatalog.filter(isCatalogItemIndexed).length;
   const storedReferenceCount = referenceCatalog.length;
 
   const sorted = [...planningPeriods].sort(
