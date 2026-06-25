@@ -66,7 +66,7 @@ import { exportRoteiroPdf } from "./lib/exportRoteiroPdf";
 import { exportCanvaGridPdf } from "./lib/exportCanvaGridPdf";
 import { ensurePersistedImage, extractMediaAssetId } from "./lib/api/persistMedia";
 import { recalculatePostDates } from "./lib/dates";
-import { createEmptyCanvaPage, prependCanvaPage, renumberCanvaPages, resolveActiveCanvaPage, resolveSlotImage } from "./lib/canva";
+import { createEmptyCanvaPage, prependCanvaPage, renumberCanvaPages, resolveActiveCanvaPage, resolveSlotImage, buildCatalogUsageAcrossPages } from "./lib/canva";
 import { getPostStatus } from "./lib/postStatus";
 
 function captionQueueLabel(postId: string, dayNumber: number): string {
@@ -553,18 +553,11 @@ export default function App() {
     [canvaPages, activeCanvaPageId]
   );
 
-  /** Looks do acervo já colocados na página ativa do grid (catalogId → L1, L2…) */
-  const catalogUsageOnActivePage = useMemo(() => {
-    const map = new Map<string, number[]>();
-    if (!activeCanvaPage) return map;
-    activeCanvaPage.slots.forEach((slot, index) => {
-      if (!slot.matchedCatalogId) return;
-      const prev = map.get(slot.matchedCatalogId) ?? [];
-      prev.push(index + 1);
-      map.set(slot.matchedCatalogId, prev);
-    });
-    return map;
-  }, [activeCanvaPage]);
+  /** Looks do acervo em qualquer página do grid (catalogId → PnLm) */
+  const catalogUsageAcrossPages = useMemo(
+    () => buildCatalogUsageAcrossPages(canvaPages),
+    [canvaPages]
+  );
 
   const selectedCanvaSlotNumber = useMemo(() => {
     if (!selectedCanvaSlotId || !activeCanvaPage) return null;
@@ -3629,7 +3622,7 @@ export default function App() {
               canvaGridFormatMeta={canvaGridFormatMeta}
               canvaGridMaxWidth={canvaGridMaxWidth}
               wardrobeItems={canvaCatalog}
-              catalogUsageOnActivePage={catalogUsageOnActivePage}
+              catalogUsageAcrossPages={catalogUsageAcrossPages}
               cloudSave={useApiStorage}
               onSelectPage={(id) => selectCanvaPage(id)}
               onAddPage={handleAddCanvaPage}

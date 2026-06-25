@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import type { CanvaGridPage, CanvaGridSlot as CanvaSlot, CatalogItem } from "../../types";
 import type { CanvaGridFormat } from "../../lib/canvaGridFormats";
-import { isCanvaSlotFilled } from "../../lib/canva";
+import { isCanvaSlotFilled, resolveCanvaPageNumber, type CanvaCatalogPlacement } from "../../lib/canva";
 import { cn } from "../../lib/cn";
 import { useCanvaWardrobePanelWidth } from "../../hooks/useCanvaWardrobePanelWidth";
 import { Button } from "../ui/Button";
@@ -41,7 +41,7 @@ export function CanvaGridWorkspace({
   canvaGridFormatMeta,
   canvaGridMaxWidth,
   wardrobeItems,
-  catalogUsageOnActivePage,
+  catalogUsageAcrossPages,
   onSelectPage,
   onAddPage,
   onDeletePage,
@@ -74,7 +74,7 @@ export function CanvaGridWorkspace({
   canvaGridFormatMeta: CanvaGridFormat;
   canvaGridMaxWidth: number;
   wardrobeItems: CatalogItem[];
-  catalogUsageOnActivePage: Map<string, number[]>;
+  catalogUsageAcrossPages: Map<string, CanvaCatalogPlacement[]>;
   onSelectPage: (pageId: string) => void;
   onAddPage: () => void;
   onDeletePage: (pageId: string) => void;
@@ -386,7 +386,8 @@ export function CanvaGridWorkspace({
         >
           <CanvaWardrobePanel
             items={wardrobeItems}
-            usageByCatalogId={catalogUsageOnActivePage}
+            usageByCatalogId={catalogUsageAcrossPages}
+            activePageNumber={resolveCanvaPageNumber(pages, activePageId)}
             gridAspectRatio={canvaGridFormatMeta.aspectRatio}
             gridRatioLabel={canvaGridFormatMeta.ratioLabel}
             selectedSlotId={selectedSlotId}

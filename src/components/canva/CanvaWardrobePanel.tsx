@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, GripVertical, LayoutGrid, ShoppingBag, Sparkles, ZoomIn, ZoomOut } from "lucide-react";
 import type { CatalogItem } from "../../types";
+import { formatCanvaPlacement, type CanvaCatalogPlacement } from "../../lib/canva";
 import { cn } from "../../lib/cn";
 import { CATALOG_DRAG_MIME } from "../../lib/clipboardImage";
 import { CatalogThumbnail } from "../ui/CatalogThumbnail";
@@ -31,6 +32,7 @@ function clampThumbMin(value: number): number {
 export function CanvaWardrobePanel({
   items,
   usageByCatalogId,
+  activePageNumber,
   gridAspectRatio,
   gridRatioLabel,
   selectedSlotId,
@@ -40,7 +42,8 @@ export function CanvaWardrobePanel({
   onOpenCatalog,
 }: {
   items: CatalogItem[];
-  usageByCatalogId: Map<string, number[]>;
+  usageByCatalogId: Map<string, CanvaCatalogPlacement[]>;
+  activePageNumber: number;
   gridAspectRatio: number;
   gridRatioLabel: string;
   selectedSlotId: string | null;
@@ -125,7 +128,7 @@ export function CanvaWardrobePanel({
             Selecione um slot à esquerda, depois escolha o look aqui.{" "}
             <span className="text-ag-success inline-flex items-center gap-0.5">
               <CheckCircle2 className="h-3 w-3" />
-              verde = já usado nesta página
+              verde = já usado no grid (Pág·slot, ex.: P4L11)
             </span>
           </p>
         )}
@@ -193,7 +196,7 @@ export function CanvaWardrobePanel({
               filter === "available"
                 ? "Todos os looks já estão no grid"
                 : filter === "in_grid"
-                  ? "Nenhum look nesta página"
+                  ? "Nenhum look no grid"
                   : "Acervo vazio"
             }
             description={
@@ -221,9 +224,10 @@ export function CanvaWardrobePanel({
             }}
           >
             {filteredItems.map((item) => {
-              const slotNumbers = usageByCatalogId.get(item.id) ?? [];
-              const isInGrid = slotNumbers.length > 0;
+              const placements = usageByCatalogId.get(item.id) ?? [];
+              const isInGrid = placements.length > 0;
               const isGridAsset = item.isReference === false;
+              const onActivePage = placements.some((p) => p.pageNumber === activePageNumber);
 
               return (
                 <button
@@ -239,7 +243,9 @@ export function CanvaWardrobePanel({
                     "group text-left rounded-xl border p-1.5 transition-all cursor-grab active:cursor-grabbing ag-focus-ring",
                     "hover:shadow-md hover:border-ag-accent/40",
                     isInGrid
-                      ? "border-ag-success/40 bg-ag-success/5 ring-1 ring-ag-success/20"
+                      ? onActivePage
+                        ? "border-ag-success/40 bg-ag-success/5 ring-1 ring-ag-success/20"
+                        : "border-ag-border bg-ag-surface-2 ring-1 ring-ag-muted/30"
                       : "border-ag-border bg-ag-surface-2 hover:bg-ag-surface-1"
                   )}
                 >
@@ -254,8 +260,23 @@ export function CanvaWardrobePanel({
                       imgClassName="group-hover:scale-[1.02] transition-transform duration-200"
                     />
                     {isInGrid && (
-                      <span className="absolute top-1 left-1 flex items-center gap-0.5 text-[8px] font-bold font-mono px-1.5 py-0.5 rounded-md bg-ag-success text-white shadow-sm">
-                        L{slotNumbers.join(", L")}
+                      <span className="absolute top-1 left-1 right-1 flex flex-wrap gap-0.5 max-h-[40%] overflow-hidden pointer-events-none">
+                        {placements.map((placement) => {
+                          const onCurrent = placement.pageNumber === activePageNumber;
+                          return (
+                            <span
+                              key={`${placement.pageNumber}-${placement.slotNumber}`}
+                              className={cn(
+                                "text-[7px] font-bold font-mono px-1 py-0.5 rounded-md shadow-sm leading-none",
+                                onCurrent
+                                  ? "bg-ag-success text-white"
+                                  : "bg-ag-surface-1/95 text-ag-muted border border-ag-border"
+                              )}
+                            >
+                              {formatCanvaPlacement(placement)}
+                            </span>
+                          );
+                        })}
                       </span>
                     )}
                     {isGridAsset && !isInGrid && (
@@ -274,7 +295,7 @@ export function CanvaWardrobePanel({
                           : thumbMinWidth >= 150
                             ? "text-[10px]"
                             : "text-[9px]",
-                      isInGrid ? "text-ag-success" : "text-ag-text"
+                      isInGrid && onActivePage ? "text-ag-success" : "text-ag-text"
                     )}
                     title={item.label}
                   >

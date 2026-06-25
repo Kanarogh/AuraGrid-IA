@@ -111,3 +111,48 @@ export function normalizeCanvaPages(pages: CanvaGridPage[] | null | undefined): 
     }))
   );
 }
+
+export type CanvaCatalogPlacement = { pageNumber: number; slotNumber: number };
+
+export function formatCanvaPlacement(placement: CanvaCatalogPlacement): string {
+  return `P${placement.pageNumber}L${placement.slotNumber}`;
+}
+
+function comparePlacements(a: CanvaCatalogPlacement, b: CanvaCatalogPlacement): number {
+  if (a.pageNumber !== b.pageNumber) return a.pageNumber - b.pageNumber;
+  return a.slotNumber - b.slotNumber;
+}
+
+/** Posição de cada look do catálogo em todas as páginas do grid (catalogId → PnLm). */
+export function buildCatalogUsageAcrossPages(
+  pages: CanvaGridPage[]
+): Map<string, CanvaCatalogPlacement[]> {
+  const map = new Map<string, CanvaCatalogPlacement[]>();
+  pages.forEach((page, pageIndex) => {
+    const pageNumber = pageIndex + 1;
+    page.slots.forEach((slot, slotIndex) => {
+      if (!slot.matchedCatalogId) return;
+      const placement: CanvaCatalogPlacement = {
+        pageNumber,
+        slotNumber: slotIndex + 1,
+      };
+      const prev = map.get(slot.matchedCatalogId) ?? [];
+      prev.push(placement);
+      map.set(slot.matchedCatalogId, prev);
+    });
+  });
+  for (const [catalogId, placements] of map) {
+    placements.sort(comparePlacements);
+    map.set(catalogId, placements);
+  }
+  return map;
+}
+
+export function resolveCanvaPageNumber(
+  pages: CanvaGridPage[],
+  activePageId: string
+): number {
+  const index = pages.findIndex((p) => p.id === activePageId);
+  if (index >= 0) return index + 1;
+  return pages.length > 0 ? pages.length : 1;
+}
