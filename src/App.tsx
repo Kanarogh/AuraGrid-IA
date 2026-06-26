@@ -39,7 +39,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { PRELOADED_CATALOG } from "./data/preloaded";
-import {
+import type {
   CatalogItem,
   CatalogVisualProfile,
   PlannedPost,
@@ -184,12 +184,19 @@ import {
 } from "./lib/brandGemValidation";
 import { toast } from "./lib/toast";
 import { confirmDialog } from "./lib/confirmDialog";
+import { promptDialog } from "./lib/promptDialog";
 import {
   collectFilesFromDataTransfer,
   enableFolderPickerInput,
   pickFilesFromFolder,
   prepareCatalogUploadCandidates,
 } from "./lib/catalogImageUpload";
+import {
+  labelHintFromFile,
+  pickCatalogReferenceFromCandidates,
+  resolveCatalogIdFromFile,
+  resolveKnownCatalogReference,
+} from "./lib/catalogLabelMatch";
 import {
   createInitialUploadProgress,
   uploadCatalogCandidatesSequential,
@@ -708,7 +715,8 @@ export default function App() {
         prepared,
         postsRef.current,
         startDate,
-        distributionPrefs
+        distributionPrefs,
+        getReferenceCatalog(catalogRef.current).map((c) => ({ id: c.id, label: c.label }))
       );
       setPosts(finalizedList);
       const firstWithImg = finalizedList.find((p) => p.image) || finalizedList[0];
@@ -815,7 +823,8 @@ export default function App() {
         pagesList,
         prevPosts,
         startDate,
-        { reversed: canvaGridReversed, distribution: distributionPrefs }
+        { reversed: canvaGridReversed, distribution: distributionPrefs },
+        getReferenceCatalog(catalogRef.current).map((c) => ({ id: c.id, label: c.label }))
       );
 
       const prevFp = JSON.stringify(prevPosts.map(stripTransientPostFields));
@@ -1022,7 +1031,7 @@ export default function App() {
 
   // Upload a batch of files and distribute across 30 days using current rules
   const handleBatchScheduleUpload = async (files: FileList) => {
-    let imagesProcessed: { image: string, label: string }[] = [];
+    let imagesProcessed: { image: string; label: string; matchedCatalogId?: string | null }[] = [];
     
     // Sort files numerically by filename sequences (e.g. 1.jpg, 2.jpg... up to 34.jpg)
     const sortedFiles = Array.from(files).sort((a, b) => {
@@ -1045,12 +1054,16 @@ export default function App() {
       
       try {
         const base64Str = await fileToCatalogImageDataUrl(file);
-        let label = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").trim();
-        label = label.replace(/\b\w/g, c => c.toUpperCase());
-        
+        const label = labelHintFromFile(file) || file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").trim().replace(/\b\w/g, (c) => c.toUpperCase());
+        const matchedCatalogId = resolveCatalogIdFromFile(
+          getReferenceCatalog(catalogRef.current),
+          file
+        );
+
         imagesProcessed.push({
           image: base64Str,
-          label: label
+          label: label,
+          matchedCatalogId,
         });
       } catch (err) {
         console.error("Erro processando arquivo para calendário:", file.name, err);
@@ -1222,8 +1235,17 @@ export default function App() {
     const clientAtStart = activeClientId;
     try {
       const base64Str = await processImageFileForCanvaGrid(file);
-      let label = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").trim();
-      label = label.replace(/\b\w/g, (c) => c.toUpperCase());
+      const label =
+        labelHintFromFile(file) ||
+        file.name
+          .replace(/\.[^/.]+$/, "")
+          .replace(/[_-]/g, " ")
+          .trim()
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+      const matchedCatalogId = resolveCatalogIdFromFile(
+        getReferenceCatalog(catalogRef.current),
+        file
+      );
 
       let image: string | null = base64Str;
       let imageAssetId: string | null = null;
@@ -1242,7 +1264,7 @@ export default function App() {
         image,
         imageAssetId,
         label,
-        matchedCatalogId: null,
+        matchedCatalogId,
       });
     } catch (err) {
       console.error("Erro no processamento da imagem do slot Canva:", err);
@@ -1416,8 +1438,17 @@ export default function App() {
 
       try {
         const base64Str = await processImageFileForCanvaGrid(file);
-        let label = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").trim();
-        label = label.replace(/\b\w/g, (c) => c.toUpperCase());
+        const label =
+          labelHintFromFile(file) ||
+          file.name
+            .replace(/\.[^/.]+$/, "")
+            .replace(/[_-]/g, " ")
+            .trim()
+            .replace(/\b\w/g, (c) => c.toUpperCase());
+        const matchedCatalogId = resolveCatalogIdFromFile(
+          getReferenceCatalog(catalogRef.current),
+          file
+        );
 
         let image: string = base64Str;
         let imageAssetId: string | null = null;
@@ -1438,7 +1469,7 @@ export default function App() {
           image,
           imageAssetId,
           label,
-          matchedCatalogId: null,
+          matchedCatalogId,
         });
         savedCount++;
       } catch (err) {
@@ -2049,6 +2080,10 @@ export default function App() {
           return;
         }
       }
+      const matchedCatalogId = resolveCatalogIdFromFile(
+        getReferenceCatalog(catalogRef.current),
+        file
+      );
       setPosts((prev) =>
         prev.map((p) =>
           p.id === postId
@@ -2058,7 +2093,7 @@ export default function App() {
                 imageAssetId,
                 isGenerated: false,
                 isConfirmed: false,
-                matchedCatalogId: null,
+                matchedCatalogId,
                 reasoning: null,
                 caption: "",
               }
@@ -2129,6 +2164,51 @@ export default function App() {
     void handleNavigate("settings");
     return false;
   }, [brandGem, handleNavigate]);
+
+  const resolvePostCatalogReferenceForCaption = useCallback(
+    async (
+      post: PlannedPost,
+      refs: CatalogItem[],
+      options?: { force?: boolean }
+    ): Promise<
+      | { status: "known"; id: string; label: string; source: string }
+      | { status: "cancelled" }
+      | { status: "none" }
+    > => {
+      let canvaLabel: string | null = null;
+      if (post.canvaSlotRef) {
+        const page = canvaPages.find((p) => p.id === post.canvaSlotRef!.pageId);
+        const slot = page?.slots.find((s) => s.id === post.canvaSlotRef!.slotId);
+        canvaLabel = slot?.label?.trim() || null;
+      }
+      const resolved = resolveKnownCatalogReference(
+        refs.map((c) => ({ id: c.id, label: c.label })),
+        {
+          matchedCatalogId: post.matchedCatalogId,
+          label: canvaLabel,
+          forceFullMatch: !!options?.force && !post.matchedCatalogId,
+        }
+      );
+      if (resolved.status === "known") {
+        return {
+          status: "known",
+          id: resolved.item.id,
+          label: resolved.item.label,
+          source: resolved.source,
+        };
+      }
+      if (resolved.status === "ambiguous") {
+        const picked = await pickCatalogReferenceFromCandidates(
+          resolved.candidates,
+          promptDialog
+        );
+        if (!picked) return { status: "cancelled" };
+        return { status: "known", id: picked.id, label: picked.label, source: "label" };
+      }
+      return { status: "none" };
+    },
+    [canvaPages]
+  );
 
   const matchAndGenerateForPost = async (
     postId: string,
@@ -2246,10 +2326,40 @@ export default function App() {
         return {};
       }
 
+      let knownMatchedIdForRequest: string | undefined;
+      if (!imageOnly) {
+        const refResolution = await resolvePostCatalogReferenceForCaption(post, refs, {
+          force: options?.force,
+        });
+        if (refResolution.status === "cancelled") {
+          setPosts((prev) =>
+            prev.map((p) => (p.id === postId ? { ...p, isGenerating: false } : p))
+          );
+          return {};
+        }
+        if (refResolution.status === "known") {
+          knownMatchedIdForRequest = refResolution.id;
+          if (post.matchedCatalogId !== refResolution.id) {
+            setPosts((prev) =>
+              prev.map((p) =>
+                p.id === postId ? { ...p, matchedCatalogId: refResolution.id } : p
+              )
+            );
+          }
+          toast.info(
+            `Referência ${refResolution.label} identificada — legenda sem match visual.`
+          );
+        }
+      }
+
       let bypassCaptionCache =
         options?.force ||
         options?.skipCache ||
         captionCacheBypassRef.current.has(postId);
+
+      if (knownMatchedIdForRequest) {
+        bypassCaptionCache = true;
+      }
 
       const extraAvoidHooks: string[] = [];
       if (options?.force && post.caption?.trim()) {
@@ -2291,6 +2401,9 @@ export default function App() {
             label: c.label,
             profile: c.visualProfile,
           }));
+        }
+        if (knownMatchedIdForRequest) {
+          body.knownMatchedId = knownMatchedIdForRequest;
         }
         return body;
       };

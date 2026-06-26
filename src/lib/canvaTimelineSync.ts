@@ -7,6 +7,7 @@ import {
   type DistributionPrefs,
 } from "./smartDistribution";
 import type { CanvaGridPage, CanvaGridSlot, PlannedPost } from "../types";
+import { resolveKnownCatalogReference } from "./catalogLabelMatch";
 
 export type CanvaSlotWithPage = CanvaGridSlot & { pageId: string };
 
@@ -47,6 +48,22 @@ export function canvaSlotsToScheduleItems(
     label: slot.label ?? undefined,
     canvaSlotRef: { pageId: slot.pageId, slotId: slot.id },
   }));
+}
+
+/** Resolve label do slot → id do catálogo quando o vínculo ainda não existe. */
+export function enrichScheduleItemsWithCatalogMatch(
+  items: ScheduleItem[],
+  catalog: { id: string; label: string }[]
+): ScheduleItem[] {
+  if (!catalog.length) return items;
+  return items.map((item) => {
+    if (item.matchedCatalogId || !item.label?.trim()) return item;
+    const resolved = resolveKnownCatalogReference(catalog, { label: item.label });
+    if (resolved.status === "known") {
+      return { ...item, matchedCatalogId: resolved.item.id };
+    }
+    return item;
+  });
 }
 
 function shouldPreserveSyncedPost(
@@ -170,10 +187,14 @@ export function syncCanvaPagesToPosts(
   pages: CanvaGridPage[],
   existingPosts: PlannedPost[],
   startDate: string,
-  options: { reversed: boolean; distribution: DistributionPrefs }
+  options: { reversed: boolean; distribution: DistributionPrefs },
+  catalog?: { id: string; label: string }[]
 ): PlannedPost[] {
-  const items = canvaSlotsToScheduleItems(pages, options.reversed);
+  let items = canvaSlotsToScheduleItems(pages, options.reversed);
   if (items.length === 0) return existingPosts;
+  if (catalog?.length) {
+    items = enrichScheduleItemsWithCatalogMatch(items, catalog);
+  }
 
   const resolved = resolveDistributionOptions(items.length, options.distribution, POST_COUNT);
   const postsPerDay = computePostsPerDay(items.length, resolved);
@@ -184,12 +205,17 @@ export function scheduleItemsToPosts(
   items: ScheduleItem[],
   existingPosts: PlannedPost[],
   startDate: string,
-  distribution: DistributionPrefs
+  distribution: DistributionPrefs,
+  catalog?: { id: string; label: string }[]
 ): PlannedPost[] {
-  const validCount = items.filter((i) => i.image != null).length;
+  const enriched =
+    catalog?.length && items.length
+      ? enrichScheduleItemsWithCatalogMatch(items, catalog)
+      : items;
+  const validCount = enriched.filter((i) => i.image != null).length;
   if (validCount === 0) return existingPosts;
 
   const resolved = resolveDistributionOptions(validCount, distribution, POST_COUNT);
   const postsPerDay = computePostsPerDay(validCount, resolved);
-  return buildPostsFromSchedule(items, postsPerDay, existingPosts, startDate);
+  return buildPostsFromSchedule(enriched, postsPerDay, existingPosts, startDate);
 }

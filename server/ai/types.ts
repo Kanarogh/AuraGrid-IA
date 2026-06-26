@@ -87,6 +87,7 @@ export interface MatchGenerateInput {
   recentHooks?: string[];
   diverseBatch?: boolean;
   matchRankHint?: MatchRankHint;
+  knownMatchedId?: string;
   sceneContext?: {
     setting?: string;
     tags?: string[];
@@ -118,6 +119,7 @@ export interface MatchGenerateResult {
     | "catalog_json_ranker_fast"
     | "catalog_json_fingerprint_text"
     | "catalog_json_vision"
+    | "catalog_known_reference"
     | "catalog_images"
     | "image_only";
 }

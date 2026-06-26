@@ -70,6 +70,8 @@ export async function POST(req: NextRequest) {
         ? recentHooks.filter((h): h is string => typeof h === "string")
         : undefined,
       diverseBatch: !!diverseBatch,
+      knownMatchedId:
+        typeof body.knownMatchedId === "string" ? body.knownMatchedId : undefined,
     });
 
     const operation = await runMatchOperation("match-and-generate", sanitized, providerId);

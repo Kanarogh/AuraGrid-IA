@@ -79,11 +79,21 @@ export function sanitizeMatchOperationInput(
     );
   }
 
+  let knownMatchedId: string | undefined;
+  if (typeof input.knownMatchedId === "string" && input.knownMatchedId.trim()) {
+    const id = input.knownMatchedId.trim();
+    if (!profiles.some((p) => p.id === id)) {
+      throw new Error("Referência conhecida não encontrada no catálogo indexado.");
+    }
+    knownMatchedId = id;
+  }
+
   return {
     ...input,
     catalogItems: undefined,
     catalogProfiles: profiles,
     clientId: input.clientId,
+    knownMatchedId,
     matchRankHint: undefined,
     sceneContext: undefined,
     postFingerprint: undefined,

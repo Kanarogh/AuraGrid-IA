@@ -59,7 +59,7 @@ function fileStemName(file: File): string {
   return file.name.replace(/\.[^/.]+$/, "");
 }
 
-function isGenericPhotoName(stem: string): boolean {
+export function isGenericPhotoName(stem: string): boolean {
   return /^(img|dsc|image|foto|photo|capture|pic)[\s_-]?\d*$/i.test(stem.trim());
 }
 

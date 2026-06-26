@@ -110,6 +110,39 @@ export async function runMatchOperation(
     };
   }
 
+  const catalogCandidates = (sanitized.catalogProfiles ?? []) as CatalogProfilePayload[];
+  const knownId = sanitized.knownMatchedId?.trim();
+  if (
+    operation === "match-and-generate" &&
+    !matchOnly &&
+    knownId &&
+    catalogCandidates.some((c) => c.id === knownId)
+  ) {
+    const prepared: PreparedMatchInput = { input: sanitized };
+    const { caption, providerUsed } = await runCaptionOnly(prepared, knownId, providerId);
+    const result = finalizeMatchResult(
+      {
+        matchedId: knownId,
+        reasoning:
+          "Referência já identificada (nome, arquivo ou vínculo manual) — match visual omitido.",
+        caption,
+        matchMode: "catalog_known_reference",
+      },
+      prepared,
+      catalogCandidates
+    );
+    console.info(`[match] strategy=known-reference matchedId=${knownId}`);
+    return {
+      result,
+      prepared,
+      providerUsed,
+      modelUsed,
+      strategy: "known-reference",
+      attempts: [],
+      diagnostics: buildMatchDiagnostics(result, prepared, catalogCandidates),
+    };
+  }
+
   const prepared = await prepareMatchInput(sanitized, providerId, operation);
   const candidates = (prepared.input.catalogProfiles ?? []) as CatalogProfilePayload[];
   const fingerprint = prepared.postFingerprint;

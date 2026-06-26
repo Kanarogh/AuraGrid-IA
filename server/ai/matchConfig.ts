@@ -39,4 +39,4 @@ export function getGeminiEmbeddingModel(): string {
 
 export const GEMINI_EMBEDDING_DIMENSIONS = 768;
 
-export type MatchStrategy = "ranker-fast" | "text-only" | "vision-legacy" | "image-only";
+export type MatchStrategy = "ranker-fast" | "text-only" | "vision-legacy" | "image-only" | "known-reference";
