@@ -156,15 +156,49 @@ function scorePattern(fp: PostVisualFingerprint, profile: Record<string, unknown
   return score;
 }
 
+function isNotVisibleToken(value: string | undefined): boolean {
+  if (!value) return false;
+  return /not-visible|unknown/i.test(value);
+}
+
+function isFieldVisible(
+  flat: FlatGarmentView,
+  field: string,
+  value?: string
+): boolean {
+  if (flat.fieldVisibility?.[field] === "not-visible") return false;
+  if (isNotVisibleToken(value)) return false;
+  return true;
+}
+
 function scoreBackAndConstruction(
   fp: PostVisualFingerprint,
-  profile: Record<string, unknown>
+  flat: FlatGarmentView
 ): number {
   let score = 0;
-  score += scoreField(fp.backDetail, profile.backDetail, 14);
-  score += scoreField(fp.neckline, profile.neckline, 10);
-  score += scoreField(fp.skirtConstruction, profile.skirtConstruction, 8);
+  if (isFieldVisible(flat, "back", flat.backDetail)) {
+    score += scoreField(fp.backDetail, flat.backDetail, 14);
+  }
+  if (isFieldVisible(flat, "neck", flat.neckline)) {
+    score += scoreField(fp.neckline, flat.neckline, 10);
+  }
+  if (isFieldVisible(flat, "skirt", flat.skirtConstruction)) {
+    score += scoreField(fp.skirtConstruction, flat.skirtConstruction, 8);
+  }
   return score;
+}
+
+function scoreTemp(fp: PostVisualFingerprint, flat: FlatGarmentView): number {
+  const fpTemp = norm(fp.garment?.temp);
+  const profileTemp = norm(flat.colorTemperature);
+  if (!fpTemp || !profileTemp || fpTemp === "unknown" || profileTemp === "unknown") {
+    return 0;
+  }
+  if (fpTemp === profileTemp) return 4;
+  const clash =
+    (fpTemp === "warm" && profileTemp === "cool") ||
+    (fpTemp === "cool" && profileTemp === "warm");
+  return clash ? -4 : 0;
 }
 
 function scoreAnchors(fp: PostVisualFingerprint, profile: Record<string, unknown>): number {
@@ -273,6 +307,7 @@ export function scoreCatalogProfileDetailed(
   total += pattern;
 
   total += scoreBackAndConstruction(fingerprint, p);
+  total += scoreTemp(fingerprint, p);
   total += scoreField(fingerprint.sleeves, p.sleeveType ?? p.sleeves, 8);
   total += scoreField(fingerprint.dressLength, p.lengthCategory ?? p.dressLength, 10);
   total += scoreField(fingerprint.silhouette, p.silhouette, 8);

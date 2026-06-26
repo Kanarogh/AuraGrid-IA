@@ -250,6 +250,7 @@ export async function loadWorkspaceDto(
       | "pending"
       | "processing"
       | "ready"
+      | "ready_limited"
       | "failed"
       | undefined,
     enrichedAt: c.enrichedAt?.toISOString(),

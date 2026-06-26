@@ -27,8 +27,20 @@ export const CATALOG_PROFILE_SCHEMA = {
         len: { type: Type.STRING },
         skirt: { type: Type.STRING },
         sil: { type: Type.STRING },
+        fabric: { type: Type.STRING },
+        construction: { type: Type.STRING },
+        trim: { type: Type.STRING },
         anchors: { type: Type.ARRAY, items: { type: Type.STRING } },
         not: { type: Type.ARRAY, items: { type: Type.STRING } },
+        fieldVisibility: {
+          type: Type.OBJECT,
+          properties: {
+            back: { type: Type.STRING },
+            skirt: { type: Type.STRING },
+            neck: { type: Type.STRING },
+            motif: { type: Type.STRING },
+          },
+        },
       },
       required: ["type", "colors", "motif", "anchors"],
     },
@@ -44,6 +56,41 @@ export const CATALOG_PROFILE_SCHEMA = {
     },
   },
   required: ["version", "referenceLabel", "garment", "scene"],
+};
+
+export const CATALOG_SELF_CRITIQUE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    removeAnchors: { type: Type.ARRAY, items: { type: Type.STRING } },
+    addAnchors: { type: Type.ARRAY, items: { type: Type.STRING } },
+    patches: {
+      type: Type.OBJECT,
+      properties: {
+        motif: { type: Type.STRING },
+        back: { type: Type.STRING },
+        neck: { type: Type.STRING },
+        sleeve: { type: Type.STRING },
+        len: { type: Type.STRING },
+        skirt: { type: Type.STRING },
+        sil: { type: Type.STRING },
+        fabric: { type: Type.STRING },
+        construction: { type: Type.STRING },
+        trim: { type: Type.STRING },
+        not: { type: Type.ARRAY, items: { type: Type.STRING } },
+      },
+    },
+    fieldVisibility: {
+      type: Type.OBJECT,
+      properties: {
+        back: { type: Type.STRING },
+        skirt: { type: Type.STRING },
+        neck: { type: Type.STRING },
+        motif: { type: Type.STRING },
+        sleeve: { type: Type.STRING },
+      },
+    },
+  },
+  required: ["removeAnchors", "addAnchors", "fieldVisibility"],
 };
 
 export function parseRetrySeconds(error: unknown): number | null {

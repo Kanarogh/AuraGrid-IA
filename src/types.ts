@@ -38,6 +38,7 @@ export type CatalogEnrichmentStatus =
   | "pending"
   | "processing"
   | "ready"
+  | "ready_limited"
   | "failed";
 
 export interface CatalogItem {

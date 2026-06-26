@@ -140,7 +140,12 @@ export async function enrichCatalogItemsInQueue(
     if (signal?.aborted) return { cancelled: true, quotaExceeded };
 
     const item = items[i];
-    if (item.enrichmentStatus === "ready" && item.visualProfile) continue;
+    if (
+      (item.enrichmentStatus === "ready" || item.enrichmentStatus === "ready_limited") &&
+      item.visualProfile
+    ) {
+      continue;
+    }
 
     onItemStart?.(item.id);
     try {
@@ -191,6 +196,10 @@ export async function enrichCatalogItemsInQueue(
 
 export function catalogReadyForTextMatch(items: CatalogItem[]): boolean {
   if (items.length === 0) return false;
-  return items.every((c) => c.enrichmentStatus === "ready" && c.visualProfile);
+  return items.every(
+    (c) =>
+      (c.enrichmentStatus === "ready" || c.enrichmentStatus === "ready_limited") &&
+      c.visualProfile
+  );
 }
 

@@ -2064,7 +2064,7 @@ export default function App() {
     if (refs.length === 0) return true;
     if (catalogReadyForTextMatch(refs)) return true;
 
-    const notReady = refs.filter((c) => c.enrichmentStatus !== "ready" || !c.visualProfile);
+    const notReady = refs.filter((c) => !isCatalogItemIndexed(c));
     const indexNow = await confirmDialog({
       message:
         `${notReady.length} referência(s) do catálogo ainda não estão indexadas (JSON).\n\n` +
@@ -2975,7 +2975,7 @@ export default function App() {
     const items = referenceCatalog.filter((c) => {
       if (filter === "failed") return c.enrichmentStatus === "failed";
       if (filter === "pending") return c.enrichmentStatus === "pending" || !c.enrichmentStatus;
-      return c.enrichmentStatus !== "ready" || !c.visualProfile;
+      return !isCatalogItemIndexed(c);
     });
     if (items.length === 0) {
       toast.info("Nenhuma referência para reindexar.");
@@ -3948,8 +3948,14 @@ export default function App() {
                 </span>
                 <span className="text-[10.5px] text-ag-muted block mt-0.5">
                   {referenceCatalog.filter((c) => c.enrichmentStatus === "ready").length} indexados ·{" "}
+                  {referenceCatalog.filter((c) => c.enrichmentStatus === "ready_limited").length} limitados ·{" "}
                   {referenceCatalog.filter((c) => c.enrichmentStatus === "failed").length} com erro ·{" "}
-                  {referenceCatalog.filter((c) => c.enrichmentStatus !== "ready" && c.enrichmentStatus !== "failed").length} pendentes
+                  {referenceCatalog.filter(
+                    (c) =>
+                      c.enrichmentStatus !== "ready" &&
+                      c.enrichmentStatus !== "ready_limited" &&
+                      c.enrichmentStatus !== "failed"
+                  ).length} pendentes
                   {isEnrichingCatalog && (
                     <span className="block mt-1 text-ag-accent font-medium">
                       {catalogEnrichProgressLabel}
@@ -3979,7 +3985,10 @@ export default function App() {
                   </button>
                 )}
                 {referenceCatalog.some(
-                  (c) => c.enrichmentStatus !== "ready" && c.enrichmentStatus !== "failed"
+                  (c) =>
+                    c.enrichmentStatus !== "ready" &&
+                    c.enrichmentStatus !== "ready_limited" &&
+                    c.enrichmentStatus !== "failed"
                 ) && (
                   <button
                     type="button"
@@ -4032,6 +4041,8 @@ export default function App() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                 {referenceCatalog.map((item, index) => {
+                  const catalogLimited =
+                    item.enrichmentStatus === "ready_limited" && !!item.visualProfile;
                   const catalogIndexed = isCatalogItemIndexed(item);
                   const showIndexButton = !catalogIndexed;
                   const canClearEnrichment = hasCatalogEnrichmentData(item);
@@ -4075,7 +4086,9 @@ export default function App() {
                       {/* Delete look trigger */}
                       <span
                         className={`absolute top-1.5 left-1.5 text-[8px] font-mono font-bold px-1.5 py-0.5 rounded-md border ${
-                          catalogIndexed
+                          catalogLimited
+                            ? "bg-ag-warning/15 text-ag-warning border-ag-warning/30"
+                            : catalogIndexed
                             ? "bg-ag-success/15 text-ag-success border-ag-success/30"
                             : item.enrichmentStatus === "processing"
                               ? "bg-ag-warning/15 text-ag-warning border-ag-warning/30"
@@ -4084,7 +4097,9 @@ export default function App() {
                                 : "bg-ag-surface-3 text-ag-muted border-ag-border"
                         }`}
                       >
-                        {catalogIndexed
+                        {catalogLimited
+                          ? "Limit."
+                          : catalogIndexed
                           ? "JSON ✓"
                           : item.enrichmentStatus === "processing"
                             ? "…"
@@ -4107,6 +4122,14 @@ export default function App() {
                       <span className="text-xs font-bold text-center uppercase block truncate text-ag-accent dark:text-ag-accent" title={item.label}>
                         {item.label}
                       </span>
+                      {catalogLimited && (
+                        <span
+                          className="text-[9px] text-ag-warning text-center block mt-0.5"
+                          title="Indexação limitada — foto não permitiu perfil completo"
+                        >
+                          Indexação limitada
+                        </span>
+                      )}
                       {item.enrichmentError && item.enrichmentStatus === "failed" && (
                         <span
                           className="text-[9px] text-ag-danger text-center block mt-0.5 line-clamp-2"

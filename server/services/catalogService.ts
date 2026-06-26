@@ -45,6 +45,7 @@ function mapCatalogRow(c: typeof catalogItems.$inferSelect) {
       | "pending"
       | "processing"
       | "ready"
+      | "ready_limited"
       | "failed"
       | undefined,
     enrichedAt: c.enrichedAt?.toISOString(),
@@ -256,7 +257,7 @@ export async function getCatalogRevision(
     .select({
       maxUpdatedAt: sql<Date | null>`MAX(${catalogItems.updatedAt})`,
       itemCount: sql<number>`COUNT(*)::int`,
-      readyCount: sql<number>`COUNT(*) FILTER (WHERE ${catalogItems.enrichmentStatus} = 'ready')::int`,
+      readyCount: sql<number>`COUNT(*) FILTER (WHERE ${catalogItems.enrichmentStatus} IN ('ready', 'ready_limited'))::int`,
       processingCount: sql<number>`COUNT(*) FILTER (WHERE ${catalogItems.enrichmentStatus} = 'processing')::int`,
     })
     .from(catalogItems)
@@ -424,7 +425,7 @@ export async function getCatalogProfiles(clientId: string, planningPeriodId?: st
     .where(
       and(
         periodWhere(clientId, periodId),
-        eq(catalogItems.enrichmentStatus, "ready")
+        inArray(catalogItems.enrichmentStatus, ["ready", "ready_limited"])
       )
     );
   return rows

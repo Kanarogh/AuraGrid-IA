@@ -1,7 +1,7 @@
 import type { CatalogItem } from "../types";
 import { readJsonResponse } from "./apiResponse";
 import { aiFetch } from "./aiFetch";
-import { getReferenceCatalog } from "./catalog";
+import { getReferenceCatalog, isCatalogItemIndexed } from "./catalog";
 import { convertSvgToDataUrl, resizeForAi } from "./images";
 import { aiQueue } from "./aiQueue";
 
@@ -21,7 +21,7 @@ export async function buildMatchReferenceBody(
     throw new Error("Este roteiro não usa referências de catálogo.");
   }
   const refs = getReferenceCatalog(catalog);
-  const ready = refs.filter((c) => c.enrichmentStatus === "ready" && c.visualProfile);
+  const ready = refs.filter(isCatalogItemIndexed);
   const useJsonMatch = ready.length > 0 && ready.length === refs.length;
 
   const body: Record<string, unknown> = {

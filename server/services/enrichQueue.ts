@@ -7,6 +7,11 @@ import { isMatchEmbeddingEnabled } from "../ai/matchConfig";
 import { isPgvectorAvailable } from "../db/pgvector";
 import { embedCatalogImage, isGeminiEmbeddingConfigured } from "../ai/geminiEmbeddings";
 import {
+  assessProfileReadiness,
+  buildCatalogEmbeddingText,
+  coerceCatalogProfile,
+} from "../ai/catalogProfile";
+import {
   getCatalogItem,
   listCatalogItems,
   resetStaleProcessingCatalogItems,
@@ -120,7 +125,9 @@ async function runCatalogEnrichmentInner(
       : all.filter(
           (c) =>
             c.isReference !== false &&
-            (c.enrichmentStatus !== "ready" || !c.visualProfile)
+            ((c.enrichmentStatus !== "ready" &&
+              c.enrichmentStatus !== "ready_limited") ||
+              !c.visualProfile)
         );
 
     const withImage = targets.filter((c) => c.imageAssetId);
@@ -159,11 +166,32 @@ async function runCatalogEnrichmentInner(
 
       try {
         const image = await mediaAssetToDataUrl(item.imageAssetId);
+        const siblingCandidates = all
+          .filter(
+            (c) =>
+              c.id !== item.id &&
+              c.visualProfile &&
+              (c.enrichmentStatus === "ready" ||
+                c.enrichmentStatus === "ready_limited")
+          )
+          .map((c) => ({
+            id: c.id,
+            label: c.label,
+            profile: c.visualProfile as Record<string, unknown>,
+          }));
+
+        const enrichInput = {
+          image,
+          label: item.label,
+          id: item.id,
+          siblingCandidates,
+        };
+
         let profile;
         try {
           const outcome = await runVisionWithFallback(
             "enrich-catalog-item",
-            (provider) => provider.enrichCatalogItem({ image, label: item.label, id: item.id }),
+            (provider) => provider.enrichCatalogItem(enrichInput),
             activeProvider
           );
           profile = outcome.result;
@@ -181,7 +209,7 @@ async function runCatalogEnrichmentInner(
             await sleep(ENRICH_RETRY_DELAY_MS, abort.signal);
             const outcome = await runVisionWithFallback(
               "enrich-catalog-item",
-              (provider) => provider.enrichCatalogItem({ image, label: item.label, id: item.id }),
+              (provider) => provider.enrichCatalogItem(enrichInput),
               activeProvider
             );
             profile = outcome.result;
@@ -192,9 +220,15 @@ async function runCatalogEnrichmentInner(
 
         if (abort.signal.aborted) return { quotaExceeded, cancelled: true };
 
+        const coerced = coerceCatalogProfile(
+          profile as Record<string, unknown>,
+          item.label
+        );
+        const enrichmentStatus = assessProfileReadiness(coerced);
+
         await updateCatalogItem(clientId, item.id, {
           visualProfile: profile,
-          enrichmentStatus: "ready",
+          enrichmentStatus,
           enrichedAt: new Date(),
           enrichmentError: null,
         });
@@ -205,7 +239,8 @@ async function runCatalogEnrichmentInner(
           (await isPgvectorAvailable())
         ) {
           try {
-            const vector = await embedCatalogImage(image);
+            const profileText = buildCatalogEmbeddingText(coerced);
+            const vector = await embedCatalogImage(image, profileText);
             await updateCatalogEmbedding(clientId, item.id, vector);
             console.info(`[enrich] embedding ok para ${item.id} (${vector.length}d)`);
           } catch (embedErr) {
@@ -215,7 +250,7 @@ async function runCatalogEnrichmentInner(
             );
           }
         } else if (isMatchEmbeddingEnabled()) {
-          console.warn(`[enrich] embedding ignorado â€” GEMINI_API_KEY ausente (${item.id})`);
+          console.warn(`[enrich] embedding ignorado — GEMINI_API_KEY ausente (${item.id})`);
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

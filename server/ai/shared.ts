@@ -34,6 +34,9 @@ export function toDataUrl(base64Str: string): string {
   return `data:${mimeType};base64,${data}`;
 }
 
+/** Re-export — resize padrão para indexação de catálogo (~1536px). */
+export { shrinkVisionImage as shrinkImageDataUrlForVision } from "./imagePayload";
+
 export function parseRetrySeconds(error: unknown): number | null {
   const msg = error instanceof Error ? error.message : String(error);
 

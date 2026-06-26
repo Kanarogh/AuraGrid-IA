@@ -26,13 +26,19 @@ export function buildCatalogEnrichmentSnapshot(
 ): CatalogEnrichmentSnapshot {
   const refs = items.filter((i) => i.isReference !== false && i.imageAssetId);
   const incomplete = refs.filter(
-    (i) => i.enrichmentStatus !== "ready" || !i.visualProfile
+    (i) =>
+      (i.enrichmentStatus !== "ready" && i.enrichmentStatus !== "ready_limited") ||
+      !i.visualProfile
   );
   const processing = refs.filter((i) => i.enrichmentStatus === "processing");
   const pending = refs.filter(
     (i) => i.enrichmentStatus === "pending" || (!i.enrichmentStatus && !i.visualProfile)
   );
-  const ready = refs.filter((i) => i.enrichmentStatus === "ready");
+  const ready = refs.filter(
+    (i) =>
+      (i.enrichmentStatus === "ready" || i.enrichmentStatus === "ready_limited") &&
+      i.visualProfile
+  );
   const failed = refs.filter((i) => i.enrichmentStatus === "failed");
   const currentItem = processing[0] ?? null;
 

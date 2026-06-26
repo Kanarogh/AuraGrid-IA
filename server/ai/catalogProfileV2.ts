@@ -1,5 +1,7 @@
 /** Schema v2 — JSON compacto: garment (match) + scene (legenda / contexto). */
 
+export type FieldVisibility = "visible" | "not-visible";
+
 export type CompactGarment = {
   type?: string;
   colors?: string[];
@@ -13,8 +15,12 @@ export type CompactGarment = {
   len?: string;
   skirt?: string;
   sil?: string;
+  fabric?: string;
+  construction?: string;
+  trim?: string;
   anchors?: string[];
   not?: string[];
+  fieldVisibility?: Partial<Record<string, FieldVisibility>>;
 };
 
 export type CompactScene = {
@@ -54,6 +60,10 @@ export type FlatGarmentView = {
   notToConfuseWith?: string;
   matchKeywords?: string[];
   distinguishingFingerprint?: string;
+  fabric?: string;
+  construction?: string;
+  trim?: string;
+  fieldVisibility?: Partial<Record<string, FieldVisibility>>;
   pattern?: { type?: string; description?: string };
   scene?: CompactScene;
 };
@@ -116,6 +126,27 @@ const LENGTHS = new Set(["mini", "knee", "midi", "maxi", "ankle", "floor", "othe
 
 const LIGHTS = new Set(["natural", "golden-hour", "overcast", "studio-flash", "shade", "other"]);
 
+export type CatalogEnrichmentStatus = "ready" | "ready_limited";
+
+export type CatalogSelfCritique = {
+  removeAnchors?: string[];
+  addAnchors?: string[];
+  patches?: {
+    motif?: string;
+    back?: string;
+    neck?: string;
+    sleeve?: string;
+    len?: string;
+    skirt?: string;
+    sil?: string;
+    fabric?: string;
+    construction?: string;
+    trim?: string;
+    not?: string[];
+  };
+  fieldVisibility?: Partial<Record<string, FieldVisibility>>;
+};
+
 export function buildEnrichCatalogPrompt(label: string, id: string): string {
   return `Fashion catalog analyst — Indian/boho women's wear. Reference: "${label || "unknown"}" (id: ${id || "n/a"}).
 
@@ -128,16 +159,23 @@ GARMENT (for strict SKU visual match — be DISCRIMINATIVE, focus on what is uni
 - motif: unique print id (tie-dye-horizontal, floral-ditsy, geometric-medallion, paisley-vertical, solid)
 - layout: horizontal|vertical|radial|placement|all-over|solid|other
 - scale: solid|micro|small|medium|large|all-over|other
-- back: halter-tie|open-cross|low-open|full|unknown
+- back: halter-tie|open-cross|low-open|full|back-not-visible|unknown
 - neck, sleeve, len (mini|knee|midi|maxi|...), skirt, sil
-- anchors: 6-8 short kebab tokens VERIFIABLE in photo. MUST include:
-    1. print motif token (e.g. medallion-symmetric, tie-dye-horizontal-band)
-    2. back-detail token (open-cross-straps, halter-tie, full-closed)
-    3. construction token (tiered-3-layers, ruffle-hem, pleated, godet)
-    4. neckline token (v-neck-deep, square-neck, halter)
-    5. trim/closure if visible (tassel-tie, button-front, side-zip, no-closure)
-    6. fabric/texture token (lightweight-rayon, embroidered-cotton, crepe-flowy)
-- not: 3-5 tokens — adjacent SKUs this is explicitly NOT (e.g. tie-dye-bands, floral-ditsy, mini-length)
+- fabric: 1 texture token (cotton-voile, crepe-flowy, embroidered-cotton, rayon-lightweight)
+- construction: 1 construction token (tiered-3-layers, wrap-front, godet-panels, smocked-bodice)
+- trim: 0-1 closure/trim token if visible (tassel-tie, cord-belt, button-front, side-zip, no-closure)
+- anchors: 6-8 short kebab tokens VERIFIABLE in photo. MUST include when visible:
+    1. print motif token
+    2. back-detail token OR "back-not-visible" if rear not shown
+    3. construction token (tiered-3-layers, ruffle-hem, pleated)
+    4. neckline token
+    5. trim/closure if visible
+    6. fabric/texture token
+- not: 3-5 tokens — adjacent SKUs this is explicitly NOT
+
+HONESTY (critical):
+- If back/skirt/neck not visible in photo → use "back-not-visible", "skirt-not-visible", etc. in anchors OR omit that field.
+- Do NOT invent details you cannot see — a honest sparse profile beats a guessed rich one.
 
 SCENE (background/place — caption only, not for match):
 - setting: studio|beach|street|garden|indoor|urban|nature|cafe|home|other
@@ -147,18 +185,250 @@ SCENE (background/place — caption only, not for match):
 
 If plain white/neutral product photo: setting=studio, tags include white-bg.
 
-CRITICAL:
-- Every "anchors" token MUST be observable in the photo — do NOT guess.
-- "not" tokens must be SHORT and SPECIFIC — they prevent confusion with sibling SKUs.
-- When two SKUs share color family, motif + back + construction decide the match — describe them precisely.
-
 JSON shape:
 {
   "version": 2,
   "referenceLabel": "${label || "unknown"}",
-  "garment": { "type", "colors", "temp", "motif", "layout", "scale", "back", "neck", "sleeve", "len", "skirt", "sil", "anchors", "not" },
+  "garment": { "type", "colors", "temp", "motif", "layout", "scale", "back", "neck", "sleeve", "len", "skirt", "sil", "fabric", "construction", "trim", "anchors", "not" },
   "scene": { "setting", "tags", "light", "mood" }
 }`;
+}
+
+export function buildCatalogSelfCritiquePrompt(
+  label: string,
+  id: string,
+  draftProfile: CatalogProfileV2,
+  siblingLabels: string[] = []
+): string {
+  const draftJson = JSON.stringify(draftProfile);
+  const siblingBlock =
+    siblingLabels.length > 0
+      ? `
+SIBLING SKUs ALREADY IN CATALOG (refine "not" to distinguish THIS piece from these — labels only):
+${siblingLabels.map((l, i) => `${i + 1}. "${l}"`).join("\n")}
+- Add/refine "not" tokens that separate this SKU from siblings without inventing.`
+      : "";
+
+  return `Fashion catalog quality reviewer — critique and refine the draft profile for "${label}" (id: ${id}).
+
+You see the SAME photo + the draft JSON from phase A. Output critique patches ONLY.
+
+TASKS:
+1. REMOVE anchors from removeAnchors that are NOT verifiable in the photo (hallucinated).
+2. ADD missing anchors to addAnchors only if clearly visible (max 3 new).
+3. patches: fix garment fields that were guessed wrong; refine "not" array (3-5 tokens).
+4. fieldVisibility: mark each key field as "visible" or "not-visible" (back, skirt, neck, motif, sleeve).
+   - If back not shown → fieldVisibility.back = "not-visible" and patches.back = "back-not-visible".
+
+RULES:
+- Do NOT add anchors you cannot verify.
+- Prefer honest "not-visible" over invented detail.
+- Keep kebab-case tokens.${siblingBlock}
+
+DRAFT PROFILE JSON:
+${draftJson}`;
+}
+
+function normalizeFieldVisibility(
+  raw: unknown
+): Partial<Record<string, FieldVisibility>> | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const out: Partial<Record<string, FieldVisibility>> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const v = String(value).toLowerCase();
+    if (v === "visible" || v === "not-visible") {
+      out[key] = v;
+    }
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+function isNotVisibleToken(value: string | undefined): boolean {
+  if (!value) return false;
+  return /not-visible|unknown/i.test(value);
+}
+
+function countObservableAnchors(g: CompactGarment): number {
+  const skip = new Set(["back-not-visible", "skirt-not-visible", "neck-not-visible"]);
+  return (g.anchors ?? []).filter((a) => {
+    const t = a.toLowerCase();
+    if (skip.has(t)) return false;
+    if (t.endsWith("-not-visible")) return false;
+    return t.length > 2;
+  }).length;
+}
+
+/** Mescla autocrítica da Fase B no perfil da Fase A. */
+export function mergeCatalogSelfCritique(
+  draft: CatalogProfileV2,
+  critique: CatalogSelfCritique
+): CatalogProfileV2 {
+  const g = { ...draft.garment };
+  const remove = new Set(
+    (critique.removeAnchors ?? []).map((a) => a.toLowerCase().trim()).filter(Boolean)
+  );
+  let anchors = (g.anchors ?? []).filter((a) => !remove.has(a.toLowerCase()));
+  const add = (critique.addAnchors ?? [])
+    .map((a) => toKebabToken(a, 48))
+    .filter((a) => a !== "unknown" && !anchors.some((x) => x.toLowerCase() === a));
+  anchors = [...anchors, ...add].slice(0, 8);
+
+  const patches = critique.patches ?? {};
+  if (patches.motif) g.motif = toKebabToken(patches.motif, 56);
+  if (patches.back) g.back = toKebabToken(patches.back, 40);
+  if (patches.neck) g.neck = toKebabToken(patches.neck, 32);
+  if (patches.sleeve) g.sleeve = toKebabToken(patches.sleeve, 32);
+  if (patches.len) g.len = normalizeLength(patches.len);
+  if (patches.skirt) g.skirt = toKebabToken(patches.skirt, 32);
+  if (patches.sil) g.sil = toKebabToken(patches.sil, 32);
+  if (patches.fabric) g.fabric = toKebabToken(patches.fabric, 40);
+  if (patches.construction) g.construction = toKebabToken(patches.construction, 40);
+  if (patches.trim) g.trim = toKebabToken(patches.trim, 32);
+  if (patches.not?.length) g.not = asTokenArray(patches.not, 6);
+
+  g.anchors = anchors;
+  g.fieldVisibility = {
+    ...(g.fieldVisibility ?? {}),
+    ...(critique.fieldVisibility ?? {}),
+  };
+
+  return {
+    ...draft,
+    garment: backfillGarmentFromAnchors(g),
+  };
+}
+
+const PRINT_ANCHOR_RE =
+  /floral|geometric|tie-dye|paisley|medallion|ditsy|print|pattern|stripe|polka/i;
+const LENGTH_CONFLICT: Record<string, RegExp> = {
+  mini: /maxi|floor-length|ankle-length/i,
+  maxi: /mini-dress|mini-length|^mini$/i,
+  midi: /floor-length/i,
+};
+
+/** Validação leve pós-IA — remove conflitos óbvios. */
+export function validateProfileCoherence(profile: CatalogProfileV2): {
+  profile: CatalogProfileV2;
+  limited: boolean;
+  warnings: string[];
+} {
+  const warnings: string[] = [];
+  const g = { ...profile.garment };
+  let limited = false;
+
+  if (!g.colors?.length) {
+    warnings.push("colors vazio");
+    limited = true;
+  }
+
+  let anchors = [...(g.anchors ?? [])];
+  const motif = (g.motif ?? "").toLowerCase();
+
+  if (motif === "solid" || motif.includes("solid")) {
+    const before = anchors.length;
+    anchors = anchors.filter((a) => !PRINT_ANCHOR_RE.test(a));
+    if (anchors.length < before) warnings.push("anchors conflitam com motif solid");
+  }
+
+  if (g.len && LENGTH_CONFLICT[g.len]) {
+    const re = LENGTH_CONFLICT[g.len]!;
+    const before = anchors.length;
+    anchors = anchors.filter((a) => !re.test(a));
+    if (anchors.length < before) warnings.push(`anchors conflitam com len=${g.len}`);
+  }
+
+  g.anchors = anchors;
+
+  const observable = countObservableAnchors(g);
+  if (observable < 3) {
+    warnings.push(`apenas ${observable} anchors observáveis`);
+    limited = true;
+  }
+
+  return {
+    profile: { ...profile, garment: backfillGarmentFromAnchors(g) },
+    limited,
+    warnings,
+  };
+}
+
+export function assessProfileReadiness(profile: CatalogProfileV2): CatalogEnrichmentStatus {
+  const g = profile.garment;
+  if (!g.type || g.type === "unknown") return "ready_limited";
+  if (!g.colors?.length) return "ready_limited";
+  if (!g.motif || g.motif === "unknown") return "ready_limited";
+  if (countObservableAnchors(g) < 3) return "ready_limited";
+  return "ready";
+}
+
+/** Labels de SKUs irmãs já indexadas (mesmo tipo + cor próxima). */
+export function findSiblingCatalogLabels(
+  indexed: Array<{ id: string; label: string; profile: CatalogProfileV2 }>,
+  draft: CatalogProfileV2,
+  excludeId: string,
+  max = 3
+): string[] {
+  const type = draft.garment.type;
+  const color = draft.garment.colors?.[0]?.toLowerCase();
+  if (!type) return [];
+
+  return indexed
+    .filter((item) => item.id !== excludeId)
+    .map((item) => {
+      const g = item.profile.garment;
+      let score = 0;
+      if (g.type === type) score += 2;
+      const ic = g.colors?.[0]?.toLowerCase();
+      if (color && ic) {
+        if (ic === color) score += 2;
+        else if (ic.includes(color) || color.includes(ic)) score += 1;
+      }
+      return { label: item.label, score };
+    })
+    .filter((x) => x.score >= 2)
+    .sort((a, b) => b.score - a.score || a.label.localeCompare(b.label))
+    .slice(0, max)
+    .map((x) => x.label);
+}
+
+/** Texto derivado do perfil para embedding híbrido. */
+export function buildCatalogEmbeddingText(profile: CatalogProfileV2): string {
+  const g = profile.garment;
+  const parts = [
+    g.type,
+    ...(g.colors ?? []),
+    g.temp,
+    g.motif,
+    g.layout,
+    g.back,
+    g.neck,
+    g.sleeve,
+    g.len,
+    g.skirt,
+    g.sil,
+    g.fabric,
+    g.construction,
+    g.trim,
+    ...(g.anchors ?? []).slice(0, 6),
+  ].filter(Boolean);
+  return parts.join(" ");
+}
+
+export function finalizeDeepCatalogProfile(
+  phaseA: Record<string, unknown>,
+  critique: CatalogSelfCritique | null | undefined,
+  label?: string
+): { profile: Record<string, unknown>; status: CatalogEnrichmentStatus } {
+  let profile = coerceCatalogProfile(phaseA, label);
+  if (critique) {
+    profile = mergeCatalogSelfCritique(profile, critique);
+  }
+  const validated = validateProfileCoherence(profile);
+  profile = validated.profile;
+  const status = assessProfileReadiness(profile);
+  const finalStatus: CatalogEnrichmentStatus =
+    validated.limited && status === "ready" ? "ready_limited" : status;
+  return { profile: profile as unknown as Record<string, unknown>, status: finalStatus };
 }
 
 function pickAnchorToken(anchors: string[], pattern: RegExp): string | undefined {
@@ -191,7 +461,13 @@ function backfillGarmentFromAnchors(g: CompactGarment): CompactGarment {
       pickAnchorToken(anchors, /a-line|fit-and-flare|empire|wrap|bodycon|silhouette|tiered/i),
     back:
       g.back ??
-      pickAnchorToken(anchors, /back|costas|open-cross|halter-tie|low-open|criss-cross/i),
+      (() => {
+        const token = pickAnchorToken(
+          anchors,
+          /back|costas|open-cross|halter-tie|low-open|criss-cross/i
+        );
+        return token && !isNotVisibleToken(token) ? token : undefined;
+      })(),
   };
 }
 
@@ -223,8 +499,12 @@ function normalizeGarmentBlock(g: Record<string, unknown>): CompactGarment {
     len: normalizeLength(g.len ?? g.lengthCategory ?? g.dressLength),
     skirt: g.skirt ? toKebabToken(String(g.skirt), 32) : g.skirtConstruction ? toKebabToken(String(g.skirtConstruction), 32) : undefined,
     sil: g.sil ? toKebabToken(String(g.sil), 32) : g.silhouette ? toKebabToken(String(g.silhouette), 32) : undefined,
+    fabric: g.fabric ? toKebabToken(String(g.fabric), 40) : undefined,
+    construction: g.construction ? toKebabToken(String(g.construction), 40) : undefined,
+    trim: g.trim ? toKebabToken(String(g.trim), 32) : undefined,
     anchors: asTokenArray(g.anchors ?? g.matchAnchors, 8),
     not: asTokenArray(g.not ?? g.notToConfuseWith, 6),
+    fieldVisibility: normalizeFieldVisibility(g.fieldVisibility),
   };
   return backfillGarmentFromAnchors(base);
 }
@@ -296,7 +576,13 @@ export function flattenProfileForRanker(raw: Record<string, unknown> | undefined
       matchAnchors: g.anchors,
       notToConfuseWith: (g.not ?? []).join(" "),
       matchKeywords: g.anchors,
-      distinguishingFingerprint: [g.motif, g.back, g.len].filter(Boolean).join(" "),
+      distinguishingFingerprint: [g.motif, g.back, g.len, g.fabric, g.construction]
+        .filter(Boolean)
+        .join(" "),
+      fabric: g.fabric,
+      construction: g.construction,
+      trim: g.trim,
+      fieldVisibility: g.fieldVisibility,
       scene,
     };
   }
@@ -408,12 +694,14 @@ export function assertCatalogProfileComplete(profile: CatalogProfileV2): void {
   if (!g.motif || g.motif === "unknown") {
     throw new IncompleteCatalogProfileError("Perfil v2 incompleto: garment.motif ausente.");
   }
-  if ((g.anchors?.length ?? 0) < 4) {
-    throw new IncompleteCatalogProfileError("Perfil v2 incompleto: mínimo 4 garment.anchors.");
-  }
   if (!profile.scene?.setting) {
     throw new IncompleteCatalogProfileError("Perfil v2 incompleto: scene.setting ausente.");
   }
+}
+
+export function isCatalogProfileUsableForMatch(profile: CatalogProfileV2): boolean {
+  const status = assessProfileReadiness(profile);
+  return status === "ready" || status === "ready_limited";
 }
 
 export function finalizeCatalogProfile(
@@ -488,12 +776,19 @@ export function compactProfileForMatchJson(
     g: {
       t: g.type,
       c: g.colors,
+      tmp: g.temp,
       m: g.motif,
       l: g.layout,
+      sc: g.scale,
       b: g.back,
       n: g.neck,
       s: g.sleeve,
       len: g.len,
+      sk: g.skirt,
+      sil: g.sil,
+      fab: g.fabric,
+      con: g.construction,
+      tr: g.trim,
       a: g.anchors?.slice(0, 6),
       not: g.not?.slice(0, 4),
     },

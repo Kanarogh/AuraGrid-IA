@@ -19,8 +19,15 @@ import {
   normalizeMatchedId,
   resolveMatchedIdFromCandidates,
 } from "./matchPrompts";
-import { buildEnrichCatalogPrompt, finalizeCatalogProfile } from "./catalogProfile";
-import { CATALOG_PROFILE_SCHEMA } from "../geminiShared";
+import { buildEnrichCatalogPrompt } from "./catalogProfile";
+import {
+  buildCatalogSelfCritiquePrompt,
+  coerceCatalogProfile,
+  finalizeDeepCatalogProfile,
+  findSiblingCatalogLabels,
+  type CatalogSelfCritique,
+} from "./catalogProfileV2";
+import { CATALOG_PROFILE_SCHEMA, CATALOG_SELF_CRITIQUE_SCHEMA } from "../geminiShared";
 import {
   getGeminiIndexingModel,
   getGeminiPlanningModel,
@@ -32,7 +39,7 @@ import {
   normalizePostFingerprint,
 } from "./postFingerprint";
 import { callGeminiIndexing, callGeminiPlanning } from "./geminiRetry";
-import { cleanBase64 } from "./shared";
+import { cleanBase64, shrinkImageDataUrlForVision } from "./shared";
 import { recordAiUsageEvent } from "../services/aiUsageService";
 import type {
   AiProvider,
@@ -127,38 +134,93 @@ export const geminiProvider: AiProvider = {
     return normalizePostFingerprint(JSON.parse(rawText) as Record<string, unknown>);
   },
 
-  async enrichCatalogItem({ image, label, id }: CatalogEnrichInput) {
+  async enrichCatalogItem({ image, label, id, siblingCandidates, deepIndexing }: CatalogEnrichInput) {
     const ai = getClient();
+    const shrunk = await shrinkImageDataUrlForVision(image, {
+      maxSide: 1536,
+      quality: 0.88,
+    });
     let modelUsed = getGeminiIndexingModel();
-    const response = await callGeminiIndexing(
+
+    const phaseAResponse = await callGeminiIndexing(
       getGeminiIndexingModel(),
-      "Gemini enrich",
+      "Gemini enrich phase A",
       (model) =>
         ai.models.generateContent({
           model,
           contents: [
             { text: buildEnrichCatalogPrompt(label, id) },
-            { inlineData: cleanBase64(image) },
+            { inlineData: cleanBase64(shrunk) },
           ],
           config: {
             responseMimeType: "application/json",
             responseSchema: CATALOG_PROFILE_SCHEMA,
           },
-        })
-    ,
+        }),
       { onSuccess: (model) => (modelUsed = model) }
     );
     await trackGeminiUsage({
       operation: "enrich_catalog_item",
       model: modelUsed,
-      response,
+      response: phaseAResponse,
     });
 
-    const rawText = response.text?.trim();
-    if (!rawText) throw new Error("Gemini retornou resposta vazia.");
+    const phaseAText = phaseAResponse.text?.trim();
+    if (!phaseAText) throw new Error("Gemini retornou resposta vazia na Fase A.");
 
-    const profile = JSON.parse(rawText) as Record<string, unknown>;
-    return finalizeCatalogProfile(profile, label);
+    const phaseARaw = JSON.parse(phaseAText) as Record<string, unknown>;
+    let critique: CatalogSelfCritique | null = null;
+
+    if (deepIndexing !== false) {
+      const draft = coerceCatalogProfile(phaseARaw, label);
+      const siblingLabels = siblingCandidates?.length
+        ? findSiblingCatalogLabels(
+            siblingCandidates.map((c) => ({
+              id: c.id,
+              label: c.label,
+              profile: coerceCatalogProfile(c.profile, c.label),
+            })),
+            draft,
+            id
+          )
+        : [];
+      const critiqueResponse = await callGeminiIndexing(
+        getGeminiIndexingModel(),
+        "Gemini enrich phase B",
+        (model) =>
+          ai.models.generateContent({
+            model,
+            contents: [
+              {
+                text: buildCatalogSelfCritiquePrompt(
+                  label,
+                  id,
+                  draft,
+                  siblingLabels
+                ),
+              },
+              { inlineData: cleanBase64(shrunk) },
+            ],
+            config: {
+              responseMimeType: "application/json",
+              responseSchema: CATALOG_SELF_CRITIQUE_SCHEMA,
+            },
+          }),
+        { onSuccess: (model) => (modelUsed = model) }
+      );
+      await trackGeminiUsage({
+        operation: "enrich_catalog_critique",
+        model: modelUsed,
+        response: critiqueResponse,
+      });
+      const critiqueText = critiqueResponse.text?.trim();
+      if (critiqueText) {
+        critique = JSON.parse(critiqueText) as CatalogSelfCritique;
+      }
+    }
+
+    const { profile } = finalizeDeepCatalogProfile(phaseARaw, critique, label);
+    return profile;
   },
 
   async matchAndGenerate(input: MatchGenerateInput): Promise<MatchGenerateResult> {

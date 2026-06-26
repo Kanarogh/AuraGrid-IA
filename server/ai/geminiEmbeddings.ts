@@ -63,13 +63,16 @@ export function isGeminiEmbeddingConfigured(): boolean {
   return hasGeminiKey();
 }
 
-/** Vetor para indexar referência do catálogo. */
-export async function embedCatalogImage(dataUrl: string): Promise<number[]> {
-  return embedImage(
-    dataUrl,
-    "task: search document | query: fashion catalog reference garment",
-    "embed_catalog_image"
-  );
+/** Vetor para indexar referência do catálogo (híbrido: imagem + descrição do perfil). */
+export async function embedCatalogImage(
+  dataUrl: string,
+  profileText?: string
+): Promise<number[]> {
+  const description = profileText?.trim();
+  const taskPrefix = description
+    ? `task: search document | reference description: ${description} | image:`
+    : "task: search document | query: fashion catalog reference garment";
+  return embedImage(dataUrl, taskPrefix, "embed_catalog_image");
 }
 
 /** Vetor para consulta (foto do post). */

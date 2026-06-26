@@ -78,7 +78,7 @@ export function wasAutoImported(item: CatalogItem): boolean {
 /** Remove perfil antigo quando o status não é "ready" (estado inconsistente). */
 export function sanitizeEnrichmentConsistency(item: CatalogItem): CatalogItem {
   const next = { ...item };
-  if (next.enrichmentStatus !== "ready") {
+  if (next.enrichmentStatus !== "ready" && next.enrichmentStatus !== "ready_limited") {
     if (next.visualProfile) next.visualProfile = undefined;
     if (next.enrichmentStatus !== "failed") {
       next.enrichedAt = undefined;
@@ -129,7 +129,10 @@ export function getCanvaCatalog(catalog: CatalogItem[]): CatalogItem[] {
 }
 
 export function isCatalogItemIndexed(item: CatalogItem): boolean {
-  return item.enrichmentStatus === "ready" && !!item.visualProfile;
+  return (
+    (item.enrichmentStatus === "ready" || item.enrichmentStatus === "ready_limited") &&
+    !!item.visualProfile
+  );
 }
 
 /** Referência com JSON de visão, erro de indexação ou status final — dá para limpar. */

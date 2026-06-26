@@ -33,6 +33,10 @@ export interface CatalogEnrichInput {
   image: string;
   label: string;
   id: string;
+  /** SKUs já indexadas para achar irmãs na Fase B (provider resolve labels após Fase A). */
+  siblingCandidates?: Array<{ id: string; label: string; profile: Record<string, unknown> }>;
+  /** Quando false, só Fase A (extração). Default true no Gemini. */
+  deepIndexing?: boolean;
 }
 
 export type BrandGemPayload = {

@@ -1,5 +1,5 @@
 import type { CatalogItem, PlannedPost } from "../types";
-import { getReferenceCatalog } from "./catalog";
+import { getReferenceCatalog, isCatalogItemIndexed } from "./catalog";
 import { catalogReadyForTextMatch } from "./catalogEnrichment";
 
 export interface CaptionBatchStats {
@@ -37,7 +37,7 @@ export function getCaptionBatchStats(
     errors: safePosts.filter((p) => !!p.error).length,
     generating: safePosts.filter((p) => p.isGenerating).length,
     catalogTotal: refs.length,
-    catalogIndexed: refs.filter((c) => c.enrichmentStatus === "ready" && c.visualProfile).length,
+    catalogIndexed: refs.filter(isCatalogItemIndexed).length,
     catalogReady: usesReferences ? catalogReadyForTextMatch(refs) : true,
   };
 }
