@@ -106,12 +106,11 @@ export async function updateCatalogItem(
     .returning();
   if (!row) throw new Error("Referência não encontrada.");
   const item = mapCatalogRow(row);
-  const touchesEnrichment =
-    patch.visualProfile !== undefined ||
-    patch.enrichmentStatus !== undefined ||
-    patch.enrichmentError !== undefined ||
-    patch.enrichedAt !== undefined;
-  if (touchesEnrichment) {
+  const terminalEnrichment =
+    patch.enrichmentStatus === "ready" ||
+    patch.enrichmentStatus === "ready_limited" ||
+    patch.enrichmentStatus === "failed";
+  if (terminalEnrichment) {
     void notifyCatalogChange(clientId, periodId);
   }
   return item;

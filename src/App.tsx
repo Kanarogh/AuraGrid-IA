@@ -461,11 +461,15 @@ export default function App() {
     },
   });
 
+  const reloadCatalogFromRemote = useCallback(async () => {
+    await reloadWorkspaceSlices(["catalog"]);
+  }, [reloadWorkspaceSlices]);
+
   useCatalogEnrichmentWatcher({
     enabled: useApiStorage,
     clientId: activeClientId ?? "",
     workspaceHydrated,
-    onCatalogReload: async () => reloadWorkspaceSlices(["catalog"]),
+    onCatalogReload: reloadCatalogFromRemote,
     isEnriching: isEnrichingCatalog,
     enrichProgress: catalogEnrichProgress,
     startEnrichLocal: startCatalogEnrichPolling,

@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { CatalogEnrichProgress } from "../lib/api/workspaceApi";
 
 /**
  * Indexação via SSE (useRemoteSyncCoordinator).
- * Recarrega catálogo ao terminar a fila (refresh por peça fica no coordinator).
+ * Recarrega catálogo só ao terminar a fila (borda true→false).
  */
 export function useCatalogEnrichmentWatcher({
   enabled,
@@ -24,10 +24,18 @@ export function useCatalogEnrichmentWatcher({
   startEnrichLocal: () => void;
   stopEnrichLocal: () => void;
 }) {
+  const onCatalogReloadRef = useRef(onCatalogReload);
+  onCatalogReloadRef.current = onCatalogReload;
+  const wasEnrichingRef = useRef(isEnriching);
+
   useEffect(() => {
-    if (!enabled || isEnriching) return;
-    void onCatalogReload();
-  }, [enabled, isEnriching, onCatalogReload]);
+    if (!enabled) return;
+    const wasEnriching = wasEnrichingRef.current;
+    wasEnrichingRef.current = isEnriching;
+    if (wasEnriching && !isEnriching) {
+      void onCatalogReloadRef.current();
+    }
+  }, [enabled, isEnriching]);
 
   const startPolling = useCallback(() => {
     startEnrichLocal();

@@ -26,6 +26,7 @@ import {
   ENRICH_PHASE_PERCENT,
   type EnrichProgressPhase,
 } from "@/src/lib/enrichProgressStages";
+import { isJsonParseError } from "../ai/geminiJson";
 
 const ENRICH_DELAY_MS = 5000;
 const ENRICH_RETRY_DELAY_MS = 5000;
@@ -49,8 +50,20 @@ function queueKey(clientId: string) {
   return clientId;
 }
 
+function formatEnrichmentError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  const line = msg.split("\n")[0]?.trim() ?? msg;
+  if (/JSON inválido|Unterminated string/i.test(line)) {
+    return "Resposta JSON inválida do Gemini (truncada ou corrompida). Use “Tentar de novo”.";
+  }
+  return line.length > 280 ? `${line.slice(0, 277)}…` : line;
+}
+
 function isTransientError(message: string): boolean {
-  return /503|UNAVAILABLE|high demand|overloaded|try again later/i.test(message);
+  return (
+    /503|UNAVAILABLE|high demand|overloaded|try again later/i.test(message) ||
+    isJsonParseError(new Error(message))
+  );
 }
 
 function isQuotaError(message: string): boolean {
@@ -226,7 +239,7 @@ async function runCatalogEnrichmentInner(
             quotaExceeded = true;
             await updateCatalogItem(clientId, item.id, {
               enrichmentStatus: "failed",
-              enrichmentError: msg,
+              enrichmentError: formatEnrichmentError(firstErr),
             });
             return { quotaExceeded, cancelled: false };
           }
@@ -287,7 +300,7 @@ async function runCatalogEnrichmentInner(
         const msg = err instanceof Error ? err.message : String(err);
         await updateCatalogItem(clientId, item.id, {
           enrichmentStatus: "failed",
-          enrichmentError: msg,
+          enrichmentError: formatEnrichmentError(err),
         });
         if (isQuotaError(msg)) {
           quotaExceeded = true;

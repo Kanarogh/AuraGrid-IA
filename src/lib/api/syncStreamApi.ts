@@ -13,6 +13,8 @@ export function openSyncEventSource(clientId: string, periodId: string): EventSo
   return new EventSource(buildSyncStreamUrl(clientId, periodId));
 }
 
+import type { CatalogEnrichProgressDetail } from "../enrichProgressStages";
+
 export type SyncStreamRevisionEvent = {
   domains: string[];
   periodId?: string;
@@ -20,10 +22,5 @@ export type SyncStreamRevisionEvent = {
 
 export type SyncStreamEnrichEvent = {
   enriching: boolean;
-  progress?: {
-    index: number;
-    total: number;
-    itemId: string;
-    label: string;
-  };
+  progress?: CatalogEnrichProgressDetail;
 };

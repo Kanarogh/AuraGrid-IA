@@ -39,7 +39,8 @@ import {
   normalizePostFingerprint,
 } from "./postFingerprint";
 import { callGeminiIndexing, callGeminiPlanning } from "./geminiRetry";
-import { cleanBase64, shrinkImageDataUrlForVision } from "./shared";
+import { parseGeminiJsonText, isJsonParseError } from "./geminiJson";
+import { cleanBase64, shrinkImageDataUrlForVision, sleep } from "./shared";
 import { recordAiUsageEvent } from "../services/aiUsageService";
 import type {
   AiProvider,
@@ -81,6 +82,14 @@ async function trackGeminiUsage(args: {
     console.warn("[ai-usage] falha ao registrar uso Gemini:", error);
   }
 }
+
+/** Limite de saída — perfil compacto cabe em ~1–2 KB; evita JSON truncado gigante. */
+const CATALOG_INDEXING_MAX_OUTPUT_TOKENS = 4096;
+
+const CATALOG_INDEXING_CONFIG = {
+  responseMimeType: "application/json" as const,
+  maxOutputTokens: CATALOG_INDEXING_MAX_OUTPUT_TOKENS,
+};
 
 export const geminiProvider: AiProvider = {
   id: "gemini",
@@ -148,34 +157,46 @@ export const geminiProvider: AiProvider = {
     report("analyze", 26);
     let modelUsed = getGeminiIndexingModel();
 
-    const phaseAResponse = await callGeminiIndexing(
-      getGeminiIndexingModel(),
-      "Gemini enrich phase A",
-      (model) =>
-        ai.models.generateContent({
-          model,
-          contents: [
-            { text: buildEnrichCatalogPrompt(label, id) },
-            { inlineData: cleanBase64(shrunk) },
-          ],
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: CATALOG_PROFILE_SCHEMA,
-          },
-        }),
-      { onSuccess: (model) => (modelUsed = model) }
-    );
-    report("analyze", 48);
-    await trackGeminiUsage({
-      operation: "enrich_catalog_item",
-      model: modelUsed,
-      response: phaseAResponse,
-    });
+    let phaseARaw: Record<string, unknown> | null = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const phaseAResponse = await callGeminiIndexing(
+          getGeminiIndexingModel(),
+          "Gemini enrich phase A",
+          (model) =>
+            ai.models.generateContent({
+              model,
+              contents: [
+                { text: buildEnrichCatalogPrompt(label, id) },
+                { inlineData: cleanBase64(shrunk) },
+              ],
+              config: {
+                ...CATALOG_INDEXING_CONFIG,
+                responseSchema: CATALOG_PROFILE_SCHEMA,
+              },
+            }),
+          { onSuccess: (model) => (modelUsed = model) }
+        );
+        report("analyze", 48);
+        await trackGeminiUsage({
+          operation: "enrich_catalog_item",
+          model: modelUsed,
+          response: phaseAResponse,
+        });
+        phaseARaw = parseGeminiJsonText<Record<string, unknown>>(
+          phaseAResponse.text,
+          "Fase A"
+        );
+        break;
+      } catch (err) {
+        if (attempt >= 2) throw err;
+        if (!isJsonParseError(err)) throw err;
+        console.warn("[enrich] Fase A JSON inválido — nova tentativa Gemini…");
+        await sleep(1200);
+      }
+    }
+    if (!phaseARaw) throw new Error("Gemini retornou resposta vazia na Fase A.");
 
-    const phaseAText = phaseAResponse.text?.trim();
-    if (!phaseAText) throw new Error("Gemini retornou resposta vazia na Fase A.");
-
-    const phaseARaw = JSON.parse(phaseAText) as Record<string, unknown>;
     let critique: CatalogSelfCritique | null = null;
 
     if (deepIndexing !== false) {
@@ -193,39 +214,53 @@ export const geminiProvider: AiProvider = {
           )
         : [];
       report("refine", 58);
-      const critiqueResponse = await callGeminiIndexing(
-        getGeminiIndexingModel(),
-        "Gemini enrich phase B",
-        (model) =>
-          ai.models.generateContent({
-            model,
-            contents: [
-              {
-                text: buildCatalogSelfCritiquePrompt(
-                  label,
-                  id,
-                  draft,
-                  siblingLabels
-                ),
-              },
-              { inlineData: cleanBase64(shrunk) },
-            ],
-            config: {
-              responseMimeType: "application/json",
-              responseSchema: CATALOG_SELF_CRITIQUE_SCHEMA,
-            },
-          }),
-        { onSuccess: (model) => (modelUsed = model) }
-      );
-      report("refine", 82);
-      await trackGeminiUsage({
-        operation: "enrich_catalog_critique",
-        model: modelUsed,
-        response: critiqueResponse,
-      });
-      const critiqueText = critiqueResponse.text?.trim();
-      if (critiqueText) {
-        critique = JSON.parse(critiqueText) as CatalogSelfCritique;
+
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          const critiqueResponse = await callGeminiIndexing(
+            getGeminiIndexingModel(),
+            "Gemini enrich phase B",
+            (model) =>
+              ai.models.generateContent({
+                model,
+                contents: [
+                  {
+                    text: buildCatalogSelfCritiquePrompt(
+                      label,
+                      id,
+                      draft,
+                      siblingLabels
+                    ),
+                  },
+                  { inlineData: cleanBase64(shrunk) },
+                ],
+                config: {
+                  ...CATALOG_INDEXING_CONFIG,
+                  responseSchema: CATALOG_SELF_CRITIQUE_SCHEMA,
+                },
+              }),
+            { onSuccess: (model) => (modelUsed = model) }
+          );
+          report("refine", 82);
+          await trackGeminiUsage({
+            operation: "enrich_catalog_critique",
+            model: modelUsed,
+            response: critiqueResponse,
+          });
+          const critiqueText = critiqueResponse.text?.trim();
+          if (critiqueText) {
+            critique = parseGeminiJsonText<CatalogSelfCritique>(
+              critiqueText,
+              "Fase B"
+            );
+          }
+          break;
+        } catch (err) {
+          if (attempt >= 2) throw err;
+          if (!isJsonParseError(err)) throw err;
+          console.warn("[enrich] Fase B JSON inválido — nova tentativa Gemini…");
+          await sleep(1200);
+        }
       }
     } else {
       report("refine", 82);

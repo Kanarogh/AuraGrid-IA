@@ -151,6 +151,7 @@ export function buildEnrichCatalogPrompt(label: string, id: string): string {
   return `Fashion catalog analyst — Indian/boho women's wear. Reference: "${label || "unknown"}" (id: ${id || "n/a"}).
 
 Output JSON v2 ONLY. Keywords in kebab-case (e.g. dusty-teal, geometric-medallion, open-cross-straps). NO sentences.
+STRICT SIZE: each string max 48 chars; max 8 anchors, 5 not tokens, 5 scene tags; total JSON under 2 KB. NEVER paste image/base64 data.
 
 GARMENT (for strict SKU visual match — be DISCRIMINATIVE, focus on what is unique to THIS SKU):
 - type: dress|top|set|saree|skirt|other
@@ -225,8 +226,8 @@ RULES:
 - Prefer honest "not-visible" over invented detail.
 - Keep kebab-case tokens.${siblingBlock}
 
-DRAFT PROFILE JSON:
-${draftJson}`;
+DRAFT PROFILE JSON (compact summary — do not expand):
+${draftJson.length > 6000 ? `${draftJson.slice(0, 6000)}…` : draftJson}`;
 }
 
 function normalizeFieldVisibility(

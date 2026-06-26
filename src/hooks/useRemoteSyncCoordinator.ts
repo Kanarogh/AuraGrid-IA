@@ -332,7 +332,26 @@ export function useRemoteSyncCoordinator({
       }, SYNC_REVISION_DEBOUNCE_MS);
     };
 
-    let lastEnrichItemId: string | null = null;
+    let catalogEnrichRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastCatalogEnrichRefreshAt = 0;
+    const CATALOG_ENRICH_REFRESH_MS = 2_000;
+
+    const scheduleCatalogEnrichRefresh = (reason: "item-done" | "queue-end") => {
+      if (catalogEnrichRefreshTimer) clearTimeout(catalogEnrichRefreshTimer);
+      const run = () => {
+        catalogEnrichRefreshTimer = null;
+        const now = Date.now();
+        if (now - lastCatalogEnrichRefreshAt < CATALOG_ENRICH_REFRESH_MS) {
+          const wait = CATALOG_ENRICH_REFRESH_MS - (now - lastCatalogEnrichRefreshAt);
+          catalogEnrichRefreshTimer = setTimeout(run, wait);
+          return;
+        }
+        lastCatalogEnrichRefreshAt = now;
+        syncDebugLog("sse.enrich", { catalogRefresh: true, reason });
+        void handlersRef.current.onDomainsChange?.(["catalog"]);
+      };
+      catalogEnrichRefreshTimer = setTimeout(run, reason === "item-done" ? 400 : 0);
+    };
 
     const connectSse = () => {
       if (cancelled) return;
@@ -361,23 +380,11 @@ export function useRemoteSyncCoordinator({
           });
           handleEnrichEvent(data);
           const itemId = data.progress?.itemId;
-          if (data.enriching && itemId && lastEnrichItemId && lastEnrichItemId !== itemId) {
-            syncDebugLog("sse.enrich", {
-              enriching: data.enriching,
-              index: data.progress?.index,
-              total: data.progress?.total,
-              catalogRefresh: true,
-              previous: lastEnrichItemId,
-              next: itemId,
-            });
-            void handlersRef.current.onDomainsChange?.(["catalog"]);
-          }
-          if (data.enriching && itemId) {
-            lastEnrichItemId = itemId;
+          if (data.enriching && data.progress?.phase === "done") {
+            scheduleCatalogEnrichRefresh("item-done");
           }
           if (!data.enriching) {
-            lastEnrichItemId = null;
-            scheduleSync(["catalog"]);
+            scheduleCatalogEnrichRefresh("queue-end");
           }
         } catch {
           /* ignore */
@@ -417,6 +424,7 @@ export function useRemoteSyncCoordinator({
       cancelled = true;
       if (debounceTimer) clearTimeout(debounceTimer);
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (catalogEnrichRefreshTimer) clearTimeout(catalogEnrichRefreshTimer);
       if (fallbackInterval) clearInterval(fallbackInterval);
       sse?.close();
     };
