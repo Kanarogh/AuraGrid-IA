@@ -1,5 +1,6 @@
 import {
   buildCampaignContextBlock,
+  buildImageOnlyCaptionInstructions,
   buildMatchCaptionInstructions,
   buildBrandVoiceBlock,
   type BrandGemConfig,
@@ -241,15 +242,15 @@ ${buildCampaignContextBlock(gem)}
 You are an expert social media copywriter for "${brandLabel(gem)}".
 
 TASK (image-only mode — NO catalog matching):
-1. Inspect the TARGET POST IMAGE carefully.
-2. Read ALL visible text in the image (headlines, collection names, slogans, offers, dates, CTAs, etc.).
+1. Inspect the TARGET POST IMAGE carefully — treat it as a designed graphic or banner.
+2. Transcribe ALL visible text (headlines, subheads, collection names, slogans, offers, dates, CTAs).
 3. Note colors, layout, mood, and the marketing message the graphic communicates.
-4. Write a full Instagram/Facebook caption inspired by what is IN THE IMAGE.
+4. Write block 1 (main hook) as marketing copy that reflects the text and visuals IN THE IMAGE.
 
 IMPORTANT:
-- This image may be a graphic, banner, or artwork with text — NOT necessarily a product/dress photo.
-- Do NOT invent a catalog garment reference or "Referência:" line.
-- Base the hook and message on the text and visuals shown in the image.
+- This image is artwork with text — NOT a dress/product photo to match against a catalog.
+- Do NOT describe a garment unless the image clearly shows one as the main subject.
+- Do NOT invent catalog references, product codes, or "Referência:" lines.
 - matchedId MUST be null.
 
 TARGET POST IMAGE:`;
@@ -361,12 +362,12 @@ export function buildImageOnlyResultInstructions(
   gem: Parameters<typeof buildMatchCaptionInstructions>[0],
   options?: CaptionPromptOptions
 ): string {
-  return `${buildMatchCaptionInstructions(gem, options)}
+  return `${buildImageOnlyCaptionInstructions(gem, options)}
 
-IMAGE-ONLY MODE (mandatory):
+IMAGE-ONLY OUTPUT (mandatory):
 - matchedId: always null — do NOT match catalog.
-- reasoning: Portuguese, 2-4 sentences describing what you read and saw in the image (text, design, campaign message).
-- caption: block 1 (main hook) ONLY — marketing text inspired by the image; no Referência, no footer blocks.
+- reasoning: Portuguese, 2-4 sentences listing the main text you read in the image and the campaign message.
+- caption: block 1 (main hook) ONLY — no Referência, no footer blocks.
 
 Output JSON only: { "matchedId": null, "reasoning": string, "caption": string }`;
 }

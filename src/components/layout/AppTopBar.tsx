@@ -6,7 +6,7 @@ import { getSectionSubtitle, getSectionTitle } from "../../lib/sectionMeta";
 import { IconButton } from "../ui/IconButton";
 import { AiUsagePanel } from "../shared/AiUsagePanel";
 import { WorkspaceStatusBar } from "./WorkspaceStatusBar";
-import { AppMoreOptionsMenu } from "./AppMoreOptionsMenu";
+import { AppLogoutButton } from "./AppLogoutButton";
 
 export function AppTopBar({
   activeSection,
@@ -83,7 +83,7 @@ export function AppTopBar({
 
           <AiUsagePanel onOpenSettings={onOpenSettings} />
 
-          <AppMoreOptionsMenu />
+          <AppLogoutButton />
 
           <IconButton
             label={isDark ? "Modo claro" : "Modo escuro"}

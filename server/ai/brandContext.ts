@@ -391,6 +391,52 @@ CAPTION TASK (after JSON catalog match):
 - Set matchedId from catalog comparison; the system adds "Referência:" using the exact catalog label.
 - Do NOT invent address, hashtags, or brand facts — fixed blocks come from GEM footer automatically.`;}
 
+/** Instruções para legenda só pelo conteúdo da imagem (arte/banner — sem catálogo). */
+export function buildImageOnlyCaptionInstructions(
+  gem?: BrandGemConfig,
+  options?: CaptionPromptOptions
+): string {
+  const antiRepeat = buildAntiRepetitionBlock(options?.recentHooks);
+
+  if (options?.brief) {
+    return `${buildBrandVoiceBlock(gem)}
+
+${buildCampaignContextBlock(gem)}
+
+${buildCaptionParamsBlock(gem)}
+
+${buildCaptionFooterBlock(gem?.footer)}
+
+${antiRepeat}
+
+${buildRegenerationBlock(options?.regenerate, options?.diverseBatch)}
+
+IMAGE-ONLY CAPTION TASK:
+- Read visible text and design in the image; write block 1 (hook) from that message.
+- No catalog match, no "Referência", no garment invented from memory.`;
+  }
+
+  return `${buildBrandVoiceBlock(gem)}
+
+${buildCampaignContextBlock(gem)}
+
+${buildCaptionParamsBlock(gem)}
+
+${buildCaptionFooterBlock(gem?.footer)}
+
+${antiRepeat}
+
+${buildRegenerationBlock(options?.regenerate, options?.diverseBatch)}
+
+IMAGE-ONLY CAPTION TASK:
+- The post image is a graphic, banner, flyer, or artwork — NOT a catalog product photo.
+- Transcribe and use ALL visible text (headlines, collection names, offers, slogans, CTAs, dates).
+- Describe the campaign message shown in the design — colors, mood, and call to action from the image.
+- Do NOT match catalog, do NOT invent a garment, do NOT write "Referência:" or catalog codes.
+- JSON "caption" = block 1 (main hook) ONLY — inspired by what is IN THE IMAGE.
+- Language and tone from GEM INSTRUCTIONS; system appends disclosure, address, CTA, hashtags.`;
+}
+
 export function buildRefineCaptionPrompt(
   currentCaption: string,
   instructions: string,

@@ -280,6 +280,11 @@ export function PostDayStudio({
               <span className="text-xs text-ag-muted leading-snug block mt-0.5">
                 Artes, banners ou posts com texto — a IA lê a imagem sem comparar ao catálogo
               </span>
+              {post.captionFromImageOnly && !post.caption && !post.isGenerating ? (
+                <span className="text-xs text-ag-accent leading-snug block mt-1">
+                  Clique em «Regenerar legenda» para gerar pelo conteúdo da arte.
+                </span>
+              ) : null}
             </span>
           </label>
           )}

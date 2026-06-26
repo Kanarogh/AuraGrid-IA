@@ -2194,8 +2194,11 @@ export default function App() {
     );
 
     try {
-      const processedPostImage = await preparePostImageForAi(post.image);
       const imageOnly = !usesReferencesRef.current || !!post.captionFromImageOnly;
+      const processedPostImage = await preparePostImageForAi(post.image, {
+        maxSide: imageOnly ? 1280 : 768,
+        quality: imageOnly ? 0.88 : 0.8,
+      });
 
       if (controller.signal.aborted) return {};
 
@@ -2291,8 +2294,12 @@ export default function App() {
             p.id === postId
               ? {
                   ...p,
-                  matchedCatalogId: usesReferencesRef.current ? matchedId : null,
-                  reasoning: usesReferencesRef.current ? reasoning : null,
+                  matchedCatalogId: imageOnly
+                    ? null
+                    : usesReferencesRef.current
+                      ? matchedId
+                      : null,
+                  reasoning: imageOnly || usesReferencesRef.current ? reasoning : null,
                   caption,
                   isGenerating: false,
                   isGenerated: true,
@@ -2318,7 +2325,7 @@ export default function App() {
             const effectiveMatchedId = imageOnly ? null : cached.matchedId;
             const cachedCaption = finalizeCaption(cached.caption, {
               matchedCatalogId: effectiveMatchedId,
-              matchedLabel: resolveCatalogLabel(refs, effectiveMatchedId),
+              matchedLabel: imageOnly ? null : resolveCatalogLabel(refs, effectiveMatchedId),
               footer: brandGem.footer,
               captionParams: brandGem.captionParams,
             });
@@ -2327,7 +2334,7 @@ export default function App() {
                 p.id === postId
                   ? {
                       ...p,
-                      matchedCatalogId: effectiveMatchedId,
+                      matchedCatalogId: imageOnly ? null : effectiveMatchedId,
                       reasoning: cached.reasoning,
                       caption: cachedCaption,
                       isGenerating: false,
@@ -2390,7 +2397,7 @@ export default function App() {
         const matchedId = imageOnly ? null : (result.matchedId ?? null);
         const caption = finalizeCaption(result.caption ?? "", {
           matchedCatalogId: matchedId,
-          matchedLabel: resolveCatalogLabel(refs, matchedId),
+          matchedLabel: imageOnly ? null : resolveCatalogLabel(refs, matchedId),
           footer: brandGem.footer,
           captionParams: brandGem.captionParams,
         });
@@ -2571,18 +2578,33 @@ export default function App() {
   };
 
   const handleToggleCaptionFromImageOnly = (postId: string, enabled: boolean) => {
+    if (enabled) {
+      captionCacheBypassRef.current.add(postId);
+    }
     setPosts((prev) =>
       prev.map((p) =>
         p.id === postId
           ? {
               ...p,
               captionFromImageOnly: enabled,
-              ...(enabled ? { matchedCatalogId: null } : {}),
-              isConfirmed: false,
+              ...(enabled
+                ? {
+                    matchedCatalogId: null,
+                    caption: "",
+                    reasoning: null,
+                    isGenerated: false,
+                    isConfirmed: false,
+                    captionModel: null,
+                  }
+                : {}),
             }
           : p
       )
     );
+    if (enabled) {
+      toast.info("Modo ativado. Clique em «Regenerar legenda» para ler o conteúdo da imagem.");
+      void saveWorkspaceNow();
+    }
   };
 
   // Direct manual modification of part of the caption live
