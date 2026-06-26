@@ -29,6 +29,7 @@ export type CaptionCacheValue = {
   reasoning: string | null;
   providerUsed?: string;
   matchMode?: string;
+  modelUsed?: string;
   cachedAt: number;
 };
 

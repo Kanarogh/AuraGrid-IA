@@ -16,6 +16,7 @@ import {
 import type { CatalogItem, PlannedPost, RepeatingText } from "../../types";
 import type { PostStatusStyle } from "../../lib/postStatus";
 import { extractMainCaptionText } from "../../lib/captionFormat";
+import { formatGeminiModelIdLabel } from "../../lib/geminiModelDisplay";
 import { INSTAGRAM_CAPTION_HARD_MAX } from "../../lib/captionParams";
 import { cn } from "../../lib/cn";
 import { Button } from "../ui/Button";
@@ -386,6 +387,11 @@ export function PostDayStudio({
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] font-mono uppercase tracking-widest text-ag-muted">
                 Legenda
+                {post.captionModel ? (
+                  <span className="ml-2 normal-case tracking-normal font-sans text-ag-muted/80">
+                    · {formatGeminiModelIdLabel(post.captionModel)}
+                  </span>
+                ) : null}
                 {post.caption && captionFooter ? (
                   (() => {
                     const mainLen = extractMainCaptionText(post.caption, captionFooter).length;

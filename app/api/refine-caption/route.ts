@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { formatAiError, getActiveProvider, getActiveProviderId } from "@/server/ai/index";
+import { getGeminiPlanningModel } from "@/server/ai/config";
 import {
   assertBrandGemReadyForCaptions,
   resolveBrandGemFromBody,
@@ -50,7 +51,16 @@ export async function POST(req: NextRequest) {
       promptContext,
       repeatingText,
     });
-    return NextResponse.json({ caption: sanitizeRefinedCaptionOutput(caption) });
+    const modelUsed = getGeminiPlanningModel();
+    return NextResponse.json(
+      { caption: sanitizeRefinedCaptionOutput(caption), modelUsed },
+      {
+        headers: {
+          "X-AI-Model-Used": modelUsed,
+          "X-AI-Provider-Used": providerId,
+        },
+      }
+    );
   } catch (error: unknown) {
     console.error("Error refining caption:", error);
     const status = /429|quota|RESOURCE_EXHAUSTED|rate.?limit/i.test(String(error)) ? 429 : 500;

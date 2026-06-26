@@ -20,7 +20,6 @@ export function AppShell({
   isDark,
   onToggleTheme,
   clientName,
-  onReset,
   onClientCreated,
   hasActiveClient,
   usesReferences = true,
@@ -37,7 +36,6 @@ export function AppShell({
   brandGemMissingCount?: number;
   isDark: boolean;
   onToggleTheme: () => void;
-  onReset: () => void;
   onClientCreated?: (clientId: string) => void;
   hasActiveClient: boolean;
   usesReferences?: boolean;
@@ -102,7 +100,6 @@ export function AppShell({
           brandGemReady={brandGemReady}
           brandGemMissingCount={brandGemMissingCount}
           hasActiveClient={hasActiveClient}
-          onReset={onReset}
         />
 
         <main

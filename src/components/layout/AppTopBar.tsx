@@ -20,7 +20,6 @@ export function AppTopBar({
   brandGemReady,
   brandGemMissingCount,
   hasActiveClient,
-  onReset,
 }: {
   activeSection: AppSection;
   isDashboardActive?: boolean;
@@ -33,7 +32,6 @@ export function AppTopBar({
   brandGemReady?: boolean;
   brandGemMissingCount?: number;
   hasActiveClient?: boolean;
-  onReset?: () => void;
 }) {
   const sectionTitle = isDashboardActive ? "Dashboard" : getSectionTitle(activeSection);
   const subtitle = isDashboardActive
@@ -85,9 +83,7 @@ export function AppTopBar({
 
           <AiUsagePanel onOpenSettings={onOpenSettings} />
 
-          {onReset && (
-            <AppMoreOptionsMenu hasActiveClient={hasActiveClient ?? false} onReset={onReset} />
-          )}
+          <AppMoreOptionsMenu />
 
           <IconButton
             label={isDark ? "Modo claro" : "Modo escuro"}

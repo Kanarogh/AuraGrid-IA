@@ -139,6 +139,8 @@ export interface PlannedPost {
   structuredCopy?: StructuredPostCopy;
   /** Legenda veio do cronograma — pedir confirmação antes de sobrescrever na IA */
   captionFromSchedule?: boolean;
+  /** Modelo Gemini usado na última geração/refino da legenda */
+  captionModel?: string | null;
 }
 
 export interface CanvaGridSlot {

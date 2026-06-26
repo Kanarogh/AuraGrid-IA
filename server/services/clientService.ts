@@ -312,6 +312,7 @@ export async function loadWorkspaceDto(
       structuredCopy: "structuredCopy" in p ? ((p.structuredCopy as object | null) ?? undefined) : undefined,
       captionFromSchedule:
         "captionFromSchedule" in p ? Boolean(p.captionFromSchedule) : false,
+      captionModel: "captionModel" in p ? (p.captionModel as string | null) : null,
     })
   );
 
@@ -748,6 +749,10 @@ export async function patchWorkspace(
         typeof post.captionFromImageOnly === "boolean" ? post.captionFromImageOnly : false;
       const captionFromSchedule =
         typeof post.captionFromSchedule === "boolean" ? post.captionFromSchedule : false;
+      const captionModel =
+        post.captionModel === null || typeof post.captionModel === "string"
+          ? (post.captionModel as string | null)
+          : null;
       const structuredCopy =
         post.structuredCopy !== null &&
         typeof post.structuredCopy === "object" &&
@@ -787,6 +792,7 @@ export async function patchWorkspace(
           isConfirmed,
           captionFromImageOnly,
           captionFromSchedule,
+          captionModel,
           structuredCopy,
           lastError,
           imageAssetId,
@@ -804,6 +810,7 @@ export async function patchWorkspace(
             isConfirmed,
             captionFromImageOnly,
             captionFromSchedule,
+            captionModel,
             structuredCopy,
             lastError,
             imageAssetId,

@@ -246,7 +246,6 @@ export default function App() {
     setCanvaGridFormat,
     setCanvaGridMaxWidth,
     setUiPrefs,
-    resetActiveClient,
     useApiStorage,
     persistWorkspaceNow,
     getPostsSnapshot,
@@ -887,26 +886,6 @@ export default function App() {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
-  };
-
-  // Reset demo showroom variables
-  const handleResetPresets = async () => {
-    if (!hasActiveClient) return;
-    if (
-      !(await confirmDialog({
-        message: `Resetar o planejamento ativo de «${activeClient.name}»? Catálogo, posts e Canva deste planejamento voltam ao vazio. Planejamentos arquivados são preservados.`,
-        variant: "danger",
-        confirmLabel: "Resetar",
-      }))
-    ) {
-      return;
-    }
-    resetActiveClient();
-    void navigateClient(
-      { section: "posts", postsTab: "day", postId: "post_day1" },
-      { replace: true, skipDirtyGuard: true }
-    );
-    toast.success(`Cliente «${activeClient.name}» foi resetado.`);
   };
 
   // Update starting planning date
@@ -2304,7 +2283,8 @@ export default function App() {
         matchedId: string | null,
         reasoning: string | null,
         providerUsed?: string,
-        matchMode?: string
+        matchMode?: string,
+        captionModel?: string | null
       ) => {
         setPosts((prev) =>
           prev.map((p) =>
@@ -2318,6 +2298,7 @@ export default function App() {
                   isGenerated: true,
                   error: null,
                   captionFromSchedule: false,
+                  captionModel: captionModel ?? null,
                 }
               : p
           )
@@ -2352,6 +2333,7 @@ export default function App() {
                       isGenerating: false,
                       isGenerated: true,
                       error: null,
+                      captionModel: cached.modelUsed ?? null,
                     }
                   : p
               )
@@ -2371,6 +2353,7 @@ export default function App() {
         caption: string;
         providerUsed?: string;
         matchMode?: string;
+        modelUsed?: string;
       }> => {
         const response = await aiQueue.enqueue(
           captionQueueLabel(postId, post.dayNumber),
@@ -2392,6 +2375,7 @@ export default function App() {
           reasoning?: string;
           caption?: string;
           error?: string;
+          modelUsed?: string;
         }>(response);
 
         if (!response.ok) {
@@ -2401,6 +2385,8 @@ export default function App() {
         const providerUsed = response.headers.get("X-AI-Provider-Used") ?? undefined;
         noteLastProviderUsed(providerUsed);
         const matchMode = response.headers.get("X-AI-Match-Mode") ?? undefined;
+        const modelUsed =
+          result.modelUsed ?? response.headers.get("X-AI-Model-Used") ?? undefined;
         const matchedId = imageOnly ? null : (result.matchedId ?? null);
         const caption = finalizeCaption(result.caption ?? "", {
           matchedCatalogId: matchedId,
@@ -2415,6 +2401,7 @@ export default function App() {
           caption,
           providerUsed,
           matchMode,
+          modelUsed,
         };
       };
 
@@ -2441,6 +2428,7 @@ export default function App() {
           reasoning: result.reasoning,
           providerUsed: result.providerUsed,
           matchMode: result.matchMode,
+          modelUsed: result.modelUsed,
           cachedAt: Date.now(),
         });
       } else {
@@ -2450,6 +2438,7 @@ export default function App() {
           reasoning: result.reasoning,
           providerUsed: result.providerUsed,
           matchMode: result.matchMode,
+          modelUsed: result.modelUsed,
           cachedAt: Date.now(),
         });
       }
@@ -2459,7 +2448,8 @@ export default function App() {
         result.matchedId,
         result.reasoning,
         result.providerUsed,
-        result.matchMode
+        result.matchMode,
+        result.modelUsed
       );
       return { quotaExceeded: false };
     } catch (error: unknown) {
@@ -2641,6 +2631,7 @@ export default function App() {
               isConfirmed: false,
               isGenerating: false,
               error: null,
+              captionModel: null,
             }
           : p
       )
@@ -2693,12 +2684,14 @@ export default function App() {
         }),
       });
 
-      const result = await readJsonResponse<{ caption?: string; error?: string }>(response);
+      const result = await readJsonResponse<{ caption?: string; error?: string; modelUsed?: string }>(response);
       if (!response.ok) {
         throw new Error(result.error || "Não foi possível refinar no servidor.");
       }
 
       noteLastProviderUsed(response.headers.get("X-AI-Provider-Used"));
+      const captionModel =
+        result.modelUsed ?? response.headers.get("X-AI-Model-Used") ?? post.captionModel ?? null;
       const refs = getReferenceCatalog(catalogRef.current);
       const caption = finalizeCaption(sanitizeRefinedCaptionOutput(result.caption ?? ""), {
         matchedCatalogId: post.matchedCatalogId,
@@ -2719,6 +2712,7 @@ export default function App() {
                 caption,
                 isGenerated: true,
                 isConfirmed: false,
+                captionModel,
               }
             : p
         )
@@ -3163,7 +3157,6 @@ export default function App() {
         brandGemMissingCount={hasActiveClient ? brandGemMissingCount : undefined}
         isDark={isDark}
         onToggleTheme={toggleTheme}
-        onReset={handleResetPresets}
         onClientCreated={(clientId) => void navigateToClientSettings(clientId)}
         hasActiveClient={hasActiveClient}
         usesReferences={usesReferences}

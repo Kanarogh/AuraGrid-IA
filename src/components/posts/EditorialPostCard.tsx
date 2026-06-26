@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { CatalogItem, PlannedPost } from "../../types";
 import type { PostStatusStyle } from "../../lib/postStatus";
+import { formatGeminiModelIdLabel } from "../../lib/geminiModelDisplay";
 import { cn } from "../../lib/cn";
 import { Button } from "../ui/Button";
 import { AiErrorBanner } from "../shared/AiErrorBanner";
@@ -287,6 +288,11 @@ export function EditorialPostCard({
             <div className="flex items-center justify-between gap-2 mb-1.5">
               <label className="text-[10px] font-mono uppercase tracking-wider text-ag-muted">
                 Legenda
+                {post.captionModel ? (
+                  <span className="ml-2 normal-case tracking-normal font-sans text-ag-muted/80">
+                    · {formatGeminiModelIdLabel(post.captionModel)}
+                  </span>
+                ) : null}
               </label>
               {(post.caption || post.isGenerated || post.reasoning) && (
                 <button

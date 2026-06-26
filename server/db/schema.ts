@@ -292,6 +292,7 @@ export const plannedPosts = pgTable(
     captionFromImageOnly: boolean("caption_from_image_only").notNull().default(false),
     structuredCopy: jsonb("structured_copy"),
     captionFromSchedule: boolean("caption_from_schedule").notNull().default(false),
+    captionModel: text("caption_model"),
     lastError: text("last_error"),
   },
   (t) => [primaryKey({ columns: [t.planningPeriodId, t.id] })]

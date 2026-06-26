@@ -80,7 +80,11 @@ export async function POST(req: NextRequest) {
     headers.set("X-AI-Attempts", aiAttemptsHeaderValue(operation.attempts));
 
     return NextResponse.json(
-      { ...operation.result, providerUsed: operation.providerUsed },
+      {
+        ...operation.result,
+        providerUsed: operation.providerUsed,
+        modelUsed: operation.modelUsed,
+      },
       { headers }
     );
   } catch (error: unknown) {

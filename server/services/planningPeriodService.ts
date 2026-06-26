@@ -272,6 +272,7 @@ async function duplicatePeriodData(
       captionFromImageOnly: post.captionFromImageOnly,
       structuredCopy: post.structuredCopy,
       captionFromSchedule: post.captionFromSchedule,
+      captionModel: post.captionModel,
       lastError: post.lastError,
     });
   }
