@@ -3880,6 +3880,8 @@ export default function App() {
         {hasActiveClient && onClientRoute && routeSection === "feed_simulator" && (
           <FeedInstagramPreview
             posts={posts}
+            canvaPages={canvaPages}
+            canvaGridReversed={canvaGridReversed}
             profileDisplayName={brandGem.name}
             profileHandle={
               activeClient.instagramHandle ?? activeClient.id.replace(/-/g, "_")

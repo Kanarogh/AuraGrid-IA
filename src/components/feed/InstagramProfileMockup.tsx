@@ -10,7 +10,7 @@ import {
   Search,
   Tag,
 } from "lucide-react";
-import type { PlannedPost } from "../../types";
+import type { CanvaGridPage, PlannedPost } from "../../types";
 import { gemInitial } from "../../lib/brandGem";
 import { sortPostsForInstagramProfile } from "../../lib/instagramFeedOrder";
 import { cn } from "../../lib/cn";
@@ -46,6 +46,8 @@ function StoryHighlight({ label, isNew }: { label: string; isNew?: boolean }) {
 
 export function InstagramProfileMockup({
   posts,
+  canvaPages,
+  canvaGridReversed,
   displayName,
   username,
   activePreviewId,
@@ -54,6 +56,8 @@ export function InstagramProfileMockup({
   onSwapDays,
 }: {
   posts: PlannedPost[];
+  canvaPages?: CanvaGridPage[];
+  canvaGridReversed?: boolean;
   displayName: string;
   username: string;
   activePreviewId: string;
@@ -62,7 +66,10 @@ export function InstagramProfileMockup({
   onSwapDays: (fromId: string, toId: string) => void;
 }) {
   const handle = username.replace(/^@/, "");
-  const ordered = sortPostsForInstagramProfile(posts).filter((p) => Boolean(p.image));
+  const ordered = sortPostsForInstagramProfile(posts, {
+    canvaPages,
+    canvaGridReversed,
+  }).filter((p) => Boolean(p.image));
   const confirmed = ordered.filter((p) => p.isConfirmed).length;
 
   return (

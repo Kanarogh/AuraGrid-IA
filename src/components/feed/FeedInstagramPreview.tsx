@@ -1,4 +1,4 @@
-import type { PlannedPost } from "../../types";
+import type { CanvaGridPage, PlannedPost } from "../../types";
 import { sortPostsForInstagramProfile } from "../../lib/instagramFeedOrder";
 import { StudioSection } from "../ui/StudioSection";
 import { Button } from "../ui/Button";
@@ -6,6 +6,8 @@ import { InstagramProfileMockup } from "./InstagramProfileMockup";
 
 export function FeedInstagramPreview({
   posts,
+  canvaPages,
+  canvaGridReversed,
   profileDisplayName,
   profileHandle,
   activePreviewId,
@@ -15,6 +17,8 @@ export function FeedInstagramPreview({
   onOpenStudio,
 }: {
   posts: PlannedPost[];
+  canvaPages?: CanvaGridPage[];
+  canvaGridReversed?: boolean;
   profileDisplayName: string;
   profileHandle: string;
   activePreviewId: string;
@@ -23,7 +27,10 @@ export function FeedInstagramPreview({
   onSwapDays: (fromId: string, toId: string) => void;
   onOpenStudio?: () => void;
 }) {
-  const ordered = sortPostsForInstagramProfile(posts).filter((p) => Boolean(p.image));
+  const ordered = sortPostsForInstagramProfile(posts, {
+    canvaPages,
+    canvaGridReversed,
+  }).filter((p) => Boolean(p.image));
   const newest = ordered[0];
   const oldest = ordered[ordered.length - 1];
 
@@ -57,6 +64,8 @@ export function FeedInstagramPreview({
       <div className="relative flex justify-center py-8 sm:py-10 px-4 sm:px-6">
         <InstagramProfileMockup
           posts={posts}
+          canvaPages={canvaPages}
+          canvaGridReversed={canvaGridReversed}
           displayName={profileDisplayName}
           username={profileHandle}
           activePreviewId={activePreviewId}
