@@ -7,7 +7,7 @@ import {
 } from "./runtimeSettings";
 import type { AiProviderId } from "./types";
 
-export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+export const DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite";
 export const DEFAULT_GEMINI_CATALOG_MODEL = "gemini-2.5-flash-lite";
 
 export function getEnvDefaultProviderId(): AiProviderId {

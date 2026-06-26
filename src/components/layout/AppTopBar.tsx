@@ -83,7 +83,7 @@ export function AppTopBar({
             />
           )}
 
-          <AiUsagePanel compact onOpenSettings={onOpenSettings} />
+          <AiUsagePanel onOpenSettings={onOpenSettings} />
 
           {onReset && (
             <AppMoreOptionsMenu hasActiveClient={hasActiveClient ?? false} onReset={onReset} />

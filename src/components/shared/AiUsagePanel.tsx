@@ -2,33 +2,27 @@
 import {
   Activity,
   AlertTriangle,
-  Cpu,
   Database,
   Loader2,
   Sparkles,
 } from "lucide-react";
-import { providerDisplayName } from "../../lib/aiSettings";
 import { useAiSettings } from "../../hooks/useAiSettings";
 import { aiQueue, type AiQueueState } from "../../lib/aiQueue";
 import { getCaptionCacheStats } from "../../lib/captionCache";
-import { GeminiModelPicker } from "./GeminiModelPicker";
-import { geminiModelDisplayLabel } from "../../lib/geminiModelDisplay";
 import { useEffect, useState } from "react";
 
 type Stats = ReturnType<typeof getCaptionCacheStats>;
 
 export function AiUsagePanel({
-  compact = false,
   onOpenSettings,
 }: {
-  compact?: boolean;
   onOpenSettings?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [queueState, setQueueState] = useState<AiQueueState>(aiQueue.getState());
   const [cacheStats, setCacheStats] = useState<Stats>(getCaptionCacheStats());
 
-  const { settings, activeModelLabel } = useAiSettings();
+  const { connectionStatus } = useAiSettings();
 
   useEffect(() => {
     const unsubscribe = aiQueue.subscribe((s) => {
@@ -40,19 +34,14 @@ export function AiUsagePanel({
 
   const pending = queueState.pending.length;
   const isWorking = !!queueState.inFlight;
-  const providerName = providerDisplayName("gemini");
 
   const indicatorLabel = isWorking
     ? `IA: ${queueState.inFlight!.label}${pending > 0 ? ` (+${pending})` : ""}`
     : pending > 0
       ? `IA: ${pending} na fila`
-      : settings?.gemini
-        ? `IA: ${geminiModelDisplayLabel(settings.gemini)}`
+      : connectionStatus === "disconnected"
+        ? "IA: offline"
         : "IA";
-
-  const headerModelLabel = settings?.gemini
-    ? geminiModelDisplayLabel(settings.gemini)
-    : activeModelLabel;
 
   return (
     <div className="relative">
@@ -63,7 +52,7 @@ export function AiUsagePanel({
           isWorking ? "text-ag-accent" : "text-ag-text"
         }`}
         aria-label="Status da IA"
-        title={`${providerName}${headerModelLabel !== "—" ? ` · ${headerModelLabel}` : ""}`}
+        title="Ver fila e cache da IA"
       >
         {isWorking ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -71,7 +60,7 @@ export function AiUsagePanel({
           <Sparkles className="h-3.5 w-3.5" />
         )}
         <span className="hidden sm:inline truncate max-w-[200px]">{indicatorLabel}</span>
-        <span className="sm:hidden">{isWorking ? pending + 1 : pending}</span>
+        <span className="sm:hidden">{isWorking ? pending + 1 : pending || "IA"}</span>
       </button>
 
       {open && (
@@ -80,18 +69,17 @@ export function AiUsagePanel({
           <div className="absolute right-0 top-full mt-2 z-40 w-80 rounded-xl border border-ag-border bg-ag-surface-1 shadow-[var(--ag-shadow-lg)] p-4 space-y-3">
             <div>
               <p className="text-[10px] font-mono uppercase tracking-widest text-ag-muted mb-1">
-                Provedor ativo
+                Status da IA
               </p>
-              <div className="flex items-center gap-2">
-                <Cpu className="h-4 w-4 text-ag-accent" />
-                <p className="text-sm font-semibold text-ag-text">{providerName}</p>
-                <span
-                  className="ml-auto text-[10px] font-mono text-ag-muted truncate max-w-[160px]"
-                  title={headerModelLabel}
-                >
-                  {headerModelLabel}
-                </span>
-              </div>
+              <p className="text-sm text-ag-text">
+                {isWorking
+                  ? `Processando: ${queueState.inFlight!.label}`
+                  : pending > 0
+                    ? `${pending} tarefa${pending > 1 ? "s" : ""} aguardando`
+                    : connectionStatus === "disconnected"
+                      ? "API Gemini não configurada"
+                      : "Nenhuma tarefa em andamento"}
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-2 text-[10px]">
@@ -114,7 +102,7 @@ export function AiUsagePanel({
               </div>
             )}
 
-            {compact && onOpenSettings ? (
+            {onOpenSettings && (
               <div className="border-t border-ag-border/60 pt-3">
                 <button
                   type="button"
@@ -124,11 +112,9 @@ export function AiUsagePanel({
                   }}
                   className="text-xs font-semibold text-ag-accent hover:underline cursor-pointer"
                 >
-                  Configurar IA →
+                  Configurar modelos →
                 </button>
               </div>
-            ) : (
-              <GeminiModelPicker variant="popover" />
             )}
           </div>
         </>
