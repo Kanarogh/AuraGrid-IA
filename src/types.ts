@@ -138,6 +138,8 @@ export interface MatchDiagnostics {
   scoreGap: number | null;
   topCandidates: MatchCandidateSummary[];
   rejectReasons: string[];
+  /** Referência já conhecida — match visual não foi executado. */
+  knownReference?: boolean;
   thresholds: {
     strict: { minScore: number; minGap: number };
     medium: { minScore: number; minGap: number };

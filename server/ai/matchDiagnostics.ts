@@ -33,6 +33,8 @@ export type MatchDiagnostics = {
   scoreGap: number | null;
   topCandidates: MatchCandidateSummary[];
   rejectReasons: string[];
+  /** Referência já conhecida — match visual não foi executado. */
+  knownReference?: boolean;
   thresholds: {
     strict: { minScore: number; minGap: number };
     medium: { minScore: number; minGap: number };
@@ -84,11 +86,29 @@ export function buildMatchDiagnostics(
   candidates: CatalogProfilePayload[],
   rejectReasons: string[] = []
 ): MatchDiagnostics {
-  const fingerprint = prepared.postFingerprint;
   const thresholds = {
     strict: { minScore: STRICT_RANKER_MIN_SCORE, minGap: STRICT_RANKER_MIN_GAP },
     medium: { minScore: getMediumRankerMinScore(), minGap: getMediumRankerMinGap() },
   };
+
+  if (result.matchMode === "catalog_known_reference") {
+    const chosenCandidate = result.matchedId
+      ? candidates.find((c) => c.id === result.matchedId)
+      : null;
+    return {
+      confidence: "high",
+      knownReference: true,
+      chosenId: result.matchedId ?? null,
+      chosenLabel: chosenCandidate?.label ?? null,
+      chosenScore: null,
+      scoreGap: null,
+      topCandidates: [],
+      rejectReasons: [],
+      thresholds,
+    };
+  }
+
+  const fingerprint = prepared.postFingerprint;
 
   if (!fingerprint || candidates.length === 0) {
     const chosenCandidate = result.matchedId

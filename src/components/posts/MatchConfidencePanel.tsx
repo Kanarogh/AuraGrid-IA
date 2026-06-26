@@ -49,6 +49,28 @@ export function MatchConfidencePanel({
 }: Props) {
   if (disabled) return null;
 
+  if (diagnostics.knownReference) {
+    const label =
+      diagnostics.chosenLabel ??
+      referenceCatalog.find((c) => c.id === currentMatchedId)?.label ??
+      diagnostics.chosenId;
+    return (
+      <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 space-y-1.5">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-medium border text-emerald-600 bg-emerald-500/10 border-emerald-500/30 dark:text-emerald-400">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Referência definida
+          </span>
+        </div>
+        <p className="text-xs text-ag-muted leading-snug">
+          {label
+            ? `Peça ${label} — identificada pelo nome ou vínculo manual. Match visual omitido; só a legenda foi gerada.`
+            : "Referência identificada pelo nome ou vínculo manual. Match visual omitido; só a legenda foi gerada."}
+        </p>
+      </div>
+    );
+  }
+
   const meta = CONFIDENCE_META[diagnostics.confidence];
   const Icon = meta.Icon;
   const candidates = diagnostics.topCandidates.slice(0, 3);
