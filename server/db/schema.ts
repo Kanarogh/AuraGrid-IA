@@ -1,4 +1,4 @@
-import {
+﻿import {
   bigint,
   boolean,
   char,
@@ -43,11 +43,8 @@ export const userAiPreferences = pgTable("user_ai_preferences", {
   userId: uuid("user_id")
     .primaryKey()
     .references(() => users.id, { onDelete: "cascade" }),
-  activeProvider: text("active_provider"),
-  openrouterModel: text("openrouter_model"),
   geminiModel: text("gemini_model"),
   geminiCatalogModel: text("gemini_catalog_model"),
-  ollamaModel: text("ollama_model"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -298,3 +295,4 @@ export const captionCacheEntries = pgTable(
     index("caption_cache_client_id_idx").on(t.clientId),
   ]
 );
+

@@ -309,8 +309,9 @@ export async function loadWorkspaceDto(
         ? { pageId: findPageForSlot(slots, p.canvaSlotId), slotId: p.canvaSlotId }
         : null,
       captionFromImageOnly: p.captionFromImageOnly,
-      structuredCopy: p.structuredCopy ?? undefined,
-      captionFromSchedule: p.captionFromSchedule ?? false,
+      structuredCopy: "structuredCopy" in p ? ((p.structuredCopy as object | null) ?? undefined) : undefined,
+      captionFromSchedule:
+        "captionFromSchedule" in p ? Boolean(p.captionFromSchedule) : false,
     })
   );
 

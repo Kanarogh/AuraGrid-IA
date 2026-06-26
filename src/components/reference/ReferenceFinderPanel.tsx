@@ -284,7 +284,7 @@ export function ReferenceFinderPanel({
             {!error && !isSearching && effectiveId && matchedItem && (
               <div className="flex gap-4">
                 <img
-                  src={matchedItem.image}
+                  src={matchedItem.image ?? undefined}
                   alt={matchedItem.label}
                   className="w-24 h-32 object-cover rounded-lg border border-ag-border shrink-0"
                 />

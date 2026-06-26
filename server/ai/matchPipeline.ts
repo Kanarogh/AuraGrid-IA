@@ -1,4 +1,4 @@
-import { runVisionWithFallback } from "./fallbackChain";
+﻿import { runVisionWithFallback } from "./fallbackChain";
 import {
   getMatchEmbeddingTopK,
   isMatchEmbeddingEnabled,
@@ -14,8 +14,6 @@ import { isPgvectorAvailable } from "../db/pgvector";
 import {
   MATCH_SHORTLIST_THRESHOLD,
   MATCH_SHORTLIST_TOP_K,
-  OLLAMA_MATCH_SHORTLIST_THRESHOLD,
-  OLLAMA_MATCH_SHORTLIST_TOP_K,
   STRICT_RANKER_MIN_GAP,
   STRICT_RANKER_MIN_SCORE,
   type CatalogProfilePayload,
@@ -104,9 +102,8 @@ export async function prepareMatchInput(
     }
   }
 
-  const threshold =
-    providerId === "ollama" ? OLLAMA_MATCH_SHORTLIST_THRESHOLD : MATCH_SHORTLIST_THRESHOLD;
-  const topK = providerId === "ollama" ? OLLAMA_MATCH_SHORTLIST_TOP_K : MATCH_SHORTLIST_TOP_K;
+  const threshold = MATCH_SHORTLIST_THRESHOLD;
+  const topK = MATCH_SHORTLIST_TOP_K;
 
   const fingerprint = await analyzePostFingerprint(sanitized.postImage, providerId);
 
@@ -144,7 +141,7 @@ export async function prepareMatchInput(
 
   if (profiles.length <= threshold) {
     console.info(
-      `[match-pipeline] catálogo completo ${profiles.length} perfis (topScore=${topScore}${topHint ? `, top=${topHint.candidateId}` : ""})`
+      `[match-pipeline] catÃ¡logo completo ${profiles.length} perfis (topScore=${topScore}${topHint ? `, top=${topHint.candidateId}` : ""})`
     );
     return {
       input: {
@@ -206,8 +203,8 @@ export function applyStrictRankerMatchFallback(
     ...result,
     matchedId: hint.candidateId,
     reasoning: result.reasoning
-      ? `${result.reasoning}\n\n[Match visual] Referência "${hint.candidateLabel}" (score ${hint.score}, gap ${hint.scoreGap}, protocolo estrito).`
-      : `[Match visual] Referência "${hint.candidateLabel}" (score ${hint.score}, gap ${hint.scoreGap}).`,
+      ? `${result.reasoning}\n\n[Match visual] ReferÃªncia "${hint.candidateLabel}" (score ${hint.score}, gap ${hint.scoreGap}, protocolo estrito).`
+      : `[Match visual] ReferÃªncia "${hint.candidateLabel}" (score ${hint.score}, gap ${hint.scoreGap}).`,
     matchMode:
       result.matchMode === "catalog_json" || result.matchMode === "catalog_json_shortlist"
         ? "catalog_json_ranker"

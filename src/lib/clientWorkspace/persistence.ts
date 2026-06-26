@@ -1,4 +1,5 @@
 import { countCanvaImages, syncCanvaPagesToPosts } from "../canvaTimelineSync";
+import { DEFAULT_DISTRIBUTION_PREFS } from "../smartDistribution";
 import type { CanvaGridPage, PlannedPost } from "../../types";
 import type { ClientWorkspace } from "./types";
 
@@ -84,6 +85,7 @@ export function hydrateWorkspaceFromStorage(workspace: ClientWorkspace): ClientW
   if (workspace.canva.autoSync && countCanvaImages(pages) > 0) {
     posts = syncCanvaPagesToPosts(pages, posts, workspace.startDate, {
       reversed: workspace.canva.reversed,
+      distribution: workspace.ui?.distributionPrefs ?? DEFAULT_DISTRIBUTION_PREFS,
     });
   }
 

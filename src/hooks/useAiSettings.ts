@@ -1,18 +1,15 @@
-import { useSyncExternalStore } from "react";
+﻿import { useSyncExternalStore } from "react";
 import type { AiProviderId } from "../lib/aiSettings";
 import {
   changeAiProvider,
-  changeOpenRouterModel,
   changeGeminiModel,
   changeGeminiCatalogModel,
-  changeOllamaModel,
   getActiveModelLabel,
   getActiveProviderOption,
   getApiStatusLabel,
   getConnectionStatus,
   getState,
   refreshAiSettings,
-  refreshOpenRouterModels,
   subscribe,
 } from "../lib/aiSettingsStore";
 
@@ -27,12 +24,9 @@ export function useAiSettings() {
     connectionStatus: getConnectionStatus(),
     apiStatusLabel: getApiStatusLabel(),
     refresh: refreshAiSettings,
-    refreshOpenRouterModels,
     setProvider: changeAiProvider,
-    setOpenRouterModel: changeOpenRouterModel,
     setGeminiModel: changeGeminiModel,
     setGeminiCatalogModel: changeGeminiCatalogModel,
-    setOllamaModel: changeOllamaModel,
   };
 }
 

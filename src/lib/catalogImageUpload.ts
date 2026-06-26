@@ -210,10 +210,14 @@ async function readDirectoryHandle(
   basePath: string
 ): Promise<File[]> {
   const files: File[] = [];
-  for await (const [name, handle] of dir.entries()) {
+  for await (const [name, handle] of (
+    dir as unknown as {
+      entries: () => AsyncIterable<[string, FileSystemDirectoryHandle | FileSystemFileHandle]>;
+    }
+  ).entries()) {
     const path = basePath ? `${basePath}/${name}` : name;
     if (handle.kind === "file") {
-      const file = await handle.getFile();
+      const file = await (handle as FileSystemFileHandle).getFile();
       try {
         Object.defineProperty(file, "webkitRelativePath", {
           value: path,
@@ -224,7 +228,7 @@ async function readDirectoryHandle(
       }
       files.push(file);
     } else if (handle.kind === "directory") {
-      files.push(...(await readDirectoryHandle(handle, path)));
+      files.push(...(await readDirectoryHandle(handle as FileSystemDirectoryHandle, path)));
     }
   }
   return files;
@@ -264,7 +268,11 @@ export async function pickFilesFromFolder(
   if (!supportsDirectoryPicker()) return null;
 
   try {
-    const handle = await window.showDirectoryPicker({ mode: "read" });
+    const handle = await (
+      window as unknown as {
+        showDirectoryPicker: (opts: { mode: "read" }) => Promise<FileSystemDirectoryHandle>;
+      }
+    ).showDirectoryPicker({ mode: "read" });
     return await readDirectoryHandle(handle, handle.name);
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") return null;

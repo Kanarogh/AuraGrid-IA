@@ -1,4 +1,4 @@
-import { isQuotaExhausted, parseRetrySeconds } from "./shared";
+﻿import { isQuotaExhausted, parseRetrySeconds } from "./shared";
 import type { AiProviderId } from "./types";
 
 export type AiFailureKind =
@@ -42,13 +42,7 @@ export function classifyAiFailure(error: unknown): AiFailureKind {
   if (/not_configured|não configurad/i.test(msg)) return "not_configured";
   if (isQuotaExhausted(error) || /limit:\s*0\b/i.test(msg)) return "quota_exhausted";
   if (/resposta vazia|empty response/i.test(msg)) return "empty_response";
-  if (
-    /no endpoints found|indisponível no OpenRouter|provider returned error|does not have access to model|model.*not found|invalid model/i.test(
-      msg
-    )
-  ) {
-    return "model_unavailable";
-  }
+  if (/model.*not found|invalid model/i.test(msg)) return "model_unavailable";
   if (/504|timeout|timed out|ETIMEDOUT|aborted/i.test(msg)) return "timeout";
   if (/401|403|invalid.*key|unauthorized/i.test(msg)) return "auth";
   if (/429|rate.?limit|RESOURCE_EXHAUSTED/i.test(msg)) return "rate_limit";
@@ -65,7 +59,7 @@ export function failureKindLabel(kind: AiFailureKind): string {
     case "empty_response":
       return "resposta vazia do modelo (não é cota)";
     case "model_unavailable":
-      return "modelo indisponível no provedor";
+      return "modelo indisponível";
     case "timeout":
       return "timeout / 504";
     case "auth":
@@ -110,9 +104,7 @@ function pushEvent(event: Omit<AiDiagnosticEvent, "at">) {
 
   const kind = event.failureKind ? ` [${failureKindLabel(event.failureKind)}]` : "";
   const retry =
-    event.retryAfterSec != null && event.retryAfterSec > 0
-      ? ` retry≈${event.retryAfterSec}s`
-      : "";
+    event.retryAfterSec != null && event.retryAfterSec > 0 ? ` retry≈${event.retryAfterSec}s` : "";
   console.warn(`${prefix} FALHA${providerTag}${kind}${retry} — ${event.message}`);
 
   if (isDebugVerbose() && event.detail) {
@@ -129,61 +121,27 @@ export function logAiChain(operation: string, active: AiProviderId, chain: AiPro
   });
 }
 
-export function logAiAttemptStart(
-  operation: string,
-  provider: AiProviderId,
-  model?: string
-) {
-  pushEvent({
-    operation,
-    provider,
-    model,
-    phase: "start",
-    message: "chamando API…",
-  });
+export function logAiAttemptStart(operation: string, provider: AiProviderId, model?: string) {
+  pushEvent({ operation, provider, model, phase: "start", message: "chamando API…" });
 }
 
-export function logAiAttemptOk(
-  operation: string,
-  provider: AiProviderId,
-  model?: string,
-  extra?: string
-) {
-  pushEvent({
-    operation,
-    provider,
-    model,
-    phase: "ok",
-    message: extra ?? "sucesso",
-  });
+export function logAiAttemptOk(operation: string, provider: AiProviderId, model?: string, extra?: string) {
+  pushEvent({ operation, provider, model, phase: "ok", message: extra ?? "sucesso" });
 }
 
 export function logAiAttemptFail(
   operation: string,
   provider: AiProviderId,
   error: unknown,
-  opts?: {
-    model?: string;
-    httpStatus?: number;
-    routedModel?: string;
-    finishReason?: string;
-    detail?: string;
-  }
+  opts?: { model?: string; httpStatus?: number; routedModel?: string; finishReason?: string; detail?: string }
 ) {
   const failureKind = classifyAiFailure(error);
   const msg = error instanceof Error ? error.message : String(error);
   const retryAfterSec = parseRetrySeconds(error);
-
-  let summary = msg;
-  if (msg.length > 220) summary = `${msg.slice(0, 217)}…`;
-
-  if (failureKind === "quota_exhausted") {
-    summary = `Cota esgotada confirmada — ${summary}`;
-  } else if (failureKind === "empty_response") {
-    summary = `Modelo respondeu HTTP 200 mas sem texto útil — ${summary}`;
-  } else if (failureKind === "rate_limit" && retryAfterSec) {
-    summary = `Rate limit — aguarde ~${retryAfterSec}s — ${summary}`;
-  }
+  let summary = msg.length > 220 ? `${msg.slice(0, 217)}…` : msg;
+  if (failureKind === "quota_exhausted") summary = `Cota esgotada confirmada — ${summary}`;
+  if (failureKind === "empty_response") summary = `Modelo respondeu sem texto útil — ${summary}`;
+  if (failureKind === "rate_limit" && retryAfterSec) summary = `Rate limit — aguarde ~${retryAfterSec}s — ${summary}`;
 
   pushEvent({
     operation,
@@ -200,24 +158,10 @@ export function logAiAttemptFail(
   });
 }
 
-export function logAiSkip(
-  operation: string,
-  provider: AiProviderId,
-  reason: string
-) {
+export function logAiSkip(operation: string, provider: AiProviderId, reason: string) {
   const failureKind: AiFailureKind =
-    reason === "cooldown"
-      ? "cooldown"
-      : reason === "not_configured"
-        ? "not_configured"
-        : "other";
-  pushEvent({
-    operation,
-    provider,
-    phase: "skip",
-    failureKind,
-    message: reason,
-  });
+    reason === "cooldown" ? "cooldown" : reason === "not_configured" ? "not_configured" : "other";
+  pushEvent({ operation, provider, phase: "skip", failureKind, message: reason });
 }
 
 export function getAiDiagnosticsSnapshot(limit = 40) {

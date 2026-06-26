@@ -266,7 +266,7 @@ export function scoreCatalogProfileDetailed(
   const p = flattenProfileForRanker(profile);
   let total = 0;
 
-  total += scoreField(fingerprint.garmentType, p.garmentType ?? p.category, 10);
+  total += scoreField(fingerprint.garmentType, p.garmentType, 10);
   total += scoreColors(fingerprint, p);
 
   const pattern = scorePattern(fingerprint, p);

@@ -5,6 +5,8 @@ import type { AppSection } from "../../lib/sectionMeta";
 import { getSectionSubtitle, getSectionTitle } from "../../lib/sectionMeta";
 import { IconButton } from "../ui/IconButton";
 import { AiUsagePanel } from "../shared/AiUsagePanel";
+import { WorkspaceStatusBar } from "./WorkspaceStatusBar";
+import { AppMoreOptionsMenu } from "./AppMoreOptionsMenu";
 
 export function AppTopBar({
   activeSection,
@@ -15,6 +17,10 @@ export function AppTopBar({
   onToggleTheme,
   onOpenSettings,
   menuButtonRef,
+  brandGemReady,
+  brandGemMissingCount,
+  hasActiveClient,
+  onReset,
 }: {
   activeSection: AppSection;
   isDashboardActive?: boolean;
@@ -24,6 +30,10 @@ export function AppTopBar({
   onToggleTheme: () => void;
   onOpenSettings?: () => void;
   menuButtonRef?: React.RefObject<HTMLButtonElement | null>;
+  brandGemReady?: boolean;
+  brandGemMissingCount?: number;
+  hasActiveClient?: boolean;
+  onReset?: () => void;
 }) {
   const sectionTitle = isDashboardActive ? "Dashboard" : getSectionTitle(activeSection);
   const subtitle = isDashboardActive
@@ -64,7 +74,20 @@ export function AppTopBar({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {hasActiveClient && brandGemReady !== undefined && onOpenSettings && (
+            <WorkspaceStatusBar
+              variant="topbar"
+              brandGemReady={brandGemReady}
+              brandGemMissingCount={brandGemMissingCount}
+              onOpenSettings={(_section) => onOpenSettings?.()}
+            />
+          )}
+
           <AiUsagePanel compact onOpenSettings={onOpenSettings} />
+
+          {onReset && (
+            <AppMoreOptionsMenu hasActiveClient={hasActiveClient ?? false} onReset={onReset} />
+          )}
 
           <IconButton
             label={isDark ? "Modo claro" : "Modo escuro"}

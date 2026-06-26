@@ -1,4 +1,4 @@
-/** Migrations SQL aplicadas em ordem pelo runner (`migrate.ts` / boot). */
+﻿/** Migrations SQL aplicadas em ordem pelo runner (`migrate.ts` / boot). */
 export const MIGRATION_FILES = [
   "0000_initial",
   "0001_campaign_context",
@@ -8,6 +8,8 @@ export const MIGRATION_FILES = [
   "0005_planning_periods",
   "0006_uses_references",
   "0007_content_schedule",
+  "0008_gemini_only_ai_preferences",
 ] as const;
 
 export type MigrationHash = (typeof MIGRATION_FILES)[number];
+

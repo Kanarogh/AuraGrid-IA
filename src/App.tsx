@@ -2119,7 +2119,7 @@ export default function App() {
     setPosts((prev) =>
       prev.map((p) => {
         if (postId ? p.id === postId : p.isGenerating) {
-          return { ...p, isGenerating: false, error: undefined };
+          return { ...p, isGenerating: false, error: null };
         }
         return p;
       })

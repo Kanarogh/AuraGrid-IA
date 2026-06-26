@@ -84,7 +84,6 @@ export function AppShell({
         onToggleCollapsed={toggleCollapsed}
         mobileOpen={mobileNavOpen}
         onMobileClose={closeMobileNav}
-        onReset={onReset}
         onClientCreated={onClientCreated}
         hasActiveClient={hasActiveClient}
         usesReferences={usesReferences}
@@ -100,6 +99,10 @@ export function AppShell({
           onToggleTheme={onToggleTheme}
           onOpenSettings={() => onNavigate("settings")}
           menuButtonRef={menuButtonRef}
+          brandGemReady={brandGemReady}
+          brandGemMissingCount={brandGemMissingCount}
+          hasActiveClient={hasActiveClient}
+          onReset={onReset}
         />
 
         <main

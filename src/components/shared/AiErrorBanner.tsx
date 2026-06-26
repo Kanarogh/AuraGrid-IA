@@ -1,7 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, RefreshCw, Shuffle } from "lucide-react";
-import { providerDisplayName, type AiProviderId } from "../../lib/aiSettings";
-import { useAiSettings } from "../../hooks/useAiSettings";
+﻿import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 
 const QUOTA_REGEX = /429|quota|cota|RESOURCE_EXHAUSTED|rate.?limit|insufficient_quota/i;
 const TIMEOUT_REGEX = /timeout|timed out|tempo esgotado|ETIMEDOUT/i;
@@ -28,8 +26,6 @@ export function AiErrorBanner({
   const kind = useMemo(() => classifyError(message), [message]);
   const initialCountdown = kind === "quota" ? 30 : 0;
   const [countdown, setCountdown] = useState(initialCountdown);
-  const [switching, setSwitching] = useState<AiProviderId | null>(null);
-  const { settings, setProvider } = useAiSettings();
 
   useEffect(() => {
     setCountdown(initialCountdown);
@@ -41,16 +37,6 @@ export function AiErrorBanner({
     return () => clearTimeout(id);
   }, [countdown]);
 
-  const fallbackTargets: AiProviderId[] = settings
-    ? settings.providers
-        .filter(
-          (p) =>
-            p.id !== settings.activeProvider &&
-            p.configured
-        )
-        .map((p) => p.id)
-    : [];
-
   const heading = (() => {
     switch (kind) {
       case "quota":
@@ -58,7 +44,7 @@ export function AiErrorBanner({
       case "timeout":
         return "Tempo esgotado na IA";
       case "vision":
-        return "Provedor sem visão";
+        return "Falha de visão no modelo";
       default:
         return "Falha ao chamar a IA";
     }
@@ -83,37 +69,12 @@ export function AiErrorBanner({
             <button
               type="button"
               onClick={onRetry}
-              disabled={countdown > 0 || switching !== null}
+              disabled={countdown > 0}
               className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-md bg-ag-danger text-white disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               <RefreshCw className="h-3 w-3" />
               {countdown > 0 ? `Tentar em ${countdown}s` : "Tentar de novo"}
             </button>
-
-            {fallbackTargets.map((p) => (
-              <button
-                key={p}
-                type="button"
-                disabled={switching !== null}
-                onClick={async () => {
-                  setSwitching(p);
-                  try {
-                    await setProvider(p);
-                    onRetry();
-                  } catch (err) {
-                    console.error(err);
-                  } finally {
-                    setSwitching(null);
-                  }
-                }}
-                className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-md bg-ag-surface-2 text-ag-text border border-ag-border hover:bg-ag-surface-3 disabled:opacity-50 cursor-pointer"
-              >
-                <Shuffle className="h-3 w-3" />
-                {switching === p
-                  ? `Trocando para ${providerDisplayName(p)}…`
-                  : `Trocar para ${providerDisplayName(p)}`}
-              </button>
-            ))}
           </div>
         </div>
       </div>

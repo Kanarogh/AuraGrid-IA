@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -7,12 +7,11 @@ import {
   Loader2,
   Sparkles,
 } from "lucide-react";
-import { providerDisplayName, type AiProviderId } from "../../lib/aiSettings";
+import { providerDisplayName } from "../../lib/aiSettings";
 import { useAiSettings } from "../../hooks/useAiSettings";
 import { aiQueue, type AiQueueState } from "../../lib/aiQueue";
 import { getCaptionCacheStats } from "../../lib/captionCache";
 import { GeminiModelPicker } from "./GeminiModelPicker";
-import { OllamaModelPicker } from "./OllamaModelPicker";
 import { geminiModelDisplayLabel } from "../../lib/geminiModelDisplay";
 import { useEffect, useState } from "react";
 
@@ -28,18 +27,8 @@ export function AiUsagePanel({
   const [open, setOpen] = useState(false);
   const [queueState, setQueueState] = useState<AiQueueState>(aiQueue.getState());
   const [cacheStats, setCacheStats] = useState<Stats>(getCaptionCacheStats());
-  const [switching, setSwitching] = useState<AiProviderId | null>(null);
-  const [savingModel, setSavingModel] = useState(false);
 
-  const {
-    settings,
-    saving,
-    activeProviderOption,
-    activeModelLabel,
-    activeProvider,
-    setProvider,
-    setOpenRouterModel,
-  } = useAiSettings();
+  const { settings, activeModelLabel } = useAiSettings();
 
   useEffect(() => {
     const unsubscribe = aiQueue.subscribe((s) => {
@@ -51,22 +40,19 @@ export function AiUsagePanel({
 
   const pending = queueState.pending.length;
   const isWorking = !!queueState.inFlight;
-  const providerName = activeProvider ? providerDisplayName(activeProvider) : "IA";
+  const providerName = providerDisplayName("gemini");
 
   const indicatorLabel = isWorking
     ? `IA: ${queueState.inFlight!.label}${pending > 0 ? ` (+${pending})` : ""}`
     : pending > 0
       ? `IA: ${pending} na fila`
-      : activeProvider
-        ? settings?.activeProvider === "gemini" && settings.gemini
-          ? `IA: ${geminiModelDisplayLabel(settings.gemini)}`
-          : `IA: ${providerName}`
+      : settings?.gemini
+        ? `IA: ${geminiModelDisplayLabel(settings.gemini)}`
         : "IA";
 
-  const headerModelLabel =
-    settings?.activeProvider === "gemini" && settings.gemini
-      ? geminiModelDisplayLabel(settings.gemini)
-      : activeModelLabel;
+  const headerModelLabel = settings?.gemini
+    ? geminiModelDisplayLabel(settings.gemini)
+    : activeModelLabel;
 
   return (
     <div className="relative">
@@ -98,9 +84,7 @@ export function AiUsagePanel({
               </p>
               <div className="flex items-center gap-2">
                 <Cpu className="h-4 w-4 text-ag-accent" />
-                <p className="text-sm font-semibold text-ag-text">
-                  {activeProvider ? providerDisplayName(activeProvider) : "—"}
-                </p>
+                <p className="text-sm font-semibold text-ag-text">{providerName}</p>
                 <span
                   className="ml-auto text-[10px] font-mono text-ag-muted truncate max-w-[160px]"
                   title={headerModelLabel}
@@ -144,88 +128,7 @@ export function AiUsagePanel({
                 </button>
               </div>
             ) : (
-              settings && (
-                <div className="border-t border-ag-border/60 pt-3 space-y-1.5">
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-ag-muted">
-                    Trocar provedor
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {settings.providers.map((p) => {
-                      const isActive = p.id === settings.activeProvider;
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          disabled={!p.configured || isActive || switching !== null || saving}
-                          onClick={async () => {
-                            setSwitching(p.id);
-                            try {
-                              await setProvider(p.id);
-                            } finally {
-                              setSwitching(null);
-                            }
-                          }}
-                          className={`text-[10px] px-2 py-1 rounded-md border cursor-pointer ${
-                            isActive
-                              ? "border-ag-accent bg-ag-accent/15 text-ag-accent font-semibold"
-                              : p.configured
-                                ? "border-ag-border bg-ag-surface-2 text-ag-text hover:bg-ag-surface-3"
-                                : "border-ag-border bg-ag-surface-2 text-ag-muted cursor-not-allowed"
-                          }`}
-                        >
-                          {switching === p.id ? `${providerDisplayName(p.id)}…` : providerDisplayName(p.id)}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {settings.activeProvider !== "openrouter" &&
-                    settings.activeProvider !== "gemini" &&
-                    settings.activeProvider !== "ollama" && (
-                    <p className="text-[10px] text-ag-muted leading-snug">
-                      Com <strong>{providerDisplayName(settings.activeProvider)}</strong> ativo, só
-                      esse provedor é usado (padrão). Para cair em Groq/OpenRouter ao esgotar cota,
-                      defina <code className="text-[9px]">AI_ALLOW_FALLBACK=1</code> no .env.
-                    </p>
-                  )}
-                </div>
-              )
-            )}
-
-            {!compact && settings?.activeProvider === "openrouter" && (
-              <div className="border-t border-ag-border/60 pt-3 space-y-1.5">
-                <p className="text-[10px] font-mono uppercase tracking-widest text-ag-muted">
-                  Modelo OpenRouter
-                </p>
-                <select
-                  value={settings.openrouter.activeModel}
-                  disabled={savingModel || saving}
-                  onChange={async (e) => {
-                    setSavingModel(true);
-                    try {
-                      await setOpenRouterModel(e.target.value);
-                    } finally {
-                      setSavingModel(false);
-                    }
-                  }}
-                  className="w-full text-[11px] px-2 py-1.5 rounded-md border border-ag-border bg-ag-surface-2 text-ag-text cursor-pointer"
-                >
-                  {settings.openrouter.models.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.recommended ? "★ " : ""}
-                      {m.label}
-                      {m.vision ? "" : " — só texto"}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {!compact && settings?.activeProvider === "gemini" && (
-              <GeminiModelPicker variant="popover" disabled={savingModel || saving} />
-            )}
-
-            {!compact && settings?.activeProvider === "ollama" && (
-              <OllamaModelPicker variant="popover" disabled={savingModel || saving} />
+              <GeminiModelPicker variant="popover" />
             )}
           </div>
         </>

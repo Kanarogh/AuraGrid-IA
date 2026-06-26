@@ -64,8 +64,8 @@ JWT_SECRET=sua-chave-secreta-longa-e-aleatoria
 JWT_ACCESS_TTL=15m
 JWT_REFRESH_TTL_DAYS=30
 
-# IA (pelo menos uma chave)
-AI_PROVIDER=gemini
+# IA (Gemini-only)
+GEMINI_API_KEY=sua-chave-aqui
 GEMINI_API_KEY=sua-chave-aqui
 ```
 
@@ -126,7 +126,7 @@ Usa `docker-compose.yml` e sobe:
 - `migrate` — aplica migrations e encerra
 - `app` — servidor na porta **3000**
 
-O serviço `app` já recebe `DATABASE_URL` e `MINIO_ENDPOINT=minio` internamente. Mantenha o `.env` com as chaves de IA (`GEMINI_API_KEY`, etc.).
+O serviço `app` já recebe `DATABASE_URL` e `MINIO_ENDPOINT=minio` internamente. Mantenha o `.env` com a chave `GEMINI_API_KEY`.
 
 Parar tudo:
 
@@ -367,7 +367,7 @@ AuraGrid-IA/
 - [ ] `npm install`
 - [ ] `.env` criado a partir de `.env.example`
 - [ ] `DATABASE_URL`, MinIO e `JWT_SECRET` configurados
-- [ ] Pelo menos uma chave de IA (`GEMINI_API_KEY`, etc.)
+- [ ] Chave de IA Gemini (`GEMINI_API_KEY`)
 - [ ] `npm run docker:infra`
 - [ ] `npm run db:migrate`
 - [ ] `npm run dev`
@@ -457,7 +457,7 @@ npm run db:migrate
    ```
 
    > Para R2/S3 com domínio (porta 443 + SSL), o `forcePathStyle` já está habilitado em `mediaService.ts`. Crie o bucket previamente no provedor.
-3. **JWT e IA:** defina `JWT_SECRET` forte e ao menos uma chave de IA (`GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`).
+3. **JWT e IA:** defina `JWT_SECRET` forte e a chave `GEMINI_API_KEY`.
 4. **Migrations:** ver seção [Migration 0007](#migration-0007-cronograma-de-conteúdo) acima. Com `DATABASE_URL` definida, `instrumentation.ts` também aplica migrations no boot.
 5. **Upload do projeto:** gere o `.zip` **sem** `node_modules` e **sem** `.next` (o Square Cloud instala dependências e o `START` faz o build). O `.gitignore` já exclui ambos.
 

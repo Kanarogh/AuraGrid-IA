@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  PANEL_PCT_MAX,
+  PANEL_PCT_MIN,
+  PANEL_PCT_STEP,
   PANEL_PCT_DEFAULT,
   clampPanelPct,
   persistPanelPct,

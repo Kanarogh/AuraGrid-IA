@@ -1,7 +1,6 @@
-import { classifyAiFailure, failureKindLabel } from "./diagnostics";
+﻿import { classifyAiFailure, failureKindLabel } from "./diagnostics";
 import type { AiProviderId } from "./types";
 
-/** Remove cercas markdown/aspas que modelos costumam devolver no refine. */
 export function sanitizeRefinedCaptionOutput(raw: string): string {
   let text = raw.trim();
   if (!text) return text;
@@ -53,7 +52,6 @@ export function parseRetrySeconds(error: unknown): number | null {
   return null;
 }
 
-/** Anexa o header Retry-After (quando presente) à mensagem do erro para o retry conseguir parsear. */
 export function annotateErrorWithRetryAfter(err: Error, response: Response): Error {
   const ra = response.headers.get("retry-after");
   if (!ra) return err;
@@ -76,26 +74,15 @@ export function annotateErrorWithRetryAfter(err: Error, response: Response): Err
 
 export function isQuotaExhausted(error: unknown): boolean {
   const msg = error instanceof Error ? error.message : String(error);
-  return (
-    /limit:\s*0\b/i.test(msg) ||
-    /RESOURCE_EXHAUSTED/i.test(msg) ||
-    /quota exceeded/i.test(msg) ||
-    /insufficient_quota/i.test(msg)
-  );
+  return /limit:\s*0\b/i.test(msg) || /RESOURCE_EXHAUSTED/i.test(msg) || /quota exceeded/i.test(msg);
 }
 
-export function isGroqPayloadTooLarge(error: unknown): boolean {
-  const msg = error instanceof Error ? error.message : String(error);
-  return (
-    /request too large/i.test(msg) ||
-    /reduce your message size/i.test(msg) ||
-    /tokens per minute \(TPM\)/i.test(msg)
-  );
+export function isGroqPayloadTooLarge(_error: unknown): boolean {
+  return false;
 }
 
 export function shouldRetryAiError(error: unknown): boolean {
   if (isQuotaExhausted(error)) return false;
-  if (isGroqPayloadTooLarge(error)) return false;
   const msg = error instanceof Error ? error.message : String(error);
   if (/429|rate.?limit/i.test(msg)) return true;
   return parseRetrySeconds(error) !== null;
@@ -107,23 +94,10 @@ export async function sleep(ms: number): Promise<void> {
 
 const PROVIDER_LABELS: Record<AiProviderId, string> = {
   gemini: "Gemini",
-  groq: "Groq",
-  openrouter: "OpenRouter",
-  ollama: "Ollama",
-};
-
-const PROVIDER_KEY_ENV: Record<AiProviderId, string> = {
-  gemini: "GEMINI_API_KEY",
-  groq: "GROQ_API_KEY",
-  openrouter: "OPENROUTER_API_KEY",
-  ollama: "OLLAMA (sem chave)",
 };
 
 const PROVIDER_MODEL_ENV: Record<AiProviderId, string> = {
   gemini: "GEMINI_MODEL",
-  groq: "GROQ_MODEL",
-  openrouter: "OPENROUTER_MODEL",
-  ollama: "OLLAMA_MODEL",
 };
 
 export function formatAiError(error: unknown, provider: AiProviderId): string {
@@ -134,53 +108,29 @@ export function formatAiError(error: unknown, provider: AiProviderId): string {
   if (kind === "empty_response") {
     return raw.includes("Não é cota")
       ? raw
-      : `${label}: o modelo respondeu sem texto (não é cota). No painel IA, use Gemini ou OpenRouter + Gemma 4 31B.`;
+      : `${label}: o modelo respondeu sem texto (não é cota).`;
   }
 
   if (kind === "model_unavailable") {
-    return `Modelo indisponível no ${label}. Escolha outro no painel IA (ex.: Gemini 2.5 Flash ou Gemma 4 31B).`;
-  }
-
-  if (isGroqPayloadTooLarge(error)) {
-    return `${label}: pedido muito grande para o limite do modelo (~30k tokens). O servidor tenta reduzir automaticamente; se persistir, use Gemini ou OpenRouter no painel IA.`;
+    return `Modelo indisponível no ${label}. Escolha outro modelo Gemini no painel IA.`;
   }
 
   if (kind === "quota_exhausted" || kind === "rate_limit") {
-    const hint =
-      kind === "quota_exhausted"
-        ? "Cota esgotada"
-        : `Rate limit (${failureKindLabel(kind)})`;
-    return `${hint} — API ${label}. Aguarde o reset ou troque o provedor no painel IA (✨). Detalhe: ${raw.slice(0, 160)}…`;
+    const hint = kind === "quota_exhausted" ? "Cota esgotada" : `Rate limit (${failureKindLabel(kind)})`;
+    return `${hint} — API ${label}. Aguarde o reset. Detalhe: ${raw.slice(0, 160)}…`;
   }
 
   if (/404|not found/i.test(raw) && /model/i.test(raw)) {
     return `Modelo inválido. Ajuste ${PROVIDER_MODEL_ENV[provider]} no .env.`;
   }
 
-  if (/no endpoints found/i.test(raw)) {
-    return `Modelo OpenRouter indisponível. No painel IA, escolha "Gemma 4 31B" ou "OpenRouter Free (auto)" e tente de novo.`;
-  }
-
-  if (/Ollama não está acessível|model.*not found.*Ollama/i.test(raw)) {
-    return raw;
-  }
-
-  if (/image_url|unknown variant.*expected.*text/i.test(raw)) {
-    return `Este provedor não aceita imagens no formato enviado. Detalhe: ${raw.slice(0, 120)}…`;
-  }
-
   if (raw.length > 280) return `${raw.slice(0, 280)}…`;
   return raw || `Falha na chamada à API ${label}.`;
 }
 
-/** Acima desse limite vale a pena cair pro próximo provedor em vez de esperar. */
 const MAX_RETRY_WAIT_SEC = 25;
 
-export async function withRetry<T>(
-  fn: () => Promise<T>,
-  label: string,
-  maxAttempts = 3
-): Promise<T> {
+export async function withRetry<T>(fn: () => Promise<T>, label: string, maxAttempts = 3): Promise<T> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -190,9 +140,7 @@ export async function withRetry<T>(
       if (!shouldRetryAiError(err) || attempt >= maxAttempts) throw err;
       const requested = parseRetrySeconds(err) ?? 15;
       if (requested > MAX_RETRY_WAIT_SEC) {
-        console.warn(
-          `${label} pediu retry em ${requested}s (> ${MAX_RETRY_WAIT_SEC}s) — abortando retries.`
-        );
+        console.warn(`${label} pediu retry em ${requested}s (> ${MAX_RETRY_WAIT_SEC}s) — abortando retries.`);
         throw err;
       }
       const waitSec = Math.min(requested, MAX_RETRY_WAIT_SEC);

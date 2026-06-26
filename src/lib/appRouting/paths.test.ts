@@ -94,7 +94,7 @@ test("home redirect", () => {
 
 test("empty clientId never produces /c//", () => {
   assert.equal(
-    buildClientPath({ clientId: "", section: "settings", settingsTab: "marca" }),
+    buildClientPath({ clientId: "", section: "settings", settingsTab: "brand" }),
     "/welcome"
   );
   assert.equal(parseAppPath("/c//configuracoes/marca").kind, "unknown");

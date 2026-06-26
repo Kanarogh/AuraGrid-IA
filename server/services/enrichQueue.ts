@@ -1,8 +1,7 @@
-import { getAiProviderId } from "../ai/config";
+﻿import { getAiProviderId } from "../ai/config";
 import { runVisionWithFallback } from "../ai/fallbackChain";
 import { withUserAiContext } from "../ai/userAiContext";
 import { ensureRuntimeAiSettingsLoaded } from "../ai/runtimeSettings";
-import { resetCatalogVisionBatchCache } from "../ai/openrouterModels";
 import type { AiProviderId } from "../ai/types";
 import { isMatchEmbeddingEnabled } from "../ai/matchConfig";
 import { isPgvectorAvailable } from "../db/pgvector";
@@ -85,7 +84,6 @@ async function runCatalogEnrichmentInner(
 ): Promise<{ quotaExceeded: boolean; cancelled: boolean }> {
   const key = queueKey(clientId);
   stopCatalogEnrichment(clientId);
-  resetCatalogVisionBatchCache();
   const abort = new AbortController();
   queues.set(key, { running: true, abort, progress: null });
 
@@ -98,7 +96,7 @@ async function runCatalogEnrichmentInner(
     }
     const usesReferences = await getEffectiveUsesReferences(clientId, periodId);
     if (!usesReferences) {
-      console.info(`[enrich] ignorado — roteiro sem referências (clientId=${clientId})`);
+      console.info(`[enrich] ignorado â€” roteiro sem referÃªncias (clientId=${clientId})`);
       if (userId && periodId) {
         void emitEnrichProgress(userId, clientId, periodId, false);
       }
@@ -109,12 +107,12 @@ async function runCatalogEnrichmentInner(
       await resetStaleProcessingCatalogItems(clientId);
     } catch (err) {
       console.warn(
-        "[enrich] reset de processing órfão ignorado:",
+        "[enrich] reset de processing Ã³rfÃ£o ignorado:",
         err instanceof Error ? err.message : err
       );
     }
     const activeProvider = providerId ?? getAiProviderId();
-    console.info(`[enrich] provedor=${activeProvider} (indexação JSON)`);
+    console.info(`[enrich] provedor=${activeProvider} (indexaÃ§Ã£o JSON)`);
 
     const all = await listCatalogItems(clientId);
     const targets = itemIds?.length
@@ -217,7 +215,7 @@ async function runCatalogEnrichmentInner(
             );
           }
         } else if (isMatchEmbeddingEnabled()) {
-          console.warn(`[enrich] embedding ignorado — GEMINI_API_KEY ausente (${item.id})`);
+          console.warn(`[enrich] embedding ignorado â€” GEMINI_API_KEY ausente (${item.id})`);
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -259,3 +257,4 @@ export async function enrichSingleCatalogItem(
 export async function getCatalogItemForEnrich(clientId: string, itemId: string) {
   return getCatalogItem(clientId, itemId);
 }
+

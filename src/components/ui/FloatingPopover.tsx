@@ -26,7 +26,7 @@ function computePosition(
   popover: DOMRect,
   placement: FloatingPlacement,
   matchWidth: boolean
-): { top: number; left: number; width?: number } {
+): { top: number; left: number; width: number | undefined } {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   let top = 0;

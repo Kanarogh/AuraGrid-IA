@@ -19,8 +19,6 @@ CREATE TABLE IF NOT EXISTS "refresh_tokens" (
 
 CREATE TABLE IF NOT EXISTS "user_ai_preferences" (
   "user_id" uuid PRIMARY KEY NOT NULL,
-  "active_provider" text,
-  "openrouter_model" text,
   "updated_at" timestamptz DEFAULT now() NOT NULL
 );
 

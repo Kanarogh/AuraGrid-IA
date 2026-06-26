@@ -27,17 +27,23 @@ describe("resolveUsesReferences", () => {
 describe("countIndexedReferences", () => {
   const refReady = {
     id: "1",
+    label: "Look A",
+    image: "data:image/png;base64,abc",
     isReference: true,
     enrichmentStatus: "ready",
     visualProfile: { label: "Look A" },
   } as CatalogItem;
   const refPending = {
     id: "2",
+    label: "Look B",
+    image: "data:image/png;base64,def",
     isReference: true,
     enrichmentStatus: "pending",
   } as CatalogItem;
   const gridReady = {
     id: "3",
+    label: "Grid",
+    image: "data:image/png;base64,ghi",
     isReference: false,
     enrichmentStatus: "ready",
     visualProfile: { label: "Grid" },

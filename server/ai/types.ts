@@ -1,6 +1,6 @@
-import type { PostVisualFingerprint } from "./postFingerprint";
+﻿import type { PostVisualFingerprint } from "./postFingerprint";
 
-export type AiProviderId = "gemini" | "groq" | "openrouter" | "ollama";
+export type AiProviderId = "gemini";
 
 export interface AiProviderHealth {
   configured: boolean;
@@ -62,31 +62,19 @@ export type BrandGemPayload = {
 
 export interface MatchGenerateInput {
   postImage: string;
-  /** Só servidor — shortlist por embedding no Postgres */
   clientId?: string;
   catalogItems?: { id: string; label: string; image: string }[];
   catalogProfiles?: { id: string; label: string; profile: Record<string, unknown> }[];
-  /** Só servidor — preenchido por prepareMatchInput */
   postFingerprint?: PostVisualFingerprint;
-  /** Só identifica referência no catálogo — sem legenda (endpoint /api/match-reference). */
   matchOnly?: boolean;
-  /** Gem estilo Gemini (preferido) */
   brandGem?: BrandGemPayload;
-  /** @deprecated use brandGem */
   promptContext?: string;
-  /** @deprecated use brandGem.footer */
   repeatingText?: BrandGemPayload["footer"];
-  /** Usuário pediu nova legenda (ignorar cache + variar o gancho) */
   regenerateCaption?: boolean;
-  /** Legenda só pelo conteúdo visual da imagem — sem match no catálogo */
   captionFromImageOnly?: boolean;
-  /** Ganchos já usados no roteiro — a IA deve variar abertura e vocabulário */
   recentHooks?: string[];
-  /** Lote em curso com vários ganchos — pedir ângulo novo mesmo na 1ª geração */
   diverseBatch?: boolean;
-  /** Hint do ranker visual (fingerprint) — só servidor */
   matchRankHint?: MatchRankHint;
-  /** Cenário do post para legenda — só servidor */
   sceneContext?: {
     setting?: string;
     tags?: string[];
@@ -155,12 +143,9 @@ export interface AiProvider {
   getModel(): string;
   isConfigured(): boolean;
   enrichCatalogItem(input: CatalogEnrichInput): Promise<Record<string, unknown>>;
-  /** 1 imagem → JSON leve para ranquear o catálogo localmente (sem enviar todo o acervo à IA). */
   analyzePostVisual(input: PostVisualAnalyzeInput): Promise<PostVisualFingerprint>;
   matchAndGenerate(input: MatchGenerateInput): Promise<MatchGenerateResult>;
-  /** Match texto-only: fingerprint JSON × perfis (sem imagem do post). */
   matchFromFingerprint(input: MatchFromFingerprintInput): Promise<MatchGenerateResult>;
-  /** Legenda com 1 imagem — sem JSON de catálogo. */
   generateCaptionOnly(input: CaptionOnlyInput): Promise<{ caption: string }>;
   refineCaption(input: {
     currentCaption: string;

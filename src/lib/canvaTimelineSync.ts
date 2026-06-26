@@ -44,7 +44,7 @@ export function canvaSlotsToScheduleItems(
     image: slot.image,
     imageAssetId: slot.imageAssetId ?? null,
     matchedCatalogId: slot.matchedCatalogId ?? null,
-    label: slot.label,
+    label: slot.label ?? undefined,
     canvaSlotRef: { pageId: slot.pageId, slotId: slot.id },
   }));
 }

@@ -1,24 +1,19 @@
-import { normalizeVisualProfile } from "./catalog";
+﻿import { normalizeVisualProfile } from "./catalog";
 import type { CatalogItem, CatalogVisualProfile } from "../types";
 import { readJsonResponse } from "./apiResponse";
 import { aiFetch } from "./aiFetch";
-import { getState as getAiSettingsState } from "./aiSettingsStore";
 import { aiQueue } from "./aiQueue";
 import { resizeForCatalogEnrich, convertSvgToDataUrl } from "./images";
 
-const ENRICH_DELAY_MS = 5000;
 const ENRICH_DELAY_GEMINI_MS = 5000;
-const ENRICH_DELAY_OPENROUTER_MS = 8000;
-/** Pausa antes de repetir a mesma peça após 503 / alta demanda */
+/** Pausa antes de repetir a mesma peÃ§a apÃ³s 503 / alta demanda */
 const ENRICH_RETRY_DELAY_MS = 5000;
-/** Evita ficar minutos esperando retry do servidor quando a cota já estourou */
+/** Evita ficar minutos esperando retry do servidor quando a cota jÃ¡ estourou */
 const ENRICH_FETCH_TIMEOUT_MS = 45_000;
-/** Ollama + visão na 1ª peça pode levar 1–3 min (carrega o modelo). */
-const ENRICH_FETCH_TIMEOUT_OLLAMA_MS = 180_000;
+/** Ollama + visÃ£o na 1Âª peÃ§a pode levar 1â€“3 min (carrega o modelo). */
 
 function enrichFetchTimeoutMs(): number {
-  const provider = getAiSettingsState().settings?.activeProvider;
-  return provider === "ollama" ? ENRICH_FETCH_TIMEOUT_OLLAMA_MS : ENRICH_FETCH_TIMEOUT_MS;
+  return ENRICH_FETCH_TIMEOUT_MS;
 }
 
 export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -48,7 +43,7 @@ export function isAbortError(err: unknown): boolean {
 }
 
 function isQuotaError(message: string): boolean {
-  return /429|cota|quota|RESOURCE_EXHAUSTED|rate.?limit|tokens per day|TPD|limite diário|esgotad|todos os modelos de visão falharam|resumo das tentativas/i.test(
+  return /429|cota|quota|RESOURCE_EXHAUSTED|rate.?limit|tokens per day|TPD|limite diÃ¡rio|esgotad|todos os modelos de visÃ£o falharam|resumo das tentativas/i.test(
     message
   );
 }
@@ -83,7 +78,7 @@ export async function enrichCatalogItemOnServer(
   const requestSignal = mergeAbortSignals(signal, timeoutController.signal);
 
   try {
-    const converted = await convertSvgToDataUrl(item.image);
+    const converted = await convertSvgToDataUrl(item.image ?? "");
     const compressedImage = await resizeForCatalogEnrich(converted);
 
     const response = await aiQueue.enqueue(
@@ -105,20 +100,17 @@ export async function enrichCatalogItemOnServer(
       response
     );
     if (!response.ok) {
-      throw new Error(data.error || "Falha ao indexar referência.");
+      throw new Error(data.error || "Falha ao indexar referÃªncia.");
     }
     if (!data.profile) {
-      throw new Error("Servidor não retornou o perfil JSON. Tente reiniciar com npm run dev.");
+      throw new Error("Servidor nÃ£o retornou o perfil JSON. Tente reiniciar com npm run dev.");
     }
     return normalizeVisualProfile(data.profile, item.label);
   } catch (err) {
     if (timeoutController.signal.aborted && !signal?.aborted) {
       const secs = Math.round(fetchTimeoutMs / 1000);
-      const isOllama = getAiSettingsState().settings?.activeProvider === "ollama";
       throw new Error(
-        isOllama
-          ? `Tempo esgotado aguardando o Ollama (${secs}s). A 1ª foto demora mais (modelo carregando). Tente de novo ou aumente OLLAMA_TIMEOUT_MS no .env.`
-          : `Tempo esgotado aguardando o servidor (${secs}s). Use Parar indexação ou troque o provedor no painel IA.`
+        `Tempo esgotado aguardando o servidor (${secs}s). Use Parar indexacao e tente novamente.`
       );
     }
     throw err;
@@ -129,13 +121,9 @@ export async function enrichCatalogItemOnServer(
 
 export type EnrichQueueResult = { cancelled: boolean; quotaExceeded: boolean };
 
-/** Indexa referências em fila (pausa entre peças para não estourar cota / 503) */
+/** Indexa referÃªncias em fila (pausa entre peÃ§as para nÃ£o estourar cota / 503) */
 function enrichDelayMs(): number {
-  const provider = getAiSettingsState().settings?.activeProvider;
-  if (provider === "openrouter") return ENRICH_DELAY_OPENROUTER_MS;
-  if (provider === "ollama") return 500;
-  if (provider === "gemini") return ENRICH_DELAY_GEMINI_MS;
-  return ENRICH_DELAY_MS;
+  return ENRICH_DELAY_GEMINI_MS;
 }
 
 export async function enrichCatalogItemsInQueue(
@@ -205,3 +193,4 @@ export function catalogReadyForTextMatch(items: CatalogItem[]): boolean {
   if (items.length === 0) return false;
   return items.every((c) => c.enrichmentStatus === "ready" && c.visualProfile);
 }
+

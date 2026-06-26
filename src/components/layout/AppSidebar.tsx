@@ -41,7 +41,6 @@ export function AppSidebar({
   onToggleCollapsed,
   mobileOpen,
   onMobileClose,
-  onReset,
   onClientCreated,
   hasActiveClient,
   usesReferences = true,
@@ -57,7 +56,6 @@ export function AppSidebar({
   onToggleCollapsed: () => void;
   mobileOpen: boolean;
   onMobileClose: () => void;
-  onReset: () => void;
   onClientCreated?: (clientId: string) => void;
   hasActiveClient: boolean;
   usesReferences?: boolean;
@@ -124,15 +122,7 @@ export function AppSidebar({
           onMobileClose={onMobileClose}
         />
 
-        <SidebarFooter
-          collapsed={isCollapsed}
-          hasActiveClient={hasActiveClient}
-          brandGemReady={brandGemReady}
-          brandGemMissingCount={brandGemMissingCount}
-          onOpenSettings={onNavigate}
-          onReset={onReset}
-          onToggleCollapsed={onToggleCollapsed}
-        />
+        <SidebarFooter collapsed={isCollapsed} onToggleCollapsed={onToggleCollapsed} />
       </aside>
     </>
   );

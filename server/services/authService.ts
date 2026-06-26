@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "crypto";
+﻿import { createHash, randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { and, eq, isNull } from "drizzle-orm";
@@ -39,12 +39,12 @@ export async function registerUser(input: {
   displayName: string;
 }): Promise<{ user: AuthUser; tokens: AuthTokens }> {
   const email = input.email.trim().toLowerCase();
-  const displayName = input.displayName.trim() || email.split("@")[0] || "Usuário";
+  const displayName = input.displayName.trim() || email.split("@")[0] || "UsuÃ¡rio";
   const db = getDb();
 
   const existing = await db.select().from(users).where(eq(users.email, email)).limit(1);
   if (existing.length > 0) {
-    throw new Error("E-mail já cadastrado.");
+    throw new Error("E-mail jÃ¡ cadastrado.");
   }
 
   const passwordHash = await bcrypt.hash(input.password, 12);
@@ -65,10 +65,10 @@ export async function loginUser(input: {
   const email = input.email.trim().toLowerCase();
   const db = getDb();
   const [row] = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  if (!row) throw new Error("E-mail ou senha inválidos.");
+  if (!row) throw new Error("E-mail ou senha invÃ¡lidos.");
 
   const ok = await bcrypt.compare(input.password, row.passwordHash);
-  if (!ok) throw new Error("E-mail ou senha inválidos.");
+  if (!ok) throw new Error("E-mail ou senha invÃ¡lidos.");
 
   const user: AuthUser = { id: row.id, email: row.email, displayName: row.displayName };
   const tokens = await issueTokens(user);
@@ -97,7 +97,7 @@ async function issueTokens(user: AuthUser): Promise<AuthTokens> {
 export function verifyAccessToken(token: string): AuthUser {
   const payload = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload;
   if (!payload.sub || typeof payload.sub !== "string") {
-    throw new Error("Token inválido.");
+    throw new Error("Token invÃ¡lido.");
   }
   return {
     id: payload.sub,
@@ -124,7 +124,7 @@ export async function refreshSession(refreshToken: string): Promise<{
     .limit(1);
 
   if (!row || row.expiresAt.getTime() < Date.now()) {
-    throw new Error("Sessão expirada. Faça login novamente.");
+    throw new Error("SessÃ£o expirada. FaÃ§a login novamente.");
   }
 
   await db
@@ -133,7 +133,7 @@ export async function refreshSession(refreshToken: string): Promise<{
     .where(eq(refreshTokens.id, row.id));
 
   const [userRow] = await db.select().from(users).where(eq(users.id, row.userId)).limit(1);
-  if (!userRow) throw new Error("Usuário não encontrado.");
+  if (!userRow) throw new Error("UsuÃ¡rio nÃ£o encontrado.");
 
   const user: AuthUser = {
     id: userRow.id,
@@ -144,7 +144,7 @@ export async function refreshSession(refreshToken: string): Promise<{
   return { user, tokens };
 }
 
-/** Valida refresh token sem rotacionar — seguro para `<img>` e outras requisições GET frequentes. */
+/** Valida refresh token sem rotacionar â€” seguro para `<img>` e outras requisiÃ§Ãµes GET frequentes. */
 export async function getUserFromRefreshToken(refreshToken: string): Promise<AuthUser | null> {
   const db = getDb();
   const tokenHash = hashToken(refreshToken);
@@ -191,27 +191,27 @@ export async function getUserAiPreferences(userId: string) {
 
 export async function upsertUserAiPreferences(
   userId: string,
-  patch: { activeProvider?: string | null; openrouterModel?: string | null }
+  patch: { geminiModel?: string | null; geminiCatalogModel?: string | null }
 ) {
   const db = getDb();
   const existing = await getUserAiPreferences(userId);
   if (!existing) {
     await db.insert(userAiPreferences).values({
       userId,
-      activeProvider: patch.activeProvider ?? null,
-      openrouterModel: patch.openrouterModel ?? null,
+      geminiModel: patch.geminiModel ?? null,
+      geminiCatalogModel: patch.geminiCatalogModel ?? null,
     });
     return;
   }
   await db
     .update(userAiPreferences)
     .set({
-      activeProvider:
-        patch.activeProvider !== undefined ? patch.activeProvider : existing.activeProvider,
-      openrouterModel:
-        patch.openrouterModel !== undefined
-          ? patch.openrouterModel
-          : existing.openrouterModel,
+      geminiModel:
+        patch.geminiModel !== undefined ? patch.geminiModel : existing.geminiModel,
+      geminiCatalogModel:
+        patch.geminiCatalogModel !== undefined
+          ? patch.geminiCatalogModel
+          : existing.geminiCatalogModel,
       updatedAt: new Date(),
     })
     .where(eq(userAiPreferences.userId, userId));
@@ -224,3 +224,4 @@ export function accessTokenMaxAgeMs(): number {
 export function refreshCookieMaxAgeMs(): number {
   return JWT_REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000;
 }
+
