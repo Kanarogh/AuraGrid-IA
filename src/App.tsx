@@ -2426,8 +2426,10 @@ export default function App() {
       let body = buildRequestBody();
       let result = await callMatchAndGenerate(body);
 
-      const mainHook = extractMainCaptionText(result.caption, brandGem.footer).trim();
-      if (mainHook && isHookTooSimilar(mainHook, recentHooks) && !isDiverseBatchLikely) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const mainHook = extractMainCaptionText(result.caption, brandGem.footer).trim();
+        if (!mainHook || !isHookTooSimilar(mainHook, recentHooks)) break;
+
         const retryHooks = mergeRecentCaptionSignals(
           getPostsSnapshot(),
           [mainHook, ...extraAvoidHooks, ...batchCaptionHooksRef.current],
@@ -2435,6 +2437,7 @@ export default function App() {
           brandGem.footer,
           15
         );
+        recentHooks = retryHooks;
         body = buildRequestBody(true, retryHooks);
         result = await callMatchAndGenerate(body);
       }

@@ -1,3 +1,4 @@
+import { analyzeRecentCaptionHooks } from "@/src/lib/recentCaptionHooks";
 import { buildSceneCaptionBlock } from "./catalogProfileV2";
 
 /** Blocos de prompt derivados do Gem (estilo Gemini) + rodapé fixo das legendas */
@@ -223,7 +224,8 @@ export function buildRegenerationBlock(
   return `
 ${header}
 - Write a COMPLETELY NEW main hook (block 1) — different wording, fresh angle, new adjectives.
-- Do NOT reuse the same opening sentence or phrasing as a typical previous caption.
+- Do NOT reuse the same opening sentence, first 3 words, or phrasing pattern as any recent caption.
+- Change the opening verb and structure (not just one adjective in the middle).
 - Keep matchedId consistent if the garment match is still valid.
 - Footer blocks (Referência label, disclosure, address, ➡️ CTA, hashtags) stay verbatim from GEM.`;
 }
@@ -241,41 +243,16 @@ export type CaptionPromptOptions = {
   };
 };
 
-function isOpenerSignal(text: string): boolean {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  return words.length >= 4 && words.length <= 8 && text.length < 90;
-}
-
-function normalizeRecentHooks(raw?: string[]): { full: string[]; openers: string[] } {
-  if (!raw?.length) return { full: [], openers: [] };
-  const full: string[] = [];
-  const openers: string[] = [];
-
-  for (const hook of raw) {
-    const trimmed = hook.trim();
-    const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
-    if (wordCount < 4) continue;
-
-    if (isOpenerSignal(trimmed)) {
-      if (!openers.some((o) => o.toLowerCase() === trimmed.toLowerCase())) {
-        openers.push(trimmed);
-      }
-      continue;
-    }
-
-    if (trimmed.length < 12) continue;
-    if (full.some((h) => h.toLowerCase() === trimmed.toLowerCase())) continue;
-    full.push(trimmed);
-    if (full.length >= 8) break;
-  }
-
-  return { full: full.slice(-8), openers: openers.slice(-6) };
-}
-
 /** Evita ganchos repetidos dentro do post e entre posts do roteiro. */
 export function buildAntiRepetitionBlock(recentHooks?: string[]): string {
-  const { full, openers } = normalizeRecentHooks(recentHooks);
-  const hasRecent = full.length > 0 || openers.length > 0;
+  if (!recentHooks?.length) return "";
+
+  const { full, openers, templates, phrases } = analyzeRecentCaptionHooks(recentHooks);
+  const hasRecent =
+    full.length > 0 ||
+    openers.length > 0 ||
+    templates.length > 0 ||
+    phrases.length > 0;
   if (!hasRecent) return "";
 
   const fullBlock =
@@ -290,6 +267,14 @@ ${full
   .join("\n")}`
       : "";
 
+  const templateBlock =
+    templates.length > 0
+      ? `
+FORBIDDEN OPENING TEMPLATES (first 2–3 words — NEVER reuse the same pattern):
+${templates.map((t, index) => `${index + 1}. "${t}"`).join("\n")}
+- If a template starts with "X en la" or "X en el", the next caption MUST use a completely different verb and structure — not the same first three words.`
+      : "";
+
   const openerBlock =
     openers.length > 0
       ? `
@@ -298,11 +283,20 @@ ${openers.map((opener, index) => `${index + 1}. "${opener}"`).join("\n")}
 - Do not reuse these sentence starters or near-identical paraphrases.`
       : "";
 
-  const recentBlock = `${fullBlock}${openerBlock}
-- Do not reuse opening lines, sentence starters, or key adjective clusters listed above.
-- Avoid template structures already present (e.g. "O X encontra o Y", "Descubra o poder de", "Aposte no", "O luxo encontra") if similar starters are listed.`;
+  const phraseBlock =
+    phrases.length > 0
+      ? `
+OVERUSED PHRASE CLUSTERS (appeared in multiple recent captions — avoid or rephrase):
+${phrases.map((phrase, index) => `${index + 1}. "${phrase}"`).join("\n")}
+- Do not repeat these adjective/noun pairs or short phrases; find fresh synonyms and angles.`
+      : "";
 
-  return `ANTI-REPETITION RULES (block 1 / main hook only):
+  const recentBlock = `${fullBlock}${templateBlock}${openerBlock}${phraseBlock}
+- Each caption must feel written for THIS specific image — not a fill-in-the-blank template.
+- Vary: opening verb, sentence rhythm, adjective choice, and narrative angle (texture vs silhouette vs occasion vs craftsmanship).
+- Avoid template structures already present (e.g. "Sumérgete en", "Descubre el", "Apuesta por", "O luxo encontra") when similar starters are listed.`;
+
+  return `ANTI-REPETITION RULES (block 1 / main hook only — STRICT):
 - Write copy unique to THIS image and garment — not a generic template.
 - Do not repeat footer blocks in the hook (Referência, disclosure, address, ➡️ CTA, hashtags).
 - Vary rhythm and structure between posts.${recentBlock}`;

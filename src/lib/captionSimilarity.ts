@@ -1,13 +1,58 @@
-/** Similaridade simples entre ganchos (overlap de tokens normalizados, 0–1). */
+/** Similaridade entre ganchos — overlap de tokens, abridores e frases repetidas. */
 
-function tokenize(text: string): string[] {
+export function normalizeCaptionCompare(text: string): string {
   return text
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenize(text: string): string[] {
+  return normalizeCaptionCompare(text)
     .split(/\s+/)
     .filter((t) => t.length > 2);
+}
+
+export function extractOpenerWords(hook: string, wordCount = 5): string[] {
+  return hook
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, wordCount)
+    .map((w) =>
+      w
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^\p{L}\p{N}]/gu, "")
+    )
+    .filter(Boolean);
+}
+
+export function extractOpeningTemplate(hook: string, wordCount = 3): string {
+  return extractOpenerWords(hook, wordCount).join(" ");
+}
+
+export function openerTemplateMatches(a: string, b: string, wordCount = 3): boolean {
+  const ta = extractOpeningTemplate(a, wordCount);
+  const tb = extractOpeningTemplate(b, wordCount);
+  if (!ta || !tb) return false;
+  return ta === tb;
+}
+
+/** Quantas das primeiras N palavras coincidem (mesma posição). */
+export function openerPrefixOverlap(a: string, b: string, wordCount = 4): number {
+  const wa = extractOpenerWords(a, wordCount);
+  const wb = extractOpenerWords(b, wordCount);
+  let match = 0;
+  for (let i = 0; i < Math.min(wa.length, wb.length); i++) {
+    if (wa[i] !== wb[i]) break;
+    match++;
+  }
+  return match;
 }
 
 export function captionHookSimilarity(a: string, b: string): number {
@@ -28,7 +73,7 @@ export function captionHookSimilarity(a: string, b: string): number {
 export function isHookTooSimilar(
   candidate: string,
   existing: string[],
-  threshold = 0.55
+  threshold = 0.42
 ): boolean {
   const hook = candidate.trim();
   if (!hook) return false;
@@ -37,6 +82,17 @@ export function isHookTooSimilar(
     const other = entry.trim();
     if (!other) return false;
     if (other.toLowerCase() === hook.toLowerCase()) return true;
+
+    // Mesmo padrão de abertura (ex.: "Sumérgete en la")
+    if (openerTemplateMatches(hook, other, 3)) return true;
+    if (openerPrefixOverlap(hook, other, 4) >= 3) return true;
+
+    // Abridores curtos já listados como sinal anti-repetição
+    const otherWords = other.split(/\s+/).filter(Boolean).length;
+    if (otherWords <= 8 && openerPrefixOverlap(hook, other, 6) >= 4) {
+      return true;
+    }
+
     return captionHookSimilarity(hook, other) >= threshold;
   });
 }
