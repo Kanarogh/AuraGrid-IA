@@ -12,6 +12,22 @@ export const MATCH_SHORTLIST_TOP_K = 12;
 export const STRICT_RANKER_MIN_SCORE = 82;
 export const STRICT_RANKER_MIN_GAP = 20;
 
+function envInt(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+/** Banda de confiança média — anexa match provável quando o estrito não bate. */
+export function getMediumRankerMinScore(): number {
+  return envInt("MEDIUM_RANKER_MIN_SCORE", 60);
+}
+
+export function getMediumRankerMinGap(): number {
+  return envInt("MEDIUM_RANKER_MIN_GAP", 8);
+}
+
 export type CatalogProfilePayload = {
   id: string;
   label: string;

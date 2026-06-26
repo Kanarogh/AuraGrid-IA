@@ -13,7 +13,12 @@ import {
   shortlistHeaderValue,
   type PreparedMatchInput,
 } from "./matchPipeline";
-import { evaluateRankerMatch } from "./matchRankerDecision";
+import { evaluateRankerMatch, assessRankerCandidate } from "./matchRankerDecision";
+import { extractMatchedGarmentDetails } from "./catalogProfileV2";
+import {
+  buildMatchDiagnostics,
+  type MatchDiagnostics,
+} from "./matchDiagnostics";
 import type { AiMatchOperation, CatalogProfilePayload } from "./operations";
 import type { AiProviderId, MatchGenerateInput, MatchGenerateResult } from "./types";
 
@@ -24,6 +29,7 @@ export type MatchOperationResult = {
   modelUsed: string;
   strategy: MatchStrategy;
   attempts: FallbackOutcome<MatchGenerateResult>["attempts"];
+  diagnostics: MatchDiagnostics;
 };
 
 function stripServerOnlyFields(input: MatchGenerateInput): MatchGenerateInput {
@@ -37,8 +43,12 @@ async function runCaptionOnly(
   providerId: AiProviderId
 ): Promise<{ caption: string; providerUsed: AiProviderId }> {
   const candidates = prepared.input.catalogProfiles ?? [];
-  const matchedLabel = matchedId
-    ? candidates.find((c) => c.id === matchedId)?.label
+  const matched = matchedId
+    ? candidates.find((c) => c.id === matchedId)
+    : undefined;
+  const matchedLabel = matched?.label;
+  const matchedGarment = matched
+    ? extractMatchedGarmentDetails(matched.profile)
     : undefined;
 
   const outcome = await runVisionWithFallback(
@@ -51,6 +61,7 @@ async function runCaptionOnly(
         repeatingText: prepared.input.repeatingText,
         sceneContext: prepared.input.sceneContext,
         matchedCatalogLabel: matchedLabel,
+        matchedGarment,
         regenerateCaption: prepared.input.regenerateCaption,
         recentHooks: prepared.input.recentHooks,
       }),
@@ -87,13 +98,15 @@ export async function runMatchOperation(
       (provider) => provider.matchAndGenerate(sanitized),
       providerId
     );
+    const prepared: PreparedMatchInput = { input: sanitized };
     return {
       result: outcome.result,
-      prepared: { input: sanitized },
+      prepared,
       providerUsed: outcome.providerUsed,
       modelUsed,
       strategy: "image-only",
       attempts: outcome.attempts,
+      diagnostics: buildMatchDiagnostics(outcome.result, prepared, []),
     };
   }
 
@@ -130,6 +143,7 @@ export async function runMatchOperation(
           modelUsed,
           strategy: "ranker-fast",
           attempts: [],
+          diagnostics: buildMatchDiagnostics(result, prepared, candidates),
         };
       }
 
@@ -151,6 +165,7 @@ export async function runMatchOperation(
         modelUsed,
         strategy: "ranker-fast",
         attempts: [],
+        diagnostics: buildMatchDiagnostics(result, prepared, candidates),
       };
     }
   }
@@ -206,6 +221,7 @@ export async function runMatchOperation(
           modelUsed,
           strategy: "text-only",
           attempts: outcome.attempts,
+          diagnostics: buildMatchDiagnostics(result, prepared, candidates),
         };
       }
 
@@ -245,6 +261,12 @@ export async function runMatchOperation(
     };
   }
 
+  const rejectReasons: string[] = [];
+  if (fingerprint && result.matchedId) {
+    const assessment = assessRankerCandidate(fingerprint, candidates, result.matchedId);
+    if (assessment) rejectReasons.push(...assessment.rejectReasons);
+  }
+
   return {
     result,
     prepared,
@@ -252,6 +274,7 @@ export async function runMatchOperation(
     modelUsed,
     strategy: "vision-legacy",
     attempts: outcome.attempts,
+    diagnostics: buildMatchDiagnostics(result, prepared, candidates, rejectReasons),
   };
 }
 

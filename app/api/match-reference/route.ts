@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
         reasoning: operation.result.reasoning,
         matchMode: operation.result.matchMode,
         providerUsed: operation.providerUsed,
+        matchDiagnostics: operation.diagnostics,
       },
       { headers }
     );

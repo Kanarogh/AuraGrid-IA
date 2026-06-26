@@ -45,6 +45,7 @@ import {
   PlannedPost,
   CanvaGridPage,
   CanvaGridSlot,
+  MatchDiagnostics,
 } from "./types";
 import { isAbortError, catalogReadyForTextMatch } from "./lib/catalogEnrichment";
 import { useClientWorkspace } from "./context/ClientWorkspaceContext";
@@ -2196,8 +2197,8 @@ export default function App() {
     try {
       const imageOnly = !usesReferencesRef.current || !!post.captionFromImageOnly;
       const processedPostImage = await preparePostImageForAi(post.image, {
-        maxSide: imageOnly ? 1280 : 768,
-        quality: imageOnly ? 0.88 : 0.8,
+        maxSide: imageOnly ? 1280 : 2048,
+        quality: imageOnly ? 0.88 : 0.9,
       });
 
       if (controller.signal.aborted) return {};
@@ -2298,7 +2299,8 @@ export default function App() {
         reasoning: string | null,
         providerUsed?: string,
         matchMode?: string,
-        captionModel?: string | null
+        captionModel?: string | null,
+        matchDiagnostics?: MatchDiagnostics | null
       ) => {
         setPosts((prev) =>
           prev.map((p) =>
@@ -2317,6 +2319,10 @@ export default function App() {
                   error: null,
                   captionFromSchedule: false,
                   captionModel: captionModel ?? null,
+                  matchDiagnostics:
+                    imageOnly || !usesReferencesRef.current
+                      ? null
+                      : (matchDiagnostics ?? null),
                 }
               : p
           )
@@ -2372,6 +2378,7 @@ export default function App() {
         providerUsed?: string;
         matchMode?: string;
         modelUsed?: string;
+        matchDiagnostics?: MatchDiagnostics | null;
       }> => {
         const response = await aiQueue.enqueue(
           captionQueueLabel(postId, post.dayNumber),
@@ -2394,6 +2401,7 @@ export default function App() {
           caption?: string;
           error?: string;
           modelUsed?: string;
+          matchDiagnostics?: MatchDiagnostics | null;
         }>(response);
 
         if (!response.ok) {
@@ -2420,6 +2428,7 @@ export default function App() {
           providerUsed,
           matchMode,
           modelUsed,
+          matchDiagnostics: result.matchDiagnostics ?? null,
         };
       };
 
@@ -2470,7 +2479,8 @@ export default function App() {
         result.reasoning,
         result.providerUsed,
         result.matchMode,
-        result.modelUsed
+        result.modelUsed,
+        result.matchDiagnostics ?? null
       );
       return { quotaExceeded: false };
     } catch (error: unknown) {
@@ -2689,11 +2699,20 @@ export default function App() {
           captionParams: brandGem.captionParams,
         });
 
+        const updatedDiagnostics: MatchDiagnostics | null = p.matchDiagnostics
+          ? {
+              ...p.matchDiagnostics,
+              chosenId: catalogId,
+              chosenLabel: targetRefLabel,
+            }
+          : null;
+
         return {
           ...p,
           matchedCatalogId: catalogId,
           caption: revisedCaption,
-          isConfirmed: false
+          isConfirmed: false,
+          matchDiagnostics: updatedDiagnostics,
         };
       }
       return p;

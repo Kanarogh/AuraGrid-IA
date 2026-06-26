@@ -22,6 +22,7 @@ import { cn } from "../../lib/cn";
 import { Button } from "../ui/Button";
 import { InstagramPhonePreview } from "./InstagramPhonePreview";
 import { AiErrorBanner } from "../shared/AiErrorBanner";
+import { MatchConfidencePanel } from "./MatchConfidencePanel";
 
 export function PostDayStudio({
   post,
@@ -349,6 +350,15 @@ export function PostDayStudio({
               )}
             </Button>
           </div>
+
+          {showReferenceControls && post.matchDiagnostics && !post.captionFromImageOnly && (
+            <MatchConfidencePanel
+              diagnostics={post.matchDiagnostics}
+              referenceCatalog={referenceCatalog}
+              currentMatchedId={post.matchedCatalogId}
+              onSelectCandidate={(id) => onSelectReference(id)}
+            />
+          )}
 
           {post.structuredCopy && (
             <details className="group rounded-xl border border-ag-accent/25 bg-ag-accent/5 open:bg-ag-accent/10 mb-3" open>

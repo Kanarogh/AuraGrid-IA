@@ -247,15 +247,43 @@ export function buildCaptionOnlyTask(input: CaptionOnlyInput, gem?: BrandGemConf
   const refLine = input.matchedCatalogLabel
     ? `\nMatched catalog reference (for tone/context only, do NOT write "Referência:" in caption): "${input.matchedCatalogLabel}"`
     : "";
+  const garmentBlock = buildMatchedGarmentBlock(input.matchedGarment);
 
   return `You are an expert social media copywriter for "${brandLabel(gem)}".
 
 TASK — CAPTION ONLY (match already decided):
 1. Inspect the TARGET POST IMAGE.
 2. Write block 1 (main hook) per BRAND GEM rules below.
-3. Do NOT perform catalog matching — matchedId is not part of this step.${refLine}
+3. Do NOT perform catalog matching — matchedId is not part of this step.${refLine}${garmentBlock}
 
 TARGET POST IMAGE:`;
+}
+
+/** Detalhes da peça casada para ancorar o gancho em traços específicos. */
+export function buildMatchedGarmentBlock(
+  garment?: CaptionOnlyInput["matchedGarment"]
+): string {
+  if (!garment) return "";
+  const parts: string[] = [];
+  if (garment.motif) parts.push(`motif: ${garment.motif}`);
+  if (garment.layout) parts.push(`layout: ${garment.layout}`);
+  if (garment.back) parts.push(`back: ${garment.back}`);
+  if (garment.neck) parts.push(`neck: ${garment.neck}`);
+  if (garment.sleeve) parts.push(`sleeve: ${garment.sleeve}`);
+  if (garment.len) parts.push(`length: ${garment.len}`);
+  if (garment.skirt) parts.push(`skirt: ${garment.skirt}`);
+  if (garment.silhouette) parts.push(`silhouette: ${garment.silhouette}`);
+  if (garment.colors?.length) parts.push(`colors: ${garment.colors.join(", ")}`);
+  if (garment.anchors?.length) parts.push(`anchors: ${garment.anchors.join(", ")}`);
+
+  if (parts.length === 0) return "";
+
+  return `
+
+MATCHED GARMENT DETAILS (use ONE concrete trait in the hook — fabric/print/back/silhouette — instead of generic adjectives):
+${parts.map((p) => `- ${p}`).join("\n")}
+- Pick a DIFFERENT detail from previous captions in this session to vary the angle.
+- Do NOT list these tokens raw in the caption; weave them into natural marketing language matching the GEM tone.`;
 }
 
 export function buildCaptionOnlyResultInstructions(

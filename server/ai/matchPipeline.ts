@@ -16,6 +16,8 @@ import {
   MATCH_SHORTLIST_TOP_K,
   STRICT_RANKER_MIN_GAP,
   STRICT_RANKER_MIN_SCORE,
+  getMediumRankerMinGap,
+  getMediumRankerMinScore,
   type CatalogProfilePayload,
 } from "./operations";
 import type { MatchGenerateInput, MatchGenerateResult, AiProviderId, MatchRankHint } from "./types";
@@ -220,6 +222,35 @@ export function applyStrictRankerMatchFallback(
   return validateMatchDecision(fallbackResult, fingerprint, candidates);
 }
 
+/**
+ * Quando o LLM e o ranker estrito não acharam match, mas existe um candidato com
+ * pontuação medianamente alta, anexa-o como "confiança média" para o usuário
+ * confirmar/trocar. Não sobrescreve match estrito.
+ */
+export function applyMediumRankerMatchFallback(
+  result: MatchGenerateResult,
+  hint: MatchRankHint | null | undefined,
+  candidates: CatalogProfilePayload[]
+): MatchGenerateResult {
+  if (result.matchedId || !hint) return result;
+  const minScore = getMediumRankerMinScore();
+  const minGap = getMediumRankerMinGap();
+  if (hint.score < minScore || hint.scoreGap < minGap) return result;
+  if (!candidates.some((c) => c.id === hint.candidateId)) return result;
+
+  return {
+    ...result,
+    matchedId: hint.candidateId,
+    reasoning: result.reasoning
+      ? `${result.reasoning}\n\n[Match provável — confiança média] Referência "${hint.candidateLabel}" (score ${hint.score}, gap ${hint.scoreGap}). Confirme ou troque manualmente.`
+      : `[Match provável — confiança média] Referência "${hint.candidateLabel}" (score ${hint.score}, gap ${hint.scoreGap}). Confirme ou troque manualmente.`,
+    matchMode:
+      result.matchMode === "catalog_json" || result.matchMode === "catalog_json_shortlist"
+        ? "catalog_json_ranker"
+        : result.matchMode,
+  };
+}
+
 export function finalizeMatchResult(
   result: MatchGenerateResult,
   prepared: PreparedMatchInput,
@@ -233,6 +264,7 @@ export function finalizeMatchResult(
     prepared.postFingerprint
   );
   finalized = validateMatchDecision(finalized, prepared.postFingerprint, candidates);
+  finalized = applyMediumRankerMatchFallback(finalized, prepared.matchRankHint, candidates);
   return finalized;
 }
 

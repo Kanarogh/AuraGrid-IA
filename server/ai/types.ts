@@ -123,6 +123,20 @@ export interface MatchReferenceResult {
     | "catalog_images";
 }
 
+/** Detalhes compactos da peça casada — usados no prompt para ancorar a legenda em traços específicos. */
+export interface MatchedGarmentDetails {
+  motif?: string;
+  layout?: string;
+  back?: string;
+  neck?: string;
+  sleeve?: string;
+  len?: string;
+  skirt?: string;
+  silhouette?: string;
+  colors?: string[];
+  anchors?: string[];
+}
+
 export interface CaptionOnlyInput {
   postImage: string;
   brandGem?: BrandGemPayload;
@@ -130,6 +144,7 @@ export interface CaptionOnlyInput {
   repeatingText?: BrandGemPayload["footer"];
   sceneContext?: MatchGenerateInput["sceneContext"];
   matchedCatalogLabel?: string;
+  matchedGarment?: MatchedGarmentDetails;
   regenerateCaption?: boolean;
   recentHooks?: string[];
 }

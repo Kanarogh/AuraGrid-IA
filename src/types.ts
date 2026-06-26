@@ -118,6 +118,31 @@ export interface ContentScheduleItem extends StructuredPostCopy {
   linkedPostId?: string;
 }
 
+export type MatchConfidence = "high" | "medium" | "low" | "none";
+
+export interface MatchCandidateSummary {
+  id: string;
+  label: string;
+  score: number;
+  pattern: number;
+  anchors: number;
+  penalty: number;
+}
+
+export interface MatchDiagnostics {
+  confidence: MatchConfidence;
+  chosenId: string | null;
+  chosenLabel: string | null;
+  chosenScore: number | null;
+  scoreGap: number | null;
+  topCandidates: MatchCandidateSummary[];
+  rejectReasons: string[];
+  thresholds: {
+    strict: { minScore: number; minGap: number };
+    medium: { minScore: number; minGap: number };
+  };
+}
+
 export interface PlannedPost {
   id: string;
   dayNumber: number;
@@ -141,6 +166,8 @@ export interface PlannedPost {
   captionFromSchedule?: boolean;
   /** Modelo Gemini usado na última geração/refino da legenda */
   captionModel?: string | null;
+  /** Diagnóstico do último match (confiança, top candidatos, motivo de rejeição) */
+  matchDiagnostics?: MatchDiagnostics | null;
 }
 
 export interface CanvaGridSlot {

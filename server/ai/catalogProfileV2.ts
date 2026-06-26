@@ -121,25 +121,36 @@ export function buildEnrichCatalogPrompt(label: string, id: string): string {
 
 Output JSON v2 ONLY. Keywords in kebab-case (e.g. dusty-teal, geometric-medallion, open-cross-straps). NO sentences.
 
-GARMENT (for strict SKU visual match):
+GARMENT (for strict SKU visual match — be DISCRIMINATIVE, focus on what is unique to THIS SKU):
 - type: dress|top|set|saree|skirt|other
-- colors: 1-2 specific shades
+- colors: 1-2 specific shades (e.g. dusty-teal, off-white-cream — NOT generic "blue"/"white")
 - temp: warm|cool|neutral
-- motif: unique print id (tie-dye-horizontal, floral-ditsy, geometric-medallion, solid)
+- motif: unique print id (tie-dye-horizontal, floral-ditsy, geometric-medallion, paisley-vertical, solid)
 - layout: horizontal|vertical|radial|placement|all-over|solid|other
 - scale: solid|micro|small|medium|large|all-over|other
 - back: halter-tie|open-cross|low-open|full|unknown
 - neck, sleeve, len (mini|knee|midi|maxi|...), skirt, sil
-- anchors: 4-6 short tokens verifiable in photo (print + back + construction)
-- not: 2-4 tokens for similar SKUs this is NOT (e.g. tie-dye-bands)
+- anchors: 6-8 short kebab tokens VERIFIABLE in photo. MUST include:
+    1. print motif token (e.g. medallion-symmetric, tie-dye-horizontal-band)
+    2. back-detail token (open-cross-straps, halter-tie, full-closed)
+    3. construction token (tiered-3-layers, ruffle-hem, pleated, godet)
+    4. neckline token (v-neck-deep, square-neck, halter)
+    5. trim/closure if visible (tassel-tie, button-front, side-zip, no-closure)
+    6. fabric/texture token (lightweight-rayon, embroidered-cotton, crepe-flowy)
+- not: 3-5 tokens — adjacent SKUs this is explicitly NOT (e.g. tie-dye-bands, floral-ditsy, mini-length)
 
-SCENE (background/place):
+SCENE (background/place — caption only, not for match):
 - setting: studio|beach|street|garden|indoor|urban|nature|cafe|home|other
 - tags: 2-5 tokens (white-bg, sand, palm-trees, brick-wall)
 - light: natural|golden-hour|overcast|studio-flash|shade|other
 - mood: optional 1-2 tokens (boho, minimal, editorial)
 
 If plain white/neutral product photo: setting=studio, tags include white-bg.
+
+CRITICAL:
+- Every "anchors" token MUST be observable in the photo — do NOT guess.
+- "not" tokens must be SHORT and SPECIFIC — they prevent confusion with sibling SKUs.
+- When two SKUs share color family, motif + back + construction decide the match — describe them precisely.
 
 JSON shape:
 {
@@ -412,6 +423,55 @@ export function finalizeCatalogProfile(
   const profile = coerceCatalogProfile(raw, label);
   assertCatalogProfileComplete(profile);
   return profile as unknown as Record<string, unknown>;
+}
+
+/** Detalhes do perfil v2 usados no prompt de legenda para ancorar o gancho. */
+export function extractMatchedGarmentDetails(
+  profile: Record<string, unknown> | undefined
+): {
+  motif?: string;
+  layout?: string;
+  back?: string;
+  neck?: string;
+  sleeve?: string;
+  len?: string;
+  skirt?: string;
+  silhouette?: string;
+  colors?: string[];
+  anchors?: string[];
+} | undefined {
+  if (!profile) return undefined;
+  const p = coerceCatalogProfile(profile, "");
+  const g = p.garment;
+  const colors = g.colors?.filter(Boolean) ?? [];
+  const anchors = g.anchors?.slice(0, 6).filter(Boolean) ?? [];
+
+  const hasAnything =
+    g.motif ||
+    g.layout ||
+    g.back ||
+    g.neck ||
+    g.sleeve ||
+    g.len ||
+    g.skirt ||
+    g.sil ||
+    colors.length ||
+    anchors.length;
+
+  if (!hasAnything) return undefined;
+
+  return {
+    motif: g.motif,
+    layout: g.layout,
+    back: g.back,
+    neck: g.neck,
+    sleeve: g.sleeve,
+    len: g.len,
+    skirt: g.skirt,
+    silhouette: g.sil,
+    colors: colors.length ? colors : undefined,
+    anchors: anchors.length ? anchors : undefined,
+  };
 }
 
 /** JSON mínimo enviado ao match (economia de tokens). */

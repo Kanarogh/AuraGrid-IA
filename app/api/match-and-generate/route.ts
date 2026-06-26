@@ -84,6 +84,7 @@ export async function POST(req: NextRequest) {
         ...operation.result,
         providerUsed: operation.providerUsed,
         modelUsed: operation.modelUsed,
+        matchDiagnostics: operation.diagnostics,
       },
       { headers }
     );
