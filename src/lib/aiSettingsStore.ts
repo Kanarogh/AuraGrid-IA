@@ -193,6 +193,26 @@ export async function changeGeminiReferenceModel(referenceModel: string | null):
   }
 }
 
+export async function resetClientGeminiModelsToEnv(): Promise<void> {
+  setState({ saving: true, error: null });
+  try {
+    const settings = await setGeminiModels({
+      planningModel: null,
+      indexingModel: null,
+      contentScheduleModel: null,
+      referenceModel: null,
+    });
+    const health = await fetchHealth();
+    setState({ settings, health, saving: false });
+  } catch (err) {
+    setState({
+      saving: false,
+      error: err instanceof Error ? err.message : "Falha ao restaurar defaults do .env.",
+    });
+    throw err;
+  }
+}
+
 export function noteLastProviderUsed(provider: string | null | undefined) {
   if (provider === "gemini") {
     setState({ lastProviderUsed: provider });

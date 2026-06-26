@@ -37,12 +37,17 @@ export function AiProviderPanel() {
         </Alert>
       )}
 
-      {activeProviderOption && (
+      {activeProviderOption && settings && (
         <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono">
           <Badge tone={activeProviderOption.configured ? "success" : "danger"} dot>
             {activeProviderOption.configured ? "Chave OK" : "Sem chave"}
           </Badge>
-          <span className="text-ag-muted truncate max-w-full">Modelo: {activeProviderOption.model}</span>
+          <span className="text-ag-muted truncate max-w-full">
+            Planejamento: {settings.gemini.activePlanningModel}
+            {settings.gemini.activeIndexingModel !== settings.gemini.activePlanningModel
+              ? ` · Indexação: ${settings.gemini.activeIndexingModel}`
+              : ""}
+          </span>
         </div>
       )}
 

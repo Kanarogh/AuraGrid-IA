@@ -60,6 +60,7 @@ export function GeminiModelPicker({
     setGeminiIndexingModel,
     setGeminiContentScheduleModel,
     setGeminiReferenceModel,
+    resetModelsToEnv,
   } = useAiSettings();
   if (!settings) return null;
 
@@ -71,6 +72,12 @@ export function GeminiModelPicker({
   const activeReference = availableModels.find((m) => m.id === gemini.activeReferenceModel);
   const activeSchedule = availableModels.find((m) => m.id === gemini.activeContentScheduleModel);
   const isDisabled = disabled || saving;
+  const usesClientOverrides = !!(
+    gemini.runtimePlanningModel ||
+    gemini.runtimeIndexingModel ||
+    gemini.runtimeReferenceModel ||
+    gemini.runtimeContentScheduleModel
+  );
   const selectClass =
     variant === "popover"
       ? "w-full text-[11px] px-2 py-1.5 rounded-md border border-ag-border bg-ag-surface-2 text-ag-text cursor-pointer"
@@ -180,16 +187,35 @@ export function GeminiModelPicker({
     <div className="space-y-3 rounded-lg border border-ag-border bg-ag-surface-1 px-3 py-2">
       <div className="flex items-center justify-between gap-2">
         <FieldLabel>Modelos Gemini</FieldLabel>
-        <a
-          href={GEMINI_DOCS_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-0.5 text-[10px] text-ag-muted hover:text-ag-accent"
-        >
-          Ver no Google AI
-          <ExternalLink className="h-3 w-3" />
-        </a>
+        <div className="flex items-center gap-2">
+          {usesClientOverrides && (
+            <button
+              type="button"
+              disabled={isDisabled}
+              onClick={() => void resetModelsToEnv()}
+              className="text-[10px] font-semibold text-ag-accent hover:underline disabled:opacity-50"
+            >
+              Usar defaults do .env
+            </button>
+          )}
+          <a
+            href={GEMINI_DOCS_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-0.5 text-[10px] text-ag-muted hover:text-ag-accent"
+          >
+            Ver no Google AI
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
       </div>
+
+      {usesClientOverrides && (
+        <p className="text-[10px] text-ag-muted leading-snug">
+          Escolhas salvas neste cliente prevalecem sobre o <code className="text-[9px]">.env</code>.
+          Use &quot;Usar defaults do .env&quot; para sincronizar com o servidor.
+        </p>
+      )}
 
       <div className="space-y-1.5">
         <p className="text-[10px] font-medium text-ag-text">Planejamento (legendas e refino)</p>

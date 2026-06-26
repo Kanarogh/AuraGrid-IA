@@ -2,12 +2,13 @@
 import type { AiProviderId } from "../lib/aiSettings";
 import {
   changeAiProvider,
+  changeGeminiCatalogModel,
   changeGeminiContentScheduleModel,
   changeGeminiIndexingModel,
   changeGeminiModel,
   changeGeminiPlanningModel,
   changeGeminiReferenceModel,
-  changeGeminiCatalogModel,
+  resetClientGeminiModelsToEnv,
   getActiveModelLabel,
   getActiveProviderOption,
   getApiStatusLabel,
@@ -35,6 +36,7 @@ export function useAiSettings() {
     setGeminiIndexingModel: changeGeminiIndexingModel,
     setGeminiContentScheduleModel: changeGeminiContentScheduleModel,
     setGeminiReferenceModel: changeGeminiReferenceModel,
+    resetModelsToEnv: resetClientGeminiModelsToEnv,
   };
 }
 
