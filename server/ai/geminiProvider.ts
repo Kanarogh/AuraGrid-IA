@@ -134,12 +134,18 @@ export const geminiProvider: AiProvider = {
     return normalizePostFingerprint(JSON.parse(rawText) as Record<string, unknown>);
   },
 
-  async enrichCatalogItem({ image, label, id, siblingCandidates, deepIndexing }: CatalogEnrichInput) {
+  async enrichCatalogItem({ image, label, id, siblingCandidates, deepIndexing, onProgress }: CatalogEnrichInput) {
+    const report = (phase: string, itemPercent: number, stepLabel?: string) => {
+      onProgress?.({ phase, itemPercent, stepLabel });
+    };
+
     const ai = getClient();
+    report("analyze", 20);
     const shrunk = await shrinkImageDataUrlForVision(image, {
       maxSide: 1536,
       quality: 0.88,
     });
+    report("analyze", 26);
     let modelUsed = getGeminiIndexingModel();
 
     const phaseAResponse = await callGeminiIndexing(
@@ -159,6 +165,7 @@ export const geminiProvider: AiProvider = {
         }),
       { onSuccess: (model) => (modelUsed = model) }
     );
+    report("analyze", 48);
     await trackGeminiUsage({
       operation: "enrich_catalog_item",
       model: modelUsed,
@@ -173,6 +180,7 @@ export const geminiProvider: AiProvider = {
 
     if (deepIndexing !== false) {
       const draft = coerceCatalogProfile(phaseARaw, label);
+      report("refine", 52);
       const siblingLabels = siblingCandidates?.length
         ? findSiblingCatalogLabels(
             siblingCandidates.map((c) => ({
@@ -184,6 +192,7 @@ export const geminiProvider: AiProvider = {
             id
           )
         : [];
+      report("refine", 58);
       const critiqueResponse = await callGeminiIndexing(
         getGeminiIndexingModel(),
         "Gemini enrich phase B",
@@ -208,6 +217,7 @@ export const geminiProvider: AiProvider = {
           }),
         { onSuccess: (model) => (modelUsed = model) }
       );
+      report("refine", 82);
       await trackGeminiUsage({
         operation: "enrich_catalog_critique",
         model: modelUsed,
@@ -217,8 +227,11 @@ export const geminiProvider: AiProvider = {
       if (critiqueText) {
         critique = JSON.parse(critiqueText) as CatalogSelfCritique;
       }
+    } else {
+      report("refine", 82);
     }
 
+    report("save", 84);
     const { profile } = finalizeDeepCatalogProfile(phaseARaw, critique, label);
     return profile;
   },

@@ -273,12 +273,9 @@ export async function stopEnrichCatalogApi(clientId: string) {
   return readApiJson(res);
 }
 
-export type CatalogEnrichProgress = {
-  index: number;
-  total: number;
-  itemId: string;
-  label: string;
-};
+import type { CatalogEnrichProgressDetail } from "../../lib/enrichProgressStages";
+
+export type CatalogEnrichProgress = CatalogEnrichProgressDetail;
 
 export async function fetchEnrichStatusApi(clientId: string) {
   const res = await apiFetch(`/api/v1/clients/${clientId}/catalog/enrich/status`);

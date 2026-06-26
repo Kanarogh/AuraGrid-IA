@@ -29,6 +29,12 @@ export interface AiHealthResponse {
   circuitBreaker?: Record<AiProviderId, AiCircuitState>;
 }
 
+export type CatalogEnrichProgressStep = {
+  phase: string;
+  itemPercent: number;
+  stepLabel?: string;
+};
+
 export interface CatalogEnrichInput {
   image: string;
   label: string;
@@ -37,6 +43,8 @@ export interface CatalogEnrichInput {
   siblingCandidates?: Array<{ id: string; label: string; profile: Record<string, unknown> }>;
   /** Quando false, só Fase A (extração). Default true no Gemini. */
   deepIndexing?: boolean;
+  /** Atualiza progresso fino (fases A/B) durante a indexação. */
+  onProgress?: (step: CatalogEnrichProgressStep) => void;
 }
 
 export type BrandGemPayload = {

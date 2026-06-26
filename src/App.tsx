@@ -220,6 +220,7 @@ import {
 import { syncDebugLog } from "./lib/sync/syncDebugLog";
 import { ContentScheduleWorkspace } from "./components/contentSchedule/ContentScheduleWorkspace";
 import { CatalogEnrichProgressPanel } from "./components/catalog/CatalogEnrichProgressPanel";
+import { CatalogEnrichImageOverlay } from "./components/catalog/CatalogEnrichImageOverlay";
 import { CatalogUploadProgressPanel } from "./components/catalog/CatalogUploadProgressPanel";
 
 
@@ -472,8 +473,10 @@ export default function App() {
   });
 
   const catalogEnrichProgressLabel = catalogEnrichProgress
-    ? `Indexando ${catalogEnrichProgress.index}/${catalogEnrichProgress.total} — ${catalogEnrichProgress.label} (um por vez)`
-    : "Indexando… (um por vez, aguarde)";
+    ? `Indexando ${catalogEnrichProgress.index}/${catalogEnrichProgress.total} — ${catalogEnrichProgress.label}${
+        catalogEnrichProgress.stepLabel ? ` · ${catalogEnrichProgress.stepLabel}` : ""
+      }`
+    : "Indexando… (aguarde)";
 
   const captionBatchStats = useMemo(
     () => getCaptionBatchStats(posts, catalog, usesReferences),
@@ -4049,6 +4052,9 @@ export default function App() {
                   const isIndexingThis =
                     item.enrichmentStatus === "processing" ||
                     (isEnrichingCatalog && catalogEnrichProgress?.itemId === item.id);
+                  const enrichOverlayActive = isIndexingThis;
+                  const enrichOverlayProgress =
+                    catalogEnrichProgress?.itemId === item.id ? catalogEnrichProgress : null;
 
                   return (
                   <div 
@@ -4061,25 +4067,40 @@ export default function App() {
                     <div className="aspect-[3/4] rounded-xl overflow-hidden relative flex items-center justify-center border transition-colors bg-ag-surface-1 border-ag-border group/img">
                       <button
                         type="button"
-                        disabled={!item.image}
+                        disabled={!item.image || enrichOverlayActive}
                         onClick={() => {
                           if (item.image) {
                             setCatalogLightbox({ image: item.image, label: item.label });
                           }
                         }}
-                        className="w-full h-full flex items-center justify-center p-1.5 cursor-zoom-in disabled:cursor-default focus:outline-none focus-visible:ring-2 focus-visible:ring-ag-accent/50 rounded-xl"
+                        className="w-full h-full flex items-center justify-center p-1.5 cursor-zoom-in disabled:cursor-default focus:outline-none focus-visible:ring-2 focus-visible:ring-ag-accent/50 rounded-xl relative"
                         title="Ampliar imagem"
                       >
-                        <CatalogThumbnail
-                          src={item.image}
-                          alt={item.label}
-                          imgClassName="object-contain pointer-events-none"
-                          priority={index < 12}
-                        />
-                        {item.image && (
-                          <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover/img:bg-black/35 transition-colors opacity-0 group-hover/img:opacity-100 pointer-events-none">
-                            <ZoomIn className="h-6 w-6 text-white drop-shadow-md" />
-                          </span>
+                        {!enrichOverlayActive && (
+                          <>
+                            <CatalogThumbnail
+                              src={item.image}
+                              alt={item.label}
+                              imgClassName="object-contain pointer-events-none"
+                              priority={index < 12}
+                            />
+                            {item.image && (
+                              <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover/img:bg-black/35 transition-colors opacity-0 group-hover/img:opacity-100 pointer-events-none">
+                                <ZoomIn className="h-6 w-6 text-white drop-shadow-md" />
+                              </span>
+                            )}
+                          </>
+                        )}
+                        {enrichOverlayActive && (
+                          <CatalogEnrichImageOverlay
+                            src={item.image}
+                            alt={item.label}
+                            percent={enrichOverlayProgress?.itemPercent}
+                            phase={enrichOverlayProgress?.phase}
+                            resetKey={item.id}
+                            stepLabel={enrichOverlayProgress?.stepLabel ?? "Indexando…"}
+                            priority={index < 12}
+                          />
                         )}
                       </button>
                       

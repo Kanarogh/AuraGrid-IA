@@ -21,6 +21,11 @@ import {
 import { mediaAssetToDataUrl } from "./mediaService";
 import { ensureClientHasActivePeriod, getEffectiveUsesReferences } from "./planningPeriodService";
 import { emitEnrichProgress } from "../sync/emitSyncEvent";
+import {
+  ENRICH_PHASE_LABELS,
+  ENRICH_PHASE_PERCENT,
+  type EnrichProgressPhase,
+} from "@/src/lib/enrichProgressStages";
 
 const ENRICH_DELAY_MS = 5000;
 const ENRICH_RETRY_DELAY_MS = 5000;
@@ -30,6 +35,9 @@ export type EnrichProgress = {
   total: number;
   itemId: string;
   label: string;
+  phase?: EnrichProgressPhase;
+  itemPercent?: number;
+  stepLabel?: string;
 };
 
 const queues = new Map<
@@ -120,6 +128,28 @@ async function runCatalogEnrichmentInner(
     console.info(`[enrich] provedor=${activeProvider} (indexaÃ§Ã£o JSON)`);
 
     const all = await listCatalogItems(clientId);
+
+    const pushProgress = (
+      item: { id: string; label: string },
+      imageIndex: number,
+      total: number,
+      phase: EnrichProgressPhase,
+      itemPercent?: number
+    ) => {
+      const progress: EnrichProgress = {
+        index: imageIndex,
+        total,
+        itemId: item.id,
+        label: item.label,
+        phase,
+        itemPercent: itemPercent ?? ENRICH_PHASE_PERCENT[phase],
+        stepLabel: ENRICH_PHASE_LABELS[phase],
+      };
+      queues.set(key, { running: true, abort, progress });
+      if (userId) {
+        void emitEnrichProgress(userId, clientId, periodId, true, progress);
+      }
+    };
     const targets = itemIds?.length
       ? all.filter((c) => itemIds.includes(c.id) && c.isReference !== false)
       : all.filter(
@@ -139,24 +169,7 @@ async function runCatalogEnrichmentInner(
       if (!item.imageAssetId) continue;
 
       const imageIndex = withImage.findIndex((c) => c.id === item.id) + 1;
-      queues.set(key, {
-        running: true,
-        abort,
-        progress: {
-          index: imageIndex,
-          total,
-          itemId: item.id,
-          label: item.label,
-        },
-      });
-      if (userId) {
-        void emitEnrichProgress(userId, clientId, periodId, true, {
-          index: imageIndex,
-          total,
-          itemId: item.id,
-          label: item.label,
-        });
-      }
+      pushProgress(item, imageIndex, total, "prepare");
 
       await updateCatalogItem(clientId, item.id, {
         visualProfile: null,
@@ -165,7 +178,9 @@ async function runCatalogEnrichmentInner(
       });
 
       try {
+        pushProgress(item, imageIndex, total, "download", 8);
         const image = await mediaAssetToDataUrl(item.imageAssetId);
+        pushProgress(item, imageIndex, total, "download", 14);
         const siblingCandidates = all
           .filter(
             (c) =>
@@ -185,8 +200,18 @@ async function runCatalogEnrichmentInner(
           label: item.label,
           id: item.id,
           siblingCandidates,
+          onProgress: (step: { phase: string; itemPercent: number; stepLabel?: string }) => {
+            pushProgress(
+              item,
+              imageIndex,
+              total,
+              step.phase as EnrichProgressPhase,
+              step.itemPercent
+            );
+          },
         };
 
+        pushProgress(item, imageIndex, total, "analyze", 18);
         let profile;
         try {
           const outcome = await runVisionWithFallback(
@@ -220,6 +245,7 @@ async function runCatalogEnrichmentInner(
 
         if (abort.signal.aborted) return { quotaExceeded, cancelled: true };
 
+        pushProgress(item, imageIndex, total, "save", 86);
         const coerced = coerceCatalogProfile(
           profile as Record<string, unknown>,
           item.label
@@ -232,6 +258,7 @@ async function runCatalogEnrichmentInner(
           enrichedAt: new Date(),
           enrichmentError: null,
         });
+        pushProgress(item, imageIndex, total, "save", 90);
 
         if (
           isMatchEmbeddingEnabled() &&
@@ -239,9 +266,11 @@ async function runCatalogEnrichmentInner(
           (await isPgvectorAvailable())
         ) {
           try {
+            pushProgress(item, imageIndex, total, "embed", 92);
             const profileText = buildCatalogEmbeddingText(coerced);
             const vector = await embedCatalogImage(image, profileText);
             await updateCatalogEmbedding(clientId, item.id, vector);
+            pushProgress(item, imageIndex, total, "embed", 98);
             console.info(`[enrich] embedding ok para ${item.id} (${vector.length}d)`);
           } catch (embedErr) {
             console.warn(
@@ -252,6 +281,8 @@ async function runCatalogEnrichmentInner(
         } else if (isMatchEmbeddingEnabled()) {
           console.warn(`[enrich] embedding ignorado — GEMINI_API_KEY ausente (${item.id})`);
         }
+
+        pushProgress(item, imageIndex, total, "done", 100);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         await updateCatalogItem(clientId, item.id, {

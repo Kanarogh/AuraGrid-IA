@@ -44,12 +44,9 @@ export type RemoteSyncHandlers = {
   ) => Promise<void>;
 };
 
-export type EnrichProgressState = {
-  index: number;
-  total: number;
-  itemId: string;
-  label: string;
-};
+import type { CatalogEnrichProgressDetail } from "../lib/enrichProgressStages";
+
+export type EnrichProgressState = CatalogEnrichProgressDetail;
 
 function isDomainPaused(domain: SyncDomain): boolean {
   if (domain === "workspace" && isWorkspaceSavePending()) return true;

@@ -12,6 +12,9 @@ export type SyncEnrichProgress = {
   total: number;
   itemId: string;
   label: string;
+  phase?: string;
+  itemPercent?: number;
+  stepLabel?: string;
 };
 
 export type SyncEventPayload = {
