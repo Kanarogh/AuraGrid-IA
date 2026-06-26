@@ -5,7 +5,7 @@ import {
   type BrandGemConfig,
 } from "./brandContext";
 import { getGeminiContentScheduleModel } from "./config";
-import { withRetry } from "./shared";
+import { callGeminiPlanning } from "./geminiRetry";
 import {
   buildContentScheduleRefineTask,
   buildContentScheduleResultInstructions,
@@ -149,9 +149,10 @@ export async function generateContentSchedule(input: {
   assertBrandGemReadyForCaptions(gem);
 
   const ai = getClient();
-  const model = getGeminiContentScheduleModel();
-  const response = await withRetry(
-    () =>
+  const response = await callGeminiPlanning(
+    getGeminiContentScheduleModel(),
+    "Gemini content schedule",
+    (model) =>
       ai.models.generateContent({
         model,
         contents: [
@@ -162,8 +163,7 @@ export async function generateContentSchedule(input: {
           responseMimeType: "application/json",
           responseSchema: CONTENT_SCHEDULE_JSON_SCHEMA,
         },
-      }),
-    "Gemini"
+      })
   );
 
   const parsed = JSON.parse(response.text || "{}") as { items?: RawItem[] };
@@ -181,9 +181,10 @@ export async function refineContentScheduleItem(input: {
   assertBrandGemReadyForCaptions(gem);
 
   const ai = getClient();
-  const model = getGeminiContentScheduleModel();
-  const response = await withRetry(
-    () =>
+  const response = await callGeminiPlanning(
+    getGeminiContentScheduleModel(),
+    "Gemini content schedule refine",
+    (model) =>
       ai.models.generateContent({
         model,
         contents: [
@@ -206,8 +207,7 @@ export async function refineContentScheduleItem(input: {
             required: ["item"],
           },
         },
-      }),
-    "Gemini"
+      })
   );
 
   const parsed = JSON.parse(response.text || "{}") as { item?: RawItem };

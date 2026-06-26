@@ -81,11 +81,31 @@ export function isGroqPayloadTooLarge(_error: unknown): boolean {
   return false;
 }
 
+export function isGeminiTransientError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  return /503|UNAVAILABLE|high demand|overloaded|temporarily unavailable|429|rate.?limit/i.test(
+    msg
+  );
+}
+
 export function shouldRetryAiError(error: unknown): boolean {
   if (isQuotaExhausted(error)) return false;
-  const msg = error instanceof Error ? error.message : String(error);
-  if (/429|rate.?limit/i.test(msg)) return true;
+  if (isGeminiTransientError(error)) return true;
   return parseRetrySeconds(error) !== null;
+}
+
+const MAX_RETRY_WAIT_SEC = 25;
+
+function retryWaitSeconds(error: unknown, attempt: number): number {
+  const requested = parseRetrySeconds(error);
+  if (requested !== null) return Math.min(requested, MAX_RETRY_WAIT_SEC);
+
+  const msg = error instanceof Error ? error.message : String(error);
+  if (/503|UNAVAILABLE|high demand|overloaded|temporarily unavailable/i.test(msg)) {
+    return Math.min(2 ** attempt, MAX_RETRY_WAIT_SEC);
+  }
+  if (/429|rate.?limit/i.test(msg)) return Math.min(15, MAX_RETRY_WAIT_SEC);
+  return 15;
 }
 
 export async function sleep(ms: number): Promise<void> {
@@ -115,6 +135,10 @@ export function formatAiError(error: unknown, provider: AiProviderId): string {
     return `Modelo indisponível no ${label}. Escolha outro modelo Gemini no painel IA.`;
   }
 
+  if (/503|UNAVAILABLE|high demand/i.test(raw)) {
+    return `${label} sobrecarregado no momento (503). Tente de novo em alguns minutos ou use outro modelo em Configurações > IA.`;
+  }
+
   if (kind === "quota_exhausted" || kind === "rate_limit") {
     const hint = kind === "quota_exhausted" ? "Cota esgotada" : `Rate limit (${failureKindLabel(kind)})`;
     return `${hint} — API ${label}. Aguarde o reset. Detalhe: ${raw.slice(0, 160)}…`;
@@ -128,8 +152,6 @@ export function formatAiError(error: unknown, provider: AiProviderId): string {
   return raw || `Falha na chamada à API ${label}.`;
 }
 
-const MAX_RETRY_WAIT_SEC = 25;
-
 export async function withRetry<T>(fn: () => Promise<T>, label: string, maxAttempts = 3): Promise<T> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -138,13 +160,12 @@ export async function withRetry<T>(fn: () => Promise<T>, label: string, maxAttem
     } catch (err) {
       lastError = err;
       if (!shouldRetryAiError(err) || attempt >= maxAttempts) throw err;
-      const requested = parseRetrySeconds(err) ?? 15;
-      if (requested > MAX_RETRY_WAIT_SEC) {
-        console.warn(`${label} pediu retry em ${requested}s (> ${MAX_RETRY_WAIT_SEC}s) — abortando retries.`);
+      const waitSec = retryWaitSeconds(err, attempt);
+      if (waitSec > MAX_RETRY_WAIT_SEC) {
+        console.warn(`${label} pediu retry em ${waitSec}s (> ${MAX_RETRY_WAIT_SEC}s) — abortando retries.`);
         throw err;
       }
-      const waitSec = Math.min(requested, MAX_RETRY_WAIT_SEC);
-      console.warn(`${label} rate limit — retry in ${waitSec}s (attempt ${attempt})`);
+      console.warn(`${label} indisponível — retry in ${waitSec}s (attempt ${attempt})`);
       await sleep(waitSec * 1000);
     }
   }

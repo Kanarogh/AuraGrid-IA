@@ -31,7 +31,8 @@ import {
   buildPostFingerprintPrompt,
   normalizePostFingerprint,
 } from "./postFingerprint";
-import { cleanBase64, withRetry } from "./shared";
+import { callGeminiIndexing, callGeminiPlanning } from "./geminiRetry";
+import { cleanBase64 } from "./shared";
 import type {
   AiProvider,
   CaptionOnlyInput,
@@ -59,9 +60,11 @@ export const geminiProvider: AiProvider = {
 
   async analyzePostVisual({ postImage, purpose }) {
     const ai = getClient();
-    const model = purpose === "reference" ? getGeminiReferenceModel() : getGeminiPlanningModel();
-    const response = await withRetry(
-      () =>
+    const primaryModel = purpose === "reference" ? getGeminiReferenceModel() : getGeminiPlanningModel();
+    const response = await callGeminiPlanning(
+      primaryModel,
+      "Gemini fingerprint",
+      (model) =>
         ai.models.generateContent({
           model,
           contents: [
@@ -87,8 +90,7 @@ export const geminiProvider: AiProvider = {
               required: ["garmentType", "dominantColorFamily", "primaryColors", "visibleAnchors"],
             },
           },
-        }),
-      "Gemini"
+        })
     );
     const rawText = response.text?.trim();
     if (!rawText) throw new Error("Gemini retornou resposta vazia.");
@@ -97,10 +99,10 @@ export const geminiProvider: AiProvider = {
 
   async enrichCatalogItem({ image, label, id }: CatalogEnrichInput) {
     const ai = getClient();
-    const model = getGeminiIndexingModel();
-
-    const response = await withRetry(
-      () =>
+    const response = await callGeminiIndexing(
+      getGeminiIndexingModel(),
+      "Gemini enrich",
+      (model) =>
         ai.models.generateContent({
           model,
           contents: [
@@ -111,8 +113,7 @@ export const geminiProvider: AiProvider = {
             responseMimeType: "application/json",
             responseSchema: CATALOG_PROFILE_SCHEMA,
           },
-        }),
-      "Gemini"
+        })
     );
 
     const rawText = response.text?.trim();
@@ -124,7 +125,7 @@ export const geminiProvider: AiProvider = {
 
   async matchAndGenerate(input: MatchGenerateInput): Promise<MatchGenerateResult> {
     const ai = getClient();
-    const model = input.matchOnly ? getGeminiReferenceModel() : getGeminiPlanningModel();
+    const primaryModel = input.matchOnly ? getGeminiReferenceModel() : getGeminiPlanningModel();
     const { postImage, matchOnly, regenerateCaption } = input;
     const catalogProfiles = input.catalogProfiles;
     const catalogItems = input.catalogProfiles?.length ? undefined : input.catalogItems;
@@ -139,8 +140,10 @@ export const geminiProvider: AiProvider = {
         },
       ];
 
-      const response = await withRetry(
-        () =>
+      const response = await callGeminiPlanning(
+        primaryModel,
+        "Gemini image-only caption",
+        (model) =>
           ai.models.generateContent({
             model,
             contents: parts,
@@ -156,8 +159,7 @@ export const geminiProvider: AiProvider = {
                 required: ["matchedId", "reasoning", "caption"],
               },
             },
-          }),
-        "Gemini"
+          })
       );
 
       const parsed = JSON.parse(response.text || "{}") as Omit<MatchGenerateResult, "matchMode"> & {
@@ -210,8 +212,10 @@ export const geminiProvider: AiProvider = {
       text: buildMatchResultInstructions(gem, !!matchOnly, buildCaptionPromptOptions(input)),
     });
 
-    const response = await withRetry(
-      () =>
+    const response = await callGeminiPlanning(
+      primaryModel,
+      "Gemini match",
+      (model) =>
         ai.models.generateContent({
           model,
           contents: parts,
@@ -236,8 +240,7 @@ export const geminiProvider: AiProvider = {
                   required: ["matchedId", "reasoning", "caption"],
                 },
           },
-        }),
-      "Gemini"
+        })
     );
 
     const parsed = JSON.parse(response.text || "{}") as Omit<MatchGenerateResult, "matchMode"> & {
@@ -257,9 +260,10 @@ export const geminiProvider: AiProvider = {
   async generateCaptionOnly(input: CaptionOnlyInput) {
     const gem = resolveBrandGemFromBody(input);
     const ai = getClient();
-    const model = getGeminiPlanningModel();
-    const response = await withRetry(
-      () =>
+    const response = await callGeminiPlanning(
+      getGeminiPlanningModel(),
+      "Gemini caption-only",
+      (model) =>
         ai.models.generateContent({
           model,
           contents: [
@@ -280,8 +284,7 @@ export const geminiProvider: AiProvider = {
               required: ["caption"],
             },
           },
-        }),
-      "Gemini"
+        })
     );
     const parsed = JSON.parse(response.text || "{}") as { caption?: string };
     return { caption: parsed.caption ?? "" };
@@ -289,13 +292,15 @@ export const geminiProvider: AiProvider = {
 
   async matchFromFingerprint(input: MatchFromFingerprintInput): Promise<MatchGenerateResult> {
     const ai = getClient();
-    const model = input.matchOnly ? getGeminiReferenceModel() : getGeminiPlanningModel();
+    const primaryModel = input.matchOnly ? getGeminiReferenceModel() : getGeminiPlanningModel();
     const { postFingerprint, matchOnly } = input;
     const gem = resolveBrandGemFromBody(input);
     const profiles = input.catalogProfiles ?? [];
 
-    const response = await withRetry(
-      () =>
+    const response = await callGeminiPlanning(
+      primaryModel,
+      "Gemini fingerprint match",
+      (model) =>
         ai.models.generateContent({
           model,
           contents: [
@@ -334,8 +339,7 @@ export const geminiProvider: AiProvider = {
                   required: ["matchedId", "reasoning", "caption"],
                 },
           },
-        }),
-      "Gemini"
+        })
     );
 
     const parsed = JSON.parse(response.text || "{}") as Omit<MatchGenerateResult, "matchMode"> & {
@@ -356,13 +360,14 @@ export const geminiProvider: AiProvider = {
     const ai = getClient();
     const prompt = buildRefineCaptionPrompt(currentCaption, instructions, gem);
 
-    const response = await withRetry(
-      () =>
+    const response = await callGeminiPlanning(
+      getGeminiPlanningModel(),
+      "Gemini refine caption",
+      (model) =>
         ai.models.generateContent({
-          model: getGeminiPlanningModel(),
+          model,
           contents: prompt,
-        }),
-      "Gemini"
+        })
     );
 
     const text = response.text?.trim();
