@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchSyncRevisionApi } from "../lib/api/workspaceApi";
+import { fetchEnrichStatusApi, fetchSyncRevisionApi } from "../lib/api/workspaceApi";
 import {
   openSyncEventSource,
   type SyncStreamEnrichEvent,
@@ -106,6 +106,31 @@ export function useRemoteSyncCoordinator({
   onRemoteAppliedRef.current = onRemoteApplied;
   const isEnrichingRef = useRef(false);
   const syncInFlightRef = useRef(false);
+  const enrichStatusSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearEnrichStatusSyncTimer = useCallback(() => {
+    if (enrichStatusSyncTimerRef.current) {
+      clearTimeout(enrichStatusSyncTimerRef.current);
+      enrichStatusSyncTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleEnrichStatusSync = useCallback(() => {
+    if (!enabled || !clientId) return;
+    clearEnrichStatusSyncTimer();
+    enrichStatusSyncTimerRef.current = setTimeout(() => {
+      enrichStatusSyncTimerRef.current = null;
+      void fetchEnrichStatusApi(clientId)
+        .then((status) => {
+          setIsEnriching(status.enriching);
+          setEnrichProgress(status.enriching ? (status.progress ?? null) : null);
+          isEnrichingRef.current = status.enriching;
+        })
+        .catch(() => {
+          /* ignore */
+        });
+    }, 700);
+  }, [enabled, clientId, clearEnrichStatusSyncTimer]);
 
   const [isEnriching, setIsEnriching] = useState(false);
   const [enrichProgress, setEnrichProgress] = useState<EnrichProgressState | null>(null);
@@ -277,8 +302,9 @@ export function useRemoteSyncCoordinator({
     setEnrichProgress(data.progress ?? null);
     if (!data.enriching) {
       isEnrichingRef.current = false;
+      clearEnrichStatusSyncTimer();
     }
-  }, []);
+  }, [clearEnrichStatusSyncTimer]);
 
   const startEnrichLocal = useCallback(() => {
     setIsEnriching(true);
@@ -382,9 +408,11 @@ export function useRemoteSyncCoordinator({
           const itemId = data.progress?.itemId;
           if (data.enriching && data.progress?.phase === "done") {
             scheduleCatalogEnrichRefresh("item-done");
+            scheduleEnrichStatusSync();
           }
           if (!data.enriching) {
             scheduleCatalogEnrichRefresh("queue-end");
+            clearEnrichStatusSyncTimer();
           }
         } catch {
           /* ignore */
@@ -425,6 +453,7 @@ export function useRemoteSyncCoordinator({
       if (debounceTimer) clearTimeout(debounceTimer);
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (catalogEnrichRefreshTimer) clearTimeout(catalogEnrichRefreshTimer);
+      clearEnrichStatusSyncTimer();
       if (fallbackInterval) clearInterval(fallbackInterval);
       sse?.close();
     };
@@ -435,6 +464,8 @@ export function useRemoteSyncCoordinator({
     workspaceHydrated,
     syncNow,
     handleEnrichEvent,
+    scheduleEnrichStatusSync,
+    clearEnrichStatusSyncTimer,
   ]);
 
   useEffect(() => {

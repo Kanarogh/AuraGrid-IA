@@ -55,6 +55,7 @@ import {
   clearGridCatalogApi,
   deleteCatalogItemApi,
   enrichCatalogApi,
+  fetchEnrichStatusApi,
   fetchWorkspace,
   stopEnrichCatalogApi,
   uploadMediaApi,
@@ -1653,13 +1654,21 @@ export default function App() {
       return next;
     });
     beginSyncDomain("catalog");
+    startCatalogEnrichPolling();
     try {
       await enrichCatalogApi(activeClientId, ids.length ? ids : undefined);
       void publishSyncChange(["catalog"]);
+      try {
+        const status = await fetchEnrichStatusApi(activeClientId);
+        if (!status.enriching) {
+          stopCatalogEnrichPolling();
+        }
+      } catch {
+        /* SSE/status pode fechar depois */
+      }
     } finally {
       endSyncDomain("catalog");
     }
-    startCatalogEnrichPolling();
   };
 
   // Importa imagens para o guarda-roupa de referências (aba Catálogo)
