@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { GEMINI_EMBEDDING_DIMENSIONS, getGeminiEmbeddingModel } from "./matchConfig";
 import { hasGeminiKey } from "./config";
+import { recordAiUsageEvent } from "../services/aiUsageService";
 
 function getClient() {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -17,7 +18,11 @@ function parseDataUrl(dataUrl: string): { mimeType: string; data: string } {
   return { mimeType: "image/jpeg", data: dataUrl };
 }
 
-async function embedImage(dataUrl: string, taskPrefix: string): Promise<number[]> {
+async function embedImage(
+  dataUrl: string,
+  taskPrefix: string,
+  operation: "embed_catalog_image" | "embed_query_image"
+): Promise<number[]> {
   const client = getClient();
   const { mimeType, data } = parseDataUrl(dataUrl);
   const model = getGeminiEmbeddingModel();
@@ -41,6 +46,16 @@ async function embedImage(dataUrl: string, taskPrefix: string): Promise<number[]
   if (!values?.length) {
     throw new Error("Gemini embedding retornou vetor vazio.");
   }
+  try {
+    await recordAiUsageEvent({
+      operation,
+      provider: "gemini",
+      model,
+      usageMetadata: (response as { usageMetadata?: unknown }).usageMetadata,
+    });
+  } catch (error) {
+    console.warn("[ai-usage] falha ao registrar uso Gemini:", error);
+  }
   return values;
 }
 
@@ -50,10 +65,18 @@ export function isGeminiEmbeddingConfigured(): boolean {
 
 /** Vetor para indexar referência do catálogo. */
 export async function embedCatalogImage(dataUrl: string): Promise<number[]> {
-  return embedImage(dataUrl, "task: search document | query: fashion catalog reference garment");
+  return embedImage(
+    dataUrl,
+    "task: search document | query: fashion catalog reference garment",
+    "embed_catalog_image"
+  );
 }
 
 /** Vetor para consulta (foto do post). */
 export async function embedQueryImage(dataUrl: string): Promise<number[]> {
-  return embedImage(dataUrl, "task: search query | query: fashion post outfit photo");
+  return embedImage(
+    dataUrl,
+    "task: search query | query: fashion post outfit photo",
+    "embed_query_image"
+  );
 }

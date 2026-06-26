@@ -11,6 +11,7 @@ export const MIGRATION_FILES = [
   "0008_gemini_only_ai_preferences",
   "0009_client_ai_preferences",
   "0010_planned_posts_caption_model",
+  "0011_ai_usage_tracking",
 ] as const;
 
 export type MigrationHash = (typeof MIGRATION_FILES)[number];

@@ -33,6 +33,7 @@ import {
 } from "./postFingerprint";
 import { callGeminiIndexing, callGeminiPlanning } from "./geminiRetry";
 import { cleanBase64 } from "./shared";
+import { recordAiUsageEvent } from "../services/aiUsageService";
 import type {
   AiProvider,
   CaptionOnlyInput,
@@ -53,6 +54,27 @@ function getClient() {
   });
 }
 
+async function trackGeminiUsage(args: {
+  operation: string;
+  model: string;
+  response: unknown;
+  clientId?: string;
+}) {
+  try {
+    const usageMetadata = (args.response as { usageMetadata?: unknown } | null | undefined)
+      ?.usageMetadata;
+    await recordAiUsageEvent({
+      operation: args.operation,
+      provider: "gemini",
+      model: args.model,
+      usageMetadata,
+      clientId: args.clientId,
+    });
+  } catch (error) {
+    console.warn("[ai-usage] falha ao registrar uso Gemini:", error);
+  }
+}
+
 export const geminiProvider: AiProvider = {
   id: "gemini",
   getModel: getGeminiPlanningModel,
@@ -61,6 +83,7 @@ export const geminiProvider: AiProvider = {
   async analyzePostVisual({ postImage, purpose }) {
     const ai = getClient();
     const primaryModel = purpose === "reference" ? getGeminiReferenceModel() : getGeminiPlanningModel();
+    let modelUsed = primaryModel;
     const response = await callGeminiPlanning(
       primaryModel,
       "Gemini fingerprint",
@@ -91,7 +114,14 @@ export const geminiProvider: AiProvider = {
             },
           },
         })
+    ,
+      { onSuccess: (model) => (modelUsed = model) }
     );
+    await trackGeminiUsage({
+      operation: "analyze_post_visual",
+      model: modelUsed,
+      response,
+    });
     const rawText = response.text?.trim();
     if (!rawText) throw new Error("Gemini retornou resposta vazia.");
     return normalizePostFingerprint(JSON.parse(rawText) as Record<string, unknown>);
@@ -99,6 +129,7 @@ export const geminiProvider: AiProvider = {
 
   async enrichCatalogItem({ image, label, id }: CatalogEnrichInput) {
     const ai = getClient();
+    let modelUsed = getGeminiIndexingModel();
     const response = await callGeminiIndexing(
       getGeminiIndexingModel(),
       "Gemini enrich",
@@ -114,7 +145,14 @@ export const geminiProvider: AiProvider = {
             responseSchema: CATALOG_PROFILE_SCHEMA,
           },
         })
+    ,
+      { onSuccess: (model) => (modelUsed = model) }
     );
+    await trackGeminiUsage({
+      operation: "enrich_catalog_item",
+      model: modelUsed,
+      response,
+    });
 
     const rawText = response.text?.trim();
     if (!rawText) throw new Error("Gemini retornou resposta vazia.");
@@ -126,6 +164,7 @@ export const geminiProvider: AiProvider = {
   async matchAndGenerate(input: MatchGenerateInput): Promise<MatchGenerateResult> {
     const ai = getClient();
     const primaryModel = input.matchOnly ? getGeminiReferenceModel() : getGeminiPlanningModel();
+    let modelUsed = primaryModel;
     const { postImage, matchOnly, regenerateCaption } = input;
     const catalogProfiles = input.catalogProfiles;
     const catalogItems = input.catalogProfiles?.length ? undefined : input.catalogItems;
@@ -160,7 +199,15 @@ export const geminiProvider: AiProvider = {
               },
             },
           })
+      ,
+        { onSuccess: (model) => (modelUsed = model) }
       );
+      await trackGeminiUsage({
+        operation: "match_and_generate_image_only",
+        model: modelUsed,
+        response,
+        clientId: input.clientId,
+      });
 
       const parsed = JSON.parse(response.text || "{}") as Omit<MatchGenerateResult, "matchMode"> & {
         caption?: string;
@@ -241,7 +288,15 @@ export const geminiProvider: AiProvider = {
                 },
           },
         })
+    ,
+      { onSuccess: (model) => (modelUsed = model) }
     );
+    await trackGeminiUsage({
+      operation: input.matchOnly ? "match_reference" : "match_and_generate",
+      model: modelUsed,
+      response,
+      clientId: input.clientId,
+    });
 
     const parsed = JSON.parse(response.text || "{}") as Omit<MatchGenerateResult, "matchMode"> & {
       caption?: string;
@@ -260,6 +315,7 @@ export const geminiProvider: AiProvider = {
   async generateCaptionOnly(input: CaptionOnlyInput) {
     const gem = resolveBrandGemFromBody(input);
     const ai = getClient();
+    let modelUsed = getGeminiPlanningModel();
     const response = await callGeminiPlanning(
       getGeminiPlanningModel(),
       "Gemini caption-only",
@@ -285,7 +341,14 @@ export const geminiProvider: AiProvider = {
             },
           },
         })
+    ,
+      { onSuccess: (model) => (modelUsed = model) }
     );
+    await trackGeminiUsage({
+      operation: "generate_caption_only",
+      model: modelUsed,
+      response,
+    });
     const parsed = JSON.parse(response.text || "{}") as { caption?: string };
     return { caption: parsed.caption ?? "" };
   },
@@ -297,6 +360,7 @@ export const geminiProvider: AiProvider = {
     const gem = resolveBrandGemFromBody(input);
     const profiles = input.catalogProfiles ?? [];
 
+    let modelUsed = primaryModel;
     const response = await callGeminiPlanning(
       primaryModel,
       "Gemini fingerprint match",
@@ -340,7 +404,15 @@ export const geminiProvider: AiProvider = {
                 },
           },
         })
+    ,
+      { onSuccess: (model) => (modelUsed = model) }
     );
+    await trackGeminiUsage({
+      operation: input.matchOnly ? "match_reference_fingerprint" : "match_fingerprint",
+      model: modelUsed,
+      response,
+      clientId: input.clientId,
+    });
 
     const parsed = JSON.parse(response.text || "{}") as Omit<MatchGenerateResult, "matchMode"> & {
       caption?: string;
@@ -360,6 +432,7 @@ export const geminiProvider: AiProvider = {
     const ai = getClient();
     const prompt = buildRefineCaptionPrompt(currentCaption, instructions, gem);
 
+    let modelUsed = getGeminiPlanningModel();
     const response = await callGeminiPlanning(
       getGeminiPlanningModel(),
       "Gemini refine caption",
@@ -368,7 +441,14 @@ export const geminiProvider: AiProvider = {
           model,
           contents: prompt,
         })
+    ,
+      { onSuccess: (model) => (modelUsed = model) }
     );
+    await trackGeminiUsage({
+      operation: "refine_caption",
+      model: modelUsed,
+      response,
+    });
 
     const text = response.text?.trim();
     if (!text) throw new Error("Gemini retornou resposta vazia ao refinar legenda.");

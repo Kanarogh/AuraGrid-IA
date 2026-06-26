@@ -3,6 +3,9 @@
 import { useMemo, useState } from "react";
 import {
   ArrowRight,
+  Coins,
+  Cpu,
+  Gauge,
   Image,
   LayoutGrid,
   LayoutDashboard,
@@ -23,6 +26,32 @@ import { Badge } from "../ui/Badge";
 import { Alert } from "../ui/Alert";
 import { Skeleton } from "../ui/Skeleton";
 import { cn } from "../../lib/cn";
+import { useDashboardAiUsage } from "../../hooks/useDashboardAiUsage";
+
+function formatTokens(value: number): string {
+  return new Intl.NumberFormat("pt-BR").format(Math.max(0, Math.round(value)));
+}
+
+function formatUsdFromMicros(value: number): string {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value / 1_000_000);
+}
+
+const USD_TO_BRL_RATE = Number(process.env.NEXT_PUBLIC_USD_TO_BRL ?? "5.5");
+
+function formatBrlFromMicros(value: number): string {
+  const safeRate = Number.isFinite(USD_TO_BRL_RATE) && USD_TO_BRL_RATE > 0 ? USD_TO_BRL_RATE : 5.5;
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format((value / 1_000_000) * safeRate);
+}
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -65,6 +94,8 @@ export function DashboardView({
   const [modalOpen, setModalOpen] = useState(false);
   const { captionBatchStats, referenceCount, canvaImageCount, canvaPageCount, brandGemReady, brandGemMissingCount } =
     metrics;
+  const { data: aiUsage, isLoading: aiUsageLoading, error: aiUsageError, reload: reloadAiUsage } =
+    useDashboardAiUsage(activeClientId);
 
   const greeting = useMemo(() => getGreeting(), []);
   const displayName = userName?.trim() || activeClient.name;
@@ -169,6 +200,114 @@ export function DashboardView({
           icon={LayoutGrid}
           style={{ animationDelay: "120ms" }}
         />
+      </section>
+
+      <section className="space-y-3 animate-ag-fade-in">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-widest text-ag-accent">IA</p>
+            <h2 className="font-display text-lg font-semibold text-ag-text mt-1">
+              Custos e tokens (30 dias)
+            </h2>
+          </div>
+          <Button variant="secondary" size="sm" onClick={() => void reloadAiUsage()}>
+            Atualizar
+          </Button>
+        </div>
+
+        {aiUsageError ? (
+          <Alert tone="danger" title="Falha ao carregar uso de IA">
+            {aiUsageError}
+          </Alert>
+        ) : null}
+
+        {aiUsageLoading && !aiUsage ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+            <Skeleton className="h-24 rounded-xl" />
+            <Skeleton className="h-24 rounded-xl" />
+            <Skeleton className="h-24 rounded-xl" />
+          </div>
+        ) : aiUsage ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+              <DashboardStatCard
+                label="Tokens"
+                value={formatTokens(aiUsage.usage.totals.totalTokens)}
+                hint={`${formatTokens(aiUsage.usage.totals.inputTokens)} in · ${formatTokens(aiUsage.usage.totals.outputTokens)} out`}
+                icon={Cpu}
+              />
+              <DashboardStatCard
+                label="Custo estimado"
+                value={formatBrlFromMicros(aiUsage.usage.totals.estimatedCostMicros)}
+                hint={`${formatUsdFromMicros(aiUsage.usage.totals.estimatedCostMicros)} USD · ${formatTokens(aiUsage.usage.totals.calls)} chamadas IA`}
+                icon={Coins}
+              />
+              <DashboardStatCard
+                label="Limite interno restante"
+                value={
+                  aiUsage.usage.internalLimit.tokenRemaining == null
+                    ? "—"
+                    : formatTokens(aiUsage.usage.internalLimit.tokenRemaining)
+                }
+                hint={
+                  aiUsage.usage.internalLimit.tokenLimit == null
+                    ? "Sem limite configurado"
+                    : `de ${formatTokens(aiUsage.usage.internalLimit.tokenLimit)} tokens (${aiUsage.usage.internalLimit.source})`
+                }
+                icon={Gauge}
+                tone={
+                  aiUsage.usage.internalLimit.tokenLimit != null &&
+                  (aiUsage.usage.internalLimit.tokenRemaining ?? 0) === 0
+                    ? "warning"
+                    : "neutral"
+                }
+              />
+            </div>
+
+            <div className="rounded-2xl border border-ag-border bg-ag-surface-1 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-ag-text">Por modelo</h3>
+                <span className="text-xs text-ag-muted">{aiUsage.usage.byModel.length} modelos</span>
+              </div>
+              {aiUsage.usage.byModel.length === 0 ? (
+                <p className="text-sm text-ag-muted">Sem consumo registrado nos últimos 30 dias.</p>
+              ) : (
+                <div className="space-y-2">
+                  {aiUsage.usage.byModel.map((row) => (
+                    <div
+                      key={row.model}
+                      className="rounded-xl border border-ag-border/70 bg-ag-surface-2/60 px-3 py-2.5"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-mono text-ag-text">{row.model}</p>
+                        <p className="text-xs font-semibold text-ag-text">
+                          {formatBrlFromMicros(row.estimatedCostMicros)}
+                        </p>
+                      </div>
+                      <p className="text-xs text-ag-muted mt-1">
+                        {formatUsdFromMicros(row.estimatedCostMicros)} USD · {formatTokens(row.inputTokens)} in ·{" "}
+                        {formatTokens(row.outputTokens)} out · {formatTokens(row.calls)} chamadas
+                      </p>
+                      <p className="text-xs text-ag-muted">
+                        Restante:{" "}
+                        {row.tokenRemaining == null ? "—" : `${formatTokens(row.tokenRemaining)} tokens`}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-ag-border bg-ag-surface-1 p-4">
+              <h3 className="text-sm font-semibold text-ag-text">Quota Google</h3>
+              <p className="text-xs text-ag-muted mt-1">{aiUsage.googleQuota.message}</p>
+              <p className="text-xs text-ag-muted mt-1">
+                Status: {aiUsage.googleQuota.status}
+                {aiUsage.googleQuota.metric ? ` · ${aiUsage.googleQuota.metric}` : ""}
+              </p>
+            </div>
+          </>
+        ) : null}
       </section>
 
       <section className="space-y-3 animate-ag-fade-in">

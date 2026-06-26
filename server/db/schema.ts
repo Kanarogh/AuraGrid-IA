@@ -319,3 +319,44 @@ export const captionCacheEntries = pgTable(
   ]
 );
 
+export const aiUsageEvents = pgTable(
+  "ai_usage_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    clientId: text("client_id").references(() => clients.id, { onDelete: "set null" }),
+    operation: text("operation").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    inputTokens: bigint("input_tokens", { mode: "number" }).notNull().default(0),
+    outputTokens: bigint("output_tokens", { mode: "number" }).notNull().default(0),
+    totalTokens: bigint("total_tokens", { mode: "number" }).notNull().default(0),
+    estimatedCostMicros: bigint("estimated_cost_micros", { mode: "number" }).notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("ai_usage_events_client_date_idx").on(t.clientId, t.createdAt),
+    index("ai_usage_events_user_date_idx").on(t.userId, t.createdAt),
+    index("ai_usage_events_model_date_idx").on(t.model, t.createdAt),
+  ]
+);
+
+export const aiUsageLimits = pgTable(
+  "ai_usage_limits",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    model: text("model").notNull().default("*"),
+    window: text("window").notNull().default("rolling_30d"),
+    tokenLimit: bigint("token_limit", { mode: "number" }),
+    costLimitMicros: bigint("cost_limit_micros", { mode: "number" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.clientId, t.model, t.window] })]
+);
+

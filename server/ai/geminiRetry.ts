@@ -34,7 +34,8 @@ export async function callGeminiWithModelFallback<T>(
   primaryModel: string,
   label: string,
   fn: (model: string) => Promise<T>,
-  fallbacks: Record<string, string[]> = PLANNING_FALLBACKS
+  fallbacks: Record<string, string[]> = PLANNING_FALLBACKS,
+  options?: { onSuccess?: (model: string, result: T) => void }
 ): Promise<T> {
   const models = buildModelChain(primaryModel, fallbacks);
   let lastError: unknown;
@@ -42,7 +43,9 @@ export async function callGeminiWithModelFallback<T>(
   for (let i = 0; i < models.length; i++) {
     const model = models[i]!;
     try {
-      return await withRetry(() => fn(model), `${label} [${model}]`);
+      const result = await withRetry(() => fn(model), `${label} [${model}]`);
+      options?.onSuccess?.(model, result);
+      return result;
     } catch (err) {
       lastError = err;
       const next = models[i + 1];
@@ -58,15 +61,17 @@ export async function callGeminiWithModelFallback<T>(
 export function callGeminiPlanning<T>(
   primaryModel: string,
   label: string,
-  fn: (model: string) => Promise<T>
+  fn: (model: string) => Promise<T>,
+  options?: { onSuccess?: (model: string, result: T) => void }
 ): Promise<T> {
-  return callGeminiWithModelFallback(primaryModel, label, fn, PLANNING_FALLBACKS);
+  return callGeminiWithModelFallback(primaryModel, label, fn, PLANNING_FALLBACKS, options);
 }
 
 export function callGeminiIndexing<T>(
   primaryModel: string,
   label: string,
-  fn: (model: string) => Promise<T>
+  fn: (model: string) => Promise<T>,
+  options?: { onSuccess?: (model: string, result: T) => void }
 ): Promise<T> {
-  return callGeminiWithModelFallback(primaryModel, label, fn, INDEXING_FALLBACKS);
+  return callGeminiWithModelFallback(primaryModel, label, fn, INDEXING_FALLBACKS, options);
 }

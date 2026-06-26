@@ -6,12 +6,26 @@ import {
 } from "./brandContext";
 import { getGeminiContentScheduleModel } from "./config";
 import { callGeminiPlanning } from "./geminiRetry";
+import { recordAiUsageEvent } from "../services/aiUsageService";
 import {
   buildContentScheduleRefineTask,
   buildContentScheduleResultInstructions,
   buildContentScheduleTask,
   type ContentScheduleGenerateOptions,
 } from "./contentSchedulePrompts";
+
+async function trackGeminiUsage(operation: string, model: string, response: unknown) {
+  try {
+    await recordAiUsageEvent({
+      operation,
+      provider: "gemini",
+      model,
+      usageMetadata: (response as { usageMetadata?: unknown }).usageMetadata,
+    });
+  } catch (error) {
+    console.warn("[ai-usage] falha ao registrar uso Gemini:", error);
+  }
+}
 
 type ContentScheduleSection = "posts" | "stories";
 
@@ -149,6 +163,7 @@ export async function generateContentSchedule(input: {
   assertBrandGemReadyForCaptions(gem);
 
   const ai = getClient();
+  let modelUsed = getGeminiContentScheduleModel();
   const response = await callGeminiPlanning(
     getGeminiContentScheduleModel(),
     "Gemini content schedule",
@@ -164,7 +179,10 @@ export async function generateContentSchedule(input: {
           responseSchema: CONTENT_SCHEDULE_JSON_SCHEMA,
         },
       })
+  ,
+    { onSuccess: (model) => (modelUsed = model) }
   );
+  await trackGeminiUsage("generate_content_schedule", modelUsed, response);
 
   const parsed = JSON.parse(response.text || "{}") as { items?: RawItem[] };
   return normalizeRawItems(Array.isArray(parsed.items) ? parsed.items : []);
@@ -181,6 +199,7 @@ export async function refineContentScheduleItem(input: {
   assertBrandGemReadyForCaptions(gem);
 
   const ai = getClient();
+  let modelUsed = getGeminiContentScheduleModel();
   const response = await callGeminiPlanning(
     getGeminiContentScheduleModel(),
     "Gemini content schedule refine",
@@ -208,7 +227,10 @@ export async function refineContentScheduleItem(input: {
           },
         },
       })
+  ,
+    { onSuccess: (model) => (modelUsed = model) }
   );
+  await trackGeminiUsage("refine_content_schedule", modelUsed, response);
 
   const parsed = JSON.parse(response.text || "{}") as { item?: RawItem };
   const [normalized] = normalizeRawItems(parsed.item ? [parsed.item] : []);
