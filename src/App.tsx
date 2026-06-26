@@ -4049,12 +4049,13 @@ export default function App() {
                   const catalogIndexed = isCatalogItemIndexed(item);
                   const showIndexButton = !catalogIndexed;
                   const canClearEnrichment = hasCatalogEnrichmentData(item);
-                  const isIndexingThis =
-                    item.enrichmentStatus === "processing" ||
-                    (isEnrichingCatalog && catalogEnrichProgress?.itemId === item.id);
-                  const enrichOverlayActive = isIndexingThis;
-                  const enrichOverlayProgress =
-                    catalogEnrichProgress?.itemId === item.id ? catalogEnrichProgress : null;
+                  const isActiveEnrichItem =
+                    isEnrichingCatalog && catalogEnrichProgress?.itemId === item.id;
+                  const enrichOverlayActive = isActiveEnrichItem;
+                  const isIndexingThis = isActiveEnrichItem;
+                  const enrichOverlayProgress = isActiveEnrichItem ? catalogEnrichProgress : null;
+                  const isStaleProcessing =
+                    item.enrichmentStatus === "processing" && !isActiveEnrichItem;
 
                   return (
                   <div 
@@ -4111,9 +4112,11 @@ export default function App() {
                             ? "bg-ag-warning/15 text-ag-warning border-ag-warning/30"
                             : catalogIndexed
                             ? "bg-ag-success/15 text-ag-success border-ag-success/30"
-                            : item.enrichmentStatus === "processing"
+                            : isStaleProcessing
                               ? "bg-ag-warning/15 text-ag-warning border-ag-warning/30"
-                              : item.enrichmentStatus === "failed"
+                            : isActiveEnrichItem
+                              ? "bg-ag-warning/15 text-ag-warning border-ag-warning/30"
+                            : item.enrichmentStatus === "failed"
                                 ? "bg-ag-danger/15 text-ag-danger border-ag-danger/30"
                                 : "bg-ag-surface-3 text-ag-muted border-ag-border"
                         }`}
@@ -4122,9 +4125,11 @@ export default function App() {
                           ? "Limit."
                           : catalogIndexed
                           ? "JSON ✓"
-                          : item.enrichmentStatus === "processing"
+                          : isActiveEnrichItem
                             ? "…"
-                            : item.enrichmentStatus === "failed"
+                          : isStaleProcessing
+                            ? "Sync…"
+                          : item.enrichmentStatus === "failed"
                               ? "Erro"
                               : "Pend."}
                       </span>

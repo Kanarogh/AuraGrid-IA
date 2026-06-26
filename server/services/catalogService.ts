@@ -105,7 +105,16 @@ export async function updateCatalogItem(
     .where(and(periodWhere(clientId, periodId), eq(catalogItems.id, id)))
     .returning();
   if (!row) throw new Error("Referência não encontrada.");
-  return mapCatalogRow(row);
+  const item = mapCatalogRow(row);
+  const touchesEnrichment =
+    patch.visualProfile !== undefined ||
+    patch.enrichmentStatus !== undefined ||
+    patch.enrichmentError !== undefined ||
+    patch.enrichedAt !== undefined;
+  if (touchesEnrichment) {
+    void notifyCatalogChange(clientId, periodId);
+  }
+  return item;
 }
 
 export async function deleteCatalogItem(

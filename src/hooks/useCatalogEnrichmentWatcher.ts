@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import type { CatalogEnrichProgress } from "../lib/api/workspaceApi";
 
 /**
- * Indexação via SSE (useRemoteSyncCoordinator). Este hook mantém a API
- * compatível com App.tsx sem poll de 2s.
+ * Indexação via SSE (useRemoteSyncCoordinator).
+ * Recarrega catálogo ao terminar a fila (refresh por peça fica no coordinator).
  */
 export function useCatalogEnrichmentWatcher({
+  enabled,
   isEnriching,
   enrichProgress,
   startEnrichLocal,
@@ -23,6 +24,11 @@ export function useCatalogEnrichmentWatcher({
   startEnrichLocal: () => void;
   stopEnrichLocal: () => void;
 }) {
+  useEffect(() => {
+    if (!enabled || isEnriching) return;
+    void onCatalogReload();
+  }, [enabled, isEnriching, onCatalogReload]);
+
   const startPolling = useCallback(() => {
     startEnrichLocal();
   }, [startEnrichLocal]);
@@ -30,8 +36,6 @@ export function useCatalogEnrichmentWatcher({
   const stopLocalPolling = useCallback(() => {
     stopEnrichLocal();
   }, [stopEnrichLocal]);
-
-  void onCatalogReload;
 
   return {
     isEnriching,

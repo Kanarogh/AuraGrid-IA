@@ -332,6 +332,8 @@ export function useRemoteSyncCoordinator({
       }, SYNC_REVISION_DEBOUNCE_MS);
     };
 
+    let lastEnrichItemId: string | null = null;
+
     const connectSse = () => {
       if (cancelled) return;
       sse?.close();
@@ -358,7 +360,23 @@ export function useRemoteSyncCoordinator({
             total: data.progress?.total,
           });
           handleEnrichEvent(data);
+          const itemId = data.progress?.itemId;
+          if (data.enriching && itemId && lastEnrichItemId && lastEnrichItemId !== itemId) {
+            syncDebugLog("sse.enrich", {
+              enriching: data.enriching,
+              index: data.progress?.index,
+              total: data.progress?.total,
+              catalogRefresh: true,
+              previous: lastEnrichItemId,
+              next: itemId,
+            });
+            void handlersRef.current.onDomainsChange?.(["catalog"]);
+          }
+          if (data.enriching && itemId) {
+            lastEnrichItemId = itemId;
+          }
           if (!data.enriching) {
+            lastEnrichItemId = null;
             scheduleSync(["catalog"]);
           }
         } catch {

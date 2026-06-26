@@ -15,7 +15,7 @@ function phaseCeiling(phase: EnrichProgressPhase | undefined, target: number): n
     case "refine":
       return 85;
     case "save":
-      return 93;
+      return 97;
     case "embed":
       return 99;
     case "done":
@@ -92,7 +92,8 @@ export function useSmoothEnrichPercent(
       const tgt = targetRef.current ?? 0;
       const ph = phaseRef.current;
       let current = displayRef.current;
-      const ceiling = phaseCeiling(ph, tgt);
+      const ceiling =
+        ph === "done" || tgt >= 100 ? 100 : phaseCeiling(ph, tgt);
 
       if (tgt > current + 0.25) {
         // Marco novo do servidor — converge rápido (ex.: 22 → 48)
