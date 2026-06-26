@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MoreHorizontal, Plus } from "lucide-react";
+import { ChevronDown, ChevronUp, MoreHorizontal, Plus } from "lucide-react";
 import { gemInitial } from "../../../lib/brandGem";
 import { useClientWorkspace } from "../../../context/ClientWorkspaceContext";
+import type { ClientMeta } from "../../../lib/clientWorkspace";
 import { cn } from "../../../lib/cn";
 import { confirmDialog } from "../../../lib/confirmDialog";
 import { useAppNavigation } from "../../../lib/appRouting";
@@ -13,44 +14,134 @@ import { ClientOptionsMenu } from "./ClientOptionsMenu";
 import { PlanningPeriodControls } from "./PlanningPeriodControls";
 import { shortPeriodLabel } from "./planningPeriodUtils";
 
-const MAX_VISIBLE_AVATARS = 4;
+const CLIENT_HUB_COLLAPSED_KEY = "aurastudio_client_hub_collapsed";
 
-function ClientAvatarButton({
-  name,
-  isActive,
-  size = "md",
-  onClick,
-  title,
+function loadClientHubCollapsed(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(CLIENT_HUB_COLLAPSED_KEY) === "1";
+}
+
+function saveClientHubCollapsed(collapsed: boolean) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(CLIENT_HUB_COLLAPSED_KEY, collapsed ? "1" : "0");
+}
+
+function ClientHubCompactBar({
+  onExpand,
 }: {
-  name: string;
-  isActive?: boolean;
-  size?: "sm" | "md" | "lg";
-  onClick: () => void;
-  title?: string;
+  onExpand: () => void;
 }) {
-  const sizeClass =
-    size === "lg" ? "h-10 w-10 text-sm" : size === "md" ? "h-8 w-8 text-xs" : "h-7 w-7 text-[10px]";
+  const { hasActiveClient, activeClient, workspace, clients } = useClientWorkspace();
+
+  const activePeriod =
+    workspace.planningPeriods.find((p) => p.id === workspace.activePlanningPeriodId) ??
+    workspace.planningPeriods[0];
+
+  if (clients.length === 0) return null;
 
   return (
-    <button
-      type="button"
-      title={title ?? name}
-      aria-label={title ?? name}
-      onClick={onClick}
-      className={cn(
-        "rounded-full flex items-center justify-center font-bold shrink-0 transition-all cursor-pointer",
-        sizeClass,
-        isActive
-          ? "bg-ag-accent text-ag-accent-fg ring-2 ring-ag-accent/30"
-          : "bg-gradient-to-br from-ag-accent/80 to-ag-accent-strong text-ag-accent-fg hover:ring-2 hover:ring-ag-accent/20"
-      )}
-    >
-      {gemInitial(name)}
-    </button>
+    <div className="px-3 py-2 shrink-0 border-b border-ag-border">
+      <button
+        type="button"
+        onClick={onExpand}
+        aria-expanded={false}
+        title="Expandir clientes e planejamento"
+        className="w-full flex items-center gap-2.5 rounded-xl border border-ag-border/70 bg-ag-surface-2/60 px-2.5 py-2 text-left hover:bg-ag-surface-2 transition-colors cursor-pointer min-w-0"
+      >
+        {hasActiveClient ? (
+          <>
+            <span
+              className="h-8 w-8 rounded-full bg-ag-accent text-ag-accent-fg text-xs font-bold flex items-center justify-center shrink-0"
+              aria-hidden
+            >
+              {gemInitial(activeClient.name)}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="text-sm font-semibold text-ag-text block truncate">
+                {activeClient.name}
+              </span>
+              {activePeriod && (
+                <span className="text-[10px] text-ag-muted block truncate">
+                  {activePeriod.label}
+                </span>
+              )}
+            </span>
+          </>
+        ) : (
+          <span className="text-sm text-ag-muted flex-1">Selecione um cliente</span>
+        )}
+        <ChevronDown className="h-4 w-4 text-ag-muted shrink-0" aria-hidden />
+      </button>
+    </div>
   );
 }
 
-function ClientHubCard({ onClientCreated }: { onClientCreated?: (clientId: string) => void }) {
+function ClientRow({
+  client,
+  subtitle,
+  isActive,
+  onSelect,
+  onOpenMenu,
+}: {
+  client: ClientMeta;
+  subtitle?: string;
+  isActive?: boolean;
+  onSelect?: () => void;
+  onOpenMenu: (anchor: HTMLElement) => void;
+}) {
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={onSelect}
+        disabled={isActive}
+        className={cn(
+          "w-full flex items-center gap-2.5 rounded-lg pl-2 pr-9 py-2 text-left transition-colors min-w-0",
+          isActive
+            ? "cursor-default"
+            : "hover:bg-ag-surface-3 cursor-pointer"
+        )}
+      >
+        <span
+          className={cn(
+            "h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0",
+            isActive
+              ? "bg-ag-accent text-ag-accent-fg ring-2 ring-ag-accent/30"
+              : "bg-gradient-to-br from-ag-accent/80 to-ag-accent-strong text-ag-accent-fg"
+          )}
+          aria-hidden
+        >
+          {gemInitial(client.name)}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="text-sm font-semibold text-ag-text block truncate">{client.name}</span>
+          {subtitle && (
+            <span className="text-[10px] text-ag-muted block truncate">{subtitle}</span>
+          )}
+        </span>
+      </button>
+      <button
+        type="button"
+        aria-label={`Opções de ${client.name}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenMenu(e.currentTarget);
+        }}
+        className="absolute right-1 top-1/2 -translate-y-1/2 z-10 p-1.5 rounded-lg text-ag-muted hover:text-ag-text hover:bg-ag-surface-2 cursor-pointer"
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+function ClientHubCard({
+  onClientCreated,
+  onCollapse,
+}: {
+  onClientCreated?: (clientId: string) => void;
+  onCollapse?: () => void;
+}) {
   const {
     clients,
     activeClientId,
@@ -61,14 +152,26 @@ function ClientHubCard({ onClientCreated }: { onClientCreated?: (clientId: strin
   } = useClientWorkspace();
   const { navigateRoute } = useAppNavigation();
   const [modalOpen, setModalOpen] = useState(false);
+  const [menuClientId, setMenuClientId] = useState<string | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [overflowOpen, setOverflowOpen] = useState(false);
-  const overflowRef = useRef<HTMLButtonElement>(null);
 
   const otherClients = clients.filter((c) => c.id !== activeClientId);
-  const visibleOthers = otherClients.slice(0, MAX_VISIBLE_AVATARS);
-  const overflowCount = otherClients.length - MAX_VISIBLE_AVATARS;
+  const menuClient = menuClientId ? clients.find((c) => c.id === menuClientId) : null;
+
+  const openMenu = (clientId: string, anchor: HTMLElement) => {
+    if (menuClientId === clientId) {
+      setMenuClientId(null);
+      setMenuAnchor(null);
+      return;
+    }
+    setMenuClientId(clientId);
+    setMenuAnchor(anchor);
+  };
+
+  const closeMenu = () => {
+    setMenuClientId(null);
+    setMenuAnchor(null);
+  };
 
   const handleDelete = async (clientId: string, clientName: string) => {
     const msg =
@@ -77,7 +180,7 @@ function ClientHubCard({ onClientCreated }: { onClientCreated?: (clientId: strin
         : `Excluir o cliente «${clientName}» e todos os dados dele? Esta ação não pode ser desfeita.`;
     if (!(await confirmDialog({ message: msg, variant: "danger", confirmLabel: "Excluir" }))) return;
     deleteClient(clientId);
-    setMenuOpen(false);
+    closeMenu();
   };
 
   if (clients.length === 0) {
@@ -105,35 +208,31 @@ function ClientHubCard({ onClientCreated }: { onClientCreated?: (clientId: strin
   return (
     <>
       <div className="px-3 py-3 shrink-0">
+        {onCollapse && clients.length > 0 && (
+          <div className="flex items-center justify-between gap-2 mb-2 px-0.5">
+            <p className="text-[11px] font-medium text-ag-muted">Clientes</p>
+            <button
+              type="button"
+              onClick={onCollapse}
+              title="Recolher clientes"
+              aria-label="Recolher clientes e planejamento"
+              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold text-ag-muted hover:text-ag-text hover:bg-ag-surface-3 cursor-pointer transition-colors"
+            >
+              <ChevronUp className="h-3.5 w-3.5" />
+              Recolher
+            </button>
+          </div>
+        )}
         <div className="rounded-2xl border border-ag-border/70 bg-ag-surface-2/60 overflow-hidden">
           {hasActiveClient && (
             <>
-              <div className="flex items-center gap-2.5 px-3 pt-3 pb-2">
-                <span
-                  className={cn(
-                    "h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0",
-                    "bg-ag-accent text-ag-accent-fg ring-2 ring-ag-accent/30"
-                  )}
-                  aria-hidden
-                >
-                  {gemInitial(activeClient.name)}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-ag-text truncate">{activeClient.name}</p>
-                  <p className="text-[10px] text-ag-muted">Cliente ativo</p>
-                </div>
-                <button
-                  type="button"
-                  aria-label="Opções do cliente"
-                  aria-expanded={menuOpen}
-                  onClick={(e) => {
-                    setMenuAnchor(e.currentTarget);
-                    setMenuOpen((o) => !o);
-                  }}
-                  className="p-1.5 rounded-lg text-ag-muted hover:text-ag-text hover:bg-ag-surface-3 cursor-pointer shrink-0"
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </button>
+              <div className="px-1 pt-1 pb-0">
+                <ClientRow
+                  client={activeClient}
+                  subtitle="Cliente ativo"
+                  isActive
+                  onOpenMenu={(anchor) => openMenu(activeClient.id, anchor)}
+                />
               </div>
 
               <div className="border-t border-ag-border/50 px-3 py-3">
@@ -143,67 +242,32 @@ function ClientHubCard({ onClientCreated }: { onClientCreated?: (clientId: strin
           )}
 
           {otherClients.length > 0 && (
-            <div className="border-t border-ag-border/50 px-3 py-2.5">
-              <p className="text-[10px] font-medium text-ag-muted mb-2">Outros clientes</p>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {visibleOthers.map((client) => (
-                  <ClientAvatarButton
-                    key={client.id}
-                    name={client.name}
-                    size="sm"
-                    title={`Trocar para ${client.name}`}
-                    onClick={() => void navigateRoute({ clientId: client.id })}
-                  />
-                ))}
-                {overflowCount > 0 && (
-                  <>
-                    <button
-                      ref={overflowRef}
-                      type="button"
-                      aria-expanded={overflowOpen}
-                      onClick={() => setOverflowOpen((o) => !o)}
-                      className="h-7 min-w-[1.75rem] px-1.5 rounded-full bg-ag-surface-3 text-[10px] font-bold text-ag-muted hover:text-ag-text hover:bg-ag-surface-2 cursor-pointer"
-                    >
-                      +{overflowCount}
-                    </button>
-                    <FloatingPopover
-                      anchorRef={overflowRef}
-                      open={overflowOpen}
-                      onClose={() => setOverflowOpen(false)}
-                      placement="bottom-start"
-                      matchAnchorWidth={false}
-                      backdrop
-                      className="w-52 max-h-48 overflow-y-auto ag-scrollbar-thin py-1"
-                    >
-                      {otherClients.slice(MAX_VISIBLE_AVATARS).map((client) => (
-                        <button
-                          key={client.id}
-                          type="button"
-                          onClick={() => {
-                            void navigateRoute({ clientId: client.id });
-                            setOverflowOpen(false);
-                          }}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-ag-surface-2 cursor-pointer"
-                        >
-                          <span className="h-7 w-7 rounded-full bg-gradient-to-br from-ag-accent/80 to-ag-accent-strong text-ag-accent-fg text-[10px] font-bold flex items-center justify-center shrink-0">
-                            {gemInitial(client.name)}
-                          </span>
-                          <span className="truncate">{client.name}</span>
-                        </button>
-                      ))}
-                    </FloatingPopover>
-                  </>
+            <div className="border-t border-ag-border/50 px-1 py-2">
+              <p className="text-[10px] font-medium text-ag-muted mb-1.5 px-2">Outros clientes</p>
+              <ul
+                className={cn(
+                  "space-y-0.5",
+                  otherClients.length > 3 && "max-h-44 overflow-y-auto ag-scrollbar-thin"
                 )}
-                <button
-                  type="button"
-                  title="Novo cliente"
-                  aria-label="Novo cliente"
-                  onClick={() => setModalOpen(true)}
-                  className="h-7 w-7 rounded-full border border-dashed border-ag-border flex items-center justify-center text-ag-accent hover:bg-ag-accent/10 cursor-pointer shrink-0"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
-              </div>
+              >
+                {otherClients.map((client) => (
+                  <li key={client.id}>
+                    <ClientRow
+                      client={client}
+                      onSelect={() => void navigateRoute({ clientId: client.id })}
+                      onOpenMenu={(anchor) => openMenu(client.id, anchor)}
+                    />
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={() => setModalOpen(true)}
+                className="w-full flex items-center justify-center gap-1.5 mt-2 mx-1 py-2 text-[11px] font-semibold text-ag-accent hover:bg-ag-accent/10 rounded-lg cursor-pointer border border-dashed border-ag-border/80"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Novo cliente
+              </button>
             </div>
           )}
 
@@ -222,12 +286,12 @@ function ClientHubCard({ onClientCreated }: { onClientCreated?: (clientId: strin
         </div>
       </div>
 
-      {hasActiveClient && menuOpen && (
+      {menuClient && (
         <ClientOptionsMenu
-          client={activeClient}
+          client={menuClient}
           anchorEl={menuAnchor}
-          open={menuOpen}
-          onClose={() => setMenuOpen(false)}
+          open={Boolean(menuClientId)}
+          onClose={closeMenu}
           onRename={renameClient}
           onDelete={handleDelete}
         />
@@ -251,13 +315,31 @@ export function ClientHub({
   onClientCreated?: (clientId: string) => void;
   brandGemReady?: boolean;
 }) {
-  const { hasActiveClient, activeClient, workspace, activeClientId } = useClientWorkspace();
+  const { hasActiveClient, activeClient, workspace, activeClientId, clients } = useClientWorkspace();
   const [flyoutOpen, setFlyoutOpen] = useState(false);
+  const [hubCollapsed, setHubCollapsed] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    setHubCollapsed(loadClientHubCollapsed());
+  }, []);
 
   useEffect(() => {
     setFlyoutOpen(false);
   }, [activeClientId]);
+
+  const toggleHubCollapsed = () => {
+    setHubCollapsed((c) => {
+      const next = !c;
+      saveClientHubCollapsed(next);
+      return next;
+    });
+  };
+
+  const expandHub = () => {
+    setHubCollapsed(false);
+    saveClientHubCollapsed(false);
+  };
 
   const activePeriod =
     workspace.planningPeriods.find((p) => p.id === workspace.activePlanningPeriodId) ??
@@ -274,7 +356,12 @@ export function ClientHub({
         : "Clientes";
 
   if (!collapsed) {
-    return <ClientHubCard onClientCreated={onClientCreated} />;
+    if (hubCollapsed && clients.length > 0) {
+      return <ClientHubCompactBar onExpand={expandHub} />;
+    }
+    return (
+      <ClientHubCard onClientCreated={onClientCreated} onCollapse={toggleHubCollapsed} />
+    );
   }
 
   return (
