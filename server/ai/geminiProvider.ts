@@ -21,7 +21,12 @@ import {
 } from "./matchPrompts";
 import { buildEnrichCatalogPrompt, finalizeCatalogProfile } from "./catalogProfile";
 import { CATALOG_PROFILE_SCHEMA } from "../geminiShared";
-import { getGeminiCatalogModel, getGeminiModel, hasGeminiKey } from "./config";
+import {
+  getGeminiIndexingModel,
+  getGeminiPlanningModel,
+  getGeminiReferenceModel,
+  hasGeminiKey,
+} from "./config";
 import {
   buildPostFingerprintPrompt,
   normalizePostFingerprint,
@@ -49,12 +54,12 @@ function getClient() {
 
 export const geminiProvider: AiProvider = {
   id: "gemini",
-  getModel: getGeminiModel,
+  getModel: getGeminiPlanningModel,
   isConfigured: hasGeminiKey,
 
-  async analyzePostVisual({ postImage }) {
+  async analyzePostVisual({ postImage, purpose }) {
     const ai = getClient();
-    const model = getGeminiModel();
+    const model = purpose === "reference" ? getGeminiReferenceModel() : getGeminiPlanningModel();
     const response = await withRetry(
       () =>
         ai.models.generateContent({
@@ -92,7 +97,7 @@ export const geminiProvider: AiProvider = {
 
   async enrichCatalogItem({ image, label, id }: CatalogEnrichInput) {
     const ai = getClient();
-    const model = getGeminiCatalogModel();
+    const model = getGeminiIndexingModel();
 
     const response = await withRetry(
       () =>
@@ -119,7 +124,7 @@ export const geminiProvider: AiProvider = {
 
   async matchAndGenerate(input: MatchGenerateInput): Promise<MatchGenerateResult> {
     const ai = getClient();
-    const model = getGeminiModel();
+    const model = input.matchOnly ? getGeminiReferenceModel() : getGeminiPlanningModel();
     const { postImage, matchOnly, regenerateCaption } = input;
     const catalogProfiles = input.catalogProfiles;
     const catalogItems = input.catalogProfiles?.length ? undefined : input.catalogItems;
@@ -252,7 +257,7 @@ export const geminiProvider: AiProvider = {
   async generateCaptionOnly(input: CaptionOnlyInput) {
     const gem = resolveBrandGemFromBody(input);
     const ai = getClient();
-    const model = getGeminiModel();
+    const model = getGeminiPlanningModel();
     const response = await withRetry(
       () =>
         ai.models.generateContent({
@@ -284,7 +289,7 @@ export const geminiProvider: AiProvider = {
 
   async matchFromFingerprint(input: MatchFromFingerprintInput): Promise<MatchGenerateResult> {
     const ai = getClient();
-    const model = getGeminiModel();
+    const model = input.matchOnly ? getGeminiReferenceModel() : getGeminiPlanningModel();
     const { postFingerprint, matchOnly } = input;
     const gem = resolveBrandGemFromBody(input);
     const profiles = input.catalogProfiles ?? [];
@@ -354,7 +359,7 @@ export const geminiProvider: AiProvider = {
     const response = await withRetry(
       () =>
         ai.models.generateContent({
-          model: getGeminiModel(),
+          model: getGeminiPlanningModel(),
           contents: prompt,
         }),
       "Gemini"

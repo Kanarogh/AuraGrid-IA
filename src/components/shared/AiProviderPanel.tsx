@@ -17,7 +17,7 @@ export function AiProviderPanel() {
           </h3>
           <p className="text-xs text-ag-muted mt-0.5">
             Projeto configurado em modo Gemini-only. Ajuste apenas os modelos Gemini usados no
-            match, geração de legenda e indexação de catálogo.
+            planejamento, indexação, busca de referência e cronograma por cliente.
           </p>
         </div>
         <button

@@ -92,6 +92,7 @@ export type MatchRankHint = {
 
 export interface PostVisualAnalyzeInput {
   postImage: string;
+  purpose?: "planning" | "reference";
 }
 
 export interface MatchGenerateResult {

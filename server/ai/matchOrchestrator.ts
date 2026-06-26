@@ -1,4 +1,5 @@
 import { runVisionWithFallback, type FallbackOutcome } from "./fallbackChain";
+import { getGeminiPlanningModel, getGeminiReferenceModel } from "./config";
 import {
   isMatchRankerFastPathEnabled,
   isMatchTextOnlyEnabled,
@@ -20,6 +21,7 @@ export type MatchOperationResult = {
   result: MatchGenerateResult;
   prepared: PreparedMatchInput;
   providerUsed: AiProviderId;
+  modelUsed: string;
   strategy: MatchStrategy;
   attempts: FallbackOutcome<MatchGenerateResult>["attempts"];
 };
@@ -75,6 +77,8 @@ export async function runMatchOperation(
   sanitized: MatchGenerateInput,
   providerId: AiProviderId
 ): Promise<MatchOperationResult> {
+  const modelUsed =
+    operation === "match-reference" ? getGeminiReferenceModel() : getGeminiPlanningModel();
   const matchOnly = operation === "match-reference" || !!sanitized.matchOnly;
 
   if (sanitized.captionFromImageOnly) {
@@ -87,12 +91,13 @@ export async function runMatchOperation(
       result: outcome.result,
       prepared: { input: sanitized },
       providerUsed: outcome.providerUsed,
+      modelUsed,
       strategy: "image-only",
       attempts: outcome.attempts,
     };
   }
 
-  const prepared = await prepareMatchInput(sanitized, providerId);
+  const prepared = await prepareMatchInput(sanitized, providerId, operation);
   const candidates = (prepared.input.catalogProfiles ?? []) as CatalogProfilePayload[];
   const fingerprint = prepared.postFingerprint;
 
@@ -122,6 +127,7 @@ export async function runMatchOperation(
           result,
           prepared,
           providerUsed: providerId,
+          modelUsed,
           strategy: "ranker-fast",
           attempts: [],
         };
@@ -142,6 +148,7 @@ export async function runMatchOperation(
         result,
         prepared,
         providerUsed,
+        modelUsed,
         strategy: "ranker-fast",
         attempts: [],
       };
@@ -192,6 +199,7 @@ export async function runMatchOperation(
           result,
           prepared,
           providerUsed: outcome.providerUsed,
+          modelUsed,
           strategy: "text-only",
           attempts: outcome.attempts,
         };
@@ -237,6 +245,7 @@ export async function runMatchOperation(
     result,
     prepared,
     providerUsed: outcome.providerUsed,
+    modelUsed,
     strategy: "vision-legacy",
     attempts: outcome.attempts,
   };
@@ -248,6 +257,7 @@ export function matchOperationHeaders(
   const headers: Record<string, string> = {
     "X-AI-Match-Strategy": result.strategy,
     "X-AI-Match-Mode": result.result.matchMode,
+    "X-AI-Model-Used": result.modelUsed,
   };
   const shortlist = shortlistHeaderValue(result.prepared.shortlist);
   if (shortlist) headers["X-AI-Catalog-Shortlist"] = shortlist;

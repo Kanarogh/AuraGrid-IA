@@ -4,7 +4,7 @@ import {
   resolveBrandGemFromBody,
   type BrandGemConfig,
 } from "./brandContext";
-import { getGeminiModel } from "./config";
+import { getGeminiContentScheduleModel } from "./config";
 import { withRetry } from "./shared";
 import {
   buildContentScheduleRefineTask,
@@ -149,7 +149,7 @@ export async function generateContentSchedule(input: {
   assertBrandGemReadyForCaptions(gem);
 
   const ai = getClient();
-  const model = getGeminiModel();
+  const model = getGeminiContentScheduleModel();
   const response = await withRetry(
     () =>
       ai.models.generateContent({
@@ -181,7 +181,7 @@ export async function refineContentScheduleItem(input: {
   assertBrandGemReadyForCaptions(gem);
 
   const ai = getClient();
-  const model = getGeminiModel();
+  const model = getGeminiContentScheduleModel();
   const response = await withRetry(
     () =>
       ai.models.generateContent({

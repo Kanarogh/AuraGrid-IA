@@ -2,7 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   buildAiSettingsResponse,
   setGeminiCatalogModelOverride,
+  setGeminiContentScheduleModelOverride,
+  setGeminiIndexingModelOverride,
   setGeminiModelOverride,
+  setGeminiPlanningModelOverride,
+  setGeminiReferenceModelOverride,
 } from "@/server/ai/index";
 import { withUserAiContext } from "@/server/ai/userAiContext";
 import { sanitizeGeminiModelId } from "@/server/ai/geminiModels";
@@ -27,34 +31,50 @@ export async function PUT(req: NextRequest) {
     const body = (await req.json()) as {
       model?: string | null;
       catalogModel?: string | null;
+      planningModel?: string | null;
+      indexingModel?: string | null;
+      contentScheduleModel?: string | null;
+      referenceModel?: string | null;
     };
 
-    if ("model" in body) {
-      const model = body.model;
-      if (model !== null && (typeof model !== "string" || !model.trim())) {
-        return NextResponse.json({ error: "model deve ser string ou null." }, { status: 400 });
-      }
-      if (model && !sanitizeGeminiModelId(model)) {
-        return NextResponse.json({ error: "ID de modelo Gemini inválido." }, { status: 400 });
-      }
-    }
+    const fieldChecks: Array<[string, string | null | undefined]> = [
+      ["model", body.model],
+      ["catalogModel", body.catalogModel],
+      ["planningModel", body.planningModel],
+      ["indexingModel", body.indexingModel],
+      ["contentScheduleModel", body.contentScheduleModel],
+      ["referenceModel", body.referenceModel],
+    ];
 
-    if ("catalogModel" in body) {
-      const catalogModel = body.catalogModel;
-      if (catalogModel !== null && (typeof catalogModel !== "string" || !catalogModel.trim())) {
+    for (const [field, value] of fieldChecks) {
+      if (!(field in body)) continue;
+      if (value !== null && (typeof value !== "string" || !value.trim())) {
         return NextResponse.json(
-          { error: "catalogModel deve ser string ou null." },
+          { error: `${field} deve ser string ou null.` },
           { status: 400 }
         );
       }
-      if (catalogModel && !sanitizeGeminiModelId(catalogModel)) {
-        return NextResponse.json({ error: "ID de modelo catálogo inválido." }, { status: 400 });
+      if (value && !sanitizeGeminiModelId(value)) {
+        return NextResponse.json(
+          { error: `ID de modelo inválido para ${field}.` },
+          { status: 400 }
+        );
       }
     }
 
-    if (!("model" in body) && !("catalogModel" in body)) {
+    if (
+      !("model" in body) &&
+      !("catalogModel" in body) &&
+      !("planningModel" in body) &&
+      !("indexingModel" in body) &&
+      !("contentScheduleModel" in body) &&
+      !("referenceModel" in body)
+    ) {
       return NextResponse.json(
-        { error: "Informe model e/ou catalogModel." },
+        {
+          error:
+            "Informe model, catalogModel, planningModel, indexingModel, contentScheduleModel e/ou referenceModel.",
+        },
         { status: 400 }
       );
     }
@@ -65,6 +85,18 @@ export async function PUT(req: NextRequest) {
       }
       if ("catalogModel" in body) {
         await setGeminiCatalogModelOverride(body.catalogModel ?? null);
+      }
+      if ("planningModel" in body) {
+        await setGeminiPlanningModelOverride(body.planningModel ?? null);
+      }
+      if ("indexingModel" in body) {
+        await setGeminiIndexingModelOverride(body.indexingModel ?? null);
+      }
+      if ("contentScheduleModel" in body) {
+        await setGeminiContentScheduleModelOverride(body.contentScheduleModel ?? null);
+      }
+      if ("referenceModel" in body) {
+        await setGeminiReferenceModelOverride(body.referenceModel ?? null);
       }
       return buildAiSettingsResponse();
     });

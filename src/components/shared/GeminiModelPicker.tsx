@@ -53,45 +53,86 @@ export function GeminiModelPicker({
   variant?: "settings" | "popover";
   disabled?: boolean;
 }) {
-  const { settings, saving, setGeminiModel, setGeminiCatalogModel } = useAiSettings();
+  const {
+    settings,
+    saving,
+    setGeminiPlanningModel,
+    setGeminiIndexingModel,
+    setGeminiContentScheduleModel,
+    setGeminiReferenceModel,
+  } = useAiSettings();
   if (!settings) return null;
 
   const { gemini } = settings;
-  const mainModels = gemini.models.filter((m) => m.vision);
-  const catalogModels = gemini.models.filter((m) => m.forCatalog || m.vision);
-  const activeMain = mainModels.find((m) => m.id === gemini.activeModel);
-  const activeCatalog = catalogModels.find((m) => m.id === gemini.activeCatalogModel);
+  const availableModels = gemini.models.filter((m) => m.vision);
+  const indexingModels = gemini.models.filter((m) => m.forCatalog || m.vision);
+  const activePlanning = availableModels.find((m) => m.id === gemini.activePlanningModel);
+  const activeIndexing = indexingModels.find((m) => m.id === gemini.activeIndexingModel);
+  const activeReference = availableModels.find((m) => m.id === gemini.activeReferenceModel);
+  const activeSchedule = availableModels.find((m) => m.id === gemini.activeContentScheduleModel);
   const isDisabled = disabled || saving;
   const selectClass =
     variant === "popover"
       ? "w-full text-[11px] px-2 py-1.5 rounded-md border border-ag-border bg-ag-surface-2 text-ag-text cursor-pointer"
       : "w-full text-xs px-2 py-1.5 rounded-md border border-ag-border bg-ag-surface-2 text-ag-text";
 
-  const mainSelect = (
+  const planningSelect = (
     <select
-      value={selectValue(gemini.activeModel, gemini.runtimeModel)}
+      value={selectValue(gemini.activePlanningModel, gemini.runtimePlanningModel)}
       disabled={isDisabled}
       onChange={(e) => {
         const v = e.target.value;
-        void setGeminiModel(v === "__env__" ? null : v);
+        void setGeminiPlanningModel(v === "__env__" ? null : v);
       }}
       className={selectClass}
     >
-      {renderGeminiOptions(mainModels, gemini.activeModel, gemini.envModel)}
+      {renderGeminiOptions(availableModels, gemini.activePlanningModel, gemini.envPlanningModel)}
     </select>
   );
 
-  const catalogSelect = (
+  const indexingSelect = (
     <select
-      value={selectValue(gemini.activeCatalogModel, gemini.runtimeCatalogModel)}
+      value={selectValue(gemini.activeIndexingModel, gemini.runtimeIndexingModel)}
       disabled={isDisabled}
       onChange={(e) => {
         const v = e.target.value;
-        void setGeminiCatalogModel(v === "__env__" ? null : v);
+        void setGeminiIndexingModel(v === "__env__" ? null : v);
       }}
       className={selectClass}
     >
-      {renderGeminiOptions(catalogModels, gemini.activeCatalogModel, gemini.envCatalogModel)}
+      {renderGeminiOptions(indexingModels, gemini.activeIndexingModel, gemini.envIndexingModel)}
+    </select>
+  );
+
+  const referenceSelect = (
+    <select
+      value={selectValue(gemini.activeReferenceModel, gemini.runtimeReferenceModel)}
+      disabled={isDisabled}
+      onChange={(e) => {
+        const v = e.target.value;
+        void setGeminiReferenceModel(v === "__env__" ? null : v);
+      }}
+      className={selectClass}
+    >
+      {renderGeminiOptions(availableModels, gemini.activeReferenceModel, gemini.envReferenceModel)}
+    </select>
+  );
+
+  const scheduleSelect = (
+    <select
+      value={selectValue(gemini.activeContentScheduleModel, gemini.runtimeContentScheduleModel)}
+      disabled={isDisabled}
+      onChange={(e) => {
+        const v = e.target.value;
+        void setGeminiContentScheduleModel(v === "__env__" ? null : v);
+      }}
+      className={selectClass}
+    >
+      {renderGeminiOptions(
+        availableModels,
+        gemini.activeContentScheduleModel,
+        gemini.envContentScheduleModel
+      )}
     </select>
   );
 
@@ -113,18 +154,23 @@ export function GeminiModelPicker({
           </a>
         </div>
         <div className="space-y-1">
-          <p className="text-[10px] text-ag-muted">Match e legenda</p>
-          {mainSelect}
+          <p className="text-[10px] text-ag-muted">Planejamento (legendas e refino)</p>
+          {planningSelect}
         </div>
         <div className="space-y-1">
           <p className="text-[10px] text-ag-muted">Indexação catálogo</p>
-          {catalogSelect}
+          {indexingSelect}
+        </div>
+        <div className="space-y-1">
+          <p className="text-[10px] text-ag-muted">Busca de referência</p>
+          {referenceSelect}
+        </div>
+        <div className="space-y-1">
+          <p className="text-[10px] text-ag-muted">Cronograma de conteúdo</p>
+          {scheduleSelect}
         </div>
         <p className="text-[10px] text-ag-muted leading-snug">
-          {activeMain?.description ?? "Modelo principal."}
-          {gemini.activeCatalogModel !== gemini.activeModel && activeCatalog
-            ? ` Catálogo: ${activeCatalog.label}.`
-            : ""}
+          {activePlanning?.description ?? "Modelo do planejamento."}
         </p>
       </div>
     );
@@ -146,20 +192,38 @@ export function GeminiModelPicker({
       </div>
 
       <div className="space-y-1.5">
-        <p className="text-[10px] font-medium text-ag-text">Match, legenda e refinar</p>
-        {mainSelect}
+        <p className="text-[10px] font-medium text-ag-text">Planejamento (legendas e refino)</p>
+        {planningSelect}
         <p className="text-[10px] text-ag-muted">
-          {activeMain?.description ?? "Modelo customizado ou do .env."}
-          {gemini.runtimeModel ? " · Escolha salva na plataforma." : " · Usando .env."}
+          {activePlanning?.description ?? "Modelo customizado ou do .env."}
+          {gemini.runtimePlanningModel ? " · Escolha salva no cliente." : " · Usando .env."}
         </p>
       </div>
 
       <div className="space-y-1.5 border-t border-ag-border pt-2">
         <p className="text-[10px] font-medium text-ag-text">Indexação do catálogo (JSON)</p>
-        {catalogSelect}
+        {indexingSelect}
         <p className="text-[10px] text-ag-muted">
-          {activeCatalog?.description ?? "Modelo para enrich-catalog-item."}
-          {gemini.runtimeCatalogModel ? " · Escolha salva na plataforma." : " · Usando .env."}
+          {activeIndexing?.description ?? "Modelo para enrich-catalog-item."}
+          {gemini.runtimeIndexingModel ? " · Escolha salva no cliente." : " · Usando .env."}
+        </p>
+      </div>
+
+      <div className="space-y-1.5 border-t border-ag-border pt-2">
+        <p className="text-[10px] font-medium text-ag-text">Busca de referência</p>
+        {referenceSelect}
+        <p className="text-[10px] text-ag-muted">
+          {activeReference?.description ?? "Modelo para /api/match-reference."}
+          {gemini.runtimeReferenceModel ? " · Escolha salva no cliente." : " · Usando .env."}
+        </p>
+      </div>
+
+      <div className="space-y-1.5 border-t border-ag-border pt-2">
+        <p className="text-[10px] font-medium text-ag-text">Cronograma de conteúdo</p>
+        {scheduleSelect}
+        <p className="text-[10px] text-ag-muted">
+          {activeSchedule?.description ?? "Modelo para /api/generate-content-schedule."}
+          {gemini.runtimeContentScheduleModel ? " · Escolha salva no cliente." : " · Usando .env."}
         </p>
       </div>
     </div>

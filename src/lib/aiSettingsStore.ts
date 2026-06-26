@@ -134,6 +134,65 @@ export async function changeGeminiCatalogModel(catalogModel: string | null): Pro
   }
 }
 
+export async function changeGeminiPlanningModel(planningModel: string | null): Promise<void> {
+  setState({ saving: true, error: null });
+  try {
+    const settings = await setGeminiModels({ planningModel });
+    const health = await fetchHealth();
+    setState({ settings, health, saving: false });
+  } catch (err) {
+    setState({
+      saving: false,
+      error: err instanceof Error ? err.message : "Falha ao trocar modelo de planejamento.",
+    });
+    throw err;
+  }
+}
+
+export async function changeGeminiIndexingModel(indexingModel: string | null): Promise<void> {
+  setState({ saving: true, error: null });
+  try {
+    const settings = await setGeminiModels({ indexingModel });
+    setState({ settings, saving: false });
+  } catch (err) {
+    setState({
+      saving: false,
+      error: err instanceof Error ? err.message : "Falha ao trocar modelo de indexação.",
+    });
+    throw err;
+  }
+}
+
+export async function changeGeminiContentScheduleModel(
+  contentScheduleModel: string | null
+): Promise<void> {
+  setState({ saving: true, error: null });
+  try {
+    const settings = await setGeminiModels({ contentScheduleModel });
+    setState({ settings, saving: false });
+  } catch (err) {
+    setState({
+      saving: false,
+      error: err instanceof Error ? err.message : "Falha ao trocar modelo de cronograma.",
+    });
+    throw err;
+  }
+}
+
+export async function changeGeminiReferenceModel(referenceModel: string | null): Promise<void> {
+  setState({ saving: true, error: null });
+  try {
+    const settings = await setGeminiModels({ referenceModel });
+    setState({ settings, saving: false });
+  } catch (err) {
+    setState({
+      saving: false,
+      error: err instanceof Error ? err.message : "Falha ao trocar modelo de referência.",
+    });
+    throw err;
+  }
+}
+
 export function noteLastProviderUsed(provider: string | null | undefined) {
   if (provider === "gemini") {
     setState({ lastProviderUsed: provider });

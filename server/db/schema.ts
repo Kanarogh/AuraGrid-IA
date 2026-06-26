@@ -48,6 +48,28 @@ export const userAiPreferences = pgTable("user_ai_preferences", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const clientAiPreferences = pgTable(
+  "client_ai_preferences",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    indexingModel: text("indexing_model"),
+    planningModel: text("planning_model"),
+    contentScheduleModel: text("content_schedule_model"),
+    referenceModel: text("reference_model"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.clientId] }),
+    index("client_ai_preferences_user_id_idx").on(t.userId),
+    index("client_ai_preferences_client_id_idx").on(t.clientId),
+  ]
+);
+
 export const planningPeriods = pgTable(
   "planning_periods",
   {

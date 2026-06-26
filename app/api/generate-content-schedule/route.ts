@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { formatAiError, getActiveProviderId } from "@/server/ai/index";
 import { resolveBrandGemFromBody } from "@/server/ai/brandContext";
+import { getGeminiContentScheduleModel } from "@/server/ai/config";
 import {
   generateContentSchedule,
   refineContentScheduleItem,
@@ -12,6 +13,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   return withUserAiFromRequest(req, async () => {
     const providerId = getActiveProviderId();
+    const modelUsed = getGeminiContentScheduleModel();
     try {
       const body = await req.json();
       const {
@@ -42,7 +44,10 @@ export async function POST(req: NextRequest) {
           existingItem,
           refineInstruction,
         });
-        return NextResponse.json({ items: [item] });
+        return NextResponse.json(
+          { items: [item], modelUsed },
+          { headers: { "X-AI-Model-Used": modelUsed } }
+        );
       }
 
       const postCount = Math.min(30, Math.max(1, Number(options?.postCount) || 9));
@@ -66,7 +71,10 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      return NextResponse.json({ items });
+      return NextResponse.json(
+        { items, modelUsed },
+        { headers: { "X-AI-Model-Used": modelUsed } }
+      );
     } catch (error: unknown) {
       console.error("Error generating content schedule:", error);
       const status = /429|quota|RESOURCE_EXHAUSTED|rate.?limit/i.test(String(error)) ? 429 : 500;

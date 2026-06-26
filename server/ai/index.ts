@@ -1,15 +1,31 @@
 ﻿import {
   getAiProviderId,
   getEnvDefaultProviderId,
+  getEnvGeminiContentScheduleModel,
+  getEnvGeminiIndexingModel,
+  getEnvGeminiPlanningModel,
+  getEnvGeminiReferenceModel,
   getEnvGeminiCatalogModel,
   getEnvGeminiModel,
+  getGeminiContentScheduleModel,
+  getGeminiIndexingModel,
+  getGeminiPlanningModel,
+  getGeminiReferenceModel,
   getGeminiCatalogModel,
   getGeminiModel,
   hasGeminiKey,
 } from "./config";
 import {
+  getRuntimeGeminiContentScheduleModel,
+  getRuntimeGeminiIndexingModel,
+  getRuntimeGeminiPlanningModel,
+  getRuntimeGeminiReferenceModel,
   getRuntimeGeminiCatalogModel,
   getRuntimeGeminiModel,
+  setRuntimeGeminiContentScheduleModel,
+  setRuntimeGeminiIndexingModel,
+  setRuntimeGeminiPlanningModel,
+  setRuntimeGeminiReferenceModel,
   setRuntimeGeminiCatalogModel,
   setRuntimeGeminiModel,
   setRuntimeProvider,
@@ -33,10 +49,22 @@ export type AiSettingsResponse = {
   gemini: {
     activeModel: string;
     activeCatalogModel: string;
+    activePlanningModel: string;
+    activeIndexingModel: string;
+    activeContentScheduleModel: string;
+    activeReferenceModel: string;
     envModel: string;
     envCatalogModel: string;
+    envPlanningModel: string;
+    envIndexingModel: string;
+    envContentScheduleModel: string;
+    envReferenceModel: string;
     runtimeModel: string | null;
     runtimeCatalogModel: string | null;
+    runtimePlanningModel: string | null;
+    runtimeIndexingModel: string | null;
+    runtimeContentScheduleModel: string | null;
+    runtimeReferenceModel: string | null;
     models: GeminiModelOption[];
   };
 };
@@ -59,10 +87,22 @@ export async function buildAiSettingsResponse(): Promise<AiSettingsResponse> {
     gemini: {
       activeModel: getGeminiModel(),
       activeCatalogModel: getGeminiCatalogModel(),
+      activePlanningModel: getGeminiPlanningModel(),
+      activeIndexingModel: getGeminiIndexingModel(),
+      activeContentScheduleModel: getGeminiContentScheduleModel(),
+      activeReferenceModel: getGeminiReferenceModel(),
       envModel: getEnvGeminiModel(),
       envCatalogModel: getEnvGeminiCatalogModel(),
+      envPlanningModel: getEnvGeminiPlanningModel(),
+      envIndexingModel: getEnvGeminiIndexingModel(),
+      envContentScheduleModel: getEnvGeminiContentScheduleModel(),
+      envReferenceModel: getEnvGeminiReferenceModel(),
       runtimeModel: getRuntimeGeminiModel(),
       runtimeCatalogModel: getRuntimeGeminiCatalogModel(),
+      runtimePlanningModel: getRuntimeGeminiPlanningModel(),
+      runtimeIndexingModel: getRuntimeGeminiIndexingModel(),
+      runtimeContentScheduleModel: getRuntimeGeminiContentScheduleModel(),
+      runtimeReferenceModel: getRuntimeGeminiReferenceModel(),
       models: GEMINI_MODELS,
     },
   };
@@ -74,6 +114,22 @@ export async function setGeminiModelOverride(model: string | null): Promise<void
 
 export async function setGeminiCatalogModelOverride(model: string | null): Promise<void> {
   await setRuntimeGeminiCatalogModel(model ? sanitizeGeminiModelId(model) : null);
+}
+
+export async function setGeminiPlanningModelOverride(model: string | null): Promise<void> {
+  await setRuntimeGeminiPlanningModel(model ? sanitizeGeminiModelId(model) : null);
+}
+
+export async function setGeminiIndexingModelOverride(model: string | null): Promise<void> {
+  await setRuntimeGeminiIndexingModel(model ? sanitizeGeminiModelId(model) : null);
+}
+
+export async function setGeminiContentScheduleModelOverride(model: string | null): Promise<void> {
+  await setRuntimeGeminiContentScheduleModel(model ? sanitizeGeminiModelId(model) : null);
+}
+
+export async function setGeminiReferenceModelOverride(model: string | null): Promise<void> {
+  await setRuntimeGeminiReferenceModel(model ? sanitizeGeminiModelId(model) : null);
 }
 
 export async function setActiveAiProvider(_provider: AiProviderId): Promise<void> {

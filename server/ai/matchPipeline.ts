@@ -38,12 +38,13 @@ export type PreparedMatchInput = {
 
 async function analyzePostFingerprint(
   postImage: string,
-  providerId: AiProviderId
+  providerId: AiProviderId,
+  purpose: "planning" | "reference"
 ): Promise<PostVisualFingerprint | null> {
   try {
     const outcome = await runVisionWithFallback(
       "post-fingerprint",
-      (provider) => provider.analyzePostVisual({ postImage }),
+      (provider) => provider.analyzePostVisual({ postImage, purpose }),
       providerId
     );
     return outcome.result;
@@ -55,7 +56,8 @@ async function analyzePostFingerprint(
 
 export async function prepareMatchInput(
   sanitized: MatchGenerateInput,
-  providerId: AiProviderId
+  providerId: AiProviderId,
+  operation: "match-and-generate" | "match-reference"
 ): Promise<PreparedMatchInput> {
   if (sanitized.captionFromImageOnly) {
     return { input: sanitized };
@@ -105,7 +107,11 @@ export async function prepareMatchInput(
   const threshold = MATCH_SHORTLIST_THRESHOLD;
   const topK = MATCH_SHORTLIST_TOP_K;
 
-  const fingerprint = await analyzePostFingerprint(sanitized.postImage, providerId);
+  const fingerprint = await analyzePostFingerprint(
+    sanitized.postImage,
+    providerId,
+    operation === "match-reference" ? "reference" : "planning"
+  );
 
   if (!fingerprint) {
     if (profiles.length <= threshold) {

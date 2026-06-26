@@ -1,5 +1,10 @@
 ﻿import { getProvider } from "./index";
 import { sanitizeForHttpHeader } from "./httpHeaders";
+import {
+  getGeminiIndexingModel,
+  getGeminiPlanningModel,
+  getGeminiReferenceModel,
+} from "./config";
 import type { AiProvider, AiProviderId } from "./types";
 
 export type FallbackOutcome<T> = {
@@ -17,17 +22,23 @@ export function stripAuraGridMeta<T extends Record<string, unknown>>(result: T):
 }
 
 export async function runVisionWithFallback<T>(
-  _label: string,
+  label: string,
   call: (provider: AiProvider) => Promise<T>,
   _activeOverride?: AiProviderId
 ): Promise<FallbackOutcome<T>> {
   const provider = getProvider("gemini");
+  const modelLabel =
+    label === "enrich-catalog-item"
+      ? getGeminiIndexingModel()
+      : label === "match-reference"
+        ? getGeminiReferenceModel()
+        : getGeminiPlanningModel();
   try {
     const result = await call(provider);
     return {
       result,
       providerUsed: "gemini",
-      modelLabel: provider.getModel(),
+      modelLabel,
       attempts: [{ provider: "gemini" }],
     };
   } catch (err) {

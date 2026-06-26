@@ -2,7 +2,7 @@
 import path from "path";
 import { sanitizeGeminiModelId } from "./geminiModels";
 import { getUserAiContext, patchUserAiContext } from "./userAiContext";
-import { saveUserAiRuntimeSettings } from "../services/userAiPreferencesService";
+import { saveUserClientAiRuntimeSettings } from "../services/clientAiPreferencesService";
 import { isDatabaseConfigured } from "../db/client";
 import type { AiProviderId } from "./types";
 
@@ -10,14 +10,18 @@ const SETTINGS_FILE = path.join(process.cwd(), ".auragrid-ai.json");
 
 type RuntimeState = {
   provider: AiProviderId | null;
-  geminiModel: string | null;
-  geminiCatalogModel: string | null;
+  indexingModel: string | null;
+  planningModel: string | null;
+  contentScheduleModel: string | null;
+  referenceModel: string | null;
 };
 
 let runtime: RuntimeState = {
   provider: null,
-  geminiModel: null,
-  geminiCatalogModel: null,
+  indexingModel: null,
+  planningModel: null,
+  contentScheduleModel: null,
+  referenceModel: null,
 };
 
 let settingsLoadPromise: Promise<void> | null = null;
@@ -39,43 +43,77 @@ export async function loadRuntimeAiSettings(): Promise<void> {
       provider?: unknown;
       geminiModel?: unknown;
       geminiCatalogModel?: unknown;
+      indexingModel?: unknown;
+      planningModel?: unknown;
+      contentScheduleModel?: unknown;
+      referenceModel?: unknown;
     };
 
-    const rawGemini =
-      typeof data.geminiModel === "string" && data.geminiModel.trim()
-        ? data.geminiModel.trim()
+    const rawIndexing =
+      typeof data.indexingModel === "string" && data.indexingModel.trim()
+        ? data.indexingModel.trim()
+        : typeof data.geminiCatalogModel === "string" && data.geminiCatalogModel.trim()
+          ? data.geminiCatalogModel.trim()
         : null;
-    const geminiModel = rawGemini ? sanitizeGeminiModelId(rawGemini) : null;
+    const indexingModel = rawIndexing ? sanitizeGeminiModelId(rawIndexing) : null;
 
-    const rawGeminiCatalog =
-      typeof data.geminiCatalogModel === "string" && data.geminiCatalogModel.trim()
-        ? data.geminiCatalogModel.trim()
+    const rawPlanning =
+      typeof data.planningModel === "string" && data.planningModel.trim()
+        ? data.planningModel.trim()
+        : typeof data.geminiModel === "string" && data.geminiModel.trim()
+          ? data.geminiModel.trim()
         : null;
-    const geminiCatalogModel = rawGeminiCatalog
-      ? sanitizeGeminiModelId(rawGeminiCatalog)
+    const planningModel = rawPlanning ? sanitizeGeminiModelId(rawPlanning) : null;
+
+    const rawContentSchedule =
+      typeof data.contentScheduleModel === "string" && data.contentScheduleModel.trim()
+        ? data.contentScheduleModel.trim()
+        : rawPlanning;
+    const contentScheduleModel = rawContentSchedule
+      ? sanitizeGeminiModelId(rawContentSchedule)
       : null;
+
+    const rawReference =
+      typeof data.referenceModel === "string" && data.referenceModel.trim()
+        ? data.referenceModel.trim()
+        : rawPlanning;
+    const referenceModel = rawReference ? sanitizeGeminiModelId(rawReference) : null;
 
     runtime = {
       provider: null,
-      geminiModel,
-      geminiCatalogModel,
+      indexingModel,
+      planningModel,
+      contentScheduleModel,
+      referenceModel,
     };
 
     const providerWasLegacy = data.provider != null && data.provider !== "gemini";
     if (providerWasLegacy || data.provider === "gemini") {
       await persistFile();
     }
-    if (rawGemini && geminiModel && rawGemini !== geminiModel) {
+    if (rawIndexing && indexingModel && rawIndexing !== indexingModel) {
       await persistFile();
     }
-    if (rawGeminiCatalog && geminiCatalogModel && rawGeminiCatalog !== geminiCatalogModel) {
+    if (rawPlanning && planningModel && rawPlanning !== planningModel) {
+      await persistFile();
+    }
+    if (
+      rawContentSchedule &&
+      contentScheduleModel &&
+      rawContentSchedule !== contentScheduleModel
+    ) {
+      await persistFile();
+    }
+    if (rawReference && referenceModel && rawReference !== referenceModel) {
       await persistFile();
     }
   } catch {
     runtime = {
       provider: null,
-      geminiModel: null,
-      geminiCatalogModel: null,
+      indexingModel: null,
+      planningModel: null,
+      contentScheduleModel: null,
+      referenceModel: null,
     };
   }
 }
@@ -88,30 +126,66 @@ export function getRuntimeProviderOverride(): AiProviderId | null {
 
 export function getRuntimeGeminiModel(): string | null {
   const userCtx = getUserAiContext();
-  if (userCtx) return userCtx.geminiModel;
-  return runtime.geminiModel;
+  if (userCtx) return userCtx.planningModel;
+  return runtime.planningModel;
 }
 
 export function getRuntimeGeminiCatalogModel(): string | null {
   const userCtx = getUserAiContext();
-  if (userCtx) return userCtx.geminiCatalogModel;
-  return runtime.geminiCatalogModel;
+  if (userCtx) return userCtx.indexingModel;
+  return runtime.indexingModel;
+}
+
+export function getRuntimeGeminiPlanningModel(): string | null {
+  return getRuntimeGeminiModel();
+}
+
+export function getRuntimeGeminiIndexingModel(): string | null {
+  return getRuntimeGeminiCatalogModel();
+}
+
+export function getRuntimeGeminiContentScheduleModel(): string | null {
+  const userCtx = getUserAiContext();
+  if (userCtx) return userCtx.contentScheduleModel;
+  return runtime.contentScheduleModel;
+}
+
+export function getRuntimeGeminiReferenceModel(): string | null {
+  const userCtx = getUserAiContext();
+  if (userCtx) return userCtx.referenceModel;
+  return runtime.referenceModel;
 }
 
 async function persistUserOrFile(patch: {
   provider?: AiProviderId | null;
-  geminiModel?: string | null;
-  geminiCatalogModel?: string | null;
+  indexingModel?: string | null;
+  planningModel?: string | null;
+  contentScheduleModel?: string | null;
+  referenceModel?: string | null;
 }): Promise<void> {
   const userCtx = getUserAiContext();
   if (userCtx && isDatabaseConfigured()) {
-    await saveUserAiRuntimeSettings(userCtx.userId, patch);
-    patchUserAiContext(patch);
+    if (!userCtx.clientId) {
+      throw new Error(
+        "Selecione um cliente ativo antes de salvar configuração de modelo por contexto."
+      );
+    }
+    await saveUserClientAiRuntimeSettings(userCtx.userId, userCtx.clientId, patch);
+    patchUserAiContext({
+      indexingModel: patch.indexingModel,
+      planningModel: patch.planningModel,
+      contentScheduleModel: patch.contentScheduleModel,
+      referenceModel: patch.referenceModel,
+    });
     return;
   }
   if (patch.provider !== undefined) runtime.provider = patch.provider;
-  if (patch.geminiModel !== undefined) runtime.geminiModel = patch.geminiModel;
-  if (patch.geminiCatalogModel !== undefined) runtime.geminiCatalogModel = patch.geminiCatalogModel;
+  if (patch.indexingModel !== undefined) runtime.indexingModel = patch.indexingModel;
+  if (patch.planningModel !== undefined) runtime.planningModel = patch.planningModel;
+  if (patch.contentScheduleModel !== undefined) {
+    runtime.contentScheduleModel = patch.contentScheduleModel;
+  }
+  if (patch.referenceModel !== undefined) runtime.referenceModel = patch.referenceModel;
   await persistFile();
 }
 
@@ -121,8 +195,10 @@ async function persistFile(): Promise<void> {
     JSON.stringify(
       {
         provider: runtime.provider,
-        geminiModel: runtime.geminiModel,
-        geminiCatalogModel: runtime.geminiCatalogModel,
+        indexingModel: runtime.indexingModel,
+        planningModel: runtime.planningModel,
+        contentScheduleModel: runtime.contentScheduleModel,
+        referenceModel: runtime.referenceModel,
       },
       null,
       2
@@ -137,13 +213,33 @@ export async function setRuntimeProvider(_provider: AiProviderId): Promise<void>
 
 export async function setRuntimeGeminiModel(model: string | null): Promise<void> {
   await persistUserOrFile({
-    geminiModel: model ? sanitizeGeminiModelId(model) : null,
+    planningModel: model ? sanitizeGeminiModelId(model) : null,
   });
 }
 
 export async function setRuntimeGeminiCatalogModel(model: string | null): Promise<void> {
   await persistUserOrFile({
-    geminiCatalogModel: model ? sanitizeGeminiModelId(model) : null,
+    indexingModel: model ? sanitizeGeminiModelId(model) : null,
+  });
+}
+
+export async function setRuntimeGeminiPlanningModel(model: string | null): Promise<void> {
+  await setRuntimeGeminiModel(model);
+}
+
+export async function setRuntimeGeminiIndexingModel(model: string | null): Promise<void> {
+  await setRuntimeGeminiCatalogModel(model);
+}
+
+export async function setRuntimeGeminiContentScheduleModel(model: string | null): Promise<void> {
+  await persistUserOrFile({
+    contentScheduleModel: model ? sanitizeGeminiModelId(model) : null,
+  });
+}
+
+export async function setRuntimeGeminiReferenceModel(model: string | null): Promise<void> {
+  await persistUserOrFile({
+    referenceModel: model ? sanitizeGeminiModelId(model) : null,
   });
 }
 
