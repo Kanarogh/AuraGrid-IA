@@ -2229,7 +2229,7 @@ export default function App() {
         return {};
       }
 
-      const bypassCaptionCache =
+      let bypassCaptionCache =
         options?.force ||
         options?.skipCache ||
         captionCacheBypassRef.current.has(postId);
@@ -2241,8 +2241,18 @@ export default function App() {
       }
 
       let recentHooks = buildRecentHooks(extraAvoidHooks);
+      const promptHooks = recentHooks.slice(-10).map((h) => h.slice(0, 140).trim());
+      const isDiverseBatchLikely = promptHooks.length >= 3;
+      if (isDiverseBatchLikely) {
+        bypassCaptionCache = true;
+      }
+      const hookSignature = promptHooks
+        .map((h) => h.toLowerCase())
+        .slice(0, 6)
+        .join("|");
 
-      const buildRequestBody = (regenerate = false, hooks = recentHooks) => {
+      const buildRequestBody = (regenerate = false, hooks = promptHooks) => {
+        const hooksForPrompt = hooks.slice(-10).map((h) => h.slice(0, 140).trim());
         const body: Record<string, unknown> = {
           postImage: processedPostImage,
           brandGem,
@@ -2252,9 +2262,9 @@ export default function App() {
             : {}),
           ...(imageOnly ? { captionFromImageOnly: true } : {}),
         };
-        if (hooks.length > 0) {
-          body.recentHooks = hooks;
-          if (hooks.length >= 3) {
+        if (hooksForPrompt.length > 0) {
+          body.recentHooks = hooksForPrompt;
+          if (hooksForPrompt.length >= 3) {
             body.diverseBatch = true;
           }
         }
@@ -2279,6 +2289,7 @@ export default function App() {
         brandGem,
         catalogIds: catalogIdsForCache,
         captionFromImageOnly: imageOnly,
+        hookSignature: isDiverseBatchLikely ? hookSignature : undefined,
       });
 
       const applyCaptionResult = async (
@@ -2416,7 +2427,7 @@ export default function App() {
       let result = await callMatchAndGenerate(body);
 
       const mainHook = extractMainCaptionText(result.caption, brandGem.footer).trim();
-      if (mainHook && isHookTooSimilar(mainHook, recentHooks)) {
+      if (mainHook && isHookTooSimilar(mainHook, recentHooks) && !isDiverseBatchLikely) {
         const retryHooks = mergeRecentCaptionSignals(
           getPostsSnapshot(),
           [mainHook, ...extraAvoidHooks, ...batchCaptionHooksRef.current],

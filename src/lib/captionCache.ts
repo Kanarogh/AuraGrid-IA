@@ -59,6 +59,8 @@ type CaptionCacheKeyInput = {
   postId?: string;
   /** Modo legenda só pela imagem (sem catálogo) */
   captionFromImageOnly?: boolean;
+  /** Assinatura opcional de diversidade anti-repetição para evitar hits inadequados em lote */
+  hookSignature?: string;
   brandGem?: BrandGemCacheSlice;
   /** @deprecated use brandGem */
   promptContext?: string;
@@ -120,9 +122,12 @@ export function buildCaptionCacheKey(input: CaptionCacheKeyInput): string {
   const params = JSON.stringify(gem?.captionParams ?? {});
   const rep = serializeRepeating(gem?.footer ?? input.repeatingText);
   const ids = (input.catalogIds ?? []).slice().sort().join("|");
+  const hookSig = (input.hookSignature ?? "").trim();
   const slot = (input.postId ?? "").trim();
   const imgOnly = input.captionFromImageOnly ? "1" : "0";
-  return djb2(`${imageFp}__slot:${slot}__imgonly:${imgOnly}__${name}__${desc}__${ctx}__${campaign}__${params}__${rep}__${ids}`);
+  return djb2(
+    `${imageFp}__slot:${slot}__imgonly:${imgOnly}__hooks:${hookSig}__${name}__${desc}__${ctx}__${campaign}__${params}__${rep}__${ids}`
+  );
 }
 
 function readAll(): StoredEntry[] {

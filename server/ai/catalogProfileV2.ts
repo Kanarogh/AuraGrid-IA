@@ -119,13 +119,13 @@ const LIGHTS = new Set(["natural", "golden-hour", "overcast", "studio-flash", "s
 export function buildEnrichCatalogPrompt(label: string, id: string): string {
   return `Fashion catalog analyst — Indian/boho women's wear. Reference: "${label || "unknown"}" (id: ${id || "n/a"}).
 
-Output JSON v2 ONLY. Keywords in kebab-case (e.g. dusty-teal, geometric-medallion, open-cross-straps). NO sentences, NO paragraphs.
+Output JSON v2 ONLY. Keywords in kebab-case (e.g. dusty-teal, geometric-medallion, open-cross-straps). NO sentences.
 
-GARMENT block — discriminative fields for visual SKU match:
+GARMENT (for strict SKU visual match):
 - type: dress|top|set|saree|skirt|other
-- colors: 1-2 SPECIFIC shades (not just "blue")
+- colors: 1-2 specific shades
 - temp: warm|cool|neutral
-- motif: UNIQUE print id (tie-dye-horizontal, floral-ditsy, geometric-medallion, solid)
+- motif: unique print id (tie-dye-horizontal, floral-ditsy, geometric-medallion, solid)
 - layout: horizontal|vertical|radial|placement|all-over|solid|other
 - scale: solid|micro|small|medium|large|all-over|other
 - back: halter-tie|open-cross|low-open|full|unknown
@@ -133,7 +133,7 @@ GARMENT block — discriminative fields for visual SKU match:
 - anchors: 4-6 short tokens verifiable in photo (print + back + construction)
 - not: 2-4 tokens for similar SKUs this is NOT (e.g. tie-dye-bands)
 
-SCENE block — background/place (even on product shots):
+SCENE (background/place):
 - setting: studio|beach|street|garden|indoor|urban|nature|cafe|home|other
 - tags: 2-5 tokens (white-bg, sand, palm-trees, brick-wall)
 - light: natural|golden-hour|overcast|studio-flash|shade|other

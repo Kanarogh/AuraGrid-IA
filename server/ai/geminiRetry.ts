@@ -16,6 +16,13 @@ const INDEXING_FALLBACKS: Record<string, string[]> = {
   "gemini-2.5-flash-lite": ["gemini-3.1-flash-lite"],
 };
 
+function retryAttempts(): number {
+  const raw = process.env.GEMINI_RETRY_ATTEMPTS?.trim();
+  const parsed = raw ? Number.parseInt(raw, 10) : 2;
+  if (!Number.isFinite(parsed)) return 2;
+  return Math.max(1, Math.min(parsed, 3));
+}
+
 function buildModelChain(
   primaryModel: string,
   fallbacks: Record<string, string[]>
@@ -43,7 +50,11 @@ export async function callGeminiWithModelFallback<T>(
   for (let i = 0; i < models.length; i++) {
     const model = models[i]!;
     try {
-      const result = await withRetry(() => fn(model), `${label} [${model}]`);
+      const result = await withRetry(
+        () => fn(model),
+        `${label} [${model}]`,
+        retryAttempts()
+      );
       options?.onSuccess?.(model, result);
       return result;
     } catch (err) {

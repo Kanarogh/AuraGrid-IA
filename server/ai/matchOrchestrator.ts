@@ -193,7 +193,11 @@ export async function runMatchOperation(
 
       result = finalizeMatchResult(result, prepared, candidates);
 
-      if (result.matchedId || !isMatchTextOnlyFallbackVisionEnabled()) {
+      if (
+        result.matchedId ||
+        (!matchOnly && !!result.caption?.trim()) ||
+        !isMatchTextOnlyFallbackVisionEnabled()
+      ) {
         console.info(`[match] strategy=text-only matchedId=${result.matchedId ?? "null"}`);
         return {
           result,

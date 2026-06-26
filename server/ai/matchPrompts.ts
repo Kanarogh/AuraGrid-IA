@@ -85,18 +85,11 @@ export function buildCatalogProfilesPromptSection(
   const siblingWarning = buildSimilarSiblingWarning(profiles);
 
   if (options?.brief) {
-    const labelMap = profiles
-      .map((p) => `  • id "${p.id}" → Referência label: "${p.label}"`)
-      .join("\n");
-
     return `${buildStrictMatchingRubric()}
 ${rankHint}${siblingWarning}
 
 CANDIDATE PROFILES (${candidates.length} — v2: g=garment, sc=scene):
 ${profilesJson}
-
-ID → LABEL MAP (matchedId = catalog id only; app adds "Referência: [label]" when matchedId is set):
-${labelMap}
 
 Match conservatively (score ≥82, gap ≥20, patternMotif + backDetail required). When you accept the match, matchedId MUST be the candidate id — if null, Referência will not appear. reasoning in Portuguese with top-2 scores.`;
   }
@@ -121,14 +114,7 @@ export function buildMatchJsonCatalogTask(matchOnly: boolean, gem?: BrandGemConf
   const step4 = matchOnly
     ? "Return ONLY the catalog match (no caption, no social media text)."
     : "After matching, write the full caption using the BRAND GEM rules below (tone, language, footer).";
-
-  const gemPrefix = matchOnly
-    ? ""
-    : `${buildBrandVoiceBlock(gem)}
-
-`;
-
-  return `${gemPrefix}You are an expert AI fashion catalog matcher for "${brandLabel(gem)}".
+  return `You are an expert AI fashion catalog matcher for "${brandLabel(gem)}".
 
 TASK (catalog JSON mode — post image + indexed profiles only):
 1. Inspect the TARGET POST IMAGE below with maximum detail (colors, print scale, neckline, sleeves, length).
@@ -262,11 +248,7 @@ export function buildCaptionOnlyTask(input: CaptionOnlyInput, gem?: BrandGemConf
     ? `\nMatched catalog reference (for tone/context only, do NOT write "Referência:" in caption): "${input.matchedCatalogLabel}"`
     : "";
 
-  return `${buildBrandVoiceBlock(gem)}
-
-${buildCampaignContextBlock(gem)}
-
-You are an expert social media copywriter for "${brandLabel(gem)}".
+  return `You are an expert social media copywriter for "${brandLabel(gem)}".
 
 TASK — CAPTION ONLY (match already decided):
 1. Inspect the TARGET POST IMAGE.
@@ -341,14 +323,7 @@ export function buildFingerprintMatchTask(matchOnly: boolean, gem?: BrandGemConf
   const step = matchOnly
     ? "Return ONLY the catalog match (no caption)."
     : "After matching, write block 1 caption per GEM rules (no Referência line in caption).";
-
-  const gemPrefix = matchOnly
-    ? ""
-    : `${buildBrandVoiceBlock(gem)}
-
-`;
-
-  return `${gemPrefix}You are an expert fashion catalog matcher for "${brandLabel(gem)}".
+  return `You are an expert fashion catalog matcher for "${brandLabel(gem)}".
 
 TASK (fingerprint JSON mode — TEXT ONLY, no post image):
 1. Use POST FINGERPRINT JSON as the visual ground truth for the target post.

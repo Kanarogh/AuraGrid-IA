@@ -159,18 +159,7 @@ EXAMPLE — what you put in JSON "caption" (block 1 only):
 O luxo encontra o conforto nessa modelagem acinturada com saia em camadas.
 """
 
-EXAMPLE — full post after system assembly (do NOT put this in JSON caption):
-"""
-O luxo encontra o conforto nessa modelagem acinturada com saia em camadas.
-
-Referência: Vestido Luxo com Bordados Neon — Leve e Acinturado-5073
-
-*Imagem gerada por inteligência artificial
-
-➡️ Acesse nosso site pelo link na Bio e acompanhe nossa coleção.
-
-#Hashtag1 #Hashtag2 #Hashtag3
-"""`;
+Do NOT output full post blocks in JSON — only block 1.`;
 
   if (custom) {
     return `${rules}\n\nADDITIONAL STRUCTURE NOTES FROM CLIENT:\n${custom}`;
@@ -277,15 +266,17 @@ function normalizeRecentHooks(raw?: string[]): { full: string[]; openers: string
     if (trimmed.length < 12) continue;
     if (full.some((h) => h.toLowerCase() === trimmed.toLowerCase())) continue;
     full.push(trimmed);
-    if (full.length >= 15) break;
+    if (full.length >= 8) break;
   }
 
-  return { full: full.slice(-15), openers: openers.slice(-10) };
+  return { full: full.slice(-8), openers: openers.slice(-6) };
 }
 
 /** Evita ganchos repetidos dentro do post e entre posts do roteiro. */
 export function buildAntiRepetitionBlock(recentHooks?: string[]): string {
   const { full, openers } = normalizeRecentHooks(recentHooks);
+  const hasRecent = full.length > 0 || openers.length > 0;
+  if (!hasRecent) return "";
 
   const fullBlock =
     full.length > 0
@@ -307,18 +298,14 @@ ${openers.map((opener, index) => `${index + 1}. "${opener}"`).join("\n")}
 - Do not reuse these sentence starters or near-identical paraphrases.`
       : "";
 
-  const hasRecent = full.length > 0 || openers.length > 0;
-  const recentBlock = hasRecent
-    ? `${fullBlock}${openerBlock}
+  const recentBlock = `${fullBlock}${openerBlock}
 - Do not reuse opening lines, sentence starters, or key adjective clusters listed above.
-- Avoid template structures already present (e.g. "O X encontra o Y", "Descubra o poder de", "Aposte no", "O luxo encontra") if similar starters are listed.`
-    : "";
+- Avoid template structures already present (e.g. "O X encontra o Y", "Descubra o poder de", "Aposte no", "O luxo encontra") if similar starters are listed.`;
 
-  return `ANTI-REPETITION RULES (mandatory — block 1 / main hook only):
+  return `ANTI-REPETITION RULES (block 1 / main hook only):
 - Write copy unique to THIS image and garment — not a generic template.
-- Never repeat footer blocks in the hook (Referência, disclosure, address, ➡️ CTA, hashtags) — the app adds them verbatim.
-- Do not repeat the same word or phrase twice inside the hook.
-- Vary rhythm and structure: alternate short punchy lines vs descriptive lines across posts.${recentBlock}`;
+- Do not repeat footer blocks in the hook (Referência, disclosure, address, ➡️ CTA, hashtags).
+- Vary rhythm and structure between posts.${recentBlock}`;
 }
 
 export function buildCaptionFooterBlock(footer?: RepeatingTextConfig): string {
@@ -340,7 +327,7 @@ export function buildCaptionFooterBlock(footer?: RepeatingTextConfig): string {
     return `MANDATORY CAPTION FOOTER: None configured — do not invent address, hashtags or legal notes unless INSTRUCTIONS require them.`;
   }
 
-  return `MANDATORY CAPTION FOOTER (fixed blocks — copy verbatim, including custom fields):\n${lines.join("\n")}`;
+  return `MANDATORY CAPTION FOOTER (fixed blocks; system appends verbatim):\n${lines.join("\n")}`;
 }
 
 /** Instruções completas para gerar legenda no match-and-generate */
@@ -349,6 +336,7 @@ export function buildMatchCaptionInstructions(
   options?: CaptionPromptOptions
 ): string {
   const antiRepeat = buildAntiRepetitionBlock(options?.recentHooks);
+  const antiRepeatBlock = antiRepeat ? `\n\n${antiRepeat}` : "";
   const sceneBlock = buildSceneCaptionBlock(options?.sceneContext ?? null);
 
   if (options?.brief) {
@@ -358,9 +346,7 @@ ${buildCampaignContextBlock(gem)}
 
 ${buildCaptionParamsBlock(gem)}
 ${sceneBlock ? `\n${sceneBlock}\n` : ""}
-${buildCaptionFooterBlock(gem?.footer)}
-
-${antiRepeat}
+${buildCaptionFooterBlock(gem?.footer)}${antiRepeatBlock}
 
 ${buildRegenerationBlock(options?.regenerate, options?.diverseBatch)}
 
@@ -378,9 +364,7 @@ ${buildCaptionParamsBlock(gem)}
 ${sceneBlock ? `\n${sceneBlock}\n` : ""}
 ${buildCaptionStructureBlock(gem)}
 
-${buildCaptionFooterBlock(gem?.footer)}
-
-${antiRepeat}
+${buildCaptionFooterBlock(gem?.footer)}${antiRepeatBlock}
 
 ${buildRegenerationBlock(options?.regenerate, options?.diverseBatch)}
 
@@ -397,6 +381,7 @@ export function buildImageOnlyCaptionInstructions(
   options?: CaptionPromptOptions
 ): string {
   const antiRepeat = buildAntiRepetitionBlock(options?.recentHooks);
+  const antiRepeatBlock = antiRepeat ? `\n\n${antiRepeat}` : "";
 
   if (options?.brief) {
     return `${buildBrandVoiceBlock(gem)}
@@ -405,9 +390,7 @@ ${buildCampaignContextBlock(gem)}
 
 ${buildCaptionParamsBlock(gem)}
 
-${buildCaptionFooterBlock(gem?.footer)}
-
-${antiRepeat}
+${buildCaptionFooterBlock(gem?.footer)}${antiRepeatBlock}
 
 ${buildRegenerationBlock(options?.regenerate, options?.diverseBatch)}
 
@@ -422,9 +405,7 @@ ${buildCampaignContextBlock(gem)}
 
 ${buildCaptionParamsBlock(gem)}
 
-${buildCaptionFooterBlock(gem?.footer)}
-
-${antiRepeat}
+${buildCaptionFooterBlock(gem?.footer)}${antiRepeatBlock}
 
 ${buildRegenerationBlock(options?.regenerate, options?.diverseBatch)}
 

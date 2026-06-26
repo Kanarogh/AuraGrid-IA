@@ -31,8 +31,11 @@ export function buildContentScheduleTask(
 ): string {
   const campaign = buildCampaignContextBlock(gem);
   const voice = buildBrandVoiceBlock(gem);
+  const compactBrief = (clientBrief.trim() || "Conteúdo mensal alinhado à marca.")
+    .slice(0, 1000)
+    .trim();
   const extra = options.extraInstructions?.trim()
-    ? `\nINSTRUÇÕES EXTRAS DO USUÁRIO:\n${options.extraInstructions.trim()}`
+    ? `\nINSTRUÇÕES EXTRAS:\n${options.extraInstructions.trim().slice(0, 500)}`
     : "";
 
   return `${voice}
@@ -41,9 +44,9 @@ ${campaign}
 
 TAREFA: Gerar um CRONOGRAMA DE CONTEÚDO MENSAL para redes sociais (Instagram).
 
-BRIEFING / DIRECIONAMENTO DO CLIENTE:
+BRIEFING DO CLIENTE:
 ---
-${clientBrief.trim() || "Conteúdo mensal alinhado à marca e aos produtos/serviços do cliente."}
+${compactBrief}
 ---
 
 PARÂMETROS:
@@ -67,11 +70,10 @@ ESTRUTURA DE CADA ITEM (obrigatório):
 - storyExtras (apenas stories interativos): pollOptions [opção A, opção B] e/ou onScreenText
 
 REGRAS:
-- Varie temas, produtos e ângulos entre os itens
-- Não repita headlines
-- Posts focam em valor, dor do cliente e solução da marca
-- Stories alternam educação, interação e bastidores
-- Hashtags consistentes com a marca`;
+- Varie temas/produtos entre itens; não repita headlines.
+- Posts: valor, dor e solução da marca.
+- Stories: educação, interação e bastidores.
+- Hashtags consistentes com a marca.`;
 }
 
 export function buildContentScheduleRefineTask(
@@ -80,12 +82,13 @@ export function buildContentScheduleRefineTask(
   refineInstruction: string
 ): string {
   const voice = buildBrandVoiceBlock(gem);
+  const compactItem = JSON.stringify(existingItem);
   return `${voice}
 
 TAREFA: Refinar UM item do cronograma de conteúdo conforme instrução do usuário.
 
 ITEM ATUAL (JSON):
-${JSON.stringify(existingItem, null, 2)}
+${compactItem.length > 1800 ? `${compactItem.slice(0, 1800)}...` : compactItem}
 
 INSTRUÇÃO DE REFINAMENTO:
 ${refineInstruction.trim()}

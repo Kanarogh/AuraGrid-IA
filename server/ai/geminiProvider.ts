@@ -175,7 +175,7 @@ export const geminiProvider: AiProvider = {
         { text: buildImageOnlyCaptionTask(gem) },
         { inlineData: cleanBase64(postImage) },
         {
-          text: buildImageOnlyResultInstructions(gem, buildCaptionPromptOptions(input)),
+          text: buildImageOnlyResultInstructions(gem, buildCaptionPromptOptions(input, true)),
         },
       ];
 
@@ -234,6 +234,7 @@ export const geminiProvider: AiProvider = {
       parts.push({
         text: `\n${buildCatalogProfilesPromptSection(profiles, {
           matchRankHint: input.matchRankHint,
+          brief: true,
         })}`,
       });
     } else {
@@ -256,7 +257,7 @@ export const geminiProvider: AiProvider = {
     }
 
     parts.push({
-      text: buildMatchResultInstructions(gem, !!matchOnly, buildCaptionPromptOptions(input)),
+      text: buildMatchResultInstructions(gem, !!matchOnly, buildCaptionPromptOptions(input, true)),
     });
 
     const response = await callGeminiPlanning(
@@ -328,7 +329,7 @@ export const geminiProvider: AiProvider = {
             {
               text: buildCaptionOnlyResultInstructions(
                 gem,
-                buildCaptionPromptOptions(input)
+                buildCaptionPromptOptions(input, true)
               ),
             },
           ],
@@ -378,7 +379,7 @@ export const geminiProvider: AiProvider = {
               text: buildMatchResultInstructions(
                 gem,
                 !!matchOnly,
-                buildCaptionPromptOptions(input)
+                buildCaptionPromptOptions(input, true)
               ),
             },
           ],
