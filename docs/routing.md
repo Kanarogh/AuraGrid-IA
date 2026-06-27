@@ -57,7 +57,8 @@ UI em [`DashboardView.tsx`](../src/components/dashboard/DashboardView.tsx). Side
 | Na URL | Só no state (React / workspace) |
 |--------|----------------------------------|
 | `clientId`, seção, abas (`postsTab`, `catalogTab`, `settingsTab`) | Gem dirty, enrich de catálogo, swap mode |
-| `postId`, `pageId`, `slotId` (quando válidos) | Conteúdo editável, drafts locais |
+| `postId`, `slotId` (quando válidos) | Conteúdo editável, drafts locais |
+| `pagina-N` (Grid Canva, se ≠ página padrão) | `activeCanvaPageId` interno |
 | `?period=` slug legível (`2026-06`) quando ≠ roteiro padrão | `activePlanningPeriodId` interno após fetch |
 
 ### Query `?period=`
@@ -70,10 +71,22 @@ UI em [`DashboardView.tsx`](../src/components/dashboard/DashboardView.tsx). Side
 
 Resolução em [`periodSlug.ts`](../src/lib/appRouting/periodSlug.ts); validação em [`validateClientRoute`](../src/lib/appRouting/defaults.ts).
 
+### Grid Canva — segmento `pagina-N`
+
+- **Formato canônico:** `pagina-N` onde N = posição 1-based na ordem atual de `canvaPages` (alinha com "Página N" na UI)
+- **Exemplo:** terceira página → `/c/palak-euro/grid-canva/pagina-3`
+- **Compat legado:** IDs internos (`page_2`, `page_1702397366456_tcm8`) resolvem e fazem `replace` para `pagina-N`
+- **Omitido** quando a página ativa é a padrão do workspace (`defaultCanvaPageId`), exceto se houver `slot` na rota
+- **Slots:** continuam com ID interno (`/slot/slot_…`)
+
+Resolução em [`canvaPageSlug.ts`](../src/lib/appRouting/canvaPageSlug.ts).
+
+**Nota:** deep link `pagina-3` é posicional — se reordenar páginas, aponta para a 3ª da lista (mesmo comportamento do rótulo na UI).
+
 ## Testes
 
 ```bash
-npm run test:app-routing   # paths + periodSlug
+npm run test:app-routing   # paths + periodSlug + canvaPageSlug
 npm run test:navigation
 ```
 

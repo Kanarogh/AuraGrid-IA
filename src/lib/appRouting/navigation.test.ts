@@ -179,4 +179,49 @@ test("buildClientPath emits readable period slug when not default", () => {
   );
 });
 
+test("validateClientRoute canonicalizes legacy canva page id to pagina-N", () => {
+  const canvaPages = [{ id: "page_1" }, { id: "page_2" }];
+  const route: ClientRoute = {
+    clientId: "palak-br",
+    section: "canva_grid",
+    pageId: "page_2",
+  };
+  const result = validateClientRoute(route, {
+    clientIds: ["palak-br"],
+    postIds: [],
+    pageIds: ["page_1", "page_2"],
+    canvaPages,
+    slotIdsByPage: new Map(),
+    defaultPageId: "page_1",
+    workspaceReady: true,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "canva_page_canonical");
+  assert.equal(result.route.pageId, "page_2");
+  assert.equal(
+    buildClientPath(result.route, { canvaPages, defaultCanvaPageId: "page_1" }),
+    "/c/palak-br/grid-canva/pagina-2"
+  );
+});
+
+test("validateClientRoute resolves pagina-N slug to internal page id", () => {
+  const canvaPages = [{ id: "page_1" }, { id: "page_2" }];
+  const route: ClientRoute = {
+    clientId: "palak-br",
+    section: "canva_grid",
+    pageId: "pagina-2",
+  };
+  const result = validateClientRoute(route, {
+    clientIds: ["palak-br"],
+    postIds: [],
+    pageIds: ["page_1", "page_2"],
+    canvaPages,
+    slotIdsByPage: new Map(),
+    defaultPageId: "page_1",
+    workspaceReady: true,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.route.pageId, "page_2");
+});
+
 console.log("\nAll navigation tests passed.");

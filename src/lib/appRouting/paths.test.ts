@@ -46,20 +46,33 @@ test("posts round-trip", () => {
   assert.equal(pathsEqual(parsed.route, route), true);
 });
 
-test("canva slot round-trip", () => {
+test("canva slot round-trip with pagina-N slug", () => {
+  const pages = [{ id: "page_1" }];
+  const ctx = { canvaPages: pages, defaultCanvaPageId: "page_other" };
   const route: ClientRoute = {
     clientId: "palak-br",
     section: "canva_grid",
     pageId: "page_1",
     slotId: "slot_abc",
   };
-  const path = buildClientPath(route);
-  assert.equal(path, "/c/palak-br/grid-canva/page_1/slot/slot_abc");
-  const parsed = parseAppPath(path);
+  const path = buildClientPath(route, ctx);
+  assert.equal(path, "/c/palak-br/grid-canva/pagina-1/slot/slot_abc");
+  const parsed = parseAppPath("/c/palak-br/grid-canva/pagina-1/slot/slot_abc");
   assert.equal(parsed.kind, "client");
   if (parsed.kind !== "client") return;
-  assert.equal(parsed.route.pageId, "page_1");
+  assert.equal(parsed.route.pageId, "pagina-1");
   assert.equal(parsed.route.slotId, "slot_abc");
+});
+
+test("canva page slug after reorder (page_2 at position 3)", () => {
+  const pages = [{ id: "page_new" }, { id: "page_1" }, { id: "page_2" }];
+  const ctx = { canvaPages: pages, defaultCanvaPageId: "page_new" };
+  const route: ClientRoute = {
+    clientId: "palak-br",
+    section: "canva_grid",
+    pageId: "page_2",
+  };
+  assert.equal(buildClientPath(route, ctx), "/c/palak-br/grid-canva/pagina-3");
 });
 
 test("settings tab default", () => {

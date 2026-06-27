@@ -80,6 +80,7 @@ function buildValidationContext(
     clientIds: registryClientIds,
     postIds: posts.map((p) => p.id),
     pageIds: canvaPages.map((p) => p.id),
+    canvaPages: canvaPages.map((p) => ({ id: p.id })),
     slotIdsByPage,
     periodIds: planningPeriodIds,
     periods: planningPeriods,
@@ -92,11 +93,15 @@ function buildValidationContext(
 
 function buildRouteBuildContext(
   planningPeriods: PlanningPeriod[],
-  activePeriodId: string
+  activePeriodId: string,
+  canvaPages: CanvaGridPage[],
+  activeCanvaPageId: string
 ): ClientRouteBuildContext {
   return {
     periods: planningPeriods,
     defaultPeriodId: activePeriodId,
+    canvaPages: canvaPages.map((p) => ({ id: p.id })),
+    defaultCanvaPageId: activeCanvaPageId,
   };
 }
 
@@ -170,7 +175,12 @@ export function useAppRouteSync({
   activeSectionRef.current = activeSection;
   settingsDraftDirtyRef.current = settingsDraftDirty;
 
-  const routeBuildCtx = buildRouteBuildContext(planningPeriods, activePlanningPeriodId);
+  const routeBuildCtx = buildRouteBuildContext(
+    planningPeriods,
+    activePlanningPeriodId,
+    canvaPages,
+    activeCanvaPageId
+  );
 
   const currentRouteFromState = useCallback(
     () =>

@@ -1,6 +1,7 @@
 import type { AppSection } from "../sectionMeta";
 import type { PostsWorkTab } from "../../components/posts/PostsWorkspaceToolbar";
 import type { PeriodRouteRef } from "./periodSlug";
+import type { CanvaPageRouteRef } from "./canvaPageSlug";
 
 export type CatalogTab = "references" | "grid";
 
@@ -32,11 +33,14 @@ export type NavigateOptions = {
   skipDirtyGuard?: boolean;
 };
 
-/** Contexto para serializar ?period= como slug legível (YYYY-MM). */
+/** Contexto para serializar slugs legíveis na URL. */
 export type ClientRouteBuildContext = {
   periods?: PeriodRouteRef[];
   /** Omite ?period= quando periodId coincide com o roteiro padrão do workspace. */
   defaultPeriodId?: string;
+  canvaPages?: CanvaPageRouteRef[];
+  /** Omite pagina-N quando pageId coincide com a página padrão do workspace. */
+  defaultCanvaPageId?: string;
 };
 
 export type RouteValidationContext = {
@@ -44,6 +48,7 @@ export type RouteValidationContext = {
   postIds: string[];
   pageIds: string[];
   slotIdsByPage: Map<string, string[]>;
+  canvaPages?: CanvaPageRouteRef[];
   periodIds?: string[];
   periods?: PeriodRouteRef[];
   /** Período ativo do workspace — fallback quando periodId na URL é inválido. */

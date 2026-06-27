@@ -17,6 +17,11 @@ import {
   isLegacyPeriodQuery,
   periodIdToUrlSlug,
 } from "./periodSlug";
+import {
+  canvaPageIdToUrlSlug,
+  isCanvaPageUrlSlug,
+  isLegacyCanvaPageSegment,
+} from "./canvaPageSlug";
 
 function encodeSegment(value: string): string {
   return encodeURIComponent(value);
@@ -38,6 +43,31 @@ function periodQueryForPath(
   const raw = route.periodId;
   if (/^\d{4}-\d{2}(-\d{2})?$/.test(raw)) return raw;
   if (isLegacyPeriodQuery(raw)) return undefined;
+  return raw;
+}
+
+function canvaPageSegmentForPath(
+  pageId: string | undefined,
+  ctx?: ClientRouteBuildContext,
+  options?: { forceInclude?: boolean }
+): string | undefined {
+  if (!pageId) return undefined;
+
+  if (ctx?.canvaPages?.length) {
+    if (isCanvaPageUrlSlug(pageId)) return pageId;
+    if (
+      !options?.forceInclude &&
+      ctx.defaultCanvaPageId &&
+      pageId === ctx.defaultCanvaPageId
+    ) {
+      return undefined;
+    }
+    return canvaPageIdToUrlSlug(pageId, ctx.canvaPages);
+  }
+
+  const raw = pageId;
+  if (isCanvaPageUrlSlug(raw)) return raw;
+  if (isLegacyCanvaPageSegment(raw)) return undefined;
   return raw;
 }
 
@@ -68,8 +98,11 @@ export function buildClientPath(route: ClientRoute, ctx?: ClientRouteBuildContex
       break;
     }
     case "canva_grid": {
-      if (route.pageId) {
-        parts.push(encodeSegment(route.pageId));
+      const pageSegment = canvaPageSegmentForPath(route.pageId, ctx, {
+        forceInclude: Boolean(route.slotId),
+      });
+      if (pageSegment) {
+        parts.push(encodeSegment(pageSegment));
         if (route.slotId) {
           parts.push("slot", encodeSegment(route.slotId));
         }

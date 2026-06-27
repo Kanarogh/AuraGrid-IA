@@ -9,6 +9,10 @@ import {
   periodQueryNeedsCanonicalReplace,
   resolvePeriodQueryToId,
 } from "./periodSlug";
+import {
+  canvaPageSegmentNeedsCanonicalReplace,
+  resolveCanvaPageSegmentToId,
+} from "./canvaPageSlug";
 import type { ClientRoute, ClientRouteBuildContext, RouteValidationContext, RouteValidationResult } from "./types";
 
 function withSectionDefaults(route: ClientRoute): ClientRoute {
@@ -27,6 +31,15 @@ function withSectionDefaults(route: ClientRoute): ClientRoute {
       break;
   }
   return next;
+}
+
+function buildRouteBuildContext(ctx: RouteValidationContext): ClientRouteBuildContext {
+  return {
+    periods: ctx.periods,
+    defaultPeriodId: ctx.defaultPeriodId ?? ctx.activePeriodId,
+    canvaPages: ctx.canvaPages,
+    defaultCanvaPageId: ctx.defaultPageId,
+  };
 }
 
 /** Corrige clientId inválido ou entidades inexistentes. */
@@ -52,7 +65,34 @@ export function validateClientRoute(
     next = { ...next, postId: undefined };
   }
 
-  if (next.pageId && !ctx.pageIds.includes(next.pageId)) {
+  if (next.section === "canva_grid" && next.pageId && ctx.canvaPages?.length) {
+    const rawPageSegment = next.pageId;
+    const resolved =
+      resolveCanvaPageSegmentToId(ctx.canvaPages, rawPageSegment) ??
+      (ctx.pageIds.includes(rawPageSegment) ? rawPageSegment : undefined);
+
+    if (resolved && ctx.pageIds.includes(resolved)) {
+      next = { ...next, pageId: resolved };
+    } else if (ctx.defaultPageId && ctx.pageIds.includes(ctx.defaultPageId)) {
+      next = { ...next, pageId: ctx.defaultPageId };
+    } else {
+      next = { ...next, pageId: undefined, slotId: undefined };
+    }
+
+    if (
+      canvaPageSegmentNeedsCanonicalReplace(
+        rawPageSegment,
+        ctx.canvaPages,
+        next.pageId
+      )
+    ) {
+      return {
+        ok: false,
+        route: withSectionDefaults(next),
+        reason: "canva_page_canonical",
+      };
+    }
+  } else if (next.pageId && !ctx.pageIds.includes(next.pageId)) {
     next = { ...next, pageId: undefined, slotId: undefined };
   }
 
@@ -84,10 +124,6 @@ export function validateClientRoute(
         next.periodId
       )
     ) {
-      const buildCtx: ClientRouteBuildContext = {
-        periods: ctx.periods,
-        defaultPeriodId: ctx.defaultPeriodId ?? ctx.activePeriodId,
-      };
       return {
         ok: false,
         route: withSectionDefaults(next),
@@ -109,10 +145,7 @@ export function validateClientRoute(
     next = { ...next, pageId: ctx.defaultPageId };
   }
 
-  const buildCtx: ClientRouteBuildContext = {
-    periods: ctx.periods,
-    defaultPeriodId: ctx.defaultPeriodId ?? ctx.activePeriodId,
-  };
+  const buildCtx = buildRouteBuildContext(ctx);
 
   const canonical = withSectionDefaults(next);
   const ok =

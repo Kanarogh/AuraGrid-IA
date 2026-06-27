@@ -53,6 +53,15 @@ export {
 } from "./periodSlug";
 
 export {
+  canvaPageIdToUrlSlug,
+  canvaPageSegmentNeedsCanonicalReplace,
+  isCanvaPageUrlSlug,
+  isLegacyCanvaPageSegment,
+  resolveCanvaPageSegmentToId,
+  type CanvaPageRouteRef,
+} from "./canvaPageSlug";
+
+export {
   AppNavigationProvider,
   useAppNavigation,
   resolvePendingNavigation,
