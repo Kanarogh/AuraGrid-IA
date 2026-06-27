@@ -387,3 +387,75 @@ export const aiUsageLimits = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.clientId, t.model, t.window] })]
 );
 
+export const clientMetaConnections = pgTable("client_meta_connections", {
+  clientId: text("client_id")
+    .primaryKey()
+    .references(() => clients.id, { onDelete: "cascade" }),
+  connectedByUserId: uuid("connected_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  igUserId: text("ig_user_id").notNull(),
+  igUsername: text("ig_username"),
+  facebookPageId: text("facebook_page_id").notNull(),
+  pageName: text("page_name"),
+  accessTokenEnc: text("access_token_enc").notNull(),
+  tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+  scopes: text("scopes"),
+  status: text("status").notNull().default("active"),
+  connectedAt: timestamp("connected_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const clientPublishPrefs = pgTable("client_publish_prefs", {
+  clientId: text("client_id")
+    .primaryKey()
+    .references(() => clients.id, { onDelete: "cascade" }),
+  timezone: text("timezone").notNull().default("America/Sao_Paulo"),
+  slotTemplates: jsonb("slot_templates")
+    .notNull()
+    .default({
+      "1": ["10:00"],
+      "2": ["10:00", "18:00"],
+      "3": ["09:00", "14:00", "19:00"],
+      "4": ["09:00", "12:00", "16:00", "19:00"],
+      "5": ["09:00", "11:30", "14:00", "17:00", "19:30"],
+    }),
+  defaultLeadMinutes: smallint("default_lead_minutes").notNull().default(15),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const instagramPublishJobs = pgTable(
+  "instagram_publish_jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    planningPeriodId: text("planning_period_id")
+      .notNull()
+      .references(() => planningPeriods.id, { onDelete: "cascade" }),
+    plannedPostId: text("planned_post_id").notNull(),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
+    caption: text("caption").notNull().default(""),
+    imageAssetId: uuid("image_asset_id")
+      .notNull()
+      .references(() => mediaAssets.id, { onDelete: "restrict" }),
+    status: text("status").notNull().default("queued"),
+    attempts: smallint("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    metaContainerId: text("meta_container_id"),
+    metaMediaId: text("meta_media_id"),
+    permalink: text("permalink"),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("instagram_publish_jobs_status_scheduled_idx").on(t.status, t.scheduledAt),
+    index("instagram_publish_jobs_client_period_idx").on(t.clientId, t.planningPeriodId),
+  ]
+);
+

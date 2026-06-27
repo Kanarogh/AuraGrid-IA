@@ -52,4 +52,13 @@ export async function register() {
     console.error("[AuraGrid] Falha ao carregar configurações de IA:", err);
   }
 
+  if (isDatabaseConfigured()) {
+    try {
+      const { startPublishWorker } = await import("./server/services/publishWorker");
+      startPublishWorker();
+    } catch (err) {
+      console.error("[AuraGrid] Falha ao iniciar publish worker:", err);
+    }
+  }
+
 }

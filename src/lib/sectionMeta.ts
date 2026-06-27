@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import {
+  CalendarClock,
   CalendarRange,
   Grid,
   LayoutGrid,
@@ -12,6 +13,7 @@ import {
 export type AppSection =
   | "content_schedule"
   | "posts"
+  | "post_scheduling"
   | "canva_grid"
   | "feed_simulator"
   | "catalog"
@@ -53,6 +55,12 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Planejamento e legendas",
         description: "Planeje, gere e aprove legendas",
         icon: Sliders,
+      },
+      {
+        id: "post_scheduling",
+        label: "Programar posts",
+        description: "Agende publicações no Instagram",
+        icon: CalendarClock,
       },
     ],
   },
@@ -119,6 +127,7 @@ export function getNavGroups(usesReferences = true): NavGroup[] {
 export const SECTION_SUBTITLES: Record<AppSection, string> = {
   content_schedule: "Gere o cronograma mensal de copy com IA",
   posts: "Planeje, gere e aprove legendas do mês",
+  post_scheduling: "Publique no Instagram o que já foi aprovado",
   canva_grid: "Monte páginas de 12 fotos e envie para o planejamento",
   feed_simulator: "Veja como o feed fica no Instagram",
   catalog: "Gerencie referências indexadas e peças de grid",

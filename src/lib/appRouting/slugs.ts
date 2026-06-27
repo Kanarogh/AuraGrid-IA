@@ -5,6 +5,7 @@ import type { CatalogTab, SettingsTab } from "./types";
 export const SECTION_SLUGS: Record<AppSection, string> = {
   content_schedule: "cronograma",
   posts: "roteiros",
+  post_scheduling: "programar-posts",
   canva_grid: "grid-canva",
   feed_simulator: "feed",
   catalog: "catalogo",

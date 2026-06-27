@@ -167,6 +167,20 @@ test("content_schedule round-trip", () => {
   assert.equal(pathsEqual(parsed.route, route), true);
 });
 
+test("post_scheduling round-trip", () => {
+  const route: ClientRoute = {
+    clientId: "palak-br",
+    section: "post_scheduling",
+  };
+  const path = buildClientPath(route);
+  assert.equal(path, "/c/palak-br/programar-posts");
+  const parsed = parseAppPath(path);
+  assert.equal(parsed.kind, "client");
+  if (parsed.kind !== "client") return;
+  assert.equal(parsed.route.section, "post_scheduling");
+  assert.equal(pathsEqual(parsed.route, route), true);
+});
+
 test("period slug round-trip with build context", () => {
   const periods = [
     {

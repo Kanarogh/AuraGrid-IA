@@ -192,6 +192,10 @@ export async function mediaAssetToDataUrl(assetId: string): Promise<string> {
   return `data:${mimeType};base64,${buffer.toString("base64")}`;
 }
 
+export function getS3Client(): S3Client {
+  return getS3();
+}
+
 export function mediaPublicUrl(assetId: string): string {
   return `/api/v1/media/${assetId}`;
 }

@@ -6,6 +6,7 @@ import { ChevronRight } from "lucide-react";
 const QUICK_SECTIONS: AppSection[] = [
   "content_schedule",
   "posts",
+  "post_scheduling",
   "canva_grid",
   "feed_simulator",
   "catalog",

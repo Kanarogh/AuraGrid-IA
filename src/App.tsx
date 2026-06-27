@@ -77,7 +77,7 @@ import { useCanvaPageActions } from "./hooks/useCanvaPageActions";
 import { useCaptionGeneration } from "./hooks/useCaptionGeneration";
 import type { SettingsTab } from "./lib/appRouting";
 import { useAppNavigation, buildDashboardPath } from "./lib/appRouting";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardView } from "./components/dashboard/DashboardView";
 import { useDashboardMetrics } from "./hooks/useDashboardMetrics";
 import { useAuth } from "./context/AuthContext";
@@ -226,6 +226,7 @@ import {
 } from "./lib/sync/workspaceReloadCoordinator";
 import { syncDebugLog } from "./lib/sync/syncDebugLog";
 import { ContentScheduleWorkspace } from "./components/contentSchedule/ContentScheduleWorkspace";
+import { PostSchedulingWorkspace } from "./components/publish/PostSchedulingWorkspace";
 import { CatalogEnrichProgressPanel } from "./components/catalog/CatalogEnrichProgressPanel";
 import { CatalogEnrichImageOverlay } from "./components/catalog/CatalogEnrichImageOverlay";
 import { CatalogUploadProgressPanel } from "./components/catalog/CatalogUploadProgressPanel";
@@ -2647,6 +2648,8 @@ export default function App() {
   );
 
   const { parsedLocation, clientRoute } = useAppNavigation();
+  const searchParams = useSearchParams();
+  const metaConnectedParam = searchParams.get("meta_connected") === "1";
   const isDashboardActive = parsedLocation.kind === "dashboard";
   const onClientRoute = parsedLocation.kind === "client";
   const routeSection = clientRoute?.section ?? activeSection;
@@ -2870,6 +2873,18 @@ export default function App() {
               }}
             />
           </div>
+        )}
+
+        {hasActiveClient && onClientRoute && routeSection === "post_scheduling" && activeClientId && (
+          <PostSchedulingWorkspace
+            clientId={activeClientId}
+            planningPeriodId={activePlanningPeriodId}
+            instagramHandle={
+              activeClient.instagramHandle ?? activeClient.id.replace(/-/g, "_")
+            }
+            metaConnectedParam={metaConnectedParam}
+            onNavigatePosts={() => void handleNavigate("posts")}
+          />
         )}
 
         {hasActiveClient && onClientRoute && routeSection === "posts" && (
