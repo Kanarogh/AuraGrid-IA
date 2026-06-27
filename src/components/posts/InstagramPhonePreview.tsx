@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import type { PlannedPost } from "../../types";
 import { cn } from "../../lib/cn";
+import { PostFeedImage } from "./PostFeedImage";
 
 export function InstagramPhonePreview({
   post,
@@ -66,13 +67,13 @@ export function InstagramPhonePreview({
               <span className="font-semibold text-[10px]">{handle}</span>
             </div>
 
-            <div className="aspect-[4/5] w-full bg-stone-900 flex items-center justify-center overflow-hidden shrink-0">
+            <div className="aspect-[4/5] w-full bg-stone-900 flex items-center justify-center overflow-hidden shrink-0 relative">
               {post.image ? (
-                <img
+                <PostFeedImage
+                  key={post.id}
                   src={post.image}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover"
+                  priority
+                  className="absolute inset-0"
                 />
               ) : (
                 <ImageIcon className="h-8 w-8 text-stone-600" />

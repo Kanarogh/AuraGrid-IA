@@ -21,6 +21,7 @@ import { INSTAGRAM_CAPTION_HARD_MAX } from "../../lib/captionParams";
 import { cn } from "../../lib/cn";
 import { Button } from "../ui/Button";
 import { InstagramPhonePreview } from "./InstagramPhonePreview";
+import { PostFeedImage } from "./PostFeedImage";
 import { AiErrorBanner } from "../shared/AiErrorBanner";
 import { MatchConfidencePanel } from "./MatchConfidencePanel";
 
@@ -221,11 +222,11 @@ export function PostDayStudio({
           >
             {post.image ? (
               <>
-                <img
+                <PostFeedImage
+                  key={post.id}
                   src={post.image}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  className="absolute inset-0 w-full h-full object-cover"
+                  priority
+                  className="absolute inset-0"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4 gap-2">
                   <span className="text-xs font-medium text-white flex items-center gap-1.5">

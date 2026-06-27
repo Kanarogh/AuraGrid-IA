@@ -2686,11 +2686,21 @@ export default function App() {
     (delta: -1 | 1) => {
       const nextIdx = activeEditorialIndex + delta;
       if (nextIdx >= 0 && nextIdx < orderedEditorialPosts.length) {
-        selectPreviewPost(orderedEditorialPosts[nextIdx].id);
+        const nextPost = orderedEditorialPosts[nextIdx];
+        if (nextPost?.image) preloadCatalogMedia(nextPost.image, "full");
+        selectPreviewPost(nextPost.id);
       }
     },
     [activeEditorialIndex, orderedEditorialPosts, selectPreviewPost]
   );
+
+  useEffect(() => {
+    if (!activePost?.image) return;
+    for (const delta of [-1, 1] as const) {
+      const neighbor = orderedEditorialPosts[activeEditorialIndex + delta];
+      if (neighbor?.image) preloadCatalogMedia(neighbor.image, "full");
+    }
+  }, [activePost?.id, activePost?.image, activeEditorialIndex, orderedEditorialPosts]);
 
   return (
     <>
