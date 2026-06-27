@@ -46,7 +46,7 @@ import {
 } from "../../lib/brandGemValidation";
 import type { BrandGem } from "../../types";
 import { AiProviderPanel } from "./AiProviderPanel";
-import { AccentPicker } from "./AccentPicker";
+import { AppearanceSettingsPanel } from "./AppearanceSettingsPanel";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { FieldLabel, Input, Textarea } from "../ui/Input";
@@ -377,7 +377,7 @@ export function ConfigPanel({
           Escolha a cor de destaque do workspace. Neutros e modo claro/escuro continuam na barra
           superior.
         </p>
-        <AccentPicker />
+        <AppearanceSettingsPanel />
       </div>
       )}
 

@@ -12,6 +12,21 @@ export type AppearanceSettings = {
   updatedAt: string | null;
 };
 
+export type AppearanceSnapshot = Omit<AppearanceSettings, "saved" | "updatedAt">;
+
+export function appearanceSnapshotSignature(snapshot: AppearanceSnapshot): string {
+  return `${snapshot.accentId}|${snapshot.theme}|${snapshot.customAccentLight ?? ""}|${snapshot.customAccentDark ?? ""}`;
+}
+
+export const APPEARANCE_BASELINE_EVENT = "ag-appearance-baseline";
+
+export function dispatchAppearanceBaseline(snapshot: AppearanceSnapshot): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<AppearanceSnapshot>(APPEARANCE_BASELINE_EVENT, { detail: snapshot })
+  );
+}
+
 export function readLocalAppearanceSettings(): Omit<
   AppearanceSettings,
   "saved" | "updatedAt"
