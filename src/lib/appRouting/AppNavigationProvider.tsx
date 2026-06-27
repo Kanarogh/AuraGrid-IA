@@ -11,7 +11,7 @@ import {
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { AppSection } from "../sectionMeta";
 import { mergeClientRoute, buildClientPath, buildLoginPath, parseAppPath } from "./paths";
-import type { ClientRoute, NavigateOptions, ParsedLocation } from "./types";
+import type { ClientRoute, ClientRouteBuildContext, NavigateOptions, ParsedLocation } from "./types";
 
 const PENDING_NAV_TIMEOUT_MS = 5000;
 
@@ -20,6 +20,7 @@ type CommitNavigationFn = (
   partial: Partial<ClientRoute>,
   options?: NavigateOptions
 ) => Promise<boolean>;
+type RouteBuildContextFn = () => ClientRouteBuildContext | undefined;
 
 export type PendingNavigation = {
   id: number;
@@ -44,6 +45,7 @@ type AppNavigationContextValue = {
     options?: NavigateOptions
   ) => Promise<boolean>;
   registerCommitNavigation: (fn: CommitNavigationFn | null) => void;
+  registerRouteBuildContext: (fn: RouteBuildContextFn | null) => void;
   navigateSection: (section: AppSection, options?: NavigateOptions) => Promise<boolean>;
   replaceClientRoute: (route: ClientRoute) => void;
   setBeforeNavigate: (fn: BeforeNavigateFn | null) => void;
@@ -65,6 +67,7 @@ export function AppNavigationProvider({
   const searchParams = useSearchParams();
   const beforeNavigateRef = useRef<BeforeNavigateFn | null>(null);
   const commitNavigationRef = useRef<CommitNavigationFn | null>(null);
+  const routeBuildContextRef = useRef<RouteBuildContextFn | null>(null);
   const isApplyingRouteRef = useRef(false);
   const navigationIdRef = useRef(0);
   const pendingNavigationRef = useRef<PendingNavigation | null>(null);
@@ -80,6 +83,11 @@ export function AppNavigationProvider({
 
   const clientRoute = parsedLocation.kind === "client" ? parsedLocation.route : null;
   currentRouteRef.current = clientRoute;
+
+  const routeBuildCtx = useCallback(
+    () => routeBuildContextRef.current?.(),
+    []
+  );
 
   const setPendingNavigation = useCallback((path: string) => {
     const pending: PendingNavigation = {
@@ -145,7 +153,7 @@ export function AppNavigationProvider({
         if (!ok) return false;
       }
 
-      const path = buildClientPath(next);
+      const path = buildClientPath(next, routeBuildCtx());
       const currentPath = searchParams.toString()
         ? `${pathname}?${searchParams.toString()}`
         : pathname;
@@ -156,7 +164,7 @@ export function AppNavigationProvider({
       pushPath(path, options?.replace);
       return true;
     },
-    [pathname, pushPath, searchParams]
+    [pathname, pushPath, routeBuildCtx, searchParams]
   );
 
   const navigateRoute = useCallback(
@@ -173,6 +181,10 @@ export function AppNavigationProvider({
     commitNavigationRef.current = fn;
   }, []);
 
+  const registerRouteBuildContext = useCallback((fn: RouteBuildContextFn | null) => {
+    routeBuildContextRef.current = fn;
+  }, []);
+
   const navigateSection = useCallback(
     (section: AppSection, options?: NavigateOptions) => navigateRoute({ section }, options),
     [navigateRoute]
@@ -180,7 +192,7 @@ export function AppNavigationProvider({
 
   const replaceClientRoute = useCallback(
     (route: ClientRoute) => {
-      const path = buildClientPath(route);
+      const path = buildClientPath(route, routeBuildCtx());
       setPendingNavigation(path);
       isApplyingRouteRef.current = true;
       router.replace(path);
@@ -188,7 +200,7 @@ export function AppNavigationProvider({
         isApplyingRouteRef.current = false;
       });
     },
-    [router, setPendingNavigation]
+    [router, routeBuildCtx, setPendingNavigation]
   );
 
   const setBeforeNavigate = useCallback((fn: BeforeNavigateFn | null) => {
@@ -205,6 +217,7 @@ export function AppNavigationProvider({
       navigateClient,
       navigateRoute,
       registerCommitNavigation,
+      registerRouteBuildContext,
       navigateSection,
       replaceClientRoute,
       setBeforeNavigate,
@@ -218,6 +231,7 @@ export function AppNavigationProvider({
       navigateClient,
       navigateRoute,
       registerCommitNavigation,
+      registerRouteBuildContext,
       navigateSection,
       replaceClientRoute,
       setBeforeNavigate,

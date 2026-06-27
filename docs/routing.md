@@ -48,13 +48,32 @@ UI em [`DashboardView.tsx`](../src/components/dashboard/DashboardView.tsx). Side
 ## Sync URL ↔ estado
 
 - **State → URL:** `commitNavigation` em [`useAppRouteSync.ts`](../src/hooks/useAppRouteSync.ts)
-- **URL → state:** effect no mesmo hook, bloqueado por `pendingNavigationRef` durante push
+- **URL → state:** effects separados no mesmo hook (canonical replace, apply patch, reconciliação state→URL)
 - **Facade:** `navigateRoute` no provider delega para `commitNavigation` registrado pelo App
+- **Build context:** `registerRouteBuildContext` serializa `?period=` como slug legível (`YYYY-MM`)
+
+### Contrato: o que vai na URL vs. só no state
+
+| Na URL | Só no state (React / workspace) |
+|--------|----------------------------------|
+| `clientId`, seção, abas (`postsTab`, `catalogTab`, `settingsTab`) | Gem dirty, enrich de catálogo, swap mode |
+| `postId`, `pageId`, `slotId` (quando válidos) | Conteúdo editável, drafts locais |
+| `?period=` slug legível (`2026-06`) quando ≠ roteiro padrão | `activePlanningPeriodId` interno após fetch |
+
+### Query `?period=`
+
+- **Formato canônico:** `YYYY-MM` derivado de `PlanningPeriod.startDate` (ex.: Junho 2026 → `?period=2026-06`)
+- **Colisão no mesmo mês:** fallback para `YYYY-MM-DD` (`?period=2026-06-01`)
+- **Compat legado:** IDs internos (`*_period_*`, `__period_`) na query são resolvidos e substituídos por `router.replace` com slug legível
+- **Roteiro estrangeiro** (period de outro cliente na URL): substituído pelo period ativo do cliente ou removido
+- **Omitido** quando o period na rota coincide com o roteiro padrão do workspace (`defaultPeriodId`)
+
+Resolução em [`periodSlug.ts`](../src/lib/appRouting/periodSlug.ts); validação em [`validateClientRoute`](../src/lib/appRouting/defaults.ts).
 
 ## Testes
 
 ```bash
-npm run test:app-routing
+npm run test:app-routing   # paths + periodSlug
 npm run test:navigation
 ```
 

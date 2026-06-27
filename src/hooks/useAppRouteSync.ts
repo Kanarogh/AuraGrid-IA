@@ -22,6 +22,8 @@ import {
 import type { AppSection } from "../lib/sectionMeta";
 import type { PostsWorkTab } from "../components/posts/PostsWorkspaceToolbar";
 import type { CanvaGridPage, PlannedPost } from "../types";
+import type { PlanningPeriod } from "../lib/planningConstants";
+import type { ClientRouteBuildContext } from "../lib/appRouting";
 
 export type AppRouteSyncHandlers = {
   setActiveSection: (section: AppSection) => void;
@@ -50,6 +52,8 @@ type UseAppRouteSyncArgs = {
   activeCanvaPageId: string;
   selectedCanvaSlotId: string | null;
   activePlanningPeriodId: string;
+  planningPeriodIds: string[];
+  planningPeriods: PlanningPeriod[];
   posts: PlannedPost[];
   canvaPages: CanvaGridPage[];
   handlers: AppRouteSyncHandlers;
@@ -59,6 +63,9 @@ function buildValidationContext(
   registryClientIds: string[],
   posts: PlannedPost[],
   canvaPages: CanvaGridPage[],
+  planningPeriodIds: string[],
+  planningPeriods: PlanningPeriod[],
+  activePeriodId: string,
   defaultPageId?: string,
   workspaceReady = true
 ) {
@@ -74,8 +81,22 @@ function buildValidationContext(
     postIds: posts.map((p) => p.id),
     pageIds: canvaPages.map((p) => p.id),
     slotIdsByPage,
+    periodIds: planningPeriodIds,
+    periods: planningPeriods,
+    activePeriodId,
+    defaultPeriodId: activePeriodId,
     defaultPageId,
     workspaceReady,
+  };
+}
+
+function buildRouteBuildContext(
+  planningPeriods: PlanningPeriod[],
+  activePeriodId: string
+): ClientRouteBuildContext {
+  return {
+    periods: planningPeriods,
+    defaultPeriodId: activePeriodId,
   };
 }
 
@@ -124,6 +145,8 @@ export function useAppRouteSync({
   activeCanvaPageId,
   selectedCanvaSlotId,
   activePlanningPeriodId,
+  planningPeriodIds,
+  planningPeriods,
   posts,
   canvaPages,
   handlers,
@@ -135,6 +158,7 @@ export function useAppRouteSync({
     setBeforeNavigate,
     pendingNavigationRef,
     registerCommitNavigation,
+    registerRouteBuildContext,
     isApplyingRouteRef,
   } = useAppNavigation();
   const pathname = usePathname();
@@ -145,6 +169,8 @@ export function useAppRouteSync({
   const settingsDraftDirtyRef = useRef(settingsDraftDirty);
   activeSectionRef.current = activeSection;
   settingsDraftDirtyRef.current = settingsDraftDirty;
+
+  const routeBuildCtx = buildRouteBuildContext(planningPeriods, activePlanningPeriodId);
 
   const currentRouteFromState = useCallback(
     () =>
@@ -214,11 +240,14 @@ export function useAppRouteSync({
         registryClientIds,
         posts,
         canvaPages,
+        planningPeriodIds,
+        planningPeriods,
+        activePlanningPeriodId,
         activeCanvaPageId,
         clientRoute?.clientId === effectiveActiveClientId
       );
       const nextRoute = enrichRouteBeforePush(built, activeCanvaPageId, ctx);
-      const nextPath = buildClientPath(nextRoute);
+      const nextPath = buildClientPath(nextRoute, routeBuildCtx);
       const currentPath = searchParams.toString()
         ? `${pathname}?${searchParams.toString()}`
         : pathname;
@@ -240,7 +269,11 @@ export function useAppRouteSync({
       registryClientIds,
       posts,
       canvaPages,
+      planningPeriodIds,
+      planningPeriods,
+      activePlanningPeriodId,
       activeCanvaPageId,
+      routeBuildCtx,
       pathname,
       searchParams,
     ]
@@ -271,6 +304,11 @@ export function useAppRouteSync({
     return () => registerCommitNavigation(null);
   }, [commitNavigation, registerCommitNavigation]);
 
+  useEffect(() => {
+    registerRouteBuildContext(() => routeBuildCtx);
+    return () => registerRouteBuildContext(null);
+  }, [registerRouteBuildContext, routeBuildCtx]);
+
   /** Troca de cliente só quando a URL muda — não a cada update de posts/canva. */
   useEffect(() => {
     if (!enabled || !clientRoute || !hasActiveClient) return;
@@ -285,62 +323,140 @@ export function useAppRouteSync({
     handlers.switchClient,
   ]);
 
+  /** Canonicaliza ?period= legado ou inválido (replace silencioso). */
+  useEffect(() => {
+    if (!enabled || !clientRoute || !hasActiveClient) return;
+    if (applyingFromUrlRef.current) return;
+    if (clientRoute.clientId !== effectiveActiveClientId) return;
+    if (!planningPeriods.length) return;
+
+    const ctx = buildValidationContext(
+      registryClientIds,
+      posts,
+      canvaPages,
+      planningPeriodIds,
+      planningPeriods,
+      activePlanningPeriodId,
+      activeCanvaPageId,
+      true
+    );
+    const validated = validateClientRoute(clientRoute, ctx);
+    if (validated.ok) return;
+
+    const canonicalPath = buildClientPath(validated.route, routeBuildCtx);
+    const currentPath = searchParams.toString()
+      ? `${pathname}?${searchParams.toString()}`
+      : pathname;
+    if (canonicalPath === currentPath) return;
+
+    replaceClientRoute(validated.route);
+  }, [
+    enabled,
+    hasActiveClient,
+    clientRoute,
+    pathname,
+    searchParams,
+    effectiveActiveClientId,
+    registryClientIds,
+    posts,
+    canvaPages,
+    planningPeriodIds,
+    planningPeriods,
+    activePlanningPeriodId,
+    activeCanvaPageId,
+    replaceClientRoute,
+    routeBuildCtx,
+  ]);
+
+  /** URL → patch de seção/abas/period (sem reconciliar state→URL). */
   useEffect(() => {
     if (!enabled || !clientRoute || !hasActiveClient) return;
     if (applyingFromUrlRef.current) return;
     if (isApplyingRouteRef.current) return;
 
-    const routePath = buildClientPath(clientRoute);
+    const routePath = buildClientPath(clientRoute, routeBuildCtx);
     const pendingStatus = resolvePendingNavigation(pendingNavigationRef.current, routePath);
 
-    if (pendingStatus === "blocked") {
-      return;
-    }
+    if (pendingStatus === "blocked") return;
+
+    const workspaceReady = clientRoute.clientId === effectiveActiveClientId;
+    const ctx = buildValidationContext(
+      registryClientIds,
+      posts,
+      canvaPages,
+      planningPeriodIds,
+      planningPeriods,
+      activePlanningPeriodId,
+      activeCanvaPageId,
+      workspaceReady
+    );
+    const validated = validateClientRoute(clientRoute, ctx);
 
     if (pendingStatus === "match") {
       pendingNavigationRef.current = null;
-      const ctx = buildValidationContext(
-        registryClientIds,
-        posts,
-        canvaPages,
-        activeCanvaPageId,
-        clientRoute.clientId === effectiveActiveClientId
-      );
-      const validated = validateClientRoute(clientRoute, ctx);
-      const route = validated.route;
-      applyPatch(clientRouteToStatePatch(route));
+      applyPatch(clientRouteToStatePatch(validated.route));
       return;
     }
+
+    applyPatch(clientRouteToStatePatch(validated.route));
+  }, [
+    enabled,
+    pathname,
+    searchParams,
+    clientRoute,
+    hasActiveClient,
+    effectiveActiveClientId,
+    registryClientIds,
+    planningPeriodIds,
+    planningPeriods,
+    activePlanningPeriodId,
+    applyPatch,
+    pendingNavigationRef,
+    isApplyingRouteRef,
+    routeBuildCtx,
+    posts,
+    canvaPages,
+    activeCanvaPageId,
+  ]);
+
+  /** State → URL quando diverge (ex.: navegação interna sem push). */
+  useEffect(() => {
+    if (!enabled || !clientRoute || !hasActiveClient) return;
+    if (applyingFromUrlRef.current) return;
+    if (isApplyingRouteRef.current) return;
+    if (clientRoute.clientId !== effectiveActiveClientId) return;
+
+    const routePath = buildClientPath(clientRoute, routeBuildCtx);
+    const pendingStatus = resolvePendingNavigation(pendingNavigationRef.current, routePath);
+    if (pendingStatus === "blocked" || pendingStatus === "match") return;
 
     let cancelled = false;
 
     void (async () => {
-      const workspaceReady = clientRoute.clientId === effectiveActiveClientId;
       const ctx = buildValidationContext(
         registryClientIds,
         posts,
         canvaPages,
+        planningPeriodIds,
+        planningPeriods,
+        activePlanningPeriodId,
         activeCanvaPageId,
-        workspaceReady
+        true
       );
       const validated = validateClientRoute(clientRoute, ctx);
       const route = validated.route;
 
       if (cancelled) return;
-
-      if (!validated.ok) {
-        replaceClientRoute(route);
-        return;
-      }
+      if (!validated.ok) return;
 
       const stateRoute = currentRouteFromState();
       if (!stateRoute) return;
 
-      if (buildClientPath(route) === buildClientPath(stateRoute)) {
+      if (buildClientPath(route, routeBuildCtx) === buildClientPath(stateRoute, routeBuildCtx)) {
         return;
       }
 
-      if (pathsEqual(route, stateRoute)) {
+      if (pathsEqual(route, stateRoute, routeBuildCtx)) {
         return;
       }
 
@@ -369,7 +485,7 @@ export function useAppRouteSync({
         }
       }
 
-      applyPatch(clientRouteToStatePatch(route));
+      void commitNavigation(stateRoute, { replace: true, skipDirtyGuard: true });
     })();
 
     return () => {
@@ -377,20 +493,25 @@ export function useAppRouteSync({
     };
   }, [
     enabled,
-    pathname,
-    searchParams,
     clientRoute,
     hasActiveClient,
     effectiveActiveClientId,
+    activeSection,
+    postsWorkTab,
+    catalogTab,
+    settingsTab,
+    activePreviewId,
+    activeCanvaPageId,
+    selectedCanvaSlotId,
+    activePlanningPeriodId,
     registryClientIds,
     posts,
     canvaPages,
-    activeCanvaPageId,
-    replaceClientRoute,
-    applyPatch,
-    handlers,
-    currentRouteFromState,
+    planningPeriodIds,
+    planningPeriods,
     commitNavigation,
+    currentRouteFromState,
+    routeBuildCtx,
     pendingNavigationRef,
     isApplyingRouteRef,
   ]);

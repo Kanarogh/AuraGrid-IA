@@ -5,7 +5,11 @@ import {
   defaultSettingsTab,
 } from "./slugs";
 import { buildClientPath, buildHomeRedirectPath } from "./paths";
-import type { ClientRoute, RouteValidationContext, RouteValidationResult } from "./types";
+import {
+  periodQueryNeedsCanonicalReplace,
+  resolvePeriodQueryToId,
+} from "./periodSlug";
+import type { ClientRoute, ClientRouteBuildContext, RouteValidationContext, RouteValidationResult } from "./types";
 
 function withSectionDefaults(route: ClientRoute): ClientRoute {
   const next = { ...route };
@@ -59,14 +63,62 @@ export function validateClientRoute(
     }
   }
 
+  if (next.periodId && ctx.periods?.length) {
+    const rawPeriodQuery = next.periodId;
+    const resolved =
+      resolvePeriodQueryToId(ctx.periods, rawPeriodQuery) ??
+      (ctx.periodIds?.includes(rawPeriodQuery) ? rawPeriodQuery : undefined);
+
+    if (resolved && ctx.periodIds?.includes(resolved)) {
+      next = { ...next, periodId: resolved };
+    } else if (ctx.activePeriodId && ctx.periodIds?.includes(ctx.activePeriodId)) {
+      next = { ...next, periodId: ctx.activePeriodId };
+    } else {
+      next = { ...next, periodId: undefined };
+    }
+
+    if (
+      periodQueryNeedsCanonicalReplace(
+        rawPeriodQuery,
+        ctx.periods,
+        next.periodId
+      )
+    ) {
+      const buildCtx: ClientRouteBuildContext = {
+        periods: ctx.periods,
+        defaultPeriodId: ctx.defaultPeriodId ?? ctx.activePeriodId,
+      };
+      return {
+        ok: false,
+        route: withSectionDefaults(next),
+        reason: "period_canonical",
+      };
+    }
+  } else if (next.periodId && ctx.periodIds?.length) {
+    if (!ctx.periodIds.includes(next.periodId)) {
+      next = {
+        ...next,
+        periodId: ctx.activePeriodId && ctx.periodIds.includes(ctx.activePeriodId)
+          ? ctx.activePeriodId
+          : undefined,
+      };
+    }
+  }
+
   if (next.section === "canva_grid" && !next.pageId && ctx.defaultPageId) {
     next = { ...next, pageId: ctx.defaultPageId };
   }
 
+  const buildCtx: ClientRouteBuildContext = {
+    periods: ctx.periods,
+    defaultPeriodId: ctx.defaultPeriodId ?? ctx.activePeriodId,
+  };
+
   const canonical = withSectionDefaults(next);
   const ok =
     ctx.clientIds.includes(canonical.clientId) &&
-    buildClientPath(canonical) === buildClientPath(withSectionDefaults(route));
+    buildClientPath(canonical, buildCtx) ===
+      buildClientPath(withSectionDefaults(route), buildCtx);
 
   return ok
     ? { ok: true, route: canonical }

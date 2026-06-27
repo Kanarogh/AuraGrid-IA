@@ -12,14 +12,37 @@ import {
   sectionFromSlug,
   settingsTabFromSlug,
 } from "./slugs";
-import type { ClientRoute, ParsedLocation } from "./types";
+import type { ClientRoute, ParsedLocation, ClientRouteBuildContext } from "./types";
+import {
+  isLegacyPeriodQuery,
+  periodIdToUrlSlug,
+} from "./periodSlug";
 
 function encodeSegment(value: string): string {
   return encodeURIComponent(value);
 }
 
+function periodQueryForPath(
+  route: ClientRoute,
+  ctx?: ClientRouteBuildContext
+): string | undefined {
+  if (!route.periodId) return undefined;
+
+  if (ctx?.periods?.length) {
+    if (ctx.defaultPeriodId && route.periodId === ctx.defaultPeriodId) {
+      return undefined;
+    }
+    return periodIdToUrlSlug(route.periodId, ctx.periods);
+  }
+
+  const raw = route.periodId;
+  if (/^\d{4}-\d{2}(-\d{2})?$/.test(raw)) return raw;
+  if (isLegacyPeriodQuery(raw)) return undefined;
+  return raw;
+}
+
 /** Monta pathname + query a partir de uma rota de cliente. */
-export function buildClientPath(route: ClientRoute): string {
+export function buildClientPath(route: ClientRoute, ctx?: ClientRouteBuildContext): string {
   if (!route.clientId?.trim()) return "/welcome";
 
   const base = `/c/${encodeSegment(route.clientId)}/${SECTION_SLUGS[route.section]}`;
@@ -58,8 +81,9 @@ export function buildClientPath(route: ClientRoute): string {
   }
 
   const pathname = parts.length > 0 ? `${base}/${parts.join("/")}` : base;
-  if (route.periodId) {
-    const qs = new URLSearchParams({ period: route.periodId });
+  const periodQuery = periodQueryForPath(route, ctx);
+  if (periodQuery) {
+    const qs = new URLSearchParams({ period: periodQuery });
     return `${pathname}?${qs.toString()}`;
   }
   return pathname;
@@ -192,12 +216,22 @@ export function parseAppPath(
   return { kind: "client", route };
 }
 
-export function pathsEqual(a: ClientRoute, b: ClientRoute): boolean {
-  return buildClientPath(a) === buildClientPath(b);
+export function pathsEqual(
+  a: ClientRoute,
+  b: ClientRoute,
+  ctx?: ClientRouteBuildContext
+): boolean {
+  return buildClientPath(a, ctx) === buildClientPath(b, ctx);
 }
 
 export function mergeClientRoute(base: ClientRoute, partial: Partial<ClientRoute>): ClientRoute {
   const next: ClientRoute = { ...base };
+  if (partial.clientId && partial.clientId !== base.clientId) {
+    delete next.periodId;
+    delete next.postId;
+    delete next.pageId;
+    delete next.slotId;
+  }
   if (partial.section && partial.section !== base.section) {
     delete next.postId;
     delete next.pageId;

@@ -113,6 +113,22 @@ test("navigation without URL base uses defaultClientId", () => {
   assert.equal(buildClientPath(next), "/c/palak-br/catalogo/referencias");
 });
 
+test("mergeClientRoute clears period and entities on client change", () => {
+  const base: ClientRoute = {
+    clientId: "palak-euro",
+    section: "catalog",
+    catalogTab: "references",
+    periodId: "palak-euro_period_123",
+  };
+  const merged = mergeClientRoute(base, { clientId: "sisaut" });
+  assert.equal(merged.clientId, "sisaut");
+  assert.equal(merged.periodId, undefined);
+  assert.equal(
+    buildClientPath(merged),
+    "/c/sisaut/catalogo/referencias"
+  );
+});
+
 test("posts tab change clears postId", () => {
   const base: ClientRoute = {
     clientId: "palak-br",
@@ -138,8 +154,27 @@ test("content_schedule round-trip", () => {
   assert.equal(pathsEqual(parsed.route, route), true);
 });
 
-test("buildDashboardPath", () => {
-  assert.equal(buildDashboardPath(), "/dashboard");
+test("period slug round-trip with build context", () => {
+  const periods = [
+    {
+      id: "sisaut__period_default",
+      startDate: "2026-06-01",
+      status: "active" as const,
+    },
+  ];
+  const route: ClientRoute = {
+    clientId: "sisaut",
+    section: "catalog",
+    catalogTab: "references",
+    periodId: "sisaut__period_default",
+  };
+  const ctx = { periods, defaultPeriodId: "other_period" };
+  const path = buildClientPath(route, ctx);
+  assert.equal(path, "/c/sisaut/catalogo/referencias?period=2026-06");
+  const parsed = parseAppPath("/c/sisaut/catalogo/referencias", "period=2026-06");
+  assert.equal(parsed.kind, "client");
+  if (parsed.kind !== "client") return;
+  assert.equal(parsed.route.periodId, "2026-06");
 });
 
 console.log("All appRouting tests passed.");

@@ -643,6 +643,8 @@ export default function App() {
     activeCanvaPageId,
     selectedCanvaSlotId,
     activePlanningPeriodId,
+    planningPeriodIds: planningPeriods.map((p) => p.id),
+    planningPeriods,
     posts,
     canvaPages,
     handlers: routeHandlers,

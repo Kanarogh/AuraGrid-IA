@@ -1,5 +1,6 @@
 import type { AppSection } from "../sectionMeta";
 import type { PostsWorkTab } from "../../components/posts/PostsWorkspaceToolbar";
+import type { PeriodRouteRef } from "./periodSlug";
 
 export type CatalogTab = "references" | "grid";
 
@@ -31,11 +32,23 @@ export type NavigateOptions = {
   skipDirtyGuard?: boolean;
 };
 
+/** Contexto para serializar ?period= como slug legível (YYYY-MM). */
+export type ClientRouteBuildContext = {
+  periods?: PeriodRouteRef[];
+  /** Omite ?period= quando periodId coincide com o roteiro padrão do workspace. */
+  defaultPeriodId?: string;
+};
+
 export type RouteValidationContext = {
   clientIds: string[];
   postIds: string[];
   pageIds: string[];
   slotIdsByPage: Map<string, string[]>;
+  periodIds?: string[];
+  periods?: PeriodRouteRef[];
+  /** Período ativo do workspace — fallback quando periodId na URL é inválido. */
+  activePeriodId?: string;
+  defaultPeriodId?: string;
   defaultPageId?: string;
   /** Quando false, não valida postId/pageId/slotId (workspace ainda carregando). */
   workspaceReady?: boolean;

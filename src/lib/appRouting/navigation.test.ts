@@ -89,4 +89,94 @@ test("validateClientRoute strips invalid postId when workspace ready", () => {
   assert.equal(result.route.postId, undefined);
 });
 
+test("validateClientRoute replaces foreign periodId with active period", () => {
+  const route: ClientRoute = {
+    clientId: "sisaut",
+    section: "catalog",
+    catalogTab: "references",
+    periodId: "palak-euro_period_123",
+  };
+  const periods = [
+    {
+      id: "sisaut_period_456",
+      startDate: "2026-06-01",
+      status: "active" as const,
+    },
+  ];
+  const result = validateClientRoute(route, {
+    clientIds: ["sisaut", "palak-euro"],
+    postIds: [],
+    pageIds: [],
+    slotIdsByPage: new Map(),
+    periodIds: ["sisaut_period_456"],
+    periods,
+    activePeriodId: "sisaut_period_456",
+    defaultPeriodId: "sisaut_period_456",
+    workspaceReady: true,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.route.periodId, "sisaut_period_456");
+  assert.equal(
+    buildClientPath(result.route, { periods, defaultPeriodId: "sisaut_period_456" }),
+    "/c/sisaut/catalogo/referencias"
+  );
+});
+
+test("validateClientRoute canonicalizes legacy period query to YYYY-MM slug", () => {
+  const route: ClientRoute = {
+    clientId: "sisaut",
+    section: "catalog",
+    catalogTab: "references",
+    periodId: "sisaut_period_456",
+  };
+  const periods = [
+    {
+      id: "sisaut_period_456",
+      startDate: "2026-06-01",
+      status: "active" as const,
+    },
+  ];
+  const result = validateClientRoute(route, {
+    clientIds: ["sisaut"],
+    postIds: [],
+    pageIds: [],
+    slotIdsByPage: new Map(),
+    periodIds: ["sisaut_period_456"],
+    periods,
+    activePeriodId: "sisaut_period_456",
+    workspaceReady: true,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "period_canonical");
+  assert.equal(
+    buildClientPath(result.route, { periods, defaultPeriodId: "sisaut_period_456" }),
+    "/c/sisaut/catalogo/referencias"
+  );
+});
+
+test("buildClientPath emits readable period slug when not default", () => {
+  const periods = [
+    {
+      id: "sisaut_period_456",
+      startDate: "2026-06-01",
+      status: "active" as const,
+    },
+    {
+      id: "sisaut_period_789",
+      startDate: "2026-05-01",
+      status: "archived" as const,
+    },
+  ];
+  const route: ClientRoute = {
+    clientId: "sisaut",
+    section: "catalog",
+    catalogTab: "references",
+    periodId: "sisaut_period_789",
+  };
+  assert.equal(
+    buildClientPath(route, { periods, defaultPeriodId: "sisaut_period_456" }),
+    "/c/sisaut/catalogo/referencias?period=2026-05"
+  );
+});
+
 console.log("\nAll navigation tests passed.");

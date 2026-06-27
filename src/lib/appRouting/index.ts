@@ -1,6 +1,7 @@
 export type {
   CatalogTab,
   ClientRoute,
+  ClientRouteBuildContext,
   NavigateOptions,
   ParsedLocation,
   RouteValidationContext,
@@ -41,6 +42,15 @@ export {
   type AppNavigationState,
   type RouteStatePatch,
 } from "./syncStateToRoute";
+
+export {
+  isLegacyPeriodQuery,
+  periodIdToUrlSlug,
+  periodQueryNeedsCanonicalReplace,
+  periodToUrlSlug,
+  resolvePeriodQueryToId,
+  type PeriodRouteRef,
+} from "./periodSlug";
 
 export {
   AppNavigationProvider,

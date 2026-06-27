@@ -9,7 +9,7 @@
     "start": "next start -H 0.0.0.0 -p 80",
     "lint": "tsc --noEmit",
     "db:migrate": "tsx server/db/migrate.ts",
-    "test:app-routing": "tsx src/lib/appRouting/paths.test.ts",
+    "test:app-routing": "tsx src/lib/appRouting/paths.test.ts && tsx src/lib/appRouting/periodSlug.test.ts",
     "test:navigation": "tsx src/lib/appRouting/navigation.test.ts",
     "test:enrich-status": "tsx server/services/catalogEnrichmentSnapshot.test.ts",
     "test:catalog-sync": "tsx server/services/catalogRevision.test.ts",
