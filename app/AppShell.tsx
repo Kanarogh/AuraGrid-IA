@@ -13,6 +13,7 @@ import { AppBootstrapGate } from "../src/components/app/AppBootstrapGate";
 import { NotificationProvider } from "../src/components/ui/NotificationProvider";
 import { AppNavigationProvider } from "../src/lib/appRouting";
 import { AppRouteBootstrap } from "../src/components/app/AppRouteBootstrap";
+import { AppearanceCloudSync } from "../src/components/app/AppearanceCloudSync";
 import { PlanningPeriodModalProvider } from "../src/components/layout/planningPeriodModalContext";
 import { initTheme } from "../src/hooks/useTheme";
 import { initAccent } from "../src/hooks/useAccent";
@@ -37,6 +38,7 @@ export default function AppShell() {
     <AppErrorBoundary>
       <NotificationProvider>
         <AuthProvider>
+          <AppearanceCloudSync />
           <ClientWorkspaceProvider>
             <ApiWorkspaceSync />
             <Suspense fallback={null}>

@@ -48,6 +48,17 @@ export const userAiPreferences = pgTable("user_ai_preferences", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const userAppearancePreferences = pgTable("user_appearance_preferences", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  accentId: text("accent_id").notNull().default("cobalto"),
+  customAccentLight: text("custom_accent_light"),
+  customAccentDark: text("custom_accent_dark"),
+  theme: text("theme").notNull().default("light"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const clientAiPreferences = pgTable(
   "client_ai_preferences",
   {

@@ -40,15 +40,15 @@ export const ACCENT_PRESETS: AccentPreset[] = [
 ];
 
 const STORAGE_KEY = "ag_accent";
-const ACCENT_CHANGE_EVENT = "ag-accent-change";
-const CUSTOM_CHANGE_EVENT = "ag-accent-custom-change";
+export const ACCENT_CHANGE_EVENT = "ag-accent-change";
+export const CUSTOM_ACCENT_CHANGE_EVENT = "ag-accent-custom-change";
 const DEFAULT_ACCENT: AccentId = "cobalto";
 
 export function isAccentId(value: unknown): value is AccentId {
   return value === "custom" || ACCENT_PRESETS.some((p) => p.id === value);
 }
 
-function readStoredAccent(): AccentId {
+export function readStoredAccent(): AccentId {
   if (typeof window === "undefined") return DEFAULT_ACCENT;
   const stored = localStorage.getItem(STORAGE_KEY);
   return isAccentId(stored) ? stored : DEFAULT_ACCENT;
@@ -78,7 +78,7 @@ function broadcastAccentChange(accent: AccentId) {
   });
 }
 
-function applyAccent(accent: AccentId, broadcast = true) {
+export function applyAccent(accent: AccentId, broadcast = true) {
   localStorage.setItem(STORAGE_KEY, accent);
   applyAccentToDom(accent);
   if (broadcast) broadcastAccentChange(accent);
@@ -111,11 +111,11 @@ export function useAccent() {
     };
 
     window.addEventListener(ACCENT_CHANGE_EVENT, onAccentChange);
-    window.addEventListener(CUSTOM_CHANGE_EVENT, onCustomChange);
+    window.addEventListener(CUSTOM_ACCENT_CHANGE_EVENT, onCustomChange);
     window.addEventListener(THEME_CHANGE_EVENT, onThemeChange);
     return () => {
       window.removeEventListener(ACCENT_CHANGE_EVENT, onAccentChange);
-      window.removeEventListener(CUSTOM_CHANGE_EVENT, onCustomChange);
+      window.removeEventListener(CUSTOM_ACCENT_CHANGE_EVENT, onCustomChange);
       window.removeEventListener(THEME_CHANGE_EVENT, onThemeChange);
     };
   }, []);
@@ -141,7 +141,7 @@ export function useAccent() {
 
     queueMicrotask(() => {
       window.dispatchEvent(new CustomEvent<AccentId>(ACCENT_CHANGE_EVENT, { detail: "custom" }));
-      window.dispatchEvent(new CustomEvent(CUSTOM_CHANGE_EVENT));
+      window.dispatchEvent(new CustomEvent(CUSTOM_ACCENT_CHANGE_EVENT));
     });
   }, []);
 
