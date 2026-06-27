@@ -4,7 +4,6 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
-  LayoutGrid,
   List,
   Settings2,
 } from "lucide-react";
@@ -39,44 +38,42 @@ export function PublishCalendarToolbar({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
-          {hubView === "calendar" && (
-            <>
-              <Button type="button" variant="ghost" size="sm" onClick={() => onAnchorChange(-1)} aria-label="Anterior">
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm font-semibold text-ag-text min-w-[140px] text-center capitalize">
-                {periodLabel}
-              </span>
-              <Button type="button" variant="ghost" size="sm" onClick={() => onAnchorChange(1)} aria-label="Próximo">
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button type="button" variant="secondary" size="sm" onClick={onToday}>
-                Hoje
-              </Button>
-              <div className="flex rounded-xl border border-ag-border p-0.5 ml-1">
-                {(["week", "month"] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => onCalendarModeChange(mode)}
-                    className={cn(
-                      "px-3 py-1.5 text-xs font-medium rounded-lg transition-colors",
-                      calendarMode === mode
-                        ? "bg-ag-accent-soft text-ag-accent"
-                        : "text-ag-muted hover:text-ag-text"
-                    )}
-                  >
-                    {mode === "week" ? "Semana" : "Mês"}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+      <div className="flex flex-wrap items-center gap-2 w-full">
+        {hubView === "calendar" && (
+          <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+            <Button type="button" variant="ghost" size="sm" onClick={() => onAnchorChange(-1)} aria-label="Anterior">
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm font-semibold text-ag-text min-w-[140px] text-center capitalize">
+              {periodLabel}
+            </span>
+            <Button type="button" variant="ghost" size="sm" onClick={() => onAnchorChange(1)} aria-label="Próximo">
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button type="button" variant="secondary" size="sm" onClick={onToday}>
+              Hoje
+            </Button>
+            <div className="flex rounded-xl border border-ag-border p-0.5">
+              {(["week", "month"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => onCalendarModeChange(mode)}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-medium rounded-lg transition-colors",
+                    calendarMode === mode
+                      ? "bg-ag-accent-soft text-ag-accent"
+                      : "text-ag-muted hover:text-ag-text"
+                  )}
+                >
+                  {mode === "week" ? "Semana" : "Mês"}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 ml-auto">
           <div className="flex rounded-xl border border-ag-border p-0.5">
             {(
               [
