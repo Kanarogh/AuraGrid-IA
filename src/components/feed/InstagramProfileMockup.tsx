@@ -54,6 +54,7 @@ export function InstagramProfileMockup({
   swapSourceId,
   onSelectPost,
   onSwapDays,
+  scheduleOverlay,
 }: {
   posts: PlannedPost[];
   canvaPages?: CanvaGridPage[];
@@ -64,6 +65,13 @@ export function InstagramProfileMockup({
   swapSourceId: string;
   onSelectPost: (postId: string) => void;
   onSwapDays: (fromId: string, toId: string) => void;
+  scheduleOverlay?: Map<
+    string,
+    {
+      scheduledAt: string;
+      status: "queued" | "publishing" | "published" | "failed" | "eligible" | "cancelled";
+    }
+  >;
 }) {
   const handle = username.replace(/^@/, "");
   const ordered = sortPostsForInstagramProfile(posts, {
@@ -194,6 +202,13 @@ export function InstagramProfileMockup({
               <div className="grid grid-cols-3 gap-[2px]">
                 {ordered.map((post) => {
                   const isFocused = post.id === activePreviewId;
+                  const sched = scheduleOverlay?.get(post.id);
+                  const schedTime = sched
+                    ? new Date(sched.scheduledAt).toLocaleTimeString("pt-BR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : null;
                   return (
                     <div
                       key={post.id}
@@ -226,9 +241,23 @@ export function InstagramProfileMockup({
                           <span className="text-[8px] font-bold mt-0.5">Inverter</span>
                         </div>
                       )}
-                      {post.isConfirmed && (
+                      {post.isConfirmed && !sched && (
                         <div className="absolute top-1 right-1 bg-emerald-400 text-black p-0.5 rounded-full z-10">
                           <Check className="h-2 w-2" strokeWidth={4} />
+                        </div>
+                      )}
+                      {sched && schedTime && (
+                        <div
+                          className={cn(
+                            "absolute top-1 left-1 right-1 z-10 rounded px-1 py-0.5 text-[7px] font-semibold text-center truncate",
+                            sched.status === "published" && "bg-emerald-500/90 text-white",
+                            sched.status === "failed" && "bg-red-500/90 text-white",
+                            sched.status === "publishing" && "bg-violet-500/90 text-white",
+                            sched.status === "queued" && "bg-ag-accent/90 text-white",
+                            sched.status === "eligible" && "bg-amber-500/90 text-black"
+                          )}
+                        >
+                          {sched.status === "published" ? "No ar" : schedTime}
                         </div>
                       )}
                     </div>

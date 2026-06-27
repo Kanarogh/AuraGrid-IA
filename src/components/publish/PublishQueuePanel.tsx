@@ -45,6 +45,7 @@ function PublishPostRow({
   selected,
   onToggleSelect,
   selectable,
+  onItemClick,
 }: {
   item: PublishQueueItem;
   clientId: string;
@@ -54,6 +55,7 @@ function PublishPostRow({
   selected?: boolean;
   onToggleSelect?: () => void;
   selectable?: boolean;
+  onItemClick?: (item: PublishQueueItem) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const local = draftSchedule
@@ -83,7 +85,19 @@ function PublishPostRow({
   };
 
   return (
-    <div className="flex gap-3 items-start p-3 rounded-xl border border-ag-border bg-ag-surface-1 hover:border-ag-accent/30 transition-colors">
+    <div
+      className="flex gap-3 items-start p-3 rounded-xl border border-ag-border bg-ag-surface-1 hover:border-ag-accent/30 transition-colors cursor-pointer"
+      onClick={() => onItemClick?.(item)}
+      onKeyDown={
+        onItemClick
+          ? (e) => {
+              if (e.key === "Enter") onItemClick(item);
+            }
+          : undefined
+      }
+      role={onItemClick ? "button" : undefined}
+      tabIndex={onItemClick ? 0 : undefined}
+    >
       {selectable && (
         <input
           type="checkbox"
@@ -116,6 +130,7 @@ function PublishPostRow({
               onChange={(e) =>
                 onDraftSchedule?.(localInputToIso(e.target.value, local.time))
               }
+              onClick={(e) => e.stopPropagation()}
               className="rounded-lg border border-ag-border bg-ag-surface-2 px-2 py-1.5 text-xs ag-focus-ring"
             />
             <input
@@ -124,6 +139,7 @@ function PublishPostRow({
               onChange={(e) =>
                 onDraftSchedule?.(localInputToIso(local.date, e.target.value))
               }
+              onClick={(e) => e.stopPropagation()}
               className="rounded-lg border border-ag-border bg-ag-surface-2 px-2 py-1.5 text-xs ag-focus-ring"
             />
           </div>
@@ -194,6 +210,7 @@ export function PublishQueuePanel({
   selectedIds,
   onToggleSelect,
   onSelectDay,
+  onItemClick,
 }: {
   clientId: string;
   queue: PublishQueueItem[];
@@ -204,6 +221,7 @@ export function PublishQueuePanel({
   selectedIds: Set<string>;
   onToggleSelect: (postId: string) => void;
   onSelectDay: (postIds: string[]) => void;
+  onItemClick?: (item: PublishQueueItem) => void;
 }) {
   const filtered = useMemo(() => filterQueue(queue, filter), [queue, filter]);
   const grouped = useMemo(() => groupByDay(filtered), [filtered]);
@@ -267,6 +285,7 @@ export function PublishQueuePanel({
                       selectable={filter === "eligible"}
                       selected={selectedIds.has(item.plannedPostId)}
                       onToggleSelect={() => onToggleSelect(item.plannedPostId)}
+                      onItemClick={onItemClick}
                     />
                   ))}
                 </div>

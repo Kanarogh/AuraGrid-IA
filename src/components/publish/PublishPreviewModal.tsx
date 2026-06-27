@@ -1,10 +1,13 @@
 "use client";
 
+import { useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { PlannedPost } from "../../types";
 import { InstagramPhonePreview } from "../posts/InstagramPhonePreview";
 import { Button } from "../ui/Button";
 import type { PublishQueueItem } from "../../lib/publish/publishApi";
 import { scheduledAtToLocalInput } from "./publishUiUtils";
+import { queueItemToPlannedPost } from "./publishCalendarUtils";
 
 export function PublishPreviewModal({
   open,
@@ -25,9 +28,13 @@ export function PublishPreviewModal({
   onConfirm: () => void;
   confirming?: boolean;
 }) {
+  const [index, setIndex] = useState(0);
+
   if (!open || items.length === 0) return null;
 
-  const preview = items[0];
+  const safeIndex = Math.min(index, items.length - 1);
+  const preview = items[safeIndex]!;
+
   const resolveWhen = (item: PublishQueueItem) =>
     draftSchedules?.[item.plannedPostId] ?? item.scheduledAt ?? scheduledAt ?? null;
 
@@ -40,24 +47,11 @@ export function PublishPreviewModal({
       : "";
 
   const when = formatWhen(resolveWhen(preview));
-
   const count = items.length;
   const captionLong = preview.caption.length > 2200;
+  const mockPost: PlannedPost = queueItemToPlannedPost(preview);
 
-  const mockPost: PlannedPost = {
-    id: preview.plannedPostId,
-    dayNumber: preview.dayNumber,
-    dateLabel: preview.dateLabel,
-    image: preview.imageUrl,
-    imageAssetId: preview.imageAssetId,
-    matchedCatalogId: null,
-    reasoning: null,
-    caption: preview.caption,
-    isGenerating: false,
-    isGenerated: true,
-    isConfirmed: true,
-    error: null,
-  };
+  const anyCaptionLong = items.some((i) => i.caption.length > 2200);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -74,13 +68,40 @@ export function PublishPreviewModal({
           <p className="text-sm text-ag-muted mt-1">
             {count === 1
               ? "Revise como o post vai aparecer no Instagram."
-              : `${count} posts serão agendados com os horários escolhidos.`}
+              : `Post ${safeIndex + 1} de ${count} — revise cada um antes de confirmar.`}
           </p>
         </div>
 
         <div className="p-5 grid gap-6 lg:grid-cols-2">
-          <div className="flex justify-center">
-            <InstagramPhonePreview post={mockPost} username={instagramHandle} />
+          <div className="space-y-3">
+            {count > 1 && (
+              <div className="flex items-center justify-center gap-3">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={safeIndex === 0}
+                  onClick={() => setIndex((i) => Math.max(0, i - 1))}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-xs text-ag-muted">
+                  {safeIndex + 1} / {count}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={safeIndex >= count - 1}
+                  onClick={() => setIndex((i) => Math.min(count - 1, i + 1))}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            <div className="flex justify-center">
+              <InstagramPhonePreview post={mockPost} username={instagramHandle} />
+            </div>
           </div>
           <div className="space-y-4">
             {when && (
@@ -92,11 +113,19 @@ export function PublishPreviewModal({
               </div>
             )}
             {count > 1 && (
-              <ul className="space-y-2 max-h-48 overflow-auto text-sm text-ag-text">
-                {items.map((item) => (
-                  <li key={item.plannedPostId} className="flex justify-between gap-2 border-b border-ag-border/50 pb-2">
-                    <span className="text-ag-muted">Dia {item.dayNumber}</span>
-                    <span className="font-medium">{formatWhen(resolveWhen(item))}</span>
+              <ul className="space-y-2 max-h-32 overflow-auto text-sm">
+                {items.map((item, i) => (
+                  <li key={item.plannedPostId}>
+                    <button
+                      type="button"
+                      onClick={() => setIndex(i)}
+                      className={`w-full flex justify-between gap-2 text-left px-2 py-1.5 rounded-lg ${
+                        i === safeIndex ? "bg-ag-accent-soft text-ag-accent" : "text-ag-text hover:bg-ag-surface-2"
+                      }`}
+                    >
+                      <span>Dia {item.dayNumber}</span>
+                      <span className="font-medium text-xs">{formatWhen(resolveWhen(item))}</span>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -119,7 +148,12 @@ export function PublishPreviewModal({
           <Button type="button" variant="ghost" onClick={onClose} disabled={confirming}>
             Voltar
           </Button>
-          <Button type="button" variant="accent" onClick={onConfirm} disabled={confirming || captionLong}>
+          <Button
+            type="button"
+            variant="accent"
+            onClick={onConfirm}
+            disabled={confirming || anyCaptionLong}
+          >
             {confirming
               ? "Programando…"
               : count === 1

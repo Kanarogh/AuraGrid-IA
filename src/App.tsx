@@ -2879,9 +2879,14 @@ export default function App() {
           <PostSchedulingWorkspace
             clientId={activeClientId}
             planningPeriodId={activePlanningPeriodId}
+            startDate={startDate}
             instagramHandle={
               activeClient.instagramHandle ?? activeClient.id.replace(/-/g, "_")
             }
+            displayName={brandGem.name || activeClient.name}
+            posts={posts}
+            canvaPages={canvaPages}
+            canvaGridReversed={canvaGridReversed}
             metaConnectedParam={metaConnectedParam}
             onNavigatePosts={() => void handleNavigate("posts")}
           />

@@ -3,6 +3,7 @@ import { assertClientAccess, requireUser } from "@/server/http/auth";
 import { errorResponse } from "@/server/http/respond";
 import {
   createPublishJobs,
+  countPublishedLast24h,
   listPublishQueue,
   previewScheduleTimes,
 } from "@/server/services/publishJobService";
@@ -25,7 +26,15 @@ export async function GET(req: NextRequest, { params }: Ctx) {
       return NextResponse.json({ error: "planningPeriodId obrigatório." }, { status: 400 });
     }
     const queue = await listPublishQueue(clientId, periodId);
-    return NextResponse.json({ queue });
+    const publishedLast24h = await countPublishedLast24h(clientId);
+    const summary = {
+      eligible: queue.filter((q) => q.status === "eligible").length,
+      scheduled: queue.filter((q) => q.status === "queued" || q.status === "publishing").length,
+      published: queue.filter((q) => q.status === "published").length,
+      failed: queue.filter((q) => q.status === "failed").length,
+      publishedLast24h,
+    };
+    return NextResponse.json({ queue, summary });
   } catch (err) {
     return errorResponse(err, 401);
   }

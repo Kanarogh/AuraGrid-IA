@@ -70,16 +70,24 @@ export async function savePublishPrefs(clientId: string, prefs: PublishPrefs): P
   return readApiJson(res);
 }
 
+export type PublishQueueSummary = {
+  eligible: number;
+  scheduled: number;
+  published: number;
+  failed: number;
+  publishedLast24h: number;
+};
+
 export async function fetchPublishQueue(
   clientId: string,
   planningPeriodId: string
-): Promise<PublishQueueItem[]> {
+): Promise<{ queue: PublishQueueItem[]; summary: PublishQueueSummary }> {
   const qs = new URLSearchParams({ planningPeriodId });
   const res = await apiFetch(
     `/api/v1/clients/${encodeURIComponent(clientId)}/publish/jobs?${qs}`
   );
-  const data = await readApiJson<{ queue: PublishQueueItem[] }>(res);
-  return data.queue;
+  const data = await readApiJson<{ queue: PublishQueueItem[]; summary: PublishQueueSummary }>(res);
+  return { queue: data.queue, summary: data.summary };
 }
 
 export async function previewPublishSchedule(

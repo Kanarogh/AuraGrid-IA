@@ -4,13 +4,16 @@ Guia para configurar e usar a funcionalidade **Programar posts** no AuraGrid.
 
 ## O que foi implementado
 
-- Seção **Programar posts** (`/c/:clientId/programar-posts`) por cliente e período de planejamento
-- Conexão OAuth com Instagram Profissional via Meta
-- Templates de horário configuráveis (1–5 posts/dia) em **Configurações**
-- Sugestão automática de horários + edição manual por post
-- Fila com status: prontos, agendados, publicados, com problema
-- Worker em background que publica no horário (mock em dev)
-- Preview estilo Instagram antes de confirmar
+- Seção **Programar posts** (`/c/:clientId/programar-posts`) — **Scheduler Hub** profissional
+- **Calendário** semana/mês com drag-and-drop, gaps do planejamento e cores por status
+- **Bandeja** de posts prontos + **Preencher automaticamente** (só no período visível)
+- **Composer** lateral (preview, legenda, data/hora, agendar/reagendar/cancelar)
+- **Preview Feed 3×3** integrado no hub (desktop + bottom sheet mobile) com badges de horário
+- **Lista operacional** com filtros, retry/cancel em lote
+- Conexão OAuth Instagram Profissional via Meta
+- Templates de horário (1–5 posts/dia) em **Configurações**
+- Worker em background + polling na UI (30s)
+- Limite Meta **X/100 publicações (24h)** no toolbar
 
 ## Variáveis de ambiente
 
@@ -33,7 +36,7 @@ Migration: `0015_meta_publish.sql` (aplicada automaticamente no deploy).
 1. Configure `META_PUBLISH_MOCK=1`
 2. Use modo nuvem (`DATABASE_URL` + MinIO)
 3. Conecte uma conta Meta **opcional** — com mock, a fila publica simulando sucesso
-4. Fluxo: aprovar posts em **Planejamento e legendas** → **Programar posts** → Sugerir horários → Confirmar
+4. Fluxo: aprovar posts em **Planejamento e legendas** → **Programar posts** → arrastar para o calendário ou **Preencher automaticamente** → **Confirmar**
 
 ## Checklist Meta Developer (produção)
 
