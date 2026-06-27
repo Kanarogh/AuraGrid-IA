@@ -4,17 +4,15 @@ import { useEffect, useRef } from "react";
 import { writeStoredCustomAccent, readStoredCustomAccent } from "../../lib/accentColor";
 import {
   fetchAppearanceSettings,
-  readLocalAppearanceSettings,
+  readLocalAccentSettings,
   saveAppearanceSettings,
   dispatchAppearanceBaseline,
-  type AppearanceSettings,
+  type AppearanceAccentSnapshot,
 } from "../../lib/appearanceSettings";
 import { useAuth } from "../../context/AuthContext";
 import { applyAccent } from "../../hooks/useAccent";
-import { applyTheme } from "../../hooks/useTheme";
 
-function applyRemoteAppearance(settings: Omit<AppearanceSettings, "saved" | "updatedAt">) {
-  applyTheme(settings.theme, true);
+function applyRemoteAccent(settings: AppearanceAccentSnapshot) {
   if (settings.accentId === "custom") {
     const fallback = readStoredCustomAccent();
     writeStoredCustomAccent({
@@ -45,15 +43,14 @@ export function AppearanceCloudSync() {
         if (cancelled) return;
 
         if (remote.saved) {
-          applyRemoteAppearance(remote);
+          applyRemoteAccent(remote);
           dispatchAppearanceBaseline({
             accentId: remote.accentId,
-            theme: remote.theme,
             customAccentLight: remote.customAccentLight,
             customAccentDark: remote.customAccentDark,
           });
         } else {
-          const local = readLocalAppearanceSettings();
+          const local = readLocalAccentSettings();
           await saveAppearanceSettings(local);
           dispatchAppearanceBaseline(local);
         }

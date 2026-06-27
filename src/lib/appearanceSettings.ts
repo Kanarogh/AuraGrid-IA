@@ -12,31 +12,50 @@ export type AppearanceSettings = {
   updatedAt: string | null;
 };
 
-export type AppearanceSnapshot = Omit<AppearanceSettings, "saved" | "updatedAt">;
+/** Cor de destaque — o modo claro/escuro é controlado na barra superior. */
+export type AppearanceAccentSnapshot = {
+  accentId: AccentId;
+  customAccentLight: string | null;
+  customAccentDark: string | null;
+};
 
-export function appearanceSnapshotSignature(snapshot: AppearanceSnapshot): string {
-  return `${snapshot.accentId}|${snapshot.theme}|${snapshot.customAccentLight ?? ""}|${snapshot.customAccentDark ?? ""}`;
+/** @deprecated Use AppearanceAccentSnapshot para dirty/save de cor. */
+export type AppearanceSnapshot = AppearanceAccentSnapshot;
+
+export function appearanceAccentSignature(snapshot: AppearanceAccentSnapshot): string {
+  return `${snapshot.accentId}|${snapshot.customAccentLight ?? ""}|${snapshot.customAccentDark ?? ""}`;
+}
+
+/** @deprecated Use appearanceAccentSignature */
+export function appearanceSnapshotSignature(snapshot: AppearanceAccentSnapshot): string {
+  return appearanceAccentSignature(snapshot);
 }
 
 export const APPEARANCE_BASELINE_EVENT = "ag-appearance-baseline";
 
-export function dispatchAppearanceBaseline(snapshot: AppearanceSnapshot): void {
+export function dispatchAppearanceBaseline(snapshot: AppearanceAccentSnapshot): void {
   if (typeof window === "undefined") return;
   window.dispatchEvent(
-    new CustomEvent<AppearanceSnapshot>(APPEARANCE_BASELINE_EVENT, { detail: snapshot })
+    new CustomEvent<AppearanceAccentSnapshot>(APPEARANCE_BASELINE_EVENT, { detail: snapshot })
   );
+}
+
+export function readLocalAccentSettings(): AppearanceAccentSnapshot {
+  const custom = readStoredCustomAccent();
+  return {
+    accentId: readStoredAccent(),
+    customAccentLight: custom.light,
+    customAccentDark: custom.dark,
+  };
 }
 
 export function readLocalAppearanceSettings(): Omit<
   AppearanceSettings,
   "saved" | "updatedAt"
 > {
-  const custom = readStoredCustomAccent();
   return {
-    accentId: readStoredAccent(),
+    ...readLocalAccentSettings(),
     theme: readStoredTheme(),
-    customAccentLight: custom.light,
-    customAccentDark: custom.dark,
   };
 }
 
@@ -46,7 +65,7 @@ export async function fetchAppearanceSettings(): Promise<AppearanceSettings> {
 }
 
 export async function saveAppearanceSettings(
-  patch: Omit<AppearanceSettings, "saved" | "updatedAt">
+  patch: AppearanceAccentSnapshot
 ): Promise<AppearanceSettings> {
   const res = await apiFetch("/api/v1/user/appearance", {
     method: "PUT",

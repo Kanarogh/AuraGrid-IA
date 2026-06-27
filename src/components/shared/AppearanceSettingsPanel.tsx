@@ -9,16 +9,15 @@ import {
   ACCENT_CHANGE_EVENT,
   CUSTOM_ACCENT_CHANGE_EVENT,
 } from "../../hooks/useAccent";
-import { THEME_CHANGE_EVENT } from "../../hooks/useTheme";
 import { cn } from "../../lib/cn";
 import { toast } from "../../lib/toast";
 import {
   APPEARANCE_BASELINE_EVENT,
-  appearanceSnapshotSignature,
+  appearanceAccentSignature,
   dispatchAppearanceBaseline,
-  readLocalAppearanceSettings,
+  readLocalAccentSettings,
   saveAppearanceSettings,
-  type AppearanceSnapshot,
+  type AppearanceAccentSnapshot,
 } from "../../lib/appearanceSettings";
 
 function formatSavedLabel(iso: string | null): string | null {
@@ -37,31 +36,28 @@ export function AppearanceSettingsPanel() {
   const { user, storageMode } = useAuth();
   const cloudAccount = storageMode === "postgresql" && !!user;
 
-  const [baseline, setBaseline] = useState<AppearanceSnapshot>(() => readLocalAppearanceSettings());
+  const [baseline, setBaseline] = useState<AppearanceAccentSnapshot>(() => readLocalAccentSettings());
   const [revision, setRevision] = useState(0);
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
 
-  const current = readLocalAppearanceSettings();
-  const isDirty =
-    appearanceSnapshotSignature(current) !== appearanceSnapshotSignature(baseline);
+  const current = readLocalAccentSettings();
+  const isDirty = appearanceAccentSignature(current) !== appearanceAccentSignature(baseline);
 
   useEffect(() => {
     const bump = () => setRevision((n) => n + 1);
     window.addEventListener(ACCENT_CHANGE_EVENT, bump);
     window.addEventListener(CUSTOM_ACCENT_CHANGE_EVENT, bump);
-    window.addEventListener(THEME_CHANGE_EVENT, bump);
     return () => {
       window.removeEventListener(ACCENT_CHANGE_EVENT, bump);
-      window.removeEventListener(THEME_CHANGE_EVENT, bump);
       window.removeEventListener(CUSTOM_ACCENT_CHANGE_EVENT, bump);
     };
   }, []);
 
   useEffect(() => {
     const onBaseline = (e: Event) => {
-      const next = (e as CustomEvent<AppearanceSnapshot>).detail;
+      const next = (e as CustomEvent<AppearanceAccentSnapshot>).detail;
       if (!next) return;
       setBaseline(next);
       setJustSaved(false);
@@ -75,7 +71,7 @@ export function AppearanceSettingsPanel() {
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      const snapshot = readLocalAppearanceSettings();
+      const snapshot = readLocalAccentSettings();
       if (cloudAccount) {
         const saved = await saveAppearanceSettings(snapshot);
         setSavedAt(saved.updatedAt);

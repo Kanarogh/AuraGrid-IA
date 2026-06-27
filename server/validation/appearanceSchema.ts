@@ -17,10 +17,9 @@ const hexColorSchema = z
   .string()
   .regex(/^#[0-9a-fA-F]{6}$/, "Cor inválida (use #RRGGBB).");
 
-export const appearanceSettingsSchema = z
+export const appearanceAccentSchema = z
   .object({
     accentId: z.enum(ACCENT_IDS),
-    theme: z.enum(["light", "dark"]),
     customAccentLight: hexColorSchema.nullable().optional(),
     customAccentDark: hexColorSchema.nullable().optional(),
   })
@@ -42,8 +41,13 @@ export const appearanceSettingsSchema = z
     }
   });
 
-export type AppearanceSettingsPayload = z.infer<typeof appearanceSettingsSchema>;
+export type AppearanceAccentPayload = z.infer<typeof appearanceAccentSchema>;
 
-export function parseAppearanceSettingsBody(body: unknown): AppearanceSettingsPayload {
-  return appearanceSettingsSchema.parse(body);
+/** Resposta GET inclui theme legado; PUT de cor não altera o tema. */
+export const appearanceSettingsSchema = appearanceAccentSchema;
+
+export type AppearanceSettingsPayload = AppearanceAccentPayload;
+
+export function parseAppearanceSettingsBody(body: unknown): AppearanceAccentPayload {
+  return appearanceAccentSchema.parse(body);
 }

@@ -1,9 +1,10 @@
 import { eq } from "drizzle-orm";
 import { getDb, isDatabaseConfigured } from "../db/client";
 import { userAppearancePreferences } from "../db/schema";
-import type { AppearanceSettingsPayload } from "../validation/appearanceSchema";
+import type { AppearanceAccentPayload } from "../validation/appearanceSchema";
 
-export type UserAppearanceSettings = AppearanceSettingsPayload & {
+export type UserAppearanceSettings = AppearanceAccentPayload & {
+  theme: "light" | "dark";
   saved: boolean;
   updatedAt: string | null;
 };
@@ -41,11 +42,14 @@ export async function getUserAppearanceSettings(userId: string): Promise<UserApp
 
 export async function saveUserAppearanceSettings(
   userId: string,
-  patch: AppearanceSettingsPayload
+  patch: AppearanceAccentPayload
 ): Promise<UserAppearanceSettings> {
-  if (!isDatabaseConfigured()) return { ...DEFAULT_SETTINGS, ...patch, saved: false, updatedAt: null };
+  if (!isDatabaseConfigured()) {
+    return { ...DEFAULT_SETTINGS, ...patch, saved: false, updatedAt: null };
+  }
 
   const db = getDb();
+  const existing = await getUserAppearanceSettings(userId);
   const customAccentLight = patch.accentId === "custom" ? patch.customAccentLight ?? null : null;
   const customAccentDark = patch.accentId === "custom" ? patch.customAccentDark ?? null : null;
 
@@ -54,7 +58,7 @@ export async function saveUserAppearanceSettings(
     .values({
       userId,
       accentId: patch.accentId,
-      theme: patch.theme,
+      theme: existing.theme,
       customAccentLight,
       customAccentDark,
     })
@@ -62,7 +66,6 @@ export async function saveUserAppearanceSettings(
       target: userAppearancePreferences.userId,
       set: {
         accentId: patch.accentId,
-        theme: patch.theme,
         customAccentLight,
         customAccentDark,
         updatedAt: new Date(),
