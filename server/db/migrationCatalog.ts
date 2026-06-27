@@ -12,6 +12,8 @@ export const MIGRATION_FILES = [
   "0009_client_ai_preferences",
   "0010_planned_posts_caption_model",
   "0011_ai_usage_tracking",
+  "0012_content_schedule_brief",
+  "0013_enrich_jobs",
 ] as const;
 
 export type MigrationHash = (typeof MIGRATION_FILES)[number];

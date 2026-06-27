@@ -27,6 +27,12 @@ import {
   type EnrichProgressPhase,
 } from "@/src/lib/enrichProgressStages";
 import { isJsonParseError } from "../ai/geminiJson";
+import {
+  clearEnrichJob,
+  getPersistedEnrichProgress,
+  isPersistedEnrichmentRunning,
+  upsertEnrichJob,
+} from "./enrichJobStore";
 
 const ENRICH_DELAY_MS = 5000;
 const ENRICH_RETRY_DELAY_MS = 5000;
@@ -85,10 +91,21 @@ export function stopCatalogEnrichment(clientId: string) {
   const q = queues.get(queueKey(clientId));
   if (q?.abort) q.abort.abort();
   queues.set(queueKey(clientId), { running: false, abort: null, progress: null });
+  void upsertEnrichJob(clientId, { status: "cancelled", progress: null }).then(() =>
+    clearEnrichJob(clientId)
+  );
 }
 
 export function getEnrichmentProgress(clientId: string): EnrichProgress | null {
   return queues.get(queueKey(clientId))?.progress ?? null;
+}
+
+export async function getEnrichmentProgressResolved(
+  clientId: string
+): Promise<EnrichProgress | null> {
+  const inMemory = getEnrichmentProgress(clientId);
+  if (inMemory) return inMemory;
+  return getPersistedEnrichProgress(clientId);
 }
 
 export async function runCatalogEnrichment(
@@ -112,6 +129,12 @@ async function runCatalogEnrichmentInner(
   stopCatalogEnrichment(clientId);
   const abort = new AbortController();
   queues.set(key, { running: true, abort, progress: null });
+  void upsertEnrichJob(clientId, {
+    userId,
+    itemIds,
+    status: "running",
+    progress: null,
+  });
 
   let quotaExceeded = false;
   let periodId: string | undefined;
@@ -159,6 +182,12 @@ async function runCatalogEnrichmentInner(
         stepLabel: ENRICH_PHASE_LABELS[phase],
       };
       queues.set(key, { running: true, abort, progress });
+      void upsertEnrichJob(clientId, {
+        userId,
+        itemIds,
+        status: "running",
+        progress,
+      });
       if (userId) {
         void emitEnrichProgress(userId, clientId, periodId, true, progress);
       }
@@ -315,6 +344,7 @@ async function runCatalogEnrichmentInner(
     return { quotaExceeded, cancelled: abort.signal.aborted };
   } finally {
     queues.set(key, { running: false, abort: null, progress: null });
+    void clearEnrichJob(clientId);
     if (userId) {
       void emitEnrichProgress(userId, clientId, periodId, false);
     }
@@ -323,6 +353,11 @@ async function runCatalogEnrichmentInner(
 
 export function isEnrichmentRunning(clientId: string): boolean {
   return queues.get(queueKey(clientId))?.running ?? false;
+}
+
+export async function isEnrichmentRunningResolved(clientId: string): Promise<boolean> {
+  if (isEnrichmentRunning(clientId)) return true;
+  return isPersistedEnrichmentRunning(clientId);
 }
 
 export async function enrichSingleCatalogItem(

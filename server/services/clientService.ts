@@ -13,6 +13,7 @@ import {
   userClientState,
 } from "../db/schema";
 import { mediaPublicUrl } from "./mediaService";
+import { parseBrandGemSaveBody } from "../validation/brandGemSchema";
 import {
   defaultPlanningStartDate,
   defaultCanvaPages,
@@ -236,6 +237,8 @@ export async function loadWorkspaceDto(
   const contentScheduleDto = Array.isArray(periodRow?.contentSchedule)
     ? periodRow.contentSchedule
     : [];
+  const contentScheduleBrief =
+    typeof periodRow?.contentScheduleBrief === "string" ? periodRow.contentScheduleBrief : "";
 
   const catalogDto = catalog.map((c) => ({
     id: c.id,
@@ -339,6 +342,7 @@ export async function loadWorkspaceDto(
     catalog: catalogDto,
     posts: postsDto,
     contentSchedule: contentScheduleDto,
+    contentScheduleBrief,
     startDate: periodStartDate,
     activePlanningPeriodId: activePeriodId,
     planningPeriods: planningPeriodsList,
@@ -399,10 +403,11 @@ async function syncBrandGemFromWorkspacePatch(
   periodId: string,
   gem: BrandGemPatchInput
 ): Promise<boolean> {
+  const validated = parseBrandGemSaveBody(gem);
   const db = getDb();
 
-  const trimmedName = gem.name.trim() || clientId;
-  const nextFp = brandGemFingerprint(gem);
+  const trimmedName = validated.name.trim() || clientId;
+  const nextFp = brandGemFingerprint(validated);
 
   const [existing] = await db
     .select()
@@ -421,7 +426,7 @@ async function syncBrandGemFromWorkspacePatch(
     : "";
 
   const campaignContext =
-    typeof gem.campaignContext === "string" ? gem.campaignContext : undefined;
+    typeof validated.campaignContext === "string" ? validated.campaignContext : undefined;
 
   let periodContextChanged = false;
   if (campaignContext !== undefined) {
@@ -445,21 +450,21 @@ async function syncBrandGemFromWorkspacePatch(
       .values({
         clientId,
         name: trimmedName,
-        description: gem.description,
-        instructions: gem.instructions,
+        description: validated.description,
+        instructions: validated.instructions,
         campaignContext: "",
-        captionParams: gem.captionParams ?? {},
-        footer: gem.footer ?? {},
+        captionParams: validated.captionParams ?? {},
+        footer: validated.footer ?? {},
         savedAt,
       })
       .onConflictDoUpdate({
         target: brandGems.clientId,
         set: {
           name: trimmedName,
-          description: gem.description,
-          instructions: gem.instructions,
-          captionParams: gem.captionParams ?? {},
-          footer: gem.footer ?? {},
+          description: validated.description,
+          instructions: validated.instructions,
+          captionParams: validated.captionParams ?? {},
+          footer: validated.footer ?? {},
           savedAt,
         },
       });
@@ -721,6 +726,16 @@ export async function patchWorkspace(
       .update(planningPeriods)
       .set({
         contentSchedule: patch.contentSchedule,
+        updatedAt: new Date(),
+      })
+      .where(eq(planningPeriods.id, periodId));
+  }
+
+  if (typeof patch.contentScheduleBrief === "string") {
+    await db
+      .update(planningPeriods)
+      .set({
+        contentScheduleBrief: patch.contentScheduleBrief,
         updatedAt: new Date(),
       })
       .where(eq(planningPeriods.id, periodId));

@@ -83,6 +83,7 @@ export const planningPeriods = pgTable(
     campaignContext: text("campaign_context").notNull().default(""),
     usesReferences: boolean("uses_references"),
     contentSchedule: jsonb("content_schedule").notNull().default([]),
+    contentScheduleBrief: text("content_schedule_brief").notNull().default(""),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
@@ -154,6 +155,21 @@ export const clientUiPrefs = pgTable(
     viewMode: text("view_mode"),
   },
   (t) => [primaryKey({ columns: [t.userId, t.clientId] })]
+);
+
+export const enrichJobs = pgTable(
+  "enrich_jobs",
+  {
+    clientId: text("client_id")
+      .primaryKey()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    itemIds: jsonb("item_ids"),
+    status: text("status").notNull().default("idle"),
+    progress: jsonb("progress"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("enrich_jobs_status_idx").on(t.status)]
 );
 
 export const mediaAssets = pgTable(

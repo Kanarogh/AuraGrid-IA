@@ -6,13 +6,14 @@ import {
 } from "@/server/ai/brandContext";
 import { matchOperationHeaders, runMatchOperation } from "@/server/ai/matchOrchestrator";
 import { sanitizeMatchOperationInput } from "@/server/ai/operations";
-import { aiAttemptsHeaderValue, withUserAiFromRequest } from "@/server/http/aiRequest";
+import { aiAttemptsHeaderValue, assertAiClientAccess, withUserAiFromRequest } from "@/server/http/aiRequest";
 import { getEffectiveUsesReferences } from "@/server/services/planningPeriodService";
+import { isDatabaseConfigured } from "@/server/db/client";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  return withUserAiFromRequest(req, async () => {
+  return withUserAiFromRequest(req, async (user) => {
     let providerId = getActiveProviderId();
     try {
     const body = await req.json();
@@ -25,11 +26,16 @@ export async function POST(req: NextRequest) {
       captionFromImageOnly,
       recentHooks,
       diverseBatch,
-      clientId,
+      clientId: rawClientId,
     } = body;
 
     if (!postImage) {
       return NextResponse.json({ error: "No post image provided." }, { status: 400 });
+    }
+
+    const clientId = await assertAiClientAccess(user, rawClientId);
+    if (isDatabaseConfigured() && !clientId) {
+      return NextResponse.json({ error: "clientId é obrigatório." }, { status: 400 });
     }
 
     try {
@@ -49,7 +55,7 @@ export async function POST(req: NextRequest) {
     }
 
     let effectiveCaptionFromImageOnly = !!captionFromImageOnly;
-    if (typeof clientId === "string") {
+    if (clientId) {
       const usesReferences = await getEffectiveUsesReferences(clientId);
       if (!usesReferences) {
         effectiveCaptionFromImageOnly = true;
@@ -58,7 +64,7 @@ export async function POST(req: NextRequest) {
 
     const sanitized = sanitizeMatchOperationInput("match-and-generate", {
       postImage,
-      clientId: typeof clientId === "string" ? clientId : undefined,
+      clientId,
       catalogProfiles: effectiveCaptionFromImageOnly ? undefined : body.catalogProfiles,
       catalogItems: effectiveCaptionFromImageOnly ? undefined : body.catalogItems,
       brandGem,

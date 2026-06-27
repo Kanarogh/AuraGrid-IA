@@ -102,6 +102,7 @@ type ClientWorkspaceContextValue = {
   setCatalog: Dispatch<SetStateAction<CatalogItem[]>>;
   setPosts: Dispatch<SetStateAction<PlannedPost[]>>;
   setContentSchedule: Dispatch<SetStateAction<ContentScheduleItem[]>>;
+  setContentScheduleBrief: Dispatch<SetStateAction<string>>;
   setStartDate: Dispatch<SetStateAction<string>>;
   setBrandGem: Dispatch<SetStateAction<BrandGem>>;
   setCanvaPages: Dispatch<SetStateAction<CanvaGridPage[]>>;
@@ -113,7 +114,7 @@ type ClientWorkspaceContextValue = {
   setUiPrefs: (partial: NonNullable<ClientWorkspace["ui"]>) => void;
   saveBrandGem: (gem: BrandGem) => Promise<string | null>;
   switchClient: (clientId: string) => void;
-  createClient: (name: string, slug?: string) => string;
+  createClient: (name: string, slug?: string) => Promise<string>;
   renameClient: (clientId: string, name: string) => void;
   deleteClient: (clientId: string) => boolean;
   resetActiveClient: () => void;
@@ -128,6 +129,8 @@ type ClientWorkspaceContextValue = {
   setDefaultUsesReferences: (value: boolean) => Promise<void>;
   setPeriodUsesReferences: (value: boolean | null) => Promise<void>;
   switchPlanningPeriod: (periodId: string) => Promise<void>;
+  /** True enquanto troca de roteiro (fetch workspace) está em andamento. */
+  isPeriodSwitching: boolean;
   viewPlanningPeriod: (periodId: string) => Promise<void>;
   reactivatePlanningPeriod: (periodId: string) => Promise<void>;
   editArchivedPlanningPeriod: (periodId: string) => Promise<void>;
@@ -293,6 +296,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
   const registryRef = useRef(registry);
   registryRef.current = registry;
   const clientSwitchQueueRef = useRef(Promise.resolve());
+  const [periodSwitchInFlight, setPeriodSwitchInFlight] = useState(false);
   const effectiveActiveClientId = useMemo(() => {
     if (!hasActiveClient) return "";
     if (registry.clients.some((c) => c.id === registry.activeClientId)) {
@@ -413,7 +417,10 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
           .then(async () => {
             if (activeClientIdRef.current === clientId) return;
             const api = getApiHelpers();
-            if (!api) return;
+            if (!api) {
+              toast.error("Workspace ainda carregando. Aguarde e tente novamente.");
+              return;
+            }
 
             const targetName =
               registryRef.current.clients.find((c) => c.id === clientId)?.name ?? clientId;
@@ -521,6 +528,20 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
     },
     []
   );
+
+  const setContentScheduleBrief: Dispatch<SetStateAction<string>> = useCallback((action) => {
+    setWorkspace((prev) => {
+      if (prev.isReadOnly) return prev;
+      const nextBrief =
+        typeof action === "function" ? action(prev.contentScheduleBrief ?? "") : action;
+      const next: ClientWorkspace = {
+        ...prev,
+        contentScheduleBrief: nextBrief,
+      };
+      workspaceRef.current = next;
+      return next;
+    });
+  }, []);
 
   const getPostsSnapshot = useCallback((): PlannedPost[] => {
     return workspaceRef.current.posts;
@@ -727,19 +748,20 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
   );
 
   const createClient = useCallback(
-    (name: string, slug?: string): string => {
+    async (name: string, slug?: string): Promise<string> => {
       if (useApiStorage) {
-        let createdId = "";
-        void (async () => {
-          const api = getApiHelpers();
-          if (!api) return;
+        const api = getApiHelpers();
+        if (!api) {
+          toast.error("Workspace ainda carregando. Aguarde e tente novamente.");
+          throw new Error("Workspace ainda carregando. Aguarde e tente novamente.");
+        }
+        try {
           if (registry.activeClientId) {
             const flush = api.flushWorkspaceNow;
             if (flush) await flush(workspaceRef.current);
           }
           aiQueue.cancelPending();
           const created = await api.createClient(name, slug);
-          createdId = created.id;
           await api.activateClient(created.id);
           const reg = await api.fetchRegistry();
           const dto = await api.fetchWorkspace(created.id);
@@ -748,8 +770,12 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
           setWorkspace(ws);
           workspaceRef.current = ws;
           broadcastSyncChanged(created.id, ["registry"]);
-        })();
-        return slug?.trim() || slugifyClientName(name);
+          return created.id;
+        } catch (err) {
+          console.error("[AuraGrid] Falha ao criar cliente:", err);
+          toast.error("Não foi possível criar o cliente na nuvem.");
+          throw err;
+        }
       }
 
       const reg = registry;
@@ -816,23 +842,31 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       if (useApiStorage) {
         void (async () => {
           const api = getApiHelpers();
-          if (!api) return;
-          await api.deleteClient(clientId);
-          const reg = await api.fetchRegistry();
-          setRegistry(reg);
-          const nextId = reg.activeClientId || reg.clients[0]?.id;
-          if (nextId) {
-            const dto = await api.fetchWorkspace(nextId);
-            const ws = api.toWorkspace(dto);
-            setWorkspace(ws);
-            workspaceRef.current = ws;
-          } else {
-            const orphan = createOrphanWorkspace();
-            setWorkspace(orphan);
-            workspaceRef.current = orphan;
+          if (!api) {
+            toast.error("Workspace ainda carregando. Aguarde e tente novamente.");
+            return;
           }
-          broadcastSyncChanged(clientId, ["registry"]);
-          aiQueue.cancelPending();
+          try {
+            await api.deleteClient(clientId);
+            const reg = await api.fetchRegistry();
+            setRegistry(reg);
+            const nextId = reg.activeClientId || reg.clients[0]?.id;
+            if (nextId) {
+              const dto = await api.fetchWorkspace(nextId);
+              const ws = api.toWorkspace(dto);
+              setWorkspace(ws);
+              workspaceRef.current = ws;
+            } else {
+              const orphan = createOrphanWorkspace();
+              setWorkspace(orphan);
+              workspaceRef.current = orphan;
+            }
+            broadcastSyncChanged(clientId, ["registry"]);
+            aiQueue.cancelPending();
+          } catch (err) {
+            console.error("[AuraGrid] Falha ao excluir cliente:", err);
+            toast.error("Não foi possível excluir o cliente na nuvem.");
+          }
         })();
         return true;
       }
@@ -863,6 +897,8 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
   const switchPlanningPeriod = useCallback(
     async (periodId: string) => {
       if (!activeClientId) return;
+      setPeriodSwitchInFlight(true);
+      try {
       const current = workspaceRef.current;
       if (
         periodId === current.activePlanningPeriodId &&
@@ -928,6 +964,9 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       setWorkspace(next);
       workspaceRef.current = next;
       flushSave(activeClientId, next);
+      } finally {
+        setPeriodSwitchInFlight(false);
+      }
     },
     [activeClientId, flushSave, useApiStorage]
   );
@@ -1241,7 +1280,10 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       void (async () => {
         try {
           const api = getApiHelpers();
-          if (!api) return;
+          if (!api) {
+            toast.error("Workspace ainda carregando. Aguarde e tente novamente.");
+            return;
+          }
           const dto = await api.resetClient(activeClientId);
           const ws = api.toWorkspace(dto);
           setWorkspace(ws);
@@ -1280,6 +1322,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       setCatalog,
       setPosts,
       setContentSchedule,
+      setContentScheduleBrief,
       setStartDate,
       setBrandGem,
       setCanvaPages,
@@ -1305,6 +1348,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       setDefaultUsesReferences,
       setPeriodUsesReferences,
       switchPlanningPeriod,
+      isPeriodSwitching: periodSwitchInFlight,
       viewPlanningPeriod,
       reactivatePlanningPeriod,
       editArchivedPlanningPeriod,
@@ -1330,6 +1374,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       setCatalog,
       setPosts,
       setContentSchedule,
+      setContentScheduleBrief,
       setStartDate,
       setBrandGem,
       setCanvaPages,
@@ -1348,6 +1393,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       persistWorkspaceNow,
       getPostsSnapshot,
       switchPlanningPeriod,
+      periodSwitchInFlight,
       viewPlanningPeriod,
       reactivatePlanningPeriod,
       editArchivedPlanningPeriod,

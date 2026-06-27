@@ -10,6 +10,7 @@ import {
   buildLoginPath,
   useAppNavigation,
 } from "../../lib/appRouting";
+import { isProtectedPath } from "../../lib/auth/protectedPaths";
 import { isStorageModeResolved } from "../../lib/storageMode";
 
 /** Redirects globais: home, auth e correção de rotas inválidas. */
@@ -47,14 +48,8 @@ export function AppRouteBootstrap() {
     }
 
     if (storageMode === "postgresql" && !user) {
-      if (
-        pathname.startsWith("/c/") ||
-        pathname === "/welcome" ||
-        pathname === dashboardPath
-      ) {
+      if (isProtectedPath(pathname)) {
         redirect(buildLoginPath(pathname));
-      } else if (pathname === "/") {
-        redirect(buildLoginPath("/"));
       }
       return;
     }

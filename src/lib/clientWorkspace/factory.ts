@@ -112,6 +112,7 @@ export function createEmptyWorkspace(meta: ClientMeta): ClientWorkspace {
     catalog: [],
     posts,
     contentSchedule: [],
+    contentScheduleBrief: "",
     startDate,
     activePlanningPeriodId: defaultPeriod.id,
     planningPeriods: [defaultPeriod],
@@ -201,6 +202,8 @@ export function normalizeWorkspace(
     catalog: Array.isArray(raw.catalog) ? raw.catalog : empty.catalog,
     posts: Array.isArray(raw.posts) && raw.posts.length > 0 ? raw.posts : empty.posts,
     contentSchedule: Array.isArray(raw.contentSchedule) ? raw.contentSchedule : empty.contentSchedule,
+    contentScheduleBrief:
+      typeof raw.contentScheduleBrief === "string" ? raw.contentScheduleBrief : empty.contentScheduleBrief,
     startDate: activePeriod.startDate ?? empty.startDate,
     activePlanningPeriodId,
     planningPeriods,

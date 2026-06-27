@@ -77,6 +77,7 @@ function buildLegacyWorkspace(): ClientWorkspace {
     catalog,
     posts,
     contentSchedule: [],
+    contentScheduleBrief: "",
     startDate,
     activePlanningPeriodId: defaultPeriod.id,
     planningPeriods: [defaultPeriod],

@@ -49,7 +49,10 @@ export function pushScheduleToPlanning(
   options?: { onlyApproved?: boolean }
 ): PushToPlanningResult {
   const onlyApproved = options?.onlyApproved !== false;
-  const eligible = items.filter((i) => (onlyApproved ? i.status === "approved" : true));
+  const eligible = items.filter((i) => {
+    if (onlyApproved && i.status !== "approved") return false;
+    return i.section === "posts";
+  });
   const datedPosts = recalculatePostDates(startDate, posts);
   const usedPostIds = new Set<string>();
   let pushedCount = 0;

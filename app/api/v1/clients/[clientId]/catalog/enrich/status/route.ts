@@ -10,8 +10,8 @@ import {
   isSnapshotEnriching,
 } from "@/server/services/catalogEnrichmentSnapshot";
 import {
-  getEnrichmentProgress,
-  isEnrichmentRunning,
+  getEnrichmentProgressResolved,
+  isEnrichmentRunningResolved,
 } from "@/server/services/enrichQueue";
 
 export const dynamic = "force-dynamic";
@@ -24,8 +24,8 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     const { clientId } = await params;
     await assertClientAccess(user, clientId);
 
-    if (isEnrichmentRunning(clientId)) {
-      const progress = getEnrichmentProgress(clientId);
+    if (await isEnrichmentRunningResolved(clientId)) {
+      const progress = await getEnrichmentProgressResolved(clientId);
       return NextResponse.json({ enriching: true, progress });
     }
 

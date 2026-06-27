@@ -33,6 +33,8 @@ export type ClientWorkspace = {
   catalog: CatalogItem[];
   posts: PlannedPost[];
   contentSchedule: ContentScheduleItem[];
+  /** Briefing do cronograma (por roteiro). */
+  contentScheduleBrief?: string;
   startDate: string;
   activePlanningPeriodId: string;
   planningPeriods: PlanningPeriod[];

@@ -1,4 +1,6 @@
-import { useEffect, useState, type FormEvent } from "react";
+"use client";
+
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { slugifyClientName } from "../../lib/clientWorkspace";
 import { useClientWorkspace } from "../../context/ClientWorkspaceContext";
 import { Button } from "../ui/Button";
@@ -19,6 +21,7 @@ export function NewClientModal({
   const [slug, setSlug] = useState("");
   const [slugTouched, setSlugTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -26,6 +29,7 @@ export function NewClientModal({
     setSlug("");
     setSlugTouched(false);
     setError(null);
+    setSubmitting(false);
   }, [open]);
 
   useEffect(() => {
@@ -41,13 +45,19 @@ export function NewClientModal({
       setError("Informe o nome do cliente.");
       return;
     }
-    const newId = createClient(trimmed, slug.trim() || undefined);
-    if (!newId) {
-      setError("Não foi possível criar o cliente.");
-      return;
-    }
-    onCreated?.(newId);
-    onClose();
+    setSubmitting(true);
+    setError(null);
+    void createClient(trimmed, slug.trim() || undefined)
+      .then((newId) => {
+        onCreated?.(newId);
+        onClose();
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Não foi possível criar o cliente.");
+      })
+      .finally(() => {
+        setSubmitting(false);
+      });
   };
 
   return (
@@ -63,6 +73,7 @@ export function NewClientModal({
             onChange={(e) => setName(e.target.value)}
             placeholder="Ex.: Boutique Luna"
             autoFocus
+            disabled={submitting}
           />
         </div>
         <div>
@@ -75,6 +86,7 @@ export function NewClientModal({
             }}
             placeholder="boutique-luna"
             className="font-mono text-sm"
+            disabled={submitting}
           />
           <p className="text-[10px] text-ag-muted mt-1">
             Usado internamente; deve ser único entre clientes.
@@ -86,10 +98,12 @@ export function NewClientModal({
           </p>
         )}
         <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="secondary" onClick={onClose}>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>
             Cancelar
           </Button>
-          <Button type="submit">Criar cliente</Button>
+          <Button type="submit" disabled={submitting}>
+            {submitting ? "Criando…" : "Criar cliente"}
+          </Button>
         </div>
       </form>
     </Modal>

@@ -1,17 +1,22 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { formatAiError, getActiveProviderId } from "@/server/ai/index";
 import { runVisionWithFallback } from "@/server/ai/fallbackChain";
-import { aiAttemptsHeaderValue, withUserAiFromRequest } from "@/server/http/aiRequest";
+import { aiAttemptsHeaderValue, assertAiClientAccess, withUserAiFromRequest } from "@/server/http/aiRequest";
+import { isDatabaseConfigured } from "@/server/db/client";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  return withUserAiFromRequest(req, async () => {
+  return withUserAiFromRequest(req, async (user) => {
     let providerId = getActiveProviderId();
     try {
-    const { image, label, id } = await req.json();
+    const { image, label, id, clientId: rawClientId } = await req.json();
     if (!image) {
       return NextResponse.json({ error: "No catalog image provided." }, { status: 400 });
+    }
+
+    if (isDatabaseConfigured()) {
+      await assertAiClientAccess(user, rawClientId ?? id);
     }
 
     const outcome = await runVisionWithFallback(

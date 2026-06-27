@@ -2,23 +2,29 @@ import { NextResponse, type NextRequest } from "next/server";
 import { formatAiError, getActiveProviderId } from "@/server/ai/index";
 import { matchOperationHeaders, runMatchOperation } from "@/server/ai/matchOrchestrator";
 import { sanitizeMatchOperationInput } from "@/server/ai/operations";
-import { aiAttemptsHeaderValue, withUserAiFromRequest } from "@/server/http/aiRequest";
+import { aiAttemptsHeaderValue, assertAiClientAccess, withUserAiFromRequest } from "@/server/http/aiRequest";
+import { isDatabaseConfigured } from "@/server/db/client";
 import { getEffectiveUsesReferences } from "@/server/services/planningPeriodService";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  return withUserAiFromRequest(req, async () => {
+  return withUserAiFromRequest(req, async (user) => {
     let providerId = getActiveProviderId();
     try {
     const body = await req.json();
-    const { postImage, clientId } = body;
+    const { postImage, clientId: rawClientId } = body;
 
     if (!postImage) {
       return NextResponse.json({ error: "No query image provided." }, { status: 400 });
     }
 
-    if (typeof clientId === "string") {
+    const clientId = await assertAiClientAccess(user, rawClientId);
+    if (isDatabaseConfigured() && !clientId) {
+      return NextResponse.json({ error: "clientId é obrigatório." }, { status: 400 });
+    }
+
+    if (clientId) {
       const usesReferences = await getEffectiveUsesReferences(clientId);
       if (!usesReferences) {
         return NextResponse.json(
@@ -30,7 +36,7 @@ export async function POST(req: NextRequest) {
 
     const sanitized = sanitizeMatchOperationInput("match-reference", {
       postImage,
-      clientId: typeof clientId === "string" ? clientId : undefined,
+      clientId,
       catalogProfiles: body.catalogProfiles,
       catalogItems: body.catalogItems,
       matchOnly: true,

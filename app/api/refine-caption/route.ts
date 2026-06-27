@@ -11,7 +11,7 @@ import { withUserAiFromRequest } from "@/server/http/aiRequest";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  return withUserAiFromRequest(req, async () => {
+  return withUserAiFromRequest(req, async (user) => {
     const providerId = getActiveProviderId();
     try {
     const { currentCaption, instructions, brandGem, promptContext, repeatingText } =

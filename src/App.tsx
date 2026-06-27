@@ -47,7 +47,7 @@ import type {
   CanvaGridSlot,
   MatchDiagnostics,
 } from "./types";
-import { isAbortError, catalogReadyForTextMatch } from "./lib/catalogEnrichment";
+import { isAbortError, catalogReadyForTextMatch, enrichCatalogItemsInQueue } from "./lib/catalogEnrichment";
 import { useClientWorkspace } from "./context/ClientWorkspaceContext";
 import {
   clearCatalogApi,
@@ -69,14 +69,12 @@ import { exportRoteiroPdf } from "./lib/exportRoteiroPdf";
 import { exportCanvaGridPdf } from "./lib/exportCanvaGridPdf";
 import { ensurePersistedImage, extractMediaAssetId } from "./lib/api/persistMedia";
 import { recalculatePostDates } from "./lib/dates";
-import { createEmptyCanvaPage, prependCanvaPage, renumberCanvaPages, resolveActiveCanvaPage, resolveSlotImage, buildCatalogUsageAcrossPages } from "./lib/canva";
+import { resolveActiveCanvaPage, resolveSlotImage, buildCatalogUsageAcrossPages } from "./lib/canva";
 import { getPostStatus } from "./lib/postStatus";
-
-function captionQueueLabel(postId: string, dayNumber: number): string {
-  return `Legenda#${postId}#dia${dayNumber}`;
-}
 import { useTheme } from "./hooks/useTheme";
 import { useAppRouteSync, type AppRouteSyncHandlers } from "./hooks/useAppRouteSync";
+import { useCanvaPageActions } from "./hooks/useCanvaPageActions";
+import { useCaptionGeneration } from "./hooks/useCaptionGeneration";
 import type { SettingsTab } from "./lib/appRouting";
 import { useAppNavigation, buildDashboardPath } from "./lib/appRouting";
 import { useRouter } from "next/navigation";
@@ -206,6 +204,7 @@ import {
   computeOverallUploadPercent,
   estimateUploadEtaSeconds,
 } from "./lib/uploadProgress";
+import type { CatalogEnrichProgress } from "./lib/api/workspaceApi";
 import { useCatalogEnrichmentWatcher } from "./hooks/useCatalogEnrichmentWatcher";
 import { useRemoteSyncCoordinator } from "./hooks/useRemoteSyncCoordinator";
 import {
@@ -246,6 +245,7 @@ export default function App() {
     setCatalog,
     setPosts,
     setContentSchedule,
+    setContentScheduleBrief,
     setStartDate,
     setBrandGem,
     saveBrandGem,
@@ -274,6 +274,7 @@ export default function App() {
     usesReferences,
     setDefaultUsesReferences,
     isClientSwitching,
+    isPeriodSwitching,
     clientSwitch,
   } = useClientWorkspace();
 
@@ -295,6 +296,7 @@ export default function App() {
   const catalog = workspace.catalog;
   const posts = workspace.posts;
   const contentSchedule = workspace.contentSchedule ?? [];
+  const contentScheduleBrief = workspace.contentScheduleBrief ?? "";
   const startDate = workspace.startDate;
   const brandGem = workspace.brandGem;
   const activePeriodLabel =
@@ -408,6 +410,7 @@ export default function App() {
           setPosts(ws.posts);
           setStartDate(ws.startDate);
           setContentSchedule(ws.contentSchedule ?? []);
+          setContentScheduleBrief(ws.contentScheduleBrief ?? "");
           setCanvaPages(ws.canva.pages);
           setActiveCanvaPageId(ws.canva.activePageId);
           setAutoSyncCanva(ws.canva.autoSync);
@@ -432,6 +435,7 @@ export default function App() {
       setStartDate,
       setPosts,
       setContentSchedule,
+      setContentScheduleBrief,
       setCanvaPages,
       setActiveCanvaPageId,
       setAutoSyncCanva,
@@ -475,6 +479,13 @@ export default function App() {
     await reloadWorkspaceSlices(["catalog"]);
   }, [reloadWorkspaceSlices]);
 
+  const [localCatalogEnriching, setLocalCatalogEnriching] = useState(false);
+  const [localCatalogEnrichProgress, setLocalCatalogEnrichProgress] =
+    useState<CatalogEnrichProgress | null>(null);
+
+  const isEnrichingCatalogUi = useApiStorage ? isEnrichingCatalog : localCatalogEnriching;
+  const catalogEnrichProgressUi = useApiStorage ? catalogEnrichProgress : localCatalogEnrichProgress;
+
   useCatalogEnrichmentWatcher({
     enabled: useApiStorage && !isClientSwitching,
     clientId: activeClientId ?? "",
@@ -486,9 +497,9 @@ export default function App() {
     stopEnrichLocal: stopCatalogEnrichPolling,
   });
 
-  const catalogEnrichProgressLabel = catalogEnrichProgress
-    ? `Indexando ${catalogEnrichProgress.index}/${catalogEnrichProgress.total} — ${catalogEnrichProgress.label}${
-        catalogEnrichProgress.stepLabel ? ` · ${catalogEnrichProgress.stepLabel}` : ""
+  const catalogEnrichProgressLabel = catalogEnrichProgressUi
+    ? `Indexando ${catalogEnrichProgressUi.index}/${catalogEnrichProgressUi.total} — ${catalogEnrichProgressUi.label}${
+        catalogEnrichProgressUi.stepLabel ? ` · ${catalogEnrichProgressUi.stepLabel}` : ""
       }`
     : "Indexando… (aguarde)";
 
@@ -512,9 +523,6 @@ export default function App() {
   });
 
   const router = useRouter();
-  const goToDashboard = useCallback(() => {
-    router.push(buildDashboardPath());
-  }, [router]);
 
   const [activePreviewId, setActivePreviewId] = useState<string>(
     () => workspace.ui?.activePreviewId ?? "post_day1"
@@ -537,12 +545,6 @@ export default function App() {
     else endSyncDomain("workspace");
     return () => endSyncDomain("workspace");
   }, [isProcessingAll, captionBatchProgress, useApiStorage]);
-  const captionBatchAbortRef = useRef<AbortController | null>(null);
-  const captionGenerateAbortRef = useRef<AbortController | null>(null);
-  const batchCaptionHooksRef = useRef<string[]>([]);
-  const captionGeneratePostIdRef = useRef<string | null>(null);
-  /** Posts que apagaram legenda — próxima geração ignora cache e chama a IA de novo. */
-  const captionCacheBypassRef = useRef(new Set<string>());
   const [catalogUploadProgress, setCatalogUploadProgress] =
     useState<CatalogUploadProgressState | null>(null);
   const catalogUploadAbortRef = useRef<AbortController | null>(null);
@@ -636,6 +638,7 @@ export default function App() {
     registryClientIds: clients.map((c) => c.id),
     activeSection,
     settingsDraftDirty,
+    isPeriodSwitching,
     postsWorkTab,
     catalogTab,
     settingsTab,
@@ -649,6 +652,20 @@ export default function App() {
     canvaPages,
     handlers: routeHandlers,
   });
+
+  const goToDashboard = useCallback(async () => {
+    if (activeSection === "settings" && settingsDraftDirty) {
+      const ok = await confirmDialog({
+        title: "Alterações não salvas",
+        message:
+          "Você tem alterações no Gem da marca que ainda não foram salvas. Sair sem salvar?",
+        variant: "danger",
+        confirmLabel: "Sair sem salvar",
+      });
+      if (!ok) return;
+    }
+    router.push(buildDashboardPath());
+  }, [activeSection, settingsDraftDirty, router]);
 
   const cancelTimelineReorder = useCallback(() => {
     setTimelineReorderMode(false);
@@ -1117,6 +1134,20 @@ export default function App() {
     await saveWorkspaceNow();
   }, [saveWorkspaceNow]);
 
+  const {
+    handleAddCanvaPage,
+    handleDeleteCanvaPage,
+    handleDuplicateCanvaPage,
+    handleReorderCanvaPages,
+    handleClearCanvaPage,
+  } = useCanvaPageActions({
+    canvaPages,
+    activeCanvaPageId,
+    setCanvaPages,
+    setActiveCanvaPageId,
+    saveCanvaGridNow,
+  });
+
   const applyCanvaSlotPatch = useCallback(
     async (
       pageId: string,
@@ -1315,99 +1346,6 @@ export default function App() {
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
   }, [activeSection, selectedCanvaSlotId, activeCanvaPageId, canvaPages]);
-
-  // Duplicate an entire Canva Page
-  const handleDuplicateCanvaPage = async (pageId: string) => {
-    const targetPage = canvaPages.find(p => p.id === pageId);
-    if (!targetPage) return;
-    
-    const newId = `page_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-    const duplicatedPage: CanvaGridPage = {
-      id: newId,
-      name: `${targetPage.name} (Cópia)`,
-      slots: targetPage.slots.map((s, idx) => ({
-        id: `slot_${newId}_${idx}`,
-        image: s.image,
-        imageAssetId: s.imageAssetId ?? extractMediaAssetId(s.image),
-        label: s.label,
-        matchedCatalogId: s.matchedCatalogId,
-      }))
-    };
-
-    setCanvaPages((prev) => {
-      const idx = prev.findIndex((p) => p.id === pageId);
-      if (idx === -1) return renumberCanvaPages([...prev, duplicatedPage]);
-      const copy = [...prev];
-      copy.splice(idx + 1, 0, duplicatedPage);
-      return renumberCanvaPages(copy);
-    });
-    setActiveCanvaPageId(newId);
-    await saveCanvaGridNow();
-  };
-
-  // Add a blank Canva Page (nova = Página 1; as antigas sobem de número)
-  const handleAddCanvaPage = async () => {
-    const newId = `page_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-    setCanvaPages((prev) => prependCanvaPage(prev, newId));
-    setActiveCanvaPageId(newId);
-    await saveCanvaGridNow();
-  };
-
-  const handleReorderCanvaPages = async (fromIndex: number, toIndex: number) => {
-    setCanvaPages((prev) => {
-      const next = [...prev];
-      const [moved] = next.splice(fromIndex, 1);
-      if (!moved) return prev;
-      next.splice(toIndex, 0, moved);
-      return renumberCanvaPages(next);
-    });
-    await saveCanvaGridNow();
-  };
-
-  // Delete a Canva Page
-  const handleDeleteCanvaPage = async (pageId: string) => {
-    if (canvaPages.length <= 1) {
-      toast.warning("Sua área de trabalho precisa ter pelo menos uma página de planejamento.");
-      return;
-    }
-    if (
-      !(await confirmDialog({
-        message: "Tem certeza que deseja apagar esta página do Canva Grid?",
-        variant: "danger",
-        confirmLabel: "Apagar",
-      }))
-    ) {
-      return;
-    }
-    const deletedIdx = canvaPages.findIndex((p) => p.id === pageId);
-    const remainingPages = renumberCanvaPages(canvaPages.filter((p) => p.id !== pageId));
-    setCanvaPages(remainingPages);
-    if (activeCanvaPageId === pageId && remainingPages.length > 0) {
-      const nextIdx = Math.min(Math.max(deletedIdx, 0), remainingPages.length - 1);
-      setActiveCanvaPageId(remainingPages[nextIdx]!.id);
-    }
-    await saveCanvaGridNow();
-  };
-
-  // Clear slots of a Canva page
-  const handleClearCanvaPage = async (pageId: string) => {
-    if (
-      !(await confirmDialog({
-        message: "Deseja mesmo zerar todas as fotos desta página?",
-        variant: "danger",
-        confirmLabel: "Zerar",
-      }))
-    ) {
-      return;
-    }
-    setCanvaPages((prev) =>
-      prev.map((p) => {
-        if (p.id !== pageId) return p;
-        return createEmptyCanvaPage(p.name, p.id);
-      })
-    );
-    await saveCanvaGridNow();
-  };
 
   // Batch upload specific to Canva Grid (re-sequences numerically & rolls over page capacity)
   const handleBatchUploadToCanva = async (files: FileList) => {
@@ -1674,10 +1612,83 @@ export default function App() {
   const runCatalogEnrichment = async (items: CatalogItem[]) => {
     const prepared = items.map(prepareCatalogItemForEnrichment);
 
-    if (!useApiStorage || !activeClientId) {
-      if (storageMode !== "local") {
-        toast.warning("Entre na sua conta para indexar o catálogo. Os dados ficam salvos na nuvem.");
+    if (!useApiStorage) {
+      const targets = prepared.filter(
+        (c) =>
+          c.isReference !== false &&
+          (!isCatalogItemIndexed(c) || !c.visualProfile)
+      );
+      if (targets.length === 0) return;
+
+      catalogEnrichAbortRef.current?.abort();
+      const abort = new AbortController();
+      catalogEnrichAbortRef.current = abort;
+      setLocalCatalogEnriching(true);
+
+      const withImage = targets.filter((c) => c.image);
+      let doneCount = 0;
+
+      try {
+        const result = await enrichCatalogItemsInQueue(
+          targets,
+          (id) => {
+            const item = targets.find((c) => c.id === id);
+            doneCount += 1;
+            setLocalCatalogEnrichProgress({
+              index: doneCount,
+              total: withImage.length,
+              itemId: id,
+              label: item?.label ?? id,
+            });
+            setCatalog((prev) =>
+              prev.map((c) =>
+                c.id === id
+                  ? { ...c, enrichmentStatus: "processing", enrichmentError: undefined }
+                  : c
+              )
+            );
+          },
+          (id, profile) => {
+            setCatalog((prev) =>
+              prev.map((c) =>
+                c.id === id
+                  ? {
+                      ...c,
+                      visualProfile: profile,
+                      enrichmentStatus: "ready",
+                      enrichmentError: undefined,
+                    }
+                  : c
+              )
+            );
+          },
+          (id, error) => {
+            setCatalog((prev) =>
+              prev.map((c) =>
+                c.id === id ? { ...c, enrichmentStatus: "failed", enrichmentError: error } : c
+              )
+            );
+          },
+          { signal: abort.signal }
+        );
+        if (result.quotaExceeded) {
+          toast.error(
+            "Cota da API esgotada durante a indexação. Tente mais tarde ou troque o provedor no painel IA."
+          );
+        }
+        await saveWorkspaceNow();
+      } finally {
+        setLocalCatalogEnriching(false);
+        setLocalCatalogEnrichProgress(null);
+        if (catalogEnrichAbortRef.current === abort) {
+          catalogEnrichAbortRef.current = null;
+        }
       }
+      return;
+    }
+
+    if (!activeClientId) {
+      toast.warning("Entre na sua conta para indexar o catálogo. Os dados ficam salvos na nuvem.");
       return;
     }
 
@@ -2140,637 +2151,50 @@ export default function App() {
     return true;
   };
 
-  const stopCaptionGeneration = useCallback((postId?: string) => {
-    if (!postId || captionGeneratePostIdRef.current === postId) {
-      captionGenerateAbortRef.current?.abort();
-      captionGenerateAbortRef.current = null;
-      captionGeneratePostIdRef.current = null;
-    }
-    if (postId) {
-      aiQueue.cancelPending((label) => label.startsWith(`Legenda#${postId}#`));
-    } else {
-      aiQueue.cancelPending((label) => label.startsWith("Legenda#"));
-    }
-    setPosts((prev) =>
-      prev.map((p) => {
-        if (postId ? p.id === postId : p.isGenerating) {
-          return { ...p, isGenerating: false, error: null };
-        }
-        return p;
-      })
-    );
-  }, []);
-
-  // Match visual + legenda (tom e rodapé vêm do Gem configurado)
-  const ensureBrandGemConfigured = useCallback((): boolean => {
-    if (isBrandGemReadyForCaptions(brandGem)) return true;
-    toast.warning(brandGemRequiredMessage(brandGem));
-    void handleNavigate("settings");
-    return false;
-  }, [brandGem, handleNavigate]);
-
-  const resolvePostCatalogReferenceForCaption = useCallback(
-    async (
-      post: PlannedPost,
-      refs: CatalogItem[],
-      options?: { force?: boolean }
-    ): Promise<
-      | { status: "known"; id: string; label: string; source: string }
-      | { status: "cancelled" }
-      | { status: "none" }
-    > => {
-      let canvaLabel: string | null = null;
-      if (post.canvaSlotRef) {
-        const page = canvaPages.find((p) => p.id === post.canvaSlotRef!.pageId);
-        const slot = page?.slots.find((s) => s.id === post.canvaSlotRef!.slotId);
-        canvaLabel = slot?.label?.trim() || null;
-      }
-      const resolved = resolveKnownCatalogReference(
-        refs.map((c) => ({ id: c.id, label: c.label })),
-        {
-          matchedCatalogId: post.matchedCatalogId,
-          label: canvaLabel,
-          forceFullMatch: !!options?.force && !post.matchedCatalogId,
-        }
-      );
-      if (resolved.status === "known") {
-        return {
-          status: "known",
-          id: resolved.item.id,
-          label: resolved.item.label,
-          source: resolved.source,
-        };
-      }
-      if (resolved.status === "ambiguous") {
-        const picked = await pickCatalogReferenceFromCandidates(
-          resolved.candidates,
-          promptDialog
-        );
-        if (!picked) return { status: "cancelled" };
-        return { status: "known", id: picked.id, label: picked.label, source: "label" };
-      }
-      return { status: "none" };
-    },
-    [canvaPages]
-  );
-
-  const matchAndGenerateForPost = async (
-    postId: string,
-    options?: {
-      skipCatalogPrompt?: boolean;
-      force?: boolean;
-      skipCache?: boolean;
-      signal?: AbortSignal;
-    }
-  ): Promise<{ quotaExceeded?: boolean }> => {
-    const post = getPostsSnapshot().find((p) => p.id === postId);
-    if (!post) return {};
-    if (!post.image) {
-      toast.warning("Carregue a foto do post antes de gerar a legenda.");
-      return {};
-    }
-    if (!ensureBrandGemConfigured()) return {};
-
-    if (post.isGenerating) return {};
-
-    if (
-      post.captionFromSchedule &&
-      post.caption.trim() &&
-      !options?.force
-    ) {
-      const replaceOk = await confirmDialog({
-        message:
-          "Este dia já tem legenda vinda do Cronograma de Conteúdo. Gerar uma nova legenda com IA vai substituir esse texto. Continuar?",
-        confirmLabel: "Substituir legenda",
-      });
-      if (!replaceOk) return {};
-    }
-
-    const recordBatchCaptionHook = (caption: string) => {
-      const hook = extractMainCaptionText(caption, brandGem.footer).trim();
-      if (!hook) return;
-      if (
-        batchCaptionHooksRef.current.some(
-          (h) => h.toLowerCase() === hook.toLowerCase()
-        )
-      ) {
-        return;
-      }
-      batchCaptionHooksRef.current.push(hook);
-    };
-
-    const buildRecentHooks = (extraBatchHooks: string[] = []) =>
-      mergeRecentCaptionSignals(
-        getPostsSnapshot(),
-        [...extraBatchHooks, ...batchCaptionHooksRef.current],
-        postId,
-        brandGem.footer,
-        15
-      );
-
-    captionGenerateAbortRef.current?.abort();
-    const controller = new AbortController();
-    captionGenerateAbortRef.current = controller;
-    captionGeneratePostIdRef.current = postId;
-    const parentSignal = options?.signal;
-    if (parentSignal?.aborted) {
-      controller.abort();
-    } else {
-      parentSignal?.addEventListener("abort", () => controller.abort(), { once: true });
-    }
-
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? {
-              ...p,
-              isGenerating: true,
-              error: null,
-              ...(options?.force
-                ? { isGenerated: false, isConfirmed: false }
-                : {}),
-            }
-          : p
-      )
-    );
-
-    try {
-      const imageOnly = !usesReferencesRef.current || !!post.captionFromImageOnly;
-      const processedPostImage = await preparePostImageForAi(post.image, {
-        maxSide: imageOnly ? 1280 : 2048,
-        quality: imageOnly ? 0.88 : 0.9,
-      });
-
-      if (controller.signal.aborted) return {};
-
-      if (!imageOnly && !options?.skipCatalogPrompt) {
-        const ok = await ensureCatalogIndexedForMatch();
-        if (!ok || controller.signal.aborted) {
-          setPosts((prev) =>
-            prev.map((p) => (p.id === postId ? { ...p, isGenerating: false } : p))
-          );
-          return {};
-        }
-      }
-
-      if (controller.signal.aborted) return {};
-
-      const refs = getReferenceCatalog(catalogRef.current);
-      if (
-        !imageOnly &&
-        refs.length > 0 &&
-        !catalogReadyForTextMatch(refs)
-      ) {
-        toast.warning(
-          "Todas as referências do catálogo precisam estar indexadas (JSON) antes de gerar a legenda."
-        );
-        setPosts((prev) =>
-          prev.map((p) => (p.id === postId ? { ...p, isGenerating: false } : p))
-        );
-        return {};
-      }
-
-      let knownMatchedIdForRequest: string | undefined;
-      if (!imageOnly) {
-        const refResolution = await resolvePostCatalogReferenceForCaption(post, refs, {
-          force: options?.force,
-        });
-        if (refResolution.status === "cancelled") {
-          setPosts((prev) =>
-            prev.map((p) => (p.id === postId ? { ...p, isGenerating: false } : p))
-          );
-          return {};
-        }
-        if (refResolution.status === "known") {
-          knownMatchedIdForRequest = refResolution.id;
-          if (post.matchedCatalogId !== refResolution.id) {
-            setPosts((prev) =>
-              prev.map((p) =>
-                p.id === postId ? { ...p, matchedCatalogId: refResolution.id } : p
-              )
-            );
-          }
-          toast.info(
-            `Referência ${refResolution.label} identificada — legenda sem match visual.`
-          );
-        }
-      }
-
-      let bypassCaptionCache =
-        options?.force ||
-        options?.skipCache ||
-        captionCacheBypassRef.current.has(postId);
-
-      if (knownMatchedIdForRequest) {
-        bypassCaptionCache = true;
-      }
-
-      const extraAvoidHooks: string[] = [];
-      if (options?.force && post.caption?.trim()) {
-        const avoidHook = extractMainCaptionText(post.caption, brandGem.footer).trim();
-        if (avoidHook) extraAvoidHooks.push(avoidHook);
-      }
-
-      let recentHooks = buildRecentHooks(extraAvoidHooks);
-      const promptHooks = recentHooks.slice(-10).map((h) => h.slice(0, 140).trim());
-      const isDiverseBatchLikely = promptHooks.length >= 3;
-      if (isDiverseBatchLikely) {
-        bypassCaptionCache = true;
-      }
-      const hookSignature = promptHooks
-        .map((h) => h.toLowerCase())
-        .slice(0, 6)
-        .join("|");
-
-      const buildRequestBody = (regenerate = false, hooks = promptHooks) => {
-        const hooksForPrompt = hooks.slice(-10).map((h) => h.slice(0, 140).trim());
-        const body: Record<string, unknown> = {
-          postImage: processedPostImage,
-          brandGem,
-          ...(useApiStorage && activeClientId ? { clientId: activeClientId } : {}),
-          ...(regenerate || options?.force || bypassCaptionCache
-            ? { regenerateCaption: true }
-            : {}),
-          ...(imageOnly ? { captionFromImageOnly: true } : {}),
-        };
-        if (hooksForPrompt.length > 0) {
-          body.recentHooks = hooksForPrompt;
-          if (hooksForPrompt.length >= 3) {
-            body.diverseBatch = true;
-          }
-        }
-        if (!imageOnly && refs.length > 0) {
-          body.catalogProfiles = refs.map((c) => ({
-            id: c.id,
-            label: c.label,
-            profile: c.visualProfile,
-          }));
-        }
-        if (knownMatchedIdForRequest) {
-          body.knownMatchedId = knownMatchedIdForRequest;
-        }
-        return body;
-      };
-
-      let catalogIdsForCache: string[] = [];
-      if (!imageOnly && refs.length > 0) {
-        catalogIdsForCache = refs.map((c) => c.id);
-      }
-
-      const cacheKey = buildCaptionCacheKey({
-        imageDataUrl: processedPostImage,
-        postId,
-        brandGem,
-        catalogIds: catalogIdsForCache,
-        captionFromImageOnly: imageOnly,
-        hookSignature: isDiverseBatchLikely ? hookSignature : undefined,
-      });
-
-      const applyCaptionResult = async (
-        caption: string,
-        matchedId: string | null,
-        reasoning: string | null,
-        providerUsed?: string,
-        matchMode?: string,
-        captionModel?: string | null,
-        matchDiagnostics?: MatchDiagnostics | null
-      ) => {
-        setPosts((prev) =>
-          prev.map((p) =>
-            p.id === postId
-              ? {
-                  ...p,
-                  matchedCatalogId: imageOnly
-                    ? null
-                    : usesReferencesRef.current
-                      ? matchedId
-                      : null,
-                  reasoning: imageOnly || usesReferencesRef.current ? reasoning : null,
-                  caption,
-                  isGenerating: false,
-                  isGenerated: true,
-                  error: null,
-                  captionFromSchedule: false,
-                  captionModel: captionModel ?? null,
-                  matchDiagnostics:
-                    imageOnly || !usesReferencesRef.current
-                      ? null
-                      : (matchDiagnostics ?? null),
-                }
-              : p
-          )
-        );
-        recordBatchCaptionHook(caption);
-        captionCacheBypassRef.current.delete(postId);
-        await saveWorkspaceNow();
-      };
-
-      if (!bypassCaptionCache) {
-        const cached = useApiStorage
-          ? await getCachedCaptionAsync(cacheKey)
-          : getCachedCaption(cacheKey);
-        if (cached) {
-          const cachedHook = extractMainCaptionText(cached.caption, brandGem.footer).trim();
-          if (!cachedHook || !isHookTooSimilar(cachedHook, recentHooks)) {
-            const effectiveMatchedId = imageOnly ? null : cached.matchedId;
-            const cachedCaption = finalizeCaption(cached.caption, {
-              matchedCatalogId: effectiveMatchedId,
-              matchedLabel: imageOnly ? null : resolveCatalogLabel(refs, effectiveMatchedId),
-              footer: brandGem.footer,
-              captionParams: brandGem.captionParams,
-            });
-            setPosts((prev) =>
-              prev.map((p) =>
-                p.id === postId
-                  ? {
-                      ...p,
-                      matchedCatalogId: imageOnly ? null : effectiveMatchedId,
-                      reasoning: cached.reasoning,
-                      caption: cachedCaption,
-                      isGenerating: false,
-                      isGenerated: true,
-                      error: null,
-                      captionModel: cached.modelUsed ?? null,
-                    }
-                  : p
-              )
-            );
-            recordBatchCaptionHook(cachedCaption);
-            await saveWorkspaceNow();
-            return { quotaExceeded: false };
-          }
-        }
-      }
-
-      const callMatchAndGenerate = async (
-        body: Record<string, unknown>
-      ): Promise<{
-        matchedId: string | null;
-        reasoning: string | null;
-        caption: string;
-        providerUsed?: string;
-        matchMode?: string;
-        modelUsed?: string;
-        matchDiagnostics?: MatchDiagnostics | null;
-      }> => {
-        const response = await aiQueue.enqueue(
-          captionQueueLabel(postId, post.dayNumber),
-          () =>
-            aiFetch("/api/match-and-generate", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(body),
-              signal: controller.signal,
-            })
-        );
-
-        if (controller.signal.aborted) {
-          throw new DOMException("Aborted", "AbortError");
-        }
-
-        const result = await readJsonResponse<{
-          matchedId?: string | null;
-          reasoning?: string;
-          caption?: string;
-          error?: string;
-          modelUsed?: string;
-          matchDiagnostics?: MatchDiagnostics | null;
-        }>(response);
-
-        if (!response.ok) {
-          throw new Error(result.error || "Falha ao gerar legenda no servidor.");
-        }
-
-        const providerUsed = response.headers.get("X-AI-Provider-Used") ?? undefined;
-        noteLastProviderUsed(providerUsed);
-        const matchMode = response.headers.get("X-AI-Match-Mode") ?? undefined;
-        const modelUsed =
-          result.modelUsed ?? response.headers.get("X-AI-Model-Used") ?? undefined;
-        const matchedId = imageOnly ? null : (result.matchedId ?? null);
-        const caption = finalizeCaption(result.caption ?? "", {
-          matchedCatalogId: matchedId,
-          matchedLabel: imageOnly ? null : resolveCatalogLabel(refs, matchedId),
-          footer: brandGem.footer,
-          captionParams: brandGem.captionParams,
-        });
-
-        return {
-          matchedId,
-          reasoning: result.reasoning ?? null,
-          caption,
-          providerUsed,
-          matchMode,
-          modelUsed,
-          matchDiagnostics: result.matchDiagnostics ?? null,
-        };
-      };
-
-      let body = buildRequestBody();
-      let result = await callMatchAndGenerate(body);
-
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const mainHook = extractMainCaptionText(result.caption, brandGem.footer).trim();
-        if (!mainHook || !isHookTooSimilar(mainHook, recentHooks)) break;
-
-        const retryHooks = mergeRecentCaptionSignals(
-          getPostsSnapshot(),
-          [mainHook, ...extraAvoidHooks, ...batchCaptionHooksRef.current],
-          postId,
-          brandGem.footer,
-          15
-        );
-        recentHooks = retryHooks;
-        body = buildRequestBody(true, retryHooks);
-        result = await callMatchAndGenerate(body);
-      }
-
-      if (useApiStorage) {
-        await setCachedCaptionAsync(cacheKey, {
-          caption: result.caption,
-          matchedId: result.matchedId,
-          reasoning: result.reasoning,
-          providerUsed: result.providerUsed,
-          matchMode: result.matchMode,
-          modelUsed: result.modelUsed,
-          cachedAt: Date.now(),
-        });
-      } else {
-        setCachedCaption(cacheKey, {
-          caption: result.caption,
-          matchedId: result.matchedId,
-          reasoning: result.reasoning,
-          providerUsed: result.providerUsed,
-          matchMode: result.matchMode,
-          modelUsed: result.modelUsed,
-          cachedAt: Date.now(),
-        });
-      }
-
-      await applyCaptionResult(
-        result.caption,
-        result.matchedId,
-        result.reasoning,
-        result.providerUsed,
-        result.matchMode,
-        result.modelUsed,
-        result.matchDiagnostics ?? null
-      );
-      return { quotaExceeded: false };
-    } catch (error: unknown) {
-      if (isAbortError(error) || controller.signal.aborted) {
-        setPosts((prev) =>
-          prev.map((p) => (p.id === postId ? { ...p, isGenerating: false } : p))
-        );
-        return {};
-      }
-      console.error(error);
-      const message =
-        error instanceof Error ? error.message : "Falha na conexão com a API de IA.";
-      const quotaExceeded = isQuotaErrorMessage(message);
-      setPosts((prev) =>
-        prev.map((p) =>
-          p.id === postId ? { ...p, isGenerating: false, error: message } : p
-        )
-      );
-      return { quotaExceeded };
-    } finally {
-      if (captionGeneratePostIdRef.current === postId) {
-        captionGenerateAbortRef.current = null;
-        captionGeneratePostIdRef.current = null;
-      }
-    }
-  };
-
-  const stopCaptionBatch = () => {
-    captionBatchAbortRef.current?.abort();
-    captionBatchAbortRef.current = null;
-    stopCaptionGeneration();
-    setIsProcessingAll(false);
-    setCaptionBatchProgress(null);
-  };
-
-  const runCaptionBatch = async (targets: PlannedPost[]) => {
-    if (targets.length === 0) return;
-
-    const ok = await ensureCatalogIndexedForMatch();
-    if (!ok) return;
-
-    captionBatchAbortRef.current?.abort();
-    const controller = new AbortController();
-    captionBatchAbortRef.current = controller;
-    batchCaptionHooksRef.current = [];
-
-    setIsProcessingAll(true);
-    setCaptionBatchProgress({ current: 0, total: targets.length, label: "" });
-
-    try {
-      for (let i = 0; i < targets.length; i++) {
-        if (controller.signal.aborted) break;
-
-        const p = targets[i];
-        setCaptionBatchProgress({
-          current: i + 1,
-          total: targets.length,
-          label: `Dia ${p.dayNumber}`,
-        });
-
-        const { quotaExceeded } = await matchAndGenerateForPost(p.id, {
-          skipCatalogPrompt: true,
-          signal: controller.signal,
-        });
-
-        if (controller.signal.aborted) break;
-
-        if (quotaExceeded) {
-          toast.error(
-            "Cota da API esgotada. A geração em lote foi interrompida. Tente mais tarde ou troque o provedor no painel IA (ícone ✨ no topo)."
-          );
-          break;
-        }
-
-        if (controller.signal.aborted) break;
-      }
-    } finally {
-      if (captionBatchAbortRef.current === controller) {
-        captionBatchAbortRef.current = null;
-      }
-      setIsProcessingAll(false);
-      setCaptionBatchProgress(null);
-      await saveWorkspaceNow();
-    }
-  };
-
-  const handleRunAllMatching = async () => {
-    if (!ensureBrandGemConfigured()) return;
-
-    const pending = getPendingCaptionPosts(posts);
-    if (pending.length === 0) {
-      toast.info("Não há posts com foto aguardando legenda. Carregue as imagens ou use “Tentar novamente” nos erros.");
-      return;
-    }
-
-    if (pending.length >= 5) {
-      const minutes = Math.max(1, Math.ceil((pending.length * 4) / 60));
-      const ok = await confirmDialog({
-        message:
-          `Gerar ${pending.length} legendas em lote.\n\n` +
-          `• Tempo estimado: ~${minutes} min (1 chamada por vez, gap de 1,5s)\n` +
-          `• Cache local evita repetir fotos já processadas\n` +
-          `• Se um provedor estourar a cota, a fila tenta o próximo automaticamente\n\n` +
-          `Continuar?`,
-        confirmLabel: "Gerar legendas",
-      });
-      if (!ok) return;
-    }
-
-    void runCaptionBatch(pending);
-  };
-
-  const handleRegenerateCaptionErrors = () => {
-    if (!ensureBrandGemConfigured()) return;
-
-    const failed = posts.filter((p) => p.image && p.error && !p.isGenerating);
-    if (failed.length === 0) return;
-    void runCaptionBatch(failed);
-  };
-
-  const handleToggleCaptionFromImageOnly = (postId: string, enabled: boolean) => {
-    if (enabled) {
-      captionCacheBypassRef.current.add(postId);
-    }
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? {
-              ...p,
-              captionFromImageOnly: enabled,
-              ...(enabled
-                ? {
-                    matchedCatalogId: null,
-                    caption: "",
-                    reasoning: null,
-                    isGenerated: false,
-                    isConfirmed: false,
-                    captionModel: null,
-                  }
-                : {}),
-            }
-          : p
-      )
-    );
-    if (enabled) {
-      toast.info("Modo ativado. Clique em «Regenerar legenda» para ler o conteúdo da imagem.");
-      void saveWorkspaceNow();
-    }
-  };
+  const {
+    stopCaptionGeneration,
+    matchAndGenerateForPost,
+    stopCaptionBatch,
+    handleRunAllMatching,
+    handleRegenerateCaptionErrors,
+    handleToggleCaptionFromImageOnly,
+    handleRefineCaption,
+    markCaptionCacheBypass,
+  } = useCaptionGeneration({
+    posts,
+    canvaPages,
+    brandGem,
+    catalogRef,
+    postsRef,
+    usesReferencesRef,
+    refineInstructions,
+    getPostsSnapshot,
+    setPosts,
+    setIsProcessingAll,
+    setCaptionBatchProgress,
+    setIsRefining,
+    setRefineInstructions,
+    isQuotaErrorMessage,
+    ensureCatalogIndexedForMatch,
+    useApiStorage,
+    activeClientId,
+    saveWorkspaceNow,
+    handleNavigate,
+  });
 
   // Direct manual modification of part of the caption live
   const updateCaptionBodyManual = (postId: string, text: string) => {
-    setPosts(prev => prev.map(p => p.id === postId ? {
-      ...p,
-      caption: text,
-      isConfirmed: false
-    } : p));
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === postId
+          ? {
+              ...p,
+              caption: text,
+              isConfirmed: false,
+            }
+          : p
+      )
+    );
   };
 
   const handleClearCaption = async (postId: string) => {
@@ -2779,7 +2203,7 @@ export default function App() {
     if (!post.caption && !post.isGenerated && !post.reasoning && !post.error) return;
 
     stopCaptionGeneration(postId);
-    captionCacheBypassRef.current.add(postId);
+    markCaptionCacheBypass(postId);
 
     if (post.image) {
       try {
@@ -2850,70 +2274,6 @@ export default function App() {
       }
       return p;
     }));
-  };
-
-  // Refine single caption with conversational instructions (fora da fila de geração em lote)
-  const handleRefineCaption = async (postId: string, instructionOverride?: string) => {
-    const post = postsRef.current.find((p) => p.id === postId);
-    const instructions = (instructionOverride ?? refineInstructions[postId] ?? "").trim();
-    if (!post?.caption?.trim() || !instructions) return;
-    if (!ensureBrandGemConfigured()) return;
-
-    setIsRefining((prev) => ({ ...prev, [postId]: true }));
-
-    try {
-      const response = await aiFetch("/api/refine-caption", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          currentCaption: post.caption,
-          instructions,
-          brandGem,
-        }),
-      });
-
-      const result = await readJsonResponse<{ caption?: string; error?: string; modelUsed?: string }>(response);
-      if (!response.ok) {
-        throw new Error(result.error || "Não foi possível refinar no servidor.");
-      }
-
-      noteLastProviderUsed(response.headers.get("X-AI-Provider-Used"));
-      const captionModel =
-        result.modelUsed ?? response.headers.get("X-AI-Model-Used") ?? post.captionModel ?? null;
-      const refs = getReferenceCatalog(catalogRef.current);
-      const caption = finalizeCaption(sanitizeRefinedCaptionOutput(result.caption ?? ""), {
-        matchedCatalogId: post.matchedCatalogId,
-        matchedLabel: resolveCatalogLabel(refs, post.matchedCatalogId),
-        footer: brandGem.footer,
-        captionParams: brandGem.captionParams,
-      });
-
-      if (!caption.trim()) {
-        throw new Error("A IA devolveu uma legenda vazia. Tente outra instrução.");
-      }
-
-      setPosts((prev) =>
-        prev.map((p) =>
-          p.id === postId
-            ? {
-                ...p,
-                caption,
-                isGenerated: true,
-                isConfirmed: false,
-                captionModel,
-              }
-            : p
-        )
-      );
-
-      setRefineInstructions((prev) => ({ ...prev, [postId]: "" }));
-      await saveWorkspaceNow();
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : String(e);
-      toast.error("Falha ao ajustar a legenda: " + message);
-    } finally {
-      setIsRefining((prev) => ({ ...prev, [postId]: false }));
-    }
   };
 
   // Clear single post look image
@@ -3491,6 +2851,8 @@ export default function App() {
               periodLabel={activePeriodLabel}
               isReadOnly={isReadOnly}
               posts={posts}
+              clientBrief={contentScheduleBrief}
+              onClientBriefChange={setContentScheduleBrief}
               onItemsChange={setContentSchedule}
               onPushToPlanning={(nextPosts, nextItems) => {
                 setPosts(nextPosts);
@@ -3907,7 +3269,7 @@ export default function App() {
         {hasActiveClient && onClientRoute && usesReferences && routeSection === "reference_finder" && (
           <ReferenceFinderPanel
             referenceCatalog={referenceCatalog}
-            isEnrichingCatalog={isEnrichingCatalog}
+            isEnrichingCatalog={isEnrichingCatalogUi}
             onNavigateCatalog={() => void handleNavigate("catalog")}
             onEnsureCatalogIndexed={ensureCatalogIndexedForMatch}
             onViewProfile={(item) => setProfileViewItem(item)}
@@ -3937,7 +3299,7 @@ export default function App() {
                     variant="danger"
                     size="sm"
                     onClick={clearEntireCatalog}
-                    disabled={isEnrichingCatalog}
+                    disabled={isEnrichingCatalogUi}
                   >
                     <Trash2 className="h-4 w-4" />
                     Excluir catálogo
@@ -3959,7 +3321,7 @@ export default function App() {
                   Reinicie com <strong>npm run dev</strong> para ativar indexação.
                 </span>
               ) : null}
-              {usesReferences && isEnrichingCatalog && (
+              {usesReferences && isEnrichingCatalogUi && (
                 <span className="flex items-center gap-2 mt-2 text-ag-accent text-xs">
                   <RefreshCw className="h-3.5 w-3.5 animate-spin shrink-0" />
                   <span className="min-w-0">{catalogEnrichProgressLabel}</span>
@@ -4028,7 +3390,7 @@ export default function App() {
                 {/* Single or Multiple File Trigger */}
                 <button
                   type="button"
-                  disabled={isUploadingCatalog || isEnrichingCatalog}
+                  disabled={isUploadingCatalog || isEnrichingCatalogUi}
                   onClick={() => filesUploadInputRef.current?.click()}
                   className="bg-ag-surface-3 hover:bg-ag-surface-3/80 border border-ag-border text-ag-text text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer shadow-sm transition-colors disabled:opacity-50"
                 >
@@ -4039,7 +3401,7 @@ export default function App() {
                 {/* Directory Upload Trigger */}
                 <button
                   type="button"
-                  disabled={isUploadingCatalog || isEnrichingCatalog}
+                  disabled={isUploadingCatalog || isEnrichingCatalogUi}
                   onClick={() => void openReferenceFolderPicker()}
                   className="bg-ag-surface-3 hover:bg-ag-surface-3/80 border border-ag-border text-ag-text text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer shadow-sm transition-colors disabled:opacity-50"
                 >
@@ -4094,7 +3456,7 @@ export default function App() {
                       c.enrichmentStatus !== "ready_limited" &&
                       c.enrichmentStatus !== "failed"
                   ).length} pendentes
-                  {isEnrichingCatalog && (
+                  {isEnrichingCatalogUi && (
                     <span className="block mt-1 text-ag-accent font-medium">
                       {catalogEnrichProgressLabel}
                     </span>
@@ -4102,7 +3464,7 @@ export default function App() {
                 </span>
               </div>
               <div className="flex flex-wrap gap-2">
-                {isEnrichingCatalog && (
+                {isEnrichingCatalogUi && (
                   <button
                     type="button"
                     onClick={stopCatalogEnrichment}
@@ -4115,7 +3477,7 @@ export default function App() {
                 {referenceCatalog.some((c) => c.enrichmentStatus === "failed") && (
                   <button
                     type="button"
-                    disabled={isEnrichingCatalog}
+                    disabled={isEnrichingCatalogUi}
                     onClick={() => void handleReindexCatalog("failed")}
                     className="text-[10px] font-bold px-3 py-1.5 rounded-lg border border-ag-danger/30 bg-ag-danger/10 text-ag-danger hover:bg-ag-danger/15 disabled:opacity-50 cursor-pointer"
                   >
@@ -4130,18 +3492,18 @@ export default function App() {
                 ) && (
                   <button
                     type="button"
-                    disabled={isEnrichingCatalog}
+                    disabled={isEnrichingCatalogUi}
                     onClick={() => void handleReindexCatalog("all-incomplete")}
                     className="text-[10px] font-bold px-3 py-1.5 rounded-lg border border-ag-border bg-ag-surface-2 text-ag-text hover:bg-ag-surface-3 disabled:opacity-50 cursor-pointer flex items-center gap-1"
                   >
-                    {isEnrichingCatalog && <RefreshCw className="h-3 w-3 animate-spin" />}
+                    {isEnrichingCatalogUi && <RefreshCw className="h-3 w-3 animate-spin" />}
                     Indexar pendentes
                   </button>
                 )}
                 {clearableEnrichmentCount > 0 && (
                   <button
                     type="button"
-                    disabled={isEnrichingCatalog}
+                    disabled={isEnrichingCatalogUi}
                     onClick={() => clearAllCatalogEnrichments()}
                     className="text-[10px] font-bold px-3 py-1.5 rounded-lg border border-ag-border bg-ag-surface-2 text-ag-muted hover:text-ag-danger hover:border-ag-danger/30 disabled:opacity-50 cursor-pointer flex items-center gap-1"
                     title="Apaga o JSON de visão; as fotos do acervo permanecem"
@@ -4153,7 +3515,7 @@ export default function App() {
                 {indexedCatalogCount > 0 && indexedCatalogCount < clearableEnrichmentCount && (
                   <button
                     type="button"
-                    disabled={isEnrichingCatalog}
+                    disabled={isEnrichingCatalogUi}
                     onClick={() =>
                       void clearCatalogEnrichments(
                         referenceCatalog.filter(isCatalogItemIndexed).map((c) => c.id)
@@ -4185,7 +3547,7 @@ export default function App() {
                   const showIndexButton = !catalogIndexed;
                   const canClearEnrichment = hasCatalogEnrichmentData(item);
                   const isActiveEnrichItem =
-                    isEnrichingCatalog && catalogEnrichProgress?.itemId === item.id;
+                    isEnrichingCatalogUi && catalogEnrichProgressUi?.itemId === item.id;
                   const enrichOverlayActive = isActiveEnrichItem;
                   const isIndexingThis = isActiveEnrichItem;
                   const enrichOverlayProgress = isActiveEnrichItem ? catalogEnrichProgress : null;
@@ -4315,7 +3677,7 @@ export default function App() {
                       {canClearEnrichment && !isIndexingThis && (
                         <button
                           type="button"
-                          disabled={isEnrichingCatalog}
+                          disabled={isEnrichingCatalogUi}
                           onClick={() => void clearCatalogEnrichments([item.id])}
                           className="w-full text-[10px] font-medium py-1 rounded-lg border border-transparent text-ag-muted hover:text-ag-danger hover:border-ag-danger/20 hover:bg-ag-danger/5 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1"
                           title="Apagar só o JSON de visão; a foto permanece"
@@ -4521,8 +3883,8 @@ export default function App() {
 
       <CatalogEnrichProgressPanel
         progress={catalogEnrichProgress}
-        isEnriching={isEnrichingCatalog}
-        onStop={isEnrichingCatalog ? stopCatalogEnrichment : undefined}
+        isEnriching={isEnrichingCatalogUi}
+        onStop={isEnrichingCatalogUi ? stopCatalogEnrichment : undefined}
       />
 
       <CatalogProfileModal

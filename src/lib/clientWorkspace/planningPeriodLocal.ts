@@ -19,6 +19,7 @@ export type PeriodSnapshot = {
   catalog: ClientWorkspace["catalog"];
   canva: ClientWorkspace["canva"];
   contentSchedule: ClientWorkspace["contentSchedule"];
+  contentScheduleBrief: ClientWorkspace["contentScheduleBrief"];
   startDate: string;
   campaignContext: string;
   usesReferences?: boolean | null;
@@ -30,6 +31,7 @@ function snapshotFromWorkspace(ws: ClientWorkspace): PeriodSnapshot {
     catalog: ws.catalog,
     canva: ws.canva,
     contentSchedule: ws.contentSchedule,
+    contentScheduleBrief: ws.contentScheduleBrief ?? "",
     startDate: ws.startDate,
     campaignContext: ws.brandGem.campaignContext ?? "",
     usesReferences: ws.planningPeriods.find((p) => p.id === ws.activePlanningPeriodId)
@@ -44,6 +46,7 @@ function applySnapshot(ws: ClientWorkspace, snapshot: PeriodSnapshot): ClientWor
     catalog: snapshot.catalog,
     canva: snapshot.canva,
     contentSchedule: snapshot.contentSchedule ?? [],
+    contentScheduleBrief: snapshot.contentScheduleBrief ?? "",
     startDate: snapshot.startDate,
     brandGem: {
       ...ws.brandGem,
@@ -77,6 +80,7 @@ export function switchLocalPlanningPeriod(
       posts: recalculatePostDates(period.startDate, createEmptyPosts()),
       catalog: [],
       contentSchedule: [],
+      contentScheduleBrief: "",
       canva: {
         pages: createDefaultCanvaPages(),
         activePageId: "page_4",
@@ -118,6 +122,7 @@ function cloneSnapshot(snapshot: PeriodSnapshot): PeriodSnapshot {
       ...item,
       id: `${item.id}_dup_${Date.now()}`,
     })),
+    contentScheduleBrief: snapshot.contentScheduleBrief ?? "",
     canva: {
       ...snapshot.canva,
       pages: snapshot.canva.pages.map((page) => ({
@@ -178,6 +183,7 @@ export function createLocalPlanningPeriod(
           posts: recalculatePostDates(startDate, createEmptyPosts()),
           catalog: [],
           contentSchedule: [],
+      contentScheduleBrief: "",
           canva: createEmptyWorkspace(meta).canva,
           startDate,
           campaignContext: sourceMeta?.campaignContext ?? "",
@@ -189,6 +195,7 @@ export function createLocalPlanningPeriod(
       posts: recalculatePostDates(startDate, createEmptyPosts()),
       catalog: [],
       contentSchedule: [],
+      contentScheduleBrief: "",
       canva: empty.canva,
       startDate,
       campaignContext: "",
@@ -260,6 +267,7 @@ export function resetLocalActivePeriod(ws: ClientWorkspace, meta: ClientMeta): C
     posts: recalculatePostDates(ws.startDate, createEmptyPosts()),
     catalog: [],
     contentSchedule: [],
+    contentScheduleBrief: "",
     canva: empty.canva,
     startDate: ws.startDate,
     campaignContext: "",

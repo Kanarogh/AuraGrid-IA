@@ -17,7 +17,7 @@ import { formatStartDate, statusLabel } from "./planningPeriodUtils";
 
 export function PlanningPeriodControls({ compact = false }: { compact?: boolean }) {
   const { openNewPlanningPeriod } = usePlanningPeriodModal();
-  const { navigateClient } = useAppNavigation();
+  const { navigateRoute } = useAppNavigation();
   const {
     hasActiveClient,
     activeClient,
@@ -99,7 +99,7 @@ export function PlanningPeriodControls({ compact = false }: { compact?: boolean 
                   role="option"
                   aria-selected={selected}
                   onClick={() => {
-                    void navigateClient({ periodId: period.id }, { replace: true, skipDirtyGuard: true });
+                    void navigateRoute({ periodId: period.id }, { replace: true });
                     setOpen(false);
                   }}
                   className={cn(

@@ -1,17 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { formatAiError, getActiveProviderId } from "@/server/ai/index";
-import { resolveBrandGemFromBody } from "@/server/ai/brandContext";
+import { resolveBrandGemFromBody, assertBrandGemReadyForCaptions } from "@/server/ai/brandContext";
 import { getGeminiContentScheduleModel } from "@/server/ai/config";
 import {
   generateContentSchedule,
   refineContentScheduleItem,
 } from "@/server/ai/contentScheduleGenerator";
-import { withUserAiFromRequest } from "@/server/http/aiRequest";
+import { assertAiClientAccess, withUserAiFromRequest } from "@/server/http/aiRequest";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  return withUserAiFromRequest(req, async () => {
+  return withUserAiFromRequest(req, async (user) => {
     const providerId = getActiveProviderId();
     const modelUsed = getGeminiContentScheduleModel();
     try {
@@ -21,11 +21,32 @@ export async function POST(req: NextRequest) {
         promptContext,
         repeatingText,
         clientBrief,
+        clientId: rawClientId,
         mode = "monthly",
         options,
         existingItem,
         refineInstruction,
       } = body;
+
+      await assertAiClientAccess(user, rawClientId);
+
+      if (mode !== "refine_one") {
+        try {
+          assertBrandGemReadyForCaptions(
+            brandGem ?? resolveBrandGemFromBody({ promptContext, repeatingText })
+          );
+        } catch (validationError: unknown) {
+          return NextResponse.json(
+            {
+              error:
+                validationError instanceof Error
+                  ? validationError.message
+                  : String(validationError),
+            },
+            { status: 400 }
+          );
+        }
+      }
 
       if (mode === "refine_one") {
         if (!existingItem?.id) {

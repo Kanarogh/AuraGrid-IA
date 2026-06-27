@@ -5,6 +5,10 @@ import { errorResponse } from "@/server/http/respond";
 import { createCatalogItem } from "@/server/services/catalogService";
 import { uploadMediaBuffer } from "@/server/services/mediaService";
 import { getEffectiveUsesReferences } from "@/server/services/planningPeriodService";
+import {
+  assertUploadSize,
+  MAX_CATALOG_BATCH_FILES,
+} from "@/server/config/uploadLimits";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +24,12 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const files = form.getAll("files").filter((f): f is File => f instanceof File);
     if (!files.length) {
       return NextResponse.json({ error: "Nenhuma imagem enviada." }, { status: 400 });
+    }
+    if (files.length > MAX_CATALOG_BATCH_FILES) {
+      return NextResponse.json(
+        { error: `Máximo de ${MAX_CATALOG_BATCH_FILES} arquivos por envio.` },
+        { status: 400 }
+      );
     }
 
     const isReferenceRaw = String(form.get("isReference") ?? "").trim().toLowerCase();
@@ -65,6 +75,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       if (!label) label = id;
 
       const buffer = Buffer.from(await file.arrayBuffer());
+      assertUploadSize(buffer.byteLength, file.name || "Arquivo");
       const media = await uploadMediaBuffer({
         clientId,
         userId: user.id,

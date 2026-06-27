@@ -45,6 +45,7 @@ type UseAppRouteSyncArgs = {
   registryClientIds: string[];
   activeSection: AppSection;
   settingsDraftDirty: boolean;
+  isPeriodSwitching: boolean;
   postsWorkTab: PostsWorkTab;
   catalogTab: CatalogTab;
   settingsTab: SettingsTab;
@@ -143,6 +144,7 @@ export function useAppRouteSync({
   registryClientIds,
   activeSection,
   settingsDraftDirty,
+  isPeriodSwitching,
   postsWorkTab,
   catalogTab,
   settingsTab,
@@ -172,8 +174,12 @@ export function useAppRouteSync({
   const applyingFromUrlRef = useRef(false);
   const activeSectionRef = useRef(activeSection);
   const settingsDraftDirtyRef = useRef(settingsDraftDirty);
+  const activePlanningPeriodIdRef = useRef(activePlanningPeriodId);
+  const isPeriodSwitchingRef = useRef(isPeriodSwitching);
   activeSectionRef.current = activeSection;
   settingsDraftDirtyRef.current = settingsDraftDirty;
+  activePlanningPeriodIdRef.current = activePlanningPeriodId;
+  isPeriodSwitchingRef.current = isPeriodSwitching;
 
   const routeBuildCtx = buildRouteBuildContext(
     planningPeriods,
@@ -293,16 +299,21 @@ export function useAppRouteSync({
     setBeforeNavigate(async (next: ClientRoute) => {
       if (
         activeSectionRef.current === "settings" &&
-        settingsDraftDirtyRef.current &&
-        next.section !== "settings"
+        settingsDraftDirtyRef.current
       ) {
-        return confirmDialog({
-          title: "Alterações não salvas",
-          message:
-            "Você tem alterações no Gem da marca que ainda não foram salvas. Sair sem salvar?",
-          variant: "danger",
-          confirmLabel: "Sair sem salvar",
-        });
+        const leavingSettings = next.section !== "settings";
+        const changingPeriod =
+          next.periodId !== undefined &&
+          next.periodId !== activePlanningPeriodIdRef.current;
+        if (leavingSettings || changingPeriod) {
+          return confirmDialog({
+            title: "Alterações não salvas",
+            message:
+              "Você tem alterações no Gem da marca que ainda não foram salvas. Sair sem salvar?",
+            variant: "danger",
+            confirmLabel: "Sair sem salvar",
+          });
+        }
       }
       return true;
     });
@@ -434,6 +445,7 @@ export function useAppRouteSync({
     if (!enabled || !clientRoute || !hasActiveClient) return;
     if (applyingFromUrlRef.current) return;
     if (isApplyingRouteRef.current) return;
+    if (isPeriodSwitchingRef.current) return;
     if (clientRoute.clientId !== effectiveActiveClientId) return;
 
     const routePath = buildClientPath(clientRoute, routeBuildCtx);
@@ -524,6 +536,7 @@ export function useAppRouteSync({
     routeBuildCtx,
     pendingNavigationRef,
     isApplyingRouteRef,
+    isPeriodSwitching,
   ]);
 
   const handleNavigate = useCallback(

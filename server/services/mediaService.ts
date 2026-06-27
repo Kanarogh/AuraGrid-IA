@@ -20,6 +20,7 @@ import {
   MINIO_SECRET_KEY,
   MINIO_USE_SSL,
 } from "../config/env";
+import { assertUploadSize } from "../config/uploadLimits";
 import { getDb, isDatabaseConfigured } from "../db/client";
 import { canvaSlots, catalogItems, mediaAssets, plannedPosts } from "../db/schema";
 import {
@@ -95,6 +96,8 @@ export async function uploadMediaBuffer(input: {
       "Armazenamento de mídia não configurado. Use SQUARECLOUD_BLOB_API_KEY ou MINIO_*."
     );
   }
+
+  assertUploadSize(input.buffer.byteLength, input.fileName);
 
   const sha256 = createHash("sha256").update(input.buffer).digest("hex");
   const provider = getMediaStorageProvider();

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { assertClientAccess, requireUser } from "@/server/http/auth";
 import { errorResponse } from "@/server/http/respond";
+import { parseBrandGemSaveBody } from "@/server/validation/brandGemSchema";
 import { saveBrandGem } from "@/server/services/clientService";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,8 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
     const { clientId } = await params;
     await assertClientAccess(user, clientId);
     const body = await req.json();
-    const savedAt = await saveBrandGem(user.id, clientId, body);
+    const validated = parseBrandGemSaveBody(body);
+    const savedAt = await saveBrandGem(user.id, clientId, validated);
     return NextResponse.json({ savedAt });
   } catch (err) {
     return errorResponse(err, 400);

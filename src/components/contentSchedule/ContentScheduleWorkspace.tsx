@@ -38,6 +38,8 @@ type ContentScheduleWorkspaceProps = {
   periodLabel?: string;
   isReadOnly?: boolean;
   posts: PlannedPost[];
+  clientBrief: string;
+  onClientBriefChange: (brief: string) => void;
   onItemsChange: (items: ContentScheduleItem[]) => void;
   onPushToPlanning: (posts: PlannedPost[], items: ContentScheduleItem[]) => void;
 };
@@ -64,10 +66,11 @@ export function ContentScheduleWorkspace({
   periodLabel,
   isReadOnly,
   posts,
+  clientBrief,
+  onClientBriefChange,
   onItemsChange,
   onPushToPlanning,
 }: ContentScheduleWorkspaceProps) {
-  const [clientBrief, setClientBrief] = useState("");
   const [postCount, setPostCount] = useState(9);
   const [storyCount, setStoryCount] = useState(12);
   const [extraInstructions, setExtraInstructions] = useState("");
@@ -244,7 +247,7 @@ export function ContentScheduleWorkspace({
         />
         <textarea
           value={clientBrief}
-          onChange={(e) => setClientBrief(e.target.value)}
+          onChange={(e) => onClientBriefChange(e.target.value)}
           disabled={isReadOnly || generating}
           rows={5}
           placeholder="Ex.: Quero focar este mês em PDV offline, gestão de estoque e datas sazonais..."
