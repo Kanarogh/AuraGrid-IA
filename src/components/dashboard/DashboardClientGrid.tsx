@@ -20,11 +20,15 @@ function formatRelativeTime(iso: string): string {
 export function DashboardClientGrid({
   clients,
   activeClientId,
+  switchingClientId,
+  clientSwitchDisabled,
   onSelectClient,
   onCreateClient,
 }: {
   clients: ClientMeta[];
   activeClientId: string;
+  switchingClientId?: string | null;
+  clientSwitchDisabled?: boolean;
   onSelectClient: (clientId: string) => void;
   onCreateClient: () => void;
 }) {
@@ -50,14 +54,21 @@ export function DashboardClientGrid({
       <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 ag-scrollbar-thin snap-x snap-mandatory sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:overflow-visible sm:pb-0">
         {clients.map((client) => {
           const isActive = client.id === activeClientId;
+          const isSwitchingTarget = switchingClientId === client.id;
           return (
             <button
               key={client.id}
               type="button"
-              onClick={() => onSelectClient(client.id)}
+              disabled={clientSwitchDisabled && !isActive}
+              onClick={() => {
+                if (clientSwitchDisabled || isActive) return;
+                onSelectClient(client.id);
+              }}
               className={cn(
                 "snap-start shrink-0 w-[min(100%,16rem)] sm:w-auto text-left rounded-xl border bg-ag-surface-1 p-4",
-                "transition-all cursor-pointer ag-focus-ring hover:shadow-[var(--ag-shadow-lg)]",
+                "transition-all ag-focus-ring hover:shadow-[var(--ag-shadow-lg)]",
+                clientSwitchDisabled && !isActive && "opacity-60 cursor-not-allowed",
+                !clientSwitchDisabled && "cursor-pointer",
                 isActive
                   ? "border-ag-accent/40 ring-2 ring-ag-accent/20 shadow-[var(--ag-shadow)]"
                   : "border-ag-border/60 hover:border-ag-accent/30"
@@ -84,7 +95,9 @@ export function DashboardClientGrid({
                 </div>
               </div>
               <p className="mt-3 text-[10px] font-mono uppercase tracking-wider text-ag-muted">
-                Atualizado {formatRelativeTime(client.updatedAt)}
+                {isSwitchingTarget
+                  ? "Carregando…"
+                  : `Atualizado ${formatRelativeTime(client.updatedAt)}`}
               </p>
             </button>
           );

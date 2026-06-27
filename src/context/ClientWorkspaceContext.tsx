@@ -78,6 +78,18 @@ import {
   effectiveUsesReferencesFromParts,
 } from "../lib/referenceWorkflow";
 
+export type ClientSwitchState = {
+  isSwitching: boolean;
+  targetClientId: string | null;
+  targetClientName: string | null;
+};
+
+const IDLE_CLIENT_SWITCH: ClientSwitchState = {
+  isSwitching: false,
+  targetClientId: null,
+  targetClientName: null,
+};
+
 type ClientWorkspaceContextValue = {
   registry: ClientRegistry;
   hasActiveClient: boolean;
@@ -139,6 +151,8 @@ type ClientWorkspaceContextValue = {
   workspaceHydrated: boolean;
   workspaceLoadError: string | null;
   retryWorkspaceLoad: () => void;
+  clientSwitch: ClientSwitchState;
+  isClientSwitching: boolean;
 };
 
 const ClientWorkspaceContext = createContext<ClientWorkspaceContextValue | null>(null);
@@ -211,6 +225,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
   );
   const [workspaceHydrated, setWorkspaceHydrated] = useState(false);
   const [workspaceLoadError, setWorkspaceLoadError] = useState<string | null>(null);
+  const [clientSwitch, setClientSwitch] = useState<ClientSwitchState>(IDLE_CLIENT_SWITCH);
 
   useEffect(() => {
     if (authLoading || !isStorageModeResolved(storageMode)) return;
@@ -273,6 +288,11 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
 
   const hasActiveClient = registry.clients.length > 0;
   const activeClientId = hasActiveClient ? registry.activeClientId : "";
+  const activeClientIdRef = useRef(activeClientId);
+  activeClientIdRef.current = activeClientId;
+  const registryRef = useRef(registry);
+  registryRef.current = registry;
+  const clientSwitchQueueRef = useRef(Promise.resolve());
   const effectiveActiveClientId = useMemo(() => {
     if (!hasActiveClient) return "";
     if (registry.clients.some((c) => c.id === registry.activeClientId)) {
@@ -389,23 +409,49 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
   const switchClient = useCallback(
     (clientId: string) => {
       if (useApiStorage) {
-        void (async () => {
-          if (registry.activeClientId === clientId) return;
-          const api = getApiHelpers();
-          if (!api) return;
-          if (registry.activeClientId) {
-            const flush = api.flushWorkspaceNow;
-            if (flush) await flush(workspaceRef.current);
-          }
-          aiQueue.cancelPending();
-          await api.activateClient(clientId);
-          const reg = await api.fetchRegistry();
-          const dto = await api.fetchWorkspace(clientId);
-          setRegistry(reg);
-          const ws = api.toWorkspace(dto);
-          setWorkspace(ws);
-          workspaceRef.current = ws;
-        })();
+        clientSwitchQueueRef.current = clientSwitchQueueRef.current
+          .then(async () => {
+            if (activeClientIdRef.current === clientId) return;
+            const api = getApiHelpers();
+            if (!api) return;
+
+            const targetName =
+              registryRef.current.clients.find((c) => c.id === clientId)?.name ?? clientId;
+            setClientSwitch({
+              isSwitching: true,
+              targetClientId: clientId,
+              targetClientName: targetName,
+            });
+            beginRemoteWorkspaceApply();
+
+            try {
+              if (activeClientIdRef.current) {
+                const flush = api.flushWorkspaceNow;
+                if (flush) await flush(workspaceRef.current);
+              }
+              aiQueue.cancelPending();
+              await api.activateClient(clientId);
+              const reg = await api.fetchRegistry();
+              const dto = await api.fetchWorkspace(clientId);
+              setRegistry(reg);
+              activeClientIdRef.current = reg.activeClientId || clientId;
+              const ws = api.toWorkspace(dto);
+              const fp = workspaceApiPatchFingerprint(ws);
+              if (fp) markWorkspacePatchSynced(clientId, fp);
+              setWorkspace(ws);
+              workspaceRef.current = ws;
+            } catch (err) {
+              console.error("[AuraGrid] Falha ao trocar cliente:", err);
+              toast.error("Não foi possível carregar as informações deste cliente. Tente novamente.");
+              throw err;
+            } finally {
+              endRemoteWorkspaceApply();
+              setClientSwitch(IDLE_CLIENT_SWITCH);
+            }
+          })
+          .catch(() => {
+            /* erro já logado/toast no bloco acima */
+          });
         return;
       }
 
@@ -414,12 +460,13 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
         if (reg.activeClientId) flushSave(reg.activeClientId, workspaceRef.current);
         aiQueue.cancelPending();
         const next = { ...reg, activeClientId: clientId };
+        activeClientIdRef.current = clientId;
         saveRegistry(next);
         queueMicrotask(() => loadClientIntoState(clientId, next.clients));
         return next;
       });
     },
-    [flushSave, loadClientIntoState, registry, useApiStorage]
+    [flushSave, loadClientIntoState, useApiStorage]
   );
 
   const setCatalog: Dispatch<SetStateAction<CatalogItem[]>> = useCallback(
@@ -1270,6 +1317,8 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       workspaceHydrated,
       workspaceLoadError,
       retryWorkspaceLoad,
+      clientSwitch,
+      isClientSwitching: clientSwitch.isSwitching,
     }),
     [
       registry,
@@ -1313,6 +1362,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       workspaceHydrated,
       workspaceLoadError,
       retryWorkspaceLoad,
+      clientSwitch,
     ]
   );
 

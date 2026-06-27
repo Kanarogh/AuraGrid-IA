@@ -80,12 +80,16 @@ function ClientRow({
   client,
   subtitle,
   isActive,
+  isLoading,
+  disabled,
   onSelect,
   onOpenMenu,
 }: {
   client: ClientMeta;
   subtitle?: string;
   isActive?: boolean;
+  isLoading?: boolean;
+  disabled?: boolean;
   onSelect?: () => void;
   onOpenMenu: (anchor: HTMLElement) => void;
 }) {
@@ -94,11 +98,11 @@ function ClientRow({
       <button
         type="button"
         onClick={onSelect}
-        disabled={isActive}
+        disabled={isActive || disabled}
         className={cn(
           "w-full flex items-center gap-2.5 rounded-lg pl-2 pr-9 py-2 text-left transition-colors min-w-0",
-          isActive
-            ? "cursor-default"
+          isActive || disabled
+            ? "cursor-default opacity-90"
             : "hover:bg-ag-surface-3 cursor-pointer"
         )}
       >
@@ -115,8 +119,12 @@ function ClientRow({
         </span>
         <span className="min-w-0 flex-1">
           <span className="text-sm font-semibold text-ag-text block truncate">{client.name}</span>
-          {subtitle && (
-            <span className="text-[10px] text-ag-muted block truncate">{subtitle}</span>
+          {isLoading ? (
+            <span className="text-[10px] text-ag-accent block truncate">Carregando…</span>
+          ) : (
+            subtitle && (
+              <span className="text-[10px] text-ag-muted block truncate">{subtitle}</span>
+            )
           )}
         </span>
       </button>
@@ -149,6 +157,8 @@ function ClientHubCard({
     deleteClient,
     renameClient,
     hasActiveClient,
+    isClientSwitching,
+    clientSwitch,
   } = useClientWorkspace();
   const { navigateRoute } = useAppNavigation();
   const [modalOpen, setModalOpen] = useState(false);
@@ -254,7 +264,12 @@ function ClientHubCard({
                   <li key={client.id}>
                     <ClientRow
                       client={client}
-                      onSelect={() => void navigateRoute({ clientId: client.id })}
+                      isLoading={clientSwitch.targetClientId === client.id}
+                      disabled={isClientSwitching}
+                      onSelect={() => {
+                        if (isClientSwitching) return;
+                        void navigateRoute({ clientId: client.id });
+                      }}
                       onOpenMenu={(anchor) => openMenu(client.id, anchor)}
                     />
                   </li>

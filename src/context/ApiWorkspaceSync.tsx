@@ -94,6 +94,7 @@ export function ApiWorkspaceSync() {
     setCanvaGridFormat,
     setCanvaGridMaxWidth,
     setUiPrefs,
+    isClientSwitching,
   } = useClientWorkspace();
 
   const loadedRef = useRef(false);
@@ -168,6 +169,7 @@ export function ApiWorkspaceSync() {
   useEffect(() => {
     if (storageMode !== "postgresql" || !user || !activeClientId || skipSaveRef.current) return;
     if (!loadedRef.current) return;
+    if (isClientSwitching) return;
     if (isApplyingRemoteWorkspace()) return;
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -209,7 +211,7 @@ export function ApiWorkspaceSync() {
         setWorkspaceSavePending(false);
       }
     };
-  }, [workspace, activeClientId, storageMode, user?.id]);
+  }, [workspace, activeClientId, storageMode, user?.id, isClientSwitching]);
 
   // Flush imediato ao fechar/recarregar (evita perder PATCH debounced)
   useEffect(() => {

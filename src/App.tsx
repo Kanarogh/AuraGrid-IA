@@ -273,6 +273,8 @@ export default function App() {
     applyRemotePlanningPeriods,
     usesReferences,
     setDefaultUsesReferences,
+    isClientSwitching,
+    clientSwitch,
   } = useClientWorkspace();
 
   const { openNewPlanningPeriod } = usePlanningPeriodModal();
@@ -446,7 +448,7 @@ export default function App() {
     stopEnrichLocal: stopCatalogEnrichPolling,
     publishSyncChange,
   } = useRemoteSyncCoordinator({
-    enabled: useApiStorage,
+    enabled: useApiStorage && !isClientSwitching,
     clientId: activeClientId ?? "",
     periodId: activePlanningPeriodId ?? "",
     workspaceHydrated,
@@ -474,7 +476,7 @@ export default function App() {
   }, [reloadWorkspaceSlices]);
 
   useCatalogEnrichmentWatcher({
-    enabled: useApiStorage,
+    enabled: useApiStorage && !isClientSwitching,
     clientId: activeClientId ?? "",
     workspaceHydrated,
     onCatalogReload: reloadCatalogFromRemote,
@@ -3404,6 +3406,8 @@ export default function App() {
             isReadOnly={isReadOnly}
             metrics={dashboardMetrics}
             isLoading={useApiStorage && !workspaceHydrated}
+            clientSwitchDisabled={isClientSwitching}
+            switchingClientId={clientSwitch.targetClientId}
             usesReferences={usesReferences}
             onContinueWorkspace={() => {
               const section =
@@ -3420,7 +3424,8 @@ export default function App() {
               void navigateClient({ clientId: effectiveActiveClientId, section })
             }
             onSelectClient={(clientId) => {
-              if (clientId !== activeClientId) switchClient(clientId);
+              if (isClientSwitching || clientId === activeClientId) return;
+              switchClient(clientId);
             }}
             onConfigureGem={() =>
               void navigateClient({

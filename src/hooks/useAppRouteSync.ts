@@ -271,6 +271,20 @@ export function useAppRouteSync({
     return () => registerCommitNavigation(null);
   }, [commitNavigation, registerCommitNavigation]);
 
+  /** Troca de cliente só quando a URL muda — não a cada update de posts/canva. */
+  useEffect(() => {
+    if (!enabled || !clientRoute || !hasActiveClient) return;
+    const routeClientId = clientRoute.clientId;
+    if (!routeClientId || routeClientId === effectiveActiveClientId) return;
+    handlers.switchClient(routeClientId);
+  }, [
+    enabled,
+    hasActiveClient,
+    clientRoute?.clientId,
+    effectiveActiveClientId,
+    handlers.switchClient,
+  ]);
+
   useEffect(() => {
     if (!enabled || !clientRoute || !hasActiveClient) return;
     if (applyingFromUrlRef.current) return;
@@ -294,9 +308,6 @@ export function useAppRouteSync({
       );
       const validated = validateClientRoute(clientRoute, ctx);
       const route = validated.route;
-      if (route.clientId !== effectiveActiveClientId) {
-        handlers.switchClient(route.clientId);
-      }
       applyPatch(clientRouteToStatePatch(route));
       return;
     }
@@ -320,10 +331,6 @@ export function useAppRouteSync({
       if (!validated.ok) {
         replaceClientRoute(route);
         return;
-      }
-
-      if (route.clientId !== effectiveActiveClientId) {
-        handlers.switchClient(route.clientId);
       }
 
       const stateRoute = currentRouteFromState();

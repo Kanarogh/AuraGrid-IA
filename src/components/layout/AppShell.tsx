@@ -8,6 +8,7 @@ import {
   saveSidebarCollapsed,
 } from "./AppSidebar";
 import { AppTopBar } from "./AppTopBar";
+import { ClientSwitchOverlay } from "../app/ClientSwitchOverlay";
 
 export function AppShell({
   activeSection,
@@ -105,9 +106,10 @@ export function AppShell({
         <main
           id="main-content"
           ref={mainRef}
-          className="flex-1 overflow-auto ag-page-mesh"
+          className="relative flex-1 overflow-auto ag-page-mesh"
           tabIndex={-1}
         >
+          <ClientSwitchOverlay />
           <div className="w-full max-w-[100rem] mx-auto px-4 sm:px-5 lg:px-6 py-6 ag-workspace-section">
             {children}
           </div>

@@ -69,6 +69,8 @@ export function DashboardView({
   isReadOnly,
   metrics,
   isLoading,
+  clientSwitchDisabled,
+  switchingClientId,
   onContinueWorkspace,
   onNavigateSection,
   onSelectClient,
@@ -84,6 +86,8 @@ export function DashboardView({
   isReadOnly: boolean;
   metrics: DashboardMetrics;
   isLoading?: boolean;
+  clientSwitchDisabled?: boolean;
+  switchingClientId?: string | null;
   onContinueWorkspace: () => void;
   onNavigateSection: (section: AppSection) => void;
   onSelectClient: (clientId: string) => void;
@@ -330,6 +334,8 @@ export function DashboardView({
           <DashboardClientGrid
             clients={clients}
             activeClientId={activeClientId}
+            clientSwitchDisabled={clientSwitchDisabled}
+            switchingClientId={switchingClientId}
             onSelectClient={onSelectClient}
             onCreateClient={() => setModalOpen(true)}
           />
