@@ -85,6 +85,19 @@ flowchart LR
 
 Entrada: `PostSchedulingWorkspace.tsx` → `PublishSchedulerHub` (wire em `App.tsx`).
 
+### Isolamento por cliente
+
+Ao trocar de cliente (sidebar ou dashboard), a seção **Programar posts** recarrega dados exclusivos daquele cliente:
+
+- **URL** — `/c/:clientId/programar-posts` preserva a seção; `periodId` estrangeiro é removido ao mudar `clientId`.
+- **Workspace** — `switchClient` carrega posts, período ativo e Gem do novo cliente antes de renderizar o hub.
+- **Remount** — `PostSchedulingWorkspace` usa `key={clientId:planningPeriodId}` para zerar estado local (drawer, modais, calendário).
+- **Fetch** — fila, conexão Meta e prefs vêm de `/api/v1/clients/:clientId/publish/**`; respostas obsoletas (troca rápida) são ignoradas via *stale-guard*.
+- **Rascunhos** — `sessionStorage` em chave `ag_publish_drafts:{clientId}:{planningPeriodId}` (sem vazamento entre clientes).
+- **Transição** — overlay “Carregando informações…” enquanto `isClientSwitching`; polling pausa nesse intervalo.
+
+Teste manual: abra Programar posts no cliente A, troque para B pela sidebar — stats, calendário, bandeja e `@handle` devem refletir B sem dados de A.
+
 ---
 
 ## O que foi implementado

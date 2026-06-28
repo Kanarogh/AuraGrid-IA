@@ -2801,6 +2801,10 @@ export default function App() {
             onSelectClient={(clientId) => {
               if (isClientSwitching || clientId === activeClientId) return;
               switchClient(clientId);
+              void navigateClient({
+                clientId,
+                section: clientRoute?.section ?? "posts",
+              });
             }}
             onConfigureGem={() =>
               void navigateClient({
@@ -2875,8 +2879,15 @@ export default function App() {
           </div>
         )}
 
-        {hasActiveClient && onClientRoute && routeSection === "post_scheduling" && activeClientId && (
+        {hasActiveClient &&
+          onClientRoute &&
+          routeSection === "post_scheduling" &&
+          activeClientId &&
+          clientRoute?.clientId === activeClientId &&
+          workspace.brandGem.id === activeClientId &&
+          !isClientSwitching && (
           <PostSchedulingWorkspace
+            key={`${activeClientId}:${activePlanningPeriodId}`}
             clientId={activeClientId}
             planningPeriodId={activePlanningPeriodId}
             startDate={startDate}

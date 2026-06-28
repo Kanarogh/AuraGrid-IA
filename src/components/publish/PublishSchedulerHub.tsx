@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarClock, CloudOff, Grid3X3, Loader2 } from "lucide-react";
 import type { CanvaGridPage, PlannedPost } from "../../types";
 import { useAuth } from "../../context/AuthContext";
+import { useClientWorkspace } from "../../context/ClientWorkspaceContext";
 import { usePublishQueuePoll } from "../../hooks/usePublishQueuePoll";
 import { toast } from "../../lib/toast";
 import { Button } from "../ui/Button";
@@ -33,6 +34,7 @@ import {
   loadPublishDrafts,
   savePublishDrafts,
 } from "../../lib/publish/publishDraftStorage";
+import { isStaleFetch } from "../../lib/publish/publishFetchGuard";
 import { filterQueue, filterTrayItems, queueMetrics } from "./publishUiUtils";
 import { calendarDateForPost } from "../../lib/publish/suggestScheduleTimes";
 import {
@@ -48,12 +50,20 @@ import {
   type HubViewMode,
 } from "./publishCalendarUtils";
 
-const CHECKLIST_KEY = "ag_publish_checklist_done";
-const FEED_PREVIEW_KEY = "ag_publish_show_feed_preview";
+const CHECKLIST_KEY_PREFIX = "ag_publish_checklist_done:";
+const FEED_PREVIEW_KEY_PREFIX = "ag_publish_show_feed_preview:";
 
-function readFeedPreviewPref(): boolean {
+function checklistKey(clientId: string): string {
+  return `${CHECKLIST_KEY_PREFIX}${clientId}`;
+}
+
+function feedPreviewKey(clientId: string): string {
+  return `${FEED_PREVIEW_KEY_PREFIX}${clientId}`;
+}
+
+function readFeedPreviewPref(clientId: string): boolean {
   if (typeof window === "undefined") return true;
-  return window.localStorage.getItem(FEED_PREVIEW_KEY) !== "0";
+  return window.localStorage.getItem(feedPreviewKey(clientId)) !== "0";
 }
 
 function loadErrorDetail(err: unknown, fallback: string): string {
@@ -85,7 +95,9 @@ export function PublishSchedulerHub({
   metaConnectedParam?: boolean;
 }) {
   const { storageMode } = useAuth();
+  const { isClientSwitching } = useClientWorkspace();
   const cloudOnly = storageMode === "postgresql";
+  const fetchGenerationRef = useRef(0);
 
   const [hubView, setHubView] = useState<HubViewMode>("calendar");
   const [calendarMode, setCalendarMode] = useState<CalendarViewMode>("week");
@@ -106,17 +118,17 @@ export function PublishSchedulerHub({
   const [mobileFeedOpen, setMobileFeedOpen] = useState(false);
   const [pendingConfirmIds, setPendingConfirmIds] = useState<string[]>([]);
   const [expandedDayKey, setExpandedDayKey] = useState<string | null>(null);
-  const [showFeedPreview, setShowFeedPreview] = useState(readFeedPreviewPref);
+  const [showFeedPreview, setShowFeedPreview] = useState(() => readFeedPreviewPref(clientId));
 
   const toggleFeedPreview = useCallback(() => {
     setShowFeedPreview((prev) => {
       const next = !prev;
       if (typeof window !== "undefined") {
-        window.localStorage.setItem(FEED_PREVIEW_KEY, next ? "1" : "0");
+        window.localStorage.setItem(feedPreviewKey(clientId), next ? "1" : "0");
       }
       return next;
     });
-  }, []);
+  }, [clientId]);
 
   const setDraftSchedules = useCallback(
     (updater: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => {
@@ -134,7 +146,19 @@ export function PublishSchedulerHub({
   }, [clientId, planningPeriodId]);
 
   useEffect(() => {
-    void fetchPublishPrefs(clientId).then(setPrefs);
+    fetchGenerationRef.current += 1;
+    setQueue([]);
+    setSummary(null);
+    setConnection(null);
+    setLoading(true);
+  }, [clientId, planningPeriodId]);
+
+  useEffect(() => {
+    const generation = fetchGenerationRef.current;
+    void fetchPublishPrefs(clientId).then((nextPrefs) => {
+      if (isStaleFetch(generation, fetchGenerationRef.current)) return;
+      setPrefs(nextPrefs);
+    });
   }, [clientId]);
 
   const refresh = useCallback(async (silent = false) => {
@@ -142,12 +166,15 @@ export function PublishSchedulerHub({
       setLoading(false);
       return;
     }
+    const generation = fetchGenerationRef.current;
     if (!silent) setLoading(true);
     try {
       const [queueResult, metaResult] = await Promise.allSettled([
         fetchPublishQueue(clientId, planningPeriodId),
         fetchMetaConnection(clientId),
       ]);
+
+      if (isStaleFetch(generation, fetchGenerationRef.current)) return;
 
       if (queueResult.status === "fulfilled") {
         setQueue(queueResult.value.queue);
@@ -166,7 +193,9 @@ export function PublishSchedulerHub({
         );
       }
     } finally {
-      if (!silent) setLoading(false);
+      if (!silent && !isStaleFetch(generation, fetchGenerationRef.current)) {
+        setLoading(false);
+      }
     }
   }, [clientId, planningPeriodId, cloudOnly]);
 
@@ -174,7 +203,11 @@ export function PublishSchedulerHub({
     void refresh();
   }, [refresh]);
 
-  usePublishQueuePoll(() => refresh(true), cloudOnly && hubView !== "settings", 30000);
+  usePublishQueuePoll(
+    () => refresh(true),
+    cloudOnly && hubView !== "settings" && !isClientSwitching,
+    30000
+  );
 
   useEffect(() => {
     if (metaConnectedParam) {
@@ -185,8 +218,8 @@ export function PublishSchedulerHub({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!localStorage.getItem(CHECKLIST_KEY) && cloudOnly) setShowChecklist(true);
-  }, [cloudOnly]);
+    if (!localStorage.getItem(checklistKey(clientId)) && cloudOnly) setShowChecklist(true);
+  }, [cloudOnly, clientId]);
 
   const shiftAnchor = useCallback((delta: -1 | 1) => {
     setAnchorDate((d) => {
@@ -371,7 +404,7 @@ export function PublishSchedulerHub({
       setDraftSchedules({});
       clearPublishDrafts(clientId, planningPeriodId);
       setPendingConfirmIds([]);
-      localStorage.setItem(CHECKLIST_KEY, "1");
+      localStorage.setItem(checklistKey(clientId), "1");
       setShowChecklist(false);
       await refresh();
     } catch (err) {
@@ -416,7 +449,7 @@ export function PublishSchedulerHub({
         showChecklist={showChecklist}
         onDismissChecklist={() => {
           setShowChecklist(false);
-          localStorage.setItem(CHECKLIST_KEY, "1");
+          localStorage.setItem(checklistKey(clientId), "1");
         }}
       />
 
