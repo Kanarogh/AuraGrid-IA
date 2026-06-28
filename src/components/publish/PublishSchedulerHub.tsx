@@ -513,6 +513,14 @@ export function PublishSchedulerHub({
           }
         >
           <div className="space-y-4 min-w-0">
+            <UnscheduledTray
+              items={trayItems}
+              draftSchedules={draftSchedules}
+              onItemClick={setComposerItem}
+              onSuggestAll={() => void handleSuggestVisible()}
+              suggesting={suggesting}
+            />
+
             <PublishCalendar
               queue={queue}
               draftSchedules={draftSchedules}
@@ -532,14 +540,6 @@ export function PublishSchedulerHub({
                 if (!match) return;
                 void handleDrop(dateKey, match.plannedPostId, combineDateAndTime(dateKey, "10:00", scheduleTimezone));
               }}
-            />
-
-            <UnscheduledTray
-              items={trayItems}
-              draftSchedules={draftSchedules}
-              onItemClick={setComposerItem}
-              onSuggestAll={() => void handleSuggestVisible()}
-              suggesting={suggesting}
             />
 
             {trayItems.length === 0 && eligible.length === 0 && metrics.scheduled === 0 && (
