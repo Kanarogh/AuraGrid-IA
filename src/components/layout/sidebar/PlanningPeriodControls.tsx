@@ -1,11 +1,12 @@
 "use client";
 
 import { CalendarRange, ChevronDown, Plus } from "lucide-react";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { isCatalogItemIndexed } from "../../../lib/catalog";
 import { useClientWorkspace } from "../../../context/ClientWorkspaceContext";
 import { useAppNavigation } from "../../../lib/appRouting";
 import { confirmDialog } from "../../../lib/confirmDialog";
+import { recalculatePostDates } from "../../../lib/dates";
 import {
   buildDisableReferencesConfirmMessage,
   resolveUsesReferences,
@@ -13,6 +14,7 @@ import {
 import { cn } from "../../../lib/cn";
 import { usePlanningPeriodModal } from "../planningPeriodModalContext";
 import { FloatingPopover } from "../../ui/FloatingPopover";
+import { Input } from "../../ui/Input";
 import { formatStartDate, statusLabel } from "./planningPeriodUtils";
 
 export function PlanningPeriodControls({ compact = false }: { compact?: boolean }) {
@@ -23,6 +25,8 @@ export function PlanningPeriodControls({ compact = false }: { compact?: boolean 
     activeClient,
     workspace,
     setPeriodUsesReferences,
+    setStartDate,
+    setPosts,
   } = useClientWorkspace();
 
   const [open, setOpen] = useState(false);
@@ -44,6 +48,15 @@ export function PlanningPeriodControls({ compact = false }: { compact?: boolean 
 
   const sorted = [...planningPeriods].sort(
     (a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+  );
+
+  const handleStartDateChange = useCallback(
+    (newDate: string) => {
+      if (!newDate || newDate === workspace.startDate) return;
+      setStartDate(newDate);
+      setPosts((prev) => recalculatePostDates(newDate, prev));
+    },
+    [setStartDate, setPosts, workspace.startDate]
   );
 
   if (!hasActiveClient || !active) return null;
@@ -141,8 +154,32 @@ export function PlanningPeriodControls({ compact = false }: { compact?: boolean 
         )}
       </FloatingPopover>
 
+      {!isReadOnly ? (
+        <div className="space-y-1">
+          <label
+            htmlFor="sidebar-planning-start-date"
+            className="text-[9px] font-semibold uppercase tracking-wider text-ag-muted"
+          >
+            Início do planejamento
+          </label>
+          <Input
+            id="sidebar-planning-start-date"
+            type="date"
+            value={workspace.startDate}
+            onChange={(e) => handleStartDateChange(e.target.value)}
+            className="rounded-lg border-ag-border bg-ag-surface px-2 py-1.5 text-[11px] font-semibold h-auto"
+          />
+          <p className="text-[9px] text-ag-muted leading-snug">
+            O Dia 1 começa nesta data; os demais dias são calculados em sequência.
+          </p>
+        </div>
+      ) : (
+        <p className="text-[10px] text-ag-muted">
+          Início {formatStartDate(active.startDate)}
+        </p>
+      )}
+
       <p className="text-[10px] text-ag-muted flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-        <span>Início {formatStartDate(active.startDate)}</span>
         <span
           className={cn(
             "inline-flex rounded-full px-1.5 py-px text-[9px] font-semibold",
