@@ -288,15 +288,6 @@ export function PublishSchedulerHub({
         }}
       />
 
-      {!connected && hubView !== "settings" && (
-        <MetaConnectionCard
-          clientId={clientId}
-          connection={connection}
-          onRefresh={() => void refresh()}
-          compact
-        />
-      )}
-
       <PublishCalendarToolbar
         anchorDate={anchorDate}
         calendarMode={calendarMode}
@@ -310,6 +301,15 @@ export function PublishSchedulerHub({
         onHubViewChange={setHubView}
         onToday={() => setAnchorDate(new Date())}
       />
+
+      {!connected && (
+        <MetaConnectionCard
+          clientId={clientId}
+          connection={connection}
+          onRefresh={() => void refresh()}
+          compact
+        />
+      )}
 
       {conflicts.size > 0 && hubView === "calendar" && (
         <p className="text-xs text-ag-warning rounded-lg border border-ag-warning/30 bg-ag-warning/5 px-3 py-2">
@@ -326,6 +326,7 @@ export function PublishSchedulerHub({
           clientId={clientId}
           connection={connection}
           onConnectionRefresh={() => void refresh()}
+          hideConnection={!connected}
         />
       ) : hubView === "list" ? (
         <PublishListView

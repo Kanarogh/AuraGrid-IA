@@ -21,10 +21,13 @@ export function PublishPrefsPanel({
   clientId,
   connection,
   onConnectionRefresh,
+  hideConnection,
 }: {
   clientId: string;
   connection: MetaConnectionPublic | null;
   onConnectionRefresh: () => void;
+  /** Quando true, o card Meta fica só no hub (abaixo da toolbar). */
+  hideConnection?: boolean;
 }) {
   const [draft, setDraft] = useState<PublishPrefs>({
     timezone: "America/Sao_Paulo",
@@ -74,11 +77,13 @@ export function PublishPrefsPanel({
 
   return (
     <div className="space-y-6">
-      <MetaConnectionCard
-        clientId={clientId}
-        connection={connection}
-        onRefresh={onConnectionRefresh}
-      />
+      {!hideConnection && (
+        <MetaConnectionCard
+          clientId={clientId}
+          connection={connection}
+          onRefresh={onConnectionRefresh}
+        />
+      )}
 
       <div className="rounded-2xl border border-ag-border bg-ag-surface-2/50 p-5 space-y-5">
         <div>
