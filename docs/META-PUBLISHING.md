@@ -2,6 +2,8 @@
 
 Guia para configurar e usar a funcionalidade **Programar posts** no AuraGrid.
 
+> Detalhes da implementação, arquitetura e pendências de produto: [`PROGRAMAR-POSTS.md`](./PROGRAMAR-POSTS.md)
+
 ## O que foi implementado
 
 - Seção **Programar posts** (`/c/:clientId/programar-posts`) — **Scheduler Hub** profissional
@@ -90,20 +92,20 @@ Migration: `0015_meta_publish.sql` (aplicada automaticamente no deploy).
 
 ### Verificação técnica
 
-- [ ] `npm run lint` sem erros
-- [ ] Testes: `suggestScheduleTimes`, routing `post_scheduling`
-- [ ] Migration `0015` aplica limpo
+- [x] `npm run lint` sem erros
+- [x] Testes: `suggestScheduleTimes`, `publishCalendarUtils`, routing `post_scheduling`
+- [ ] Migration `0015` aplica limpo em banco vazio com dados reais (validar no deploy)
 
 ### Fluxo funcional (META_PUBLISH_MOCK=1)
 
-- [ ] Sidebar → Programar posts → URL `/c/:id/programar-posts`
-- [ ] Stepper reflete estado (conectar / prontos / agendados / publicados)
-- [ ] Configurações: templates 1/2/3 posts/dia persistem
-- [ ] Sugerir horários + override manual
-- [ ] Modal de confirmação com preview Instagram
-- [ ] Worker mock → status publicado
-- [ ] Cancelar / retry em falha
-- [ ] Modo local exibe aviso
+- [x] Sidebar → Programar posts → URL `/c/:id/programar-posts`
+- [x] Scheduler Hub: calendário, lista, config, bandeja, composer, feed 3×3
+- [x] Configurações: templates 1–5 posts/dia persistem
+- [x] Preencher automaticamente + override manual + drag-and-drop
+- [x] Modal de confirmação com preview Instagram (carrossel multi-post)
+- [x] Worker mock → status publicado
+- [x] Cancelar / retry (individual e lote na lista)
+- [x] Modo local exibe aviso
 
 ### OAuth real (quando credenciais disponíveis)
 
