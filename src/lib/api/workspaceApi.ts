@@ -1,4 +1,5 @@
 import { normalizeCanvaPages } from "../canva";
+import { normalizeCaptionGenerationParams } from "../captionParams";
 import type { BrandGem, CatalogItem, ContentScheduleItem, PlannedPost } from "../../types";
 import type { ClientRegistry, ClientWorkspace } from "../clientWorkspace/types";
 import type { ClientMeta } from "../clientWorkspace/types";
@@ -44,7 +45,10 @@ export function apiWorkspaceToClientWorkspace(dto: ApiWorkspaceResponse): Client
 
   return {
     version: 1,
-    brandGem: dto.brandGem,
+    brandGem: {
+      ...dto.brandGem,
+      captionParams: normalizeCaptionGenerationParams(dto.brandGem?.captionParams),
+    },
     catalog: dto.catalog
       .filter((c): c is CatalogItem => !!c?.id)
       .map((c) => ({

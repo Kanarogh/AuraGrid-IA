@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "./AuthContext";
 import { useClientWorkspace } from "./ClientWorkspaceContext";
 import { getAccessToken } from "../lib/api/apiClient";
@@ -19,6 +19,8 @@ import type { ClientRegistry, ClientWorkspace } from "../lib/clientWorkspace";
 import { createEmptyRegistry, createOrphanWorkspace } from "../lib/clientWorkspace";
 import {
   buildWorkspaceApiPatch,
+  buildWorkspaceContentPatch,
+  workspaceContentFingerprint,
   workspaceApiPatchFingerprint,
 } from "../lib/clientWorkspace/apiWorkspacePatch";
 import { emitCloudSaveStatus } from "../lib/cloudSaveStatus";
@@ -55,7 +57,7 @@ async function fetchWorkspaceWithRetry(clientId: string) {
 }
 
 function buildWorkspacePatch(ws: ClientWorkspace) {
-  return buildWorkspaceApiPatch(ws);
+  return buildWorkspaceContentPatch(ws);
 }
 
 function flushWorkspacePatch(clientId: string, ws: ClientWorkspace) {
@@ -104,6 +106,11 @@ export function ApiWorkspaceSync() {
   const skipSaveRef = useRef(true);
   const [reloadNonce, setReloadNonce] = useState(0);
   workspaceRef.current = workspace;
+
+  const contentFingerprint = useMemo(
+    () => workspaceContentFingerprint(workspace) ?? "",
+    [workspace]
+  );
 
   useEffect(() => {
     const onReload = () => setReloadNonce((n) => n + 1);
@@ -166,12 +173,13 @@ export function ApiWorkspaceSync() {
     };
   }, [storageMode, user?.id, reloadNonce]);
 
-  // Debounced PATCH
+  // Debounced PATCH — só quando conteúdo muda (posts, gem, canva…), não ao trocar de dia na UI
   useEffect(() => {
     if (storageMode !== "postgresql" || !user || !activeClientId || skipSaveRef.current) return;
     if (!loadedRef.current) return;
     if (isClientSwitching) return;
     if (isApplyingRemoteWorkspace()) return;
+    if (!contentFingerprint) return;
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     setWorkspaceSavePending(true);
@@ -183,13 +191,17 @@ export function ApiWorkspaceSync() {
         setWorkspaceSavePending(false);
         return;
       }
-      const fingerprint = JSON.stringify(patch);
+      const fingerprint = contentFingerprint;
       if (isWorkspacePatchAlreadySynced(activeClientId, fingerprint)) {
         syncDebugLog("save.skip", { clientId: activeClientId, reason: "fingerprint-match" });
         setWorkspaceSavePending(false);
         return;
       }
-      syncDebugLog("save.patch", { clientId: activeClientId, debounceMs: SAVE_DEBOUNCE_MS });
+      syncDebugLog("save.patch", {
+        clientId: activeClientId,
+        debounceMs: SAVE_DEBOUNCE_MS,
+        reason: "content-changed",
+      });
       markLocalSync(activeClientId, ["workspace"]);
       if (!isApplyingRemoteWorkspace()) emitCloudSaveStatus("saving");
       void patchWorkspaceApi(activeClientId, patch)
@@ -217,7 +229,7 @@ export function ApiWorkspaceSync() {
         setWorkspaceSavePending(false);
       }
     };
-  }, [workspace, activeClientId, storageMode, user?.id, isClientSwitching]);
+  }, [contentFingerprint, activeClientId, storageMode, user?.id, isClientSwitching]);
 
   // Flush imediato ao fechar/recarregar (evita perder PATCH debounced)
   useEffect(() => {
@@ -268,10 +280,10 @@ export function ApiWorkspaceSync() {
       markLocalSync(activeClientId, ["workspace"]);
       if (!isApplyingRemoteWorkspace()) emitCloudSaveStatus("saving");
       try {
-        const patch = buildWorkspacePatch(ws);
+        const patch = buildWorkspaceContentPatch(ws);
         if (!patch) return;
-        const fingerprint = JSON.stringify(patch);
-        if (isWorkspacePatchAlreadySynced(activeClientId, fingerprint)) return;
+        const fingerprint = workspaceContentFingerprint(ws);
+        if (!fingerprint || isWorkspacePatchAlreadySynced(activeClientId, fingerprint)) return;
         await patchWorkspaceApi(activeClientId, patch);
         markWorkspacePatchSynced(activeClientId, fingerprint);
         if (!isApplyingRemoteWorkspace()) emitCloudSaveStatus("saved");

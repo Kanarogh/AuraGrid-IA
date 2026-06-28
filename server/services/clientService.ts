@@ -17,6 +17,7 @@ import { listAccessibleClientIds, resolveClientAccess } from "./permissionServic
 import { canAccessSection } from "@/src/lib/permissions/roleTemplates";
 import { mediaPublicUrl } from "./mediaService";
 import { parseBrandGemSaveBody } from "../validation/brandGemSchema";
+import { normalizeCaptionGenerationParams } from "@/src/lib/captionParams";
 import {
   defaultPlanningStartDate,
   defaultCanvaPages,
@@ -107,7 +108,7 @@ export async function createClientForUser(userId: string, name: string, slug?: s
     description: "",
     instructions: "",
     campaignContext: "",
-    captionParams: {},
+    captionParams: normalizeCaptionGenerationParams({}),
     footer: { structure: "", address: "", contact: "", hashtags: "", extra: "", customFields: [] },
   });
 
@@ -348,7 +349,9 @@ export async function loadWorkspaceDto(
       description: gem?.description ?? "",
       instructions: gem?.instructions ?? "",
       campaignContext: periodCampaignContext,
-      captionParams: gem?.captionParams ?? {},
+      captionParams: normalizeCaptionGenerationParams(
+        (gem?.captionParams ?? {}) as Parameters<typeof normalizeCaptionGenerationParams>[0]
+      ),
       footer: gem?.footer ?? {},
     },
     catalog: catalogDto,
@@ -423,7 +426,7 @@ async function filterWorkspaceByPermissions<T extends {
       description: "",
       instructions: "",
       campaignContext: "",
-      captionParams: {},
+      captionParams: normalizeCaptionGenerationParams({}),
       footer: {},
     };
   }
@@ -953,7 +956,7 @@ export async function resetClientWorkspace(userId: string, clientId: string) {
       name: client?.name ?? clientId,
       description: "",
       instructions: "",
-      captionParams: {},
+      captionParams: normalizeCaptionGenerationParams({}),
       footer: {
         structure: "",
         address: "",

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeCaptionGenerationParams } from "@/src/lib/captionParams";
 
 export const captionGenerationParamsSchema = z.object({
   maxHookChars: z.number().int().min(80).max(2000),
@@ -41,5 +42,12 @@ export const brandGemSaveSchema = z.object({
 export type BrandGemSaveInput = z.infer<typeof brandGemSaveSchema>;
 
 export function parseBrandGemSaveBody(body: unknown): BrandGemSaveInput {
-  return brandGemSaveSchema.parse(body);
+  const raw =
+    typeof body === "object" && body !== null ? ({ ...(body as Record<string, unknown>) }) : {};
+  if (raw.captionParams !== undefined) {
+    raw.captionParams = normalizeCaptionGenerationParams(
+      raw.captionParams as Parameters<typeof normalizeCaptionGenerationParams>[0]
+    );
+  }
+  return brandGemSaveSchema.parse(raw);
 }
