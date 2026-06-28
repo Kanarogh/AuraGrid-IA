@@ -1,4 +1,4 @@
-import { and, asc, eq, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
 import { getDb, isDatabaseConfigured } from "../db/client";
 import { instagramPublishJobs, plannedPosts, planningPeriods } from "../db/schema";
 import { HttpError } from "../http/respond";
@@ -307,7 +307,7 @@ export async function countPublishedLast24h(clientId: string): Promise<number> {
       and(
         eq(instagramPublishJobs.clientId, clientId),
         eq(instagramPublishJobs.status, "published"),
-        sql`${instagramPublishJobs.publishedAt} >= ${since}`
+        gte(instagramPublishJobs.publishedAt, since)
       )
     );
   return row?.count ?? 0;
