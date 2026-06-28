@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { cn } from "../../lib/cn";
 import type { PublishQueueItem } from "../../lib/publish/publishApi";
-import { PublishPostCard } from "./PublishPostCard";
+import { PublishCalendarEventPill } from "./PublishCalendarEventPill";
 import {
   bucketByCalendarDate,
   calendarDateKey,
@@ -14,12 +14,13 @@ import {
   getMonthWeeks,
   getWeekDays,
   itemsForCalendar,
+  MONTH_PREVIEW_MAX,
   PUBLISH_DRAG_MIME,
+  WEEK_PREVIEW_MAX,
   type CalendarViewMode,
 } from "./publishCalendarUtils";
 
 const WEEKDAY_LABELS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
-const MONTH_PREVIEW_MAX = 3;
 
 function DayCell({
   date,
@@ -28,31 +29,33 @@ function DayCell({
   draftSchedules,
   isToday,
   isGap,
+  isWeekend,
   onDrop,
   onItemClick,
   onEmptyClick,
-  onExpandDay,
-  compact,
-  expanded,
+  onOpenDayDetail,
+  density,
+  previewMax,
 }: {
   date: Date;
   items: PublishQueueItem[];
-  allItems?: PublishQueueItem[];
+  allItems: PublishQueueItem[];
   draftSchedules: Record<string, string>;
   isToday: boolean;
   isGap?: boolean;
+  isWeekend?: boolean;
   onDrop: (dateKey: string, postId: string) => void;
   onItemClick: (item: PublishQueueItem) => void;
   onEmptyClick: (dateKey: string) => void;
-  onExpandDay?: (dateKey: string) => void;
-  compact?: boolean;
-  expanded?: boolean;
+  onOpenDayDetail?: (dateKey: string) => void;
+  density: "month" | "week";
+  previewMax: number;
 }) {
   const [dragOver, setDragOver] = useState(false);
   const dateKey = calendarDateKey(date);
   const dayNum = date.getDate();
-  const displayItems = expanded ? (allItems ?? items) : items;
-  const overflow = !expanded && (allItems?.length ?? items.length) > items.length;
+  const preview = items.slice(0, previewMax);
+  const overflowCount = allItems.length - preview.length;
 
   const handleDragOver = (e: React.DragEvent) => {
     if (e.dataTransfer.types.includes(PUBLISH_DRAG_MIME)) {
@@ -74,27 +77,35 @@ function DayCell({
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
       className={cn(
-        "rounded-xl border min-h-[120px] flex flex-col transition-colors group/day",
-        compact ? "p-1.5 min-h-[80px]" : "p-2 min-h-[140px]",
-        isToday && "border-ag-accent/50 bg-ag-accent-soft/20",
-        isGap && !displayItems.length && "border-dashed border-ag-warning/40 bg-ag-warning/5",
-        dragOver && "border-ag-accent bg-ag-accent-soft/40 ring-2 ring-ag-accent/20",
-        !isToday && !dragOver && !isGap && "border-ag-border/60 bg-ag-surface-1/50"
+        "rounded-xl border flex flex-col transition-all duration-200 group/day",
+        density === "month" ? "p-1.5 min-h-[88px]" : "p-2 min-h-[140px]",
+        isToday && "border-ag-accent/60 bg-ag-accent-soft/25 shadow-sm",
+        isWeekend && !isToday && "bg-ag-surface-2/30",
+        isGap && allItems.length === 0 && "border-dashed border-ag-warning/40 bg-ag-warning/5",
+        dragOver && "border-ag-accent bg-ag-accent-soft/40 ring-2 ring-ag-accent/25 scale-[1.01]",
+        !isToday && !dragOver && !(isGap && allItems.length === 0) && "border-ag-border/50 bg-ag-surface-1 hover:border-ag-border hover:shadow-sm"
       )}
     >
-      <div className="flex items-center justify-between mb-1.5">
+      <div className="flex items-center justify-between mb-1.5 shrink-0">
         <button
           type="button"
-          onClick={() => onExpandDay?.(dateKey)}
+          onClick={() => onOpenDayDetail?.(dateKey)}
           className={cn(
-            "text-xs font-semibold rounded px-1 -mx-1 hover:bg-ag-surface-2",
-            isToday ? "text-ag-accent" : "text-ag-muted",
-            onExpandDay && "cursor-pointer"
+            "text-xs font-semibold transition-colors ag-focus-ring",
+            isToday
+              ? "h-6 w-6 flex items-center justify-center rounded-full bg-ag-accent text-white text-[11px]"
+              : "rounded px-1 -mx-1 hover:bg-ag-surface-2 text-ag-muted",
+            onOpenDayDetail && "cursor-pointer"
           )}
         >
           {dayNum}
         </button>
-        {displayItems.length === 0 && (
+        {allItems.length > 1 && (
+          <span className="text-[9px] font-medium text-ag-muted tabular-nums">
+            · {allItems.length}
+          </span>
+        )}
+        {allItems.length === 0 && (
           <button
             type="button"
             onClick={() => onEmptyClick(dateKey)}
@@ -105,29 +116,46 @@ function DayCell({
           </button>
         )}
       </div>
-      <div className="flex-1 space-y-1.5 overflow-y-auto max-h-[200px]">
-        {displayItems.map((item) => (
-          <PublishPostCard
+
+      <div className="flex-1 space-y-1 overflow-hidden min-h-0">
+        {preview.map((item) => (
+          <PublishCalendarEventPill
             key={item.plannedPostId}
             item={item}
+            dayItems={allItems}
             draftSchedules={draftSchedules}
-            compact
+            density={density}
             draggable
             onClick={() => onItemClick(item)}
-            showStatus
           />
         ))}
-        {overflow && (
+        {overflowCount > 0 && (
           <button
             type="button"
-            onClick={() => onExpandDay?.(dateKey)}
-            className="w-full text-[10px] font-medium text-ag-accent hover:underline py-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenDayDetail?.(dateKey);
+            }}
+            className="w-full rounded-md border border-ag-border/50 bg-ag-surface-2/60 px-1.5 py-0.5 text-[10px] font-medium text-ag-accent hover:bg-ag-accent-soft/40 transition-colors ag-focus-ring"
           >
-            +{(allItems?.length ?? 0) - items.length} mais
+            +{overflowCount} mais
           </button>
         )}
       </div>
     </div>
+  );
+}
+
+function WeekdayHeader({ label, isWeekend }: { label: string; isWeekend?: boolean }) {
+  return (
+    <p
+      className={cn(
+        "text-[10px] font-mono uppercase tracking-wider text-center",
+        isWeekend ? "text-ag-muted/70" : "text-ag-muted"
+      )}
+    >
+      {label}
+    </p>
   );
 }
 
@@ -140,8 +168,7 @@ export function PublishCalendar({
   onDrop,
   onItemClick,
   onEmptyDayClick,
-  onExpandDay,
-  expandedDayKey,
+  onOpenDayDetail,
   scheduleTimezone = "America/Sao_Paulo",
 }: {
   queue: PublishQueueItem[];
@@ -152,8 +179,7 @@ export function PublishCalendar({
   onDrop: (dateKey: string, postId: string, scheduledIso: string) => void;
   onItemClick: (item: PublishQueueItem) => void;
   onEmptyDayClick: (dateKey: string) => void;
-  onExpandDay?: (dateKey: string) => void;
-  expandedDayKey?: string | null;
+  onOpenDayDetail?: (dateKey: string) => void;
   scheduleTimezone?: string;
 }) {
   const todayKey = calendarDateKey(new Date());
@@ -193,66 +219,71 @@ export function PublishCalendar({
     onDrop(dateKey, postId, combineDateAndTime(dateKey, time, scheduleTimezone));
   };
 
+  const previewMax = calendarMode === "week" ? WEEK_PREVIEW_MAX : MONTH_PREVIEW_MAX;
+  const density = calendarMode === "week" ? "week" : "month";
+
   const calendarBody =
     calendarMode === "week" ? (
       <div className="grid grid-cols-7 gap-2 min-w-[640px]">
         {weekDays.map((date, i) => {
           const key = calendarDateKey(date);
+          const dayItems = buckets.get(key) ?? [];
           return (
             <div key={key} className="min-w-0">
-              <p className="text-[10px] font-mono uppercase tracking-wider text-ag-muted text-center mb-1.5">
-                {WEEKDAY_LABELS[i]}
-              </p>
+              <div className="mb-1.5 rounded-lg bg-ag-surface-2/60 py-1.5">
+                <WeekdayHeader label={WEEKDAY_LABELS[i]} isWeekend={i >= 5} />
+              </div>
               <DayCell
                 date={date}
-                items={buckets.get(key) ?? []}
+                items={dayItems}
+                allItems={dayItems}
                 draftSchedules={draftSchedules}
                 isToday={key === todayKey}
                 isGap={gaps.has(key)}
+                isWeekend={i >= 5}
                 onDrop={handleDrop}
                 onItemClick={onItemClick}
                 onEmptyClick={onEmptyDayClick}
-                onExpandDay={onExpandDay}
-                expanded={expandedDayKey === key}
+                onOpenDayDetail={onOpenDayDetail}
+                density={density}
+                previewMax={previewMax}
               />
             </div>
           );
         })}
       </div>
     ) : (
-      <div className="space-y-1 min-w-[640px]">
-        <div className="grid grid-cols-7 gap-1 mb-1">
-          {WEEKDAY_LABELS.map((label) => (
-            <p key={label} className="text-[10px] font-mono uppercase text-ag-muted text-center">
-              {label}
-            </p>
+      <div className="space-y-1.5 min-w-[640px]">
+        <div className="grid grid-cols-7 gap-1.5 mb-1.5 rounded-lg bg-ag-surface-2/60 py-2">
+          {WEEKDAY_LABELS.map((label, i) => (
+            <WeekdayHeader key={label} label={label} isWeekend={i >= 5} />
           ))}
         </div>
         {monthWeeks.map((week, wi) => (
-          <div key={wi} className="grid grid-cols-7 gap-1">
-            {week.map((date) => {
+          <div key={wi} className="grid grid-cols-7 gap-1.5">
+            {week.map((date, di) => {
               const key = calendarDateKey(date);
               const inMonth = date.getMonth() === anchorDate.getMonth();
               if (!inMonth) {
                 return <div key={key} className="min-h-[72px]" />;
               }
               const dayItems = buckets.get(key) ?? [];
-              const preview = dayItems.slice(0, MONTH_PREVIEW_MAX);
               return (
                 <DayCell
                   key={key}
                   date={date}
-                  items={preview}
+                  items={dayItems}
                   allItems={dayItems}
                   draftSchedules={draftSchedules}
                   isToday={key === todayKey}
                   isGap={gaps.has(key)}
+                  isWeekend={di >= 5}
                   onDrop={handleDrop}
                   onItemClick={onItemClick}
                   onEmptyClick={onEmptyDayClick}
-                  onExpandDay={onExpandDay}
-                  compact
-                  expanded={expandedDayKey === key}
+                  onOpenDayDetail={onOpenDayDetail}
+                  density={density}
+                  previewMax={previewMax}
                 />
               );
             })}
@@ -262,18 +293,19 @@ export function PublishCalendar({
     );
 
   return (
-    <div className="overflow-x-auto -mx-1 px-1 pb-1">
-      {isGapLegend(gaps) && (
-        <p className="text-[10px] text-ag-muted mb-2">
-          <span className="inline-block w-2 h-2 rounded border border-dashed border-ag-warning/60 mr-1 align-middle" />
-          Dia do planejamento sem agendamento
-        </p>
-      )}
-      {calendarBody}
+    <div className="ag-studio relative overflow-hidden rounded-2xl border border-ag-border/70 shadow-[var(--ag-shadow)]">
+      <div className="ag-studio-mesh absolute inset-0 pointer-events-none opacity-50" aria-hidden />
+      <div className="relative z-10 p-4 overflow-x-auto">
+        {gaps.size > 0 && (
+          <div className="mb-3">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-ag-warning/30 bg-ag-warning/5 px-2.5 py-1 text-[10px] text-ag-muted">
+              <span className="inline-block w-2 h-2 rounded border border-dashed border-ag-warning/60" />
+              Dia do planejamento sem agendamento
+            </span>
+          </div>
+        )}
+        {calendarBody}
+      </div>
     </div>
   );
-}
-
-function isGapLegend(gaps: Set<string>) {
-  return gaps.size > 0;
 }

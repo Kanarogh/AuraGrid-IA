@@ -5,6 +5,9 @@ import { filterQueue } from "./publishUiUtils";
 
 export const PUBLISH_DRAG_MIME = "application/x-ag-publish-post";
 
+export const MONTH_PREVIEW_MAX = 2;
+export const WEEK_PREVIEW_MAX = 4;
+
 export type CalendarViewMode = "week" | "month";
 export type HubViewMode = "calendar" | "list" | "settings";
 
@@ -129,6 +132,23 @@ export function formatTimeLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
+export function formatDayDetailTitle(dateKey: string): string {
+  const d = parseCalendarDateKey(dateKey);
+  const formatted = d.toLocaleDateString("pt-BR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+}
+
+export function publishPostSlotLabel(item: PublishQueueItem, dayItems: PublishQueueItem[]): string {
+  const sameDay = dayItems.filter((p) => p.dayNumber === item.dayNumber);
+  if (sameDay.length <= 1) return `D${item.dayNumber}`;
+  const slotIndex = sameDay.findIndex((p) => p.plannedPostId === item.plannedPostId);
+  return `D${item.dayNumber} · Post ${slotIndex + 1}`;
+}
+
 export function combineDateAndTime(
   dateKey: string,
   time: string,
@@ -247,6 +267,30 @@ export function statusBorderClass(
   if (status === "queued") return "border-l-[3px] border-l-ag-accent";
   if (status === "eligible" && hasDraft) return "border-l-[3px] border-l-amber-500";
   return "";
+}
+
+export function statusPillClass(
+  status: PublishQueueItem["status"],
+  hasDraft?: boolean
+): string {
+  if (status === "published") return "border-l-emerald-500 bg-emerald-500/8 hover:bg-emerald-500/12";
+  if (status === "failed") return "border-l-red-500 bg-red-500/8 hover:bg-red-500/12";
+  if (status === "publishing") return "border-l-violet-500 bg-violet-500/8 animate-pulse";
+  if (status === "queued") return "border-l-ag-accent bg-ag-accent-soft/50 hover:bg-ag-accent-soft/70";
+  if (status === "eligible" && hasDraft) return "border-l-amber-500 bg-amber-500/8 hover:bg-amber-500/12";
+  return "border-l-ag-border bg-ag-surface-2/80 hover:bg-ag-surface-2";
+}
+
+export function statusDotClass(
+  status: PublishQueueItem["status"],
+  hasDraft?: boolean
+): string {
+  if (status === "published") return "bg-emerald-500";
+  if (status === "failed") return "bg-red-500";
+  if (status === "publishing") return "bg-violet-500 animate-pulse";
+  if (status === "queued") return "bg-ag-accent";
+  if (status === "eligible" && hasDraft) return "bg-amber-500";
+  return "bg-ag-muted/50";
 }
 
 export function scheduleOverlayLabel(status: PublishQueueItem["status"]): string {

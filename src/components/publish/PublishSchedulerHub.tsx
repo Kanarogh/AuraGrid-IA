@@ -13,6 +13,7 @@ import { PublishPrefsPanel } from "./PublishPrefsPanel";
 import { PublishPreviewModal } from "./PublishPreviewModal";
 import { PublishCalendar } from "./PublishCalendar";
 import { PublishCalendarToolbar, PublishStatusBanner } from "./PublishCalendarToolbar";
+import { PublishDayDetailModal } from "./PublishDayDetailModal";
 import { UnscheduledTray } from "./UnscheduledTray";
 import { PublishIncompleteTray } from "./PublishIncompleteTray";
 import { PublishListView } from "./PublishListView";
@@ -44,6 +45,8 @@ import {
   findScheduleConflicts,
   formatScheduleToast,
   getVisibleDateKeys,
+  itemsForCalendar,
+  bucketByCalendarDate,
   resolvePublishCaption,
   validateScheduledTime,
   wouldCreateConflict,
@@ -120,7 +123,7 @@ export function PublishSchedulerHub({
   const [showChecklist, setShowChecklist] = useState(false);
   const [mobileFeedOpen, setMobileFeedOpen] = useState(false);
   const [pendingConfirmIds, setPendingConfirmIds] = useState<string[]>([]);
-  const [expandedDayKey, setExpandedDayKey] = useState<string | null>(null);
+  const [dayDetailDateKey, setDayDetailDateKey] = useState<string | null>(null);
   const [incompleteExpanded, setIncompleteExpanded] = useState(false);
   const [showFeedPreview, setShowFeedPreview] = useState(() => readFeedPreviewPref(clientId));
 
@@ -290,6 +293,16 @@ export function PublishSchedulerHub({
     [queue, eligible, draftSchedules]
   );
 
+  const calendarBuckets = useMemo(() => {
+    const calendarItems = itemsForCalendar(queue, draftSchedules);
+    return bucketByCalendarDate(calendarItems, draftSchedules);
+  }, [queue, draftSchedules]);
+
+  const dayDetailItems = useMemo(() => {
+    if (!dayDetailDateKey) return [];
+    return calendarBuckets.get(dayDetailDateKey) ?? [];
+  }, [dayDetailDateKey, calendarBuckets]);
+
   const handleDrop = async (_dateKey: string, postId: string, scheduledIso: string) => {
     const item = queue.find((q) => q.plannedPostId === postId);
     if (!item) return;
@@ -368,16 +381,8 @@ export function PublishSchedulerHub({
     }
   };
 
-  const handleExpandDay = (dateKey: string) => {
-    if (calendarMode === "month") {
-      if (expandedDayKey === dateKey) {
-        setExpandedDayKey(null);
-        return;
-      }
-      setExpandedDayKey(dateKey);
-      return;
-    }
-    setExpandedDayKey(expandedDayKey === dateKey ? null : dateKey);
+  const handleOpenDayDetail = (dateKey: string) => {
+    setDayDetailDateKey(dateKey);
   };
 
   const confirmTargets = useMemo(() => {
@@ -474,7 +479,7 @@ export function PublishSchedulerHub({
         onAnchorChange={shiftAnchor}
         onCalendarModeChange={(mode) => {
           setCalendarMode(mode);
-          setExpandedDayKey(null);
+          setDayDetailDateKey(null);
         }}
         onHubViewChange={setHubView}
         onToday={() => setAnchorDate(new Date())}
@@ -557,9 +562,8 @@ export function PublishSchedulerHub({
               anchorDate={anchorDate}
               calendarMode={calendarMode}
               startDate={startDate}
-              expandedDayKey={expandedDayKey}
               scheduleTimezone={scheduleTimezone}
-              onExpandDay={handleExpandDay}
+              onOpenDayDetail={handleOpenDayDetail}
               onDrop={(dk, pid, iso) => void handleDrop(dk, pid, iso)}
               onItemClick={setComposerItem}
               onEmptyDayClick={(dateKey) => {
@@ -638,6 +642,16 @@ export function PublishSchedulerHub({
           />
         </div>
       )}
+
+      <PublishDayDetailModal
+        open={!!dayDetailDateKey}
+        dateKey={dayDetailDateKey}
+        items={dayDetailItems}
+        draftSchedules={draftSchedules}
+        scheduleTimezone={scheduleTimezone}
+        onClose={() => setDayDetailDateKey(null)}
+        onItemClick={setComposerItem}
+      />
 
       <PublishComposerDrawer
         open={!!composerItem}

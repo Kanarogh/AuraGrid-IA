@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import {
   Calendar,
   ChevronLeft,
@@ -13,6 +14,33 @@ import { Button } from "../ui/Button";
 import type { PublishQueueSummary } from "../../lib/publish/publishApi";
 import type { CalendarViewMode, HubViewMode } from "./publishCalendarUtils";
 import { formatMonthYear, formatWeekRange, getWeekDays } from "./publishCalendarUtils";
+
+function SummaryChip({
+  children,
+  tone,
+  interactive,
+}: {
+  children: ReactNode;
+  tone: "accent" | "warning" | "neutral" | "success" | "danger" | "muted";
+  interactive?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors",
+        tone === "accent" && "border-ag-accent/30 bg-ag-accent-soft/40 text-ag-accent",
+        tone === "warning" && "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+        tone === "neutral" && "border-ag-border bg-ag-surface-2/60 text-ag-muted",
+        tone === "success" && "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+        tone === "danger" && "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400",
+        tone === "muted" && "border-ag-border/50 bg-transparent text-ag-muted/80",
+        interactive && "hover:bg-amber-500/15 cursor-pointer"
+      )}
+    >
+      {children}
+    </span>
+  );
+}
 
 export function PublishCalendarToolbar({
   anchorDate,
@@ -119,10 +147,10 @@ export function PublishCalendarToolbar({
       </div>
 
       {summary && (
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ag-muted">
-          <span>
-            <strong className="text-ag-text">{summary.eligible}</strong> prontos para agendar
-          </span>
+        <div className="flex flex-wrap gap-2">
+          <SummaryChip tone="accent">
+            <strong>{summary.eligible}</strong> prontos
+          </SummaryChip>
           {summary.notReady > 0 && (
             <button
               type="button"
@@ -133,26 +161,28 @@ export function PublishCalendarToolbar({
                   onHubViewChange("list");
                 }
               }}
-              className="hover:text-ag-text ag-focus-ring rounded"
+              className="ag-focus-ring rounded-full"
               title="Ver incompletos e o que falta em cada post"
             >
-              <strong className="text-ag-text">{summary.notReady}</strong> incompletos
+              <SummaryChip tone="warning" interactive>
+                <strong>{summary.notReady}</strong> incompletos
+              </SummaryChip>
             </button>
           )}
-          <span>
-            <strong className="text-ag-text">{summary.scheduled}</strong> agendados
-          </span>
-          <span>
-            <strong className="text-ag-text">{summary.published}</strong> publicados
-          </span>
+          <SummaryChip tone="neutral">
+            <strong>{summary.scheduled}</strong> agendados
+          </SummaryChip>
+          <SummaryChip tone="success">
+            <strong>{summary.published}</strong> publicados
+          </SummaryChip>
           {summary.failed > 0 && (
-            <span className="text-ag-danger">
+            <SummaryChip tone="danger">
               <strong>{summary.failed}</strong> com problema
-            </span>
+            </SummaryChip>
           )}
-          <span className="text-ag-muted/80">
-            {summary.publishedLast24h}/100 publicações (24h)
-          </span>
+          <SummaryChip tone="muted">
+            {summary.publishedLast24h}/100 (24h)
+          </SummaryChip>
         </div>
       )}
     </div>
