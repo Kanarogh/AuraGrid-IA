@@ -69,7 +69,7 @@ export function InstagramProfileMockup({
     string,
     {
       scheduledAt: string;
-      status: "queued" | "publishing" | "published" | "failed" | "eligible" | "cancelled";
+      status: "queued" | "publishing" | "published" | "failed" | "eligible" | "not_ready" | "cancelled";
     }
   >;
 }) {

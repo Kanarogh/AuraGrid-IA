@@ -33,6 +33,7 @@ export function PublishListView({
   const filters: { id: PublishFilter; label: string; count: number }[] = [
     { id: "all", label: "Todos", count: queue.length },
     { id: "eligible", label: "Prontos", count: metrics.eligible },
+    { id: "not_ready", label: "Incompletos", count: metrics.notReady },
     { id: "queued", label: "Agendados", count: metrics.scheduled },
     { id: "published", label: "Publicados", count: metrics.published },
     { id: "failed", label: "Com problema", count: metrics.failed },

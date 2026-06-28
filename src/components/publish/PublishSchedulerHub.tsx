@@ -353,6 +353,22 @@ export function PublishSchedulerHub({
         </p>
       )}
 
+      {summary && summary.notReady > 0 && hubView === "calendar" && (
+        <p className="text-xs text-ag-muted rounded-lg border border-ag-border/60 bg-ag-surface-2/40 px-3 py-2">
+          {summary.eligible === 0 ? (
+            <>
+              Nenhum post está completo para agendar. Os {summary.notReady} restantes precisam de{" "}
+              <strong className="text-ag-text">legenda, foto e aprovação</strong> em Planejamento e legendas.
+            </>
+          ) : (
+            <>
+              Só entram em <strong className="text-ag-text">Prontos para agendar</strong> os posts com legenda,
+              foto e aprovação. Os outros {summary.notReady} ainda estão incompletos.
+            </>
+          )}
+        </p>
+      )}
+
       {loading && hubView !== "settings" ? (
         <div className="flex justify-center py-16">
           <Loader2 className="h-8 w-8 animate-spin text-ag-accent" />

@@ -29,10 +29,12 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     const publishedLast24h = await countPublishedLast24h(clientId);
     const summary = {
       eligible: queue.filter((q) => q.status === "eligible").length,
+      notReady: queue.filter((q) => q.status === "not_ready").length,
       scheduled: queue.filter((q) => q.status === "queued" || q.status === "publishing").length,
       published: queue.filter((q) => q.status === "published").length,
       failed: queue.filter((q) => q.status === "failed").length,
       publishedLast24h,
+      total: queue.length,
     };
     return NextResponse.json({ queue, summary });
   } catch (err) {

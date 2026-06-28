@@ -27,7 +27,7 @@ export type PublishQueueItem = {
   imageUrl: string | null;
   isConfirmed: boolean;
   scheduledAt: string | null;
-  status: "eligible" | "queued" | "publishing" | "published" | "failed" | "cancelled";
+  status: "eligible" | "not_ready" | "queued" | "publishing" | "published" | "failed" | "cancelled";
   permalink: string | null;
   lastError: string | null;
   attempts: number;
@@ -72,10 +72,12 @@ export async function savePublishPrefs(clientId: string, prefs: PublishPrefs): P
 
 export type PublishQueueSummary = {
   eligible: number;
+  notReady: number;
   scheduled: number;
   published: number;
   failed: number;
   publishedLast24h: number;
+  total: number;
 };
 
 export async function fetchPublishQueue(
@@ -148,6 +150,7 @@ export async function retryPublishJob(clientId: string, jobId: string): Promise<
 
 export const PUBLISH_STATUS_LABELS: Record<PublishQueueItem["status"], string> = {
   eligible: "Pronto para programar",
+  not_ready: "Incompleto",
   queued: "Agendado",
   publishing: "Publicando agora…",
   published: "No ar",

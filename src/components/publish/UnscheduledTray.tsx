@@ -28,6 +28,9 @@ export function UnscheduledTray({
           <p className="text-sm font-semibold text-ag-text mt-0.5">
             {items.length} {items.length === 1 ? "post" : "posts"} · arraste para o calendário
           </p>
+          <p className="text-[11px] text-ag-muted mt-0.5">
+            Apenas posts com legenda, foto e aprovação confirmada.
+          </p>
         </div>
         <Button
           type="button"

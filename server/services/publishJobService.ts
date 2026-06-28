@@ -21,6 +21,7 @@ export type PublishQueueItem = {
   scheduledAt: string | null;
   status:
     | "eligible"
+    | "not_ready"
     | "queued"
     | "publishing"
     | "published"
@@ -74,12 +75,16 @@ export async function listPublishQueue(
     const job = jobByPost.get(post.id);
     const hasAsset = !!post.imageAssetId;
     const hasCaption = !!post.caption?.trim();
-    const eligible =
-      post.isConfirmed && hasAsset && hasCaption && !job;
+    const isReady = post.isConfirmed && hasAsset && hasCaption;
 
-    let status: PublishQueueItem["status"] = "eligible";
-    if (job) status = mapJobStatus(job.status);
-    else if (!post.isConfirmed || !hasAsset || !hasCaption) status = "eligible";
+    let status: PublishQueueItem["status"];
+    if (job) {
+      status = mapJobStatus(job.status);
+    } else if (isReady) {
+      status = "eligible";
+    } else {
+      status = "not_ready";
+    }
 
     return {
       jobId: job?.id ?? null,
@@ -93,7 +98,7 @@ export async function listPublishQueue(
         : null,
       isConfirmed: post.isConfirmed,
       scheduledAt: job?.scheduledAt?.toISOString() ?? null,
-      status: job ? status : eligible ? "eligible" : "eligible",
+      status,
       permalink: job?.permalink ?? null,
       lastError: job?.lastError ?? null,
       attempts: job?.attempts ?? 0,

@@ -1,21 +1,26 @@
 import type { PublishQueueItem } from "../../lib/publish/publishApi";
 
-export type PublishFilter = "eligible" | "queued" | "published" | "failed" | "all";
+export type PublishFilter = "eligible" | "not_ready" | "queued" | "published" | "failed" | "all";
+
+export function isPublishReady(item: PublishQueueItem): boolean {
+  return item.status === "eligible";
+}
+
+export function publishReadinessIssues(item: PublishQueueItem): string[] {
+  const missing: string[] = [];
+  if (!item.isConfirmed) missing.push("aprovação");
+  if (!item.imageAssetId) missing.push("foto");
+  if (!item.caption.trim()) missing.push("legenda");
+  return missing;
+}
 
 export function filterQueue(
   queue: PublishQueueItem[],
   filter: PublishFilter
 ): PublishQueueItem[] {
   if (filter === "all") return queue;
-  if (filter === "eligible") {
-    return queue.filter(
-      (q) =>
-        q.status === "eligible" &&
-        q.isConfirmed &&
-        !!q.imageAssetId &&
-        !!q.caption.trim()
-    );
-  }
+  if (filter === "eligible") return queue.filter((q) => q.status === "eligible");
+  if (filter === "not_ready") return queue.filter((q) => q.status === "not_ready");
   if (filter === "queued") {
     return queue.filter((q) => q.status === "queued" || q.status === "publishing");
   }
@@ -24,16 +29,14 @@ export function filterQueue(
 }
 
 export function queueMetrics(queue: PublishQueueItem[]) {
-  const eligible = queue.filter(
-    (q) =>
-      q.status === "eligible" && q.isConfirmed && q.imageAssetId && q.caption.trim()
-  ).length;
+  const eligible = queue.filter((q) => q.status === "eligible").length;
+  const notReady = queue.filter((q) => q.status === "not_ready").length;
   const scheduled = queue.filter(
     (q) => q.status === "queued" || q.status === "publishing"
   ).length;
   const published = queue.filter((q) => q.status === "published").length;
   const failed = queue.filter((q) => q.status === "failed").length;
-  return { eligible, scheduled, published, failed };
+  return { eligible, notReady, scheduled, published, failed, total: queue.length };
 }
 
 export function groupByDay(items: PublishQueueItem[]): Map<number, PublishQueueItem[]> {

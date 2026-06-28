@@ -119,8 +119,13 @@ export function PublishCalendarToolbar({
       {summary && (
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ag-muted">
           <span>
-            <strong className="text-ag-text">{summary.eligible}</strong> prontos
+            <strong className="text-ag-text">{summary.eligible}</strong> prontos para agendar
           </span>
+          {summary.notReady > 0 && (
+            <span>
+              <strong className="text-ag-text">{summary.notReady}</strong> incompletos
+            </span>
+          )}
           <span>
             <strong className="text-ag-text">{summary.scheduled}</strong> agendados
           </span>
