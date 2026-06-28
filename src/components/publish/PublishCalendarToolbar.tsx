@@ -122,9 +122,14 @@ export function PublishCalendarToolbar({
             <strong className="text-ag-text">{summary.eligible}</strong> prontos para agendar
           </span>
           {summary.notReady > 0 && (
-            <span>
+            <button
+              type="button"
+              onClick={() => onHubViewChange("list")}
+              className="hover:text-ag-text ag-focus-ring rounded"
+              title="Ver incompletos na lista"
+            >
               <strong className="text-ag-text">{summary.notReady}</strong> incompletos
-            </span>
+            </button>
           )}
           <span>
             <strong className="text-ag-text">{summary.scheduled}</strong> agendados

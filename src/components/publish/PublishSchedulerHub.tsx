@@ -7,7 +7,7 @@ import { useAuth } from "../../context/AuthContext";
 import { usePublishQueuePoll } from "../../hooks/usePublishQueuePoll";
 import { toast } from "../../lib/toast";
 import { Button } from "../ui/Button";
-import { MetaConnectionCard } from "./MetaConnectionCard";
+import { PublishHubStatusStrip } from "./PublishHubStatusStrip";
 import { PublishPrefsPanel } from "./PublishPrefsPanel";
 import { PublishPreviewModal } from "./PublishPreviewModal";
 import { PublishCalendar } from "./PublishCalendar";
@@ -436,60 +436,18 @@ export function PublishSchedulerHub({
         onToggleFeedPreview={hubView === "calendar" ? toggleFeedPreview : undefined}
       />
 
-      {!connected && (
-        <MetaConnectionCard
+      {hubView === "calendar" && (
+        <PublishHubStatusStrip
           clientId={clientId}
-          connection={connection}
-          onRefresh={() => void refresh()}
-          compact
+          connected={connected}
           publishMockEnabled={publishMockEnabled}
+          canSchedule={canSchedule}
+          draftCount={autoScheduleOnDrop ? 0 : draftCount}
+          conflictCount={conflicts.size}
+          confirmDisabled={conflicts.size > 0 || confirmTargets.length === 0}
+          onConfirmDrafts={() => setPreviewOpen(true)}
+          onOpenSettings={() => setHubView("settings")}
         />
-      )}
-
-      {draftCount > 0 && hubView === "calendar" && !autoScheduleOnDrop && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
-          <p className="text-sm text-ag-text">
-            <strong>{draftCount}</strong>{" "}
-            {draftCount === 1 ? "rascunho pendente" : "rascunhos pendentes"} — confirme para salvar no
-            calendário.
-          </p>
-          <Button
-            type="button"
-            variant="accent"
-            size="sm"
-            disabled={!canSchedule || conflicts.size > 0 || confirmTargets.length === 0}
-            onClick={() => setPreviewOpen(true)}
-          >
-            Confirmar agendamento
-          </Button>
-        </div>
-      )}
-
-      {publishMockEnabled && !connected && hubView === "calendar" && (
-        <p className="text-xs text-ag-success rounded-lg border border-ag-success/30 bg-ag-success/5 px-3 py-2">
-          Modo simulação ativo — você pode agendar posts sem conectar o Instagram.
-        </p>
-      )}
-      {conflicts.size > 0 && hubView === "calendar" && (
-        <p className="text-xs text-ag-warning rounded-lg border border-ag-warning/30 bg-ag-warning/5 px-3 py-2">
-          {conflicts.size} conflito(s) de horário — dois posts no mesmo minuto. Ajuste antes de confirmar.
-        </p>
-      )}
-
-      {summary && summary.notReady > 0 && hubView === "calendar" && (
-        <p className="text-xs text-ag-muted rounded-lg border border-ag-border/60 bg-ag-surface-2/40 px-3 py-2">
-          {summary.eligible === 0 ? (
-            <>
-              Nenhum post está completo para agendar. Os {summary.notReady} restantes precisam de{" "}
-              <strong className="text-ag-text">legenda, foto e aprovação</strong> em Planejamento e legendas.
-            </>
-          ) : (
-            <>
-              Só entram em <strong className="text-ag-text">Prontos para agendar</strong> os posts com legenda,
-              foto e aprovação. Os outros {summary.notReady} ainda estão incompletos.
-            </>
-          )}
-        </p>
       )}
 
       {loading && hubView !== "settings" ? (
@@ -503,7 +461,6 @@ export function PublishSchedulerHub({
           publishMockEnabled={publishMockEnabled}
           onConnectionRefresh={() => void refresh()}
           onPrefsChange={setPrefs}
-          hideConnection={!connected}
         />
       ) : hubView === "list" ? (
         <PublishListView
@@ -523,23 +480,6 @@ export function PublishSchedulerHub({
           }
         >
           <div className="space-y-4 min-w-0">
-            <UnscheduledTray
-              items={trayItems}
-              draftSchedules={draftSchedules}
-              onItemClick={setComposerItem}
-              onSuggestAll={() => void handleSuggestVisible()}
-              suggesting={suggesting}
-            />
-
-            {trayItems.length === 0 && eligible.length === 0 && metrics.scheduled === 0 && (
-              <div className="rounded-2xl border border-dashed border-ag-border p-8 text-center space-y-3">
-                <p className="text-sm text-ag-muted">Nenhum post aprovado com foto e legenda.</p>
-                <Button type="button" variant="accent" onClick={onNavigatePosts}>
-                  Ir para Planejamento e legendas
-                </Button>
-              </div>
-            )}
-
             <PublishCalendar
               queue={queue}
               draftSchedules={draftSchedules}
@@ -561,15 +501,19 @@ export function PublishSchedulerHub({
               }}
             />
 
-            {draftCount > 0 && !autoScheduleOnDrop && (
-              <div className="flex flex-wrap gap-2 justify-end">
-                <Button
-                  type="button"
-                  variant="accent"
-                  disabled={!canSchedule || conflicts.size > 0 || confirmTargets.length === 0}
-                  onClick={() => setPreviewOpen(true)}
-                >
-                  Confirmar {confirmTargets.length || draftCount} posts
+            <UnscheduledTray
+              items={trayItems}
+              draftSchedules={draftSchedules}
+              onItemClick={setComposerItem}
+              onSuggestAll={() => void handleSuggestVisible()}
+              suggesting={suggesting}
+            />
+
+            {trayItems.length === 0 && eligible.length === 0 && metrics.scheduled === 0 && (
+              <div className="rounded-2xl border border-dashed border-ag-border p-6 text-center space-y-3">
+                <p className="text-sm text-ag-muted">Nenhum post aprovado com foto e legenda.</p>
+                <Button type="button" variant="accent" onClick={onNavigatePosts}>
+                  Ir para Planejamento e legendas
                 </Button>
               </div>
             )}
