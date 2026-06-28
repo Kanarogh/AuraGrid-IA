@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ExternalLink, Eye, EyeOff, RefreshCw, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, ChevronUp, ExternalLink, RefreshCw, X } from "lucide-react";
 import { cn } from "../../lib/cn";
+import type { PlannedPost } from "../../types";
 import { Button } from "../ui/Button";
 import { InstagramPhonePreview } from "../posts/InstagramPhonePreview";
 import {
@@ -18,12 +19,20 @@ import {
 import { queueItemToPlannedPost, resolveItemSchedule } from "./publishCalendarUtils";
 import { toast } from "../../lib/toast";
 
+function resolveCaption(item: PublishQueueItem, posts: PlannedPost[]): string {
+  const fromQueue = item.caption?.trim();
+  if (fromQueue) return fromQueue;
+  const post = posts.find((p) => p.id === item.plannedPostId);
+  return post?.caption?.trim() ?? "";
+}
+
 export function PublishComposerDrawer({
   open,
   item,
   clientId,
   planningPeriodId,
   draftSchedules,
+  posts,
   instagramHandle,
   connected,
   onClose,
@@ -36,6 +45,7 @@ export function PublishComposerDrawer({
   clientId: string;
   planningPeriodId: string;
   draftSchedules: Record<string, string>;
+  posts: PlannedPost[];
   instagramHandle: string;
   connected: boolean;
   onClose: () => void;
@@ -55,14 +65,23 @@ export function PublishComposerDrawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open || !item) return null;
+  const caption = useMemo(
+    () => (item ? resolveCaption(item, posts) : ""),
+    [item, posts]
+  );
+
+  const mockPost = useMemo(() => {
+    if (!item) return null;
+    return { ...queueItemToPlannedPost(item), caption };
+  }, [item, caption]);
+
+  if (!open || !item || !mockPost) return null;
 
   const iso = resolveItemSchedule(item, draftSchedules) ?? "";
   const local = scheduledAtToLocalInput(iso || null);
   const isEligible = item.status === "eligible";
   const isQueued = item.status === "queued" || item.status === "publishing";
   const isFailed = item.status === "failed";
-  const mockPost = queueItemToPlannedPost(item);
 
   const updateSchedule = (date: string, time: string) => {
     onDraftSchedule(item.plannedPostId, localInputToIso(date, time));
@@ -84,7 +103,7 @@ export function PublishComposerDrawer({
           {
             plannedPostId: item.plannedPostId,
             scheduledAt: iso,
-            caption: item.caption,
+            caption,
             imageAssetId: item.imageAssetId!,
           },
         ]);
@@ -139,57 +158,55 @@ export function PublishComposerDrawer({
         className={cn(
           "fixed z-50 top-0 right-0 h-full w-full max-w-md",
           "border-l border-ag-border bg-ag-surface-1 shadow-2xl",
-          "flex flex-col animate-ag-fade-in"
+          "flex flex-col min-h-0 animate-ag-fade-in"
         )}
         role="dialog"
         aria-modal="true"
         aria-label="Detalhes do post"
       >
-        <div className="flex items-center justify-between p-4 border-b border-ag-border">
-          <div>
+        <div className="shrink-0 flex items-start justify-between gap-3 p-4 border-b border-ag-border">
+          <div className="min-w-0">
             <h2 className="font-display text-lg font-semibold text-ag-text">
               Dia {item.dayNumber}
             </h2>
             <p className="text-xs text-ag-muted">{item.dateLabel}</p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-ag-surface-2 text-ag-muted ag-focus-ring"
-            aria-label="Fechar"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          <button
-            type="button"
-            onClick={() => setShowPreview((v) => !v)}
-            className="flex w-full items-center justify-between rounded-lg border border-ag-border bg-ag-surface-2 px-3 py-2 text-sm text-ag-text hover:bg-ag-surface-3 ag-focus-ring"
-          >
-            <span className="font-medium">Preview Instagram</span>
-            <span className="inline-flex items-center gap-1.5 text-xs text-ag-muted">
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowPreview((v) => !v)}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium ag-focus-ring",
+                showPreview
+                  ? "border-ag-accent/40 bg-ag-accent/10 text-ag-accent"
+                  : "border-ag-border bg-ag-surface-2 text-ag-muted hover:text-ag-text"
+              )}
+              aria-expanded={showPreview}
+            >
               {showPreview ? (
                 <>
-                  <EyeOff className="h-3.5 w-3.5" />
-                  Ocultar
+                  <ChevronUp className="h-3.5 w-3.5" />
+                  Ocultar preview
                 </>
               ) : (
                 <>
-                  <Eye className="h-3.5 w-3.5" />
-                  Mostrar
+                  <ChevronDown className="h-3.5 w-3.5" />
+                  Ver preview
                 </>
               )}
-            </span>
-          </button>
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-ag-surface-2 text-ag-muted ag-focus-ring"
+              aria-label="Fechar"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
 
-          {showPreview && (
-            <div className="flex justify-center scale-90 origin-top">
-              <InstagramPhonePreview post={mockPost} username={instagramHandle} variant="compact" />
-            </div>
-          )}
-
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
           {(isEligible || isQueued || isFailed) && (
             <div className="flex flex-wrap gap-2">
               <input
@@ -207,19 +224,38 @@ export function PublishComposerDrawer({
             </div>
           )}
 
-          <div>
-            <div className="flex items-center justify-between mb-2">
+          <section className="rounded-xl border border-ag-border bg-ag-surface-2 p-3">
+            <div className="flex items-center justify-between gap-2 mb-2">
               <p className="text-[10px] font-mono uppercase tracking-widest text-ag-muted">Legenda</p>
               <button
                 type="button"
-                className="text-xs text-ag-accent hover:underline"
+                className="text-xs text-ag-accent hover:underline shrink-0"
                 onClick={onNavigatePosts}
               >
                 Editar em Planejamento
               </button>
             </div>
-            <p className="text-sm text-ag-text whitespace-pre-wrap">{item.caption}</p>
-          </div>
+            {caption ? (
+              <p className="text-sm leading-relaxed text-ag-text whitespace-pre-wrap break-words">
+                {caption}
+              </p>
+            ) : (
+              <p className="text-sm text-ag-muted italic">
+                Sem legenda. Gere ou edite em Planejamento e legendas.
+              </p>
+            )}
+          </section>
+
+          {showPreview && (
+            <section className="rounded-xl border border-ag-border bg-ag-surface-2 p-3">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-ag-muted mb-3 text-center">
+                Preview Instagram
+              </p>
+              <div className="flex justify-center">
+                <InstagramPhonePreview post={mockPost} username={instagramHandle} variant="compact" />
+              </div>
+            </section>
+          )}
 
           {item.status === "published" && item.permalink && (
             <a
@@ -239,7 +275,7 @@ export function PublishComposerDrawer({
           )}
         </div>
 
-        <div className="p-4 border-t border-ag-border flex flex-col gap-2">
+        <div className="shrink-0 p-4 border-t border-ag-border flex flex-col gap-2">
           {(isEligible || isQueued) && (
             <Button
               type="button"

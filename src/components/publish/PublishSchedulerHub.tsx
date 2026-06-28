@@ -459,6 +459,7 @@ export function PublishSchedulerHub({
         clientId={clientId}
         planningPeriodId={planningPeriodId}
         draftSchedules={draftSchedules}
+        posts={posts}
         instagramHandle={instagramHandle}
         connected={connected}
         onClose={() => setComposerItem(null)}
