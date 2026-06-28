@@ -4,6 +4,7 @@ import { Suspense, useEffect } from "react";
 import App from "../src/App";
 import { AppErrorBoundary } from "../src/components/shared/AppErrorBoundary";
 import { AuthProvider } from "../src/context/AuthContext";
+import { PermissionsProvider } from "../src/context/PermissionsContext";
 import { ApiWorkspaceSync } from "../src/context/ApiWorkspaceSync";
 import {
   ClientWorkspaceProvider,
@@ -38,6 +39,7 @@ export default function AppShell() {
     <AppErrorBoundary>
       <NotificationProvider>
         <AuthProvider>
+          <PermissionsProvider>
           <AppearanceCloudSync />
           <ClientWorkspaceProvider>
             <ApiWorkspaceSync />
@@ -50,6 +52,7 @@ export default function AppShell() {
               </AppNavigationShell>
             </Suspense>
           </ClientWorkspaceProvider>
+          </PermissionsProvider>
         </AuthProvider>
       </NotificationProvider>
     </AppErrorBoundary>

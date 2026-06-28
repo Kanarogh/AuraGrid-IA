@@ -3,6 +3,7 @@ import { formatAiError, getActiveProviderId } from "@/server/ai/index";
 import { matchOperationHeaders, runMatchOperation } from "@/server/ai/matchOrchestrator";
 import { sanitizeMatchOperationInput } from "@/server/ai/operations";
 import { aiAttemptsHeaderValue, assertAiClientAccess, withUserAiFromRequest } from "@/server/http/aiRequest";
+import { REFERENCE_FINDER_READ } from "@/server/http/sectionAccess";
 import { isDatabaseConfigured } from "@/server/db/client";
 import { getEffectiveUsesReferences } from "@/server/services/planningPeriodService";
 
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No query image provided." }, { status: 400 });
     }
 
-    const clientId = await assertAiClientAccess(user, rawClientId);
+    const clientId = await assertAiClientAccess(user, rawClientId, REFERENCE_FINDER_READ);
     if (isDatabaseConfigured() && !clientId) {
       return NextResponse.json({ error: "clientId é obrigatório." }, { status: 400 });
     }

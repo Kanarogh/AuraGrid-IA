@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { eq } from "drizzle-orm";
 import { assertClientAccess, getOptionalUser, getOptionalUserFromRequest } from "@/server/http/auth";
+import { POSTS_READ, POSTS_WRITE } from "@/server/http/sectionAccess";
 import { errorResponse } from "@/server/http/respond";
 import { getMediaBuffer, deleteMediaAsset } from "@/server/services/mediaService";
 import { resizeMediaBuffer } from "@/server/services/mediaResize";
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     }
 
     const { buffer, mimeType, clientId } = await getMediaBuffer(assetId);
-    await assertClientAccess(user, clientId);
+    await assertClientAccess(user, clientId, POSTS_READ);
 
     const widthParam = req.nextUrl.searchParams.get("w");
     const requestedWidth = widthParam ? Number.parseInt(widthParam, 10) : 0;
@@ -70,7 +71,7 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
       .where(eq(mediaAssets.id, assetId))
       .limit(1);
     if (!row) return NextResponse.json({ error: "Mídia não encontrada." }, { status: 404 });
-    await assertClientAccess(user, row.clientId);
+    await assertClientAccess(user, row.clientId, POSTS_WRITE);
     await deleteMediaAsset(assetId);
     return NextResponse.json({ ok: true });
   } catch (err) {

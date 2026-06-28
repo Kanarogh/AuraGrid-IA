@@ -1,5 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { assertClientAccess, requireUser } from "@/server/http/auth";
+import {
+  CONTENT_SCHEDULE_MANAGE,
+  CONTENT_SCHEDULE_READ,
+} from "@/server/http/sectionAccess";
 import { errorResponse } from "@/server/http/respond";
 import { loadWorkspaceDto } from "@/server/services/clientService";
 import {
@@ -18,7 +22,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   try {
     const user = requireUser(req);
     const { clientId } = await params;
-    await assertClientAccess(user, clientId);
+    await assertClientAccess(user, clientId, CONTENT_SCHEDULE_READ);
     const periods = await listPeriodsForClient(clientId);
     return NextResponse.json({ periods });
   } catch (err) {
@@ -30,7 +34,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   try {
     const user = requireUser(req);
     const { clientId } = await params;
-    await assertClientAccess(user, clientId);
+    await assertClientAccess(user, clientId, CONTENT_SCHEDULE_MANAGE);
     const body = (await req.json().catch(() => ({}))) ?? {};
     const period = await createPeriod(clientId, {
       label: typeof body.label === "string" ? body.label : undefined,

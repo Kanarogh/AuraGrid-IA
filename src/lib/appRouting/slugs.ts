@@ -41,6 +41,7 @@ export const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   captions: "legendas",
   ai: "ia",
   appearance: "aparencia",
+  team: "equipe",
 };
 
 const SLUG_TO_SETTINGS_TAB = Object.fromEntries(

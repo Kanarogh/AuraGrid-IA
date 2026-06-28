@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import { APP_NAME } from "../../lib/appBranding";
 
@@ -9,11 +10,10 @@ export function LoginForm({
 }: {
   onSuccess?: () => void;
 }) {
-  const { login, register } = useAuth();
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const { login } = useAuth();
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -22,8 +22,11 @@ export function LoginForm({
     setError(null);
     setSubmitting(true);
     try {
-      if (mode === "login") await login(email, password);
-      else await register(email, password, displayName || email.split("@")[0] || "Usuário");
+      const user = await login(email, password);
+      if (user.mustChangePassword) {
+        router.replace("/redefinir-senha");
+        return;
+      }
       onSuccess?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha na autenticação.");
@@ -36,21 +39,8 @@ export function LoginForm({
     <div className="min-h-screen flex items-center justify-center bg-ag-bg px-4">
       <div className="w-full max-w-md rounded-2xl border border-ag-border bg-ag-surface p-8 shadow-xl">
         <h1 className="text-xl font-bold text-ag-text mb-1">{APP_NAME}</h1>
-        <p className="text-sm text-ag-muted mb-6">
-          {mode === "login" ? "Entre na sua conta" : "Crie sua conta"}
-        </p>
+        <p className="text-sm text-ag-muted mb-6">Entre na sua conta</p>
         <form onSubmit={submit} className="space-y-4">
-          {mode === "register" && (
-            <label className="block text-sm">
-              <span className="text-ag-muted">Nome</span>
-              <input
-                className="mt-1 w-full rounded-xl border border-ag-border bg-ag-bg px-3 py-2"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                autoComplete="name"
-              />
-            </label>
-          )}
           <label className="block text-sm">
             <span className="text-ag-muted">E-mail</span>
             <input
@@ -71,7 +61,7 @@ export function LoginForm({
               className="mt-1 w-full rounded-xl border border-ag-border bg-ag-bg px-3 py-2"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              autoComplete="current-password"
             />
           </label>
           {error && <p className="text-sm text-ag-danger">{error}</p>}
@@ -80,16 +70,12 @@ export function LoginForm({
             disabled={submitting}
             className="w-full rounded-xl bg-ag-accent text-white py-2.5 font-semibold disabled:opacity-50"
           >
-            {submitting ? "Aguarde…" : mode === "login" ? "Entrar" : "Cadastrar"}
+            {submitting ? "Aguarde…" : "Entrar"}
           </button>
         </form>
-        <button
-          type="button"
-          className="mt-4 text-sm text-ag-accent w-full text-center"
-          onClick={() => setMode(mode === "login" ? "register" : "login")}
-        >
-          {mode === "login" ? "Criar conta" : "Já tenho conta"}
-        </button>
+        <p className="mt-4 text-xs text-center text-ag-muted">
+          Conta criada pelo administrador da equipe.
+        </p>
       </div>
     </div>
   );

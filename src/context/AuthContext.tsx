@@ -27,7 +27,7 @@ type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
   storageMode: StorageMode;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<AuthUser>;
   register: (email: string, password: string, displayName: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -83,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const u = await loginApi(email, password);
     setUser(u);
     if (authBootstrapCache) authBootstrapCache = { ...authBootstrapCache, user: u };
+    return u;
   }, []);
 
   const register = useCallback(async (email: string, password: string, displayName: string) => {

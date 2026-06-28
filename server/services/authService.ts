@@ -5,11 +5,18 @@ import { and, eq, isNull } from "drizzle-orm";
 import { JWT_ACCESS_TTL, JWT_REFRESH_TTL_DAYS, JWT_SECRET } from "../config/env";
 import { getDb } from "../db/client";
 import { refreshTokens, userAiPreferences, users } from "../db/schema";
+import { buildAuthUserProfile } from "./permissionService";
+import type { AuthUserProfile } from "@/src/lib/permissions/types";
 
 export type AuthUser = {
   id: string;
   email: string;
   displayName: string;
+};
+
+export type LoginResult = {
+  user: AuthUserProfile;
+  tokens: AuthTokens;
 };
 
 export type AuthTokens = {
@@ -50,7 +57,14 @@ export async function registerUser(input: {
   const passwordHash = await bcrypt.hash(input.password, 12);
   const [row] = await db
     .insert(users)
-    .values({ email, passwordHash, displayName })
+    .values({
+      email,
+      passwordHash,
+      displayName,
+      accountRole: "owner",
+      mustChangePassword: false,
+      status: "active",
+    })
     .returning();
 
   const user: AuthUser = { id: row!.id, email: row!.email, displayName: row!.displayName };
@@ -61,18 +75,59 @@ export async function registerUser(input: {
 export async function loginUser(input: {
   email: string;
   password: string;
-}): Promise<{ user: AuthUser; tokens: AuthTokens }> {
+}): Promise<LoginResult> {
   const email = input.email.trim().toLowerCase();
   const db = getDb();
   const [row] = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  if (!row) throw new Error("E-mail ou senha invÃ¡lidos.");
+  if (!row) throw new Error("E-mail ou senha inválidos.");
+
+  if (row.status === "suspended") {
+    throw new Error("Conta suspensa. Contacte o administrador.");
+  }
 
   const ok = await bcrypt.compare(input.password, row.passwordHash);
-  if (!ok) throw new Error("E-mail ou senha invÃ¡lidos.");
+  if (!ok) throw new Error("E-mail ou senha inválidos.");
 
-  const user: AuthUser = { id: row.id, email: row.email, displayName: row.displayName };
-  const tokens = await issueTokens(user);
-  return { user, tokens };
+  const profile = await buildAuthUserProfile(row.id);
+  if (!profile) throw new Error("Usuário não encontrado.");
+
+  const tokens = await issueTokens({
+    id: row.id,
+    email: row.email,
+    displayName: row.displayName,
+  });
+  return { user: profile, tokens };
+}
+
+export async function changeUserPassword(input: {
+  userId: string;
+  currentPassword: string;
+  newPassword: string;
+}): Promise<AuthUserProfile> {
+  if (input.newPassword.length < 8) {
+    throw new Error("A nova senha deve ter pelo menos 8 caracteres.");
+  }
+  const db = getDb();
+  const [row] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+  if (!row) throw new Error("Usuário não encontrado.");
+
+  const ok = await bcrypt.compare(input.currentPassword, row.passwordHash);
+  if (!ok) throw new Error("Senha atual incorreta.");
+
+  const passwordHash = await bcrypt.hash(input.newPassword, 12);
+  await db
+    .update(users)
+    .set({
+      passwordHash,
+      mustChangePassword: false,
+      passwordChangedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, input.userId));
+
+  const profile = await buildAuthUserProfile(input.userId);
+  if (!profile) throw new Error("Usuário não encontrado.");
+  return profile;
 }
 
 async function issueTokens(user: AuthUser): Promise<AuthTokens> {
@@ -107,7 +162,7 @@ export function verifyAccessToken(token: string): AuthUser {
 }
 
 export async function refreshSession(refreshToken: string): Promise<{
-  user: AuthUser;
+  user: AuthUserProfile;
   tokens: AuthTokens;
 }> {
   const db = getDb();
@@ -133,15 +188,25 @@ export async function refreshSession(refreshToken: string): Promise<{
     .where(eq(refreshTokens.id, row.id));
 
   const [userRow] = await db.select().from(users).where(eq(users.id, row.userId)).limit(1);
-  if (!userRow) throw new Error("UsuÃ¡rio nÃ£o encontrado.");
+  if (!userRow) throw new Error("Usuário não encontrado.");
+  if (userRow.status === "suspended") {
+    throw new Error("Conta suspensa. Contacte o administrador.");
+  }
 
   const user: AuthUser = {
     id: userRow.id,
     email: userRow.email,
     displayName: userRow.displayName,
   };
+
+  const profile = await buildAuthUserProfile(userRow.id);
+  if (!profile) throw new Error("Usuário não encontrado.");
+
   const tokens = await issueTokens(user);
-  return { user, tokens };
+  return {
+    user: profile,
+    tokens,
+  };
 }
 
 /** Valida refresh token sem rotacionar â€” seguro para `<img>` e outras requisiÃ§Ãµes GET frequentes. */

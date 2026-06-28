@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { assertClientAccess, requireUser } from "@/server/http/auth";
+import { CATALOG_READ, CATALOG_WRITE } from "@/server/http/sectionAccess";
 import { errorResponse } from "@/server/http/respond";
 import { createCatalogItem, listCatalogItems } from "@/server/services/catalogService";
 import { isEnrichmentRunning } from "@/server/services/enrichQueue";
@@ -13,7 +14,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   try {
     const user = requireUser(req);
     const { clientId } = await params;
-    await assertClientAccess(user, clientId);
+    await assertClientAccess(user, clientId, CATALOG_READ);
     const items = await listCatalogItems(clientId);
     return NextResponse.json({ items, enriching: isEnrichmentRunning(clientId) });
   } catch (err) {
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   try {
     const user = requireUser(req);
     const { clientId } = await params;
-    await assertClientAccess(user, clientId);
+    await assertClientAccess(user, clientId, CATALOG_WRITE);
     const {
       id,
       label,

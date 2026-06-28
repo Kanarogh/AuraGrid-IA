@@ -115,13 +115,28 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-/** Filtra seções indisponíveis quando o roteiro não usa referências. */
-export function getNavGroups(usesReferences = true): NavGroup[] {
-  if (usesReferences) return NAV_GROUPS;
-  return NAV_GROUPS.map((g) => ({
-    ...g,
-    items: g.items.filter((item) => item.id !== "reference_finder"),
-  })).filter((g) => g.items.length > 0);
+/** Filtra seções indisponíveis quando o roteiro não usa referências ou sem permissão. */
+export function getNavGroups(
+  usesReferences = true,
+  canAccessSection?: (section: AppSection) => boolean
+): NavGroup[] {
+  let groups = usesReferences
+    ? NAV_GROUPS
+    : NAV_GROUPS.map((g) => ({
+        ...g,
+        items: g.items.filter((item) => item.id !== "reference_finder"),
+      })).filter((g) => g.items.length > 0);
+
+  if (canAccessSection) {
+    groups = groups
+      .map((g) => ({
+        ...g,
+        items: g.items.filter((item) => canAccessSection(item.id)),
+      }))
+      .filter((g) => g.items.length > 0);
+  }
+
+  return groups;
 }
 
 export const SECTION_SUBTITLES: Record<AppSection, string> = {

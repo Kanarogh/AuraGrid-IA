@@ -12,6 +12,9 @@ import {
 } from "./metaGraphClient";
 import { upsertMetaConnection } from "./metaConnectionService";
 import { createOAuthState, parseOAuthState } from "./mediaPublishUrl";
+import { assertClientAccessResolved } from "./permissionService";
+import { META_CONNECT } from "../http/publishAccess";
+import type { AuthUser } from "./authService";
 
 export function buildMetaOAuthStartUrl(clientId: string, userId: string): string {
   if (!isMetaOAuthConfigured()) {
@@ -39,6 +42,8 @@ export async function completeMetaOAuthCallback(
   state: string
 ): Promise<{ clientId: string; connection: Awaited<ReturnType<typeof upsertMetaConnection>> }> {
   const { clientId, userId } = parseOAuthState(state);
+  const authUser: AuthUser = { id: userId, email: "", displayName: "" };
+  await assertClientAccessResolved(authUser, clientId, META_CONNECT);
   const short = await exchangeCodeForToken(code, META_OAUTH_REDIRECT_URI);
   const long = await exchangeForLongLivedToken(short.access_token);
   const userToken = long.access_token;

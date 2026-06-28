@@ -81,6 +81,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardView } from "./components/dashboard/DashboardView";
 import { useDashboardMetrics } from "./hooks/useDashboardMetrics";
 import { useAuth } from "./context/AuthContext";
+import { usePermissions } from "./context/PermissionsContext";
+import { SectionGate } from "./components/permissions/SectionGate";
+import { useSectionReadOnly } from "./hooks/useSectionReadOnly";
 import { aiFetch } from "./lib/aiFetch";
 import {
   initAiSettingsStore,
@@ -235,6 +238,7 @@ import { CatalogUploadProgressPanel } from "./components/catalog/CatalogUploadPr
 export default function App() {
   const { isDark, toggleTheme } = useTheme();
   const { user: authUser, storageMode } = useAuth();
+  const permissions = usePermissions();
 
   const {
     hasActiveClient,
@@ -278,6 +282,8 @@ export default function App() {
     isPeriodSwitching,
     clientSwitch,
   } = useClientWorkspace();
+
+  const sectionReadOnly = useSectionReadOnly(isReadOnly, activeClientId);
 
   const { openNewPlanningPeriod } = usePlanningPeriodModal();
 
@@ -2721,6 +2727,7 @@ export default function App() {
         onClientCreated={(clientId) => void navigateToClientSettings(clientId)}
         hasActiveClient={hasActiveClient}
         usesReferences={usesReferences}
+        activeClientId={activeClientId}
         footer={<Footer />}
       >
         {connectionStatus === "disconnected" && <ApiAlert />}
@@ -2841,7 +2848,8 @@ export default function App() {
           </div>
         )}
 
-        {hasActiveClient && onClientRoute && routeSection === "settings" && (
+        {hasActiveClient && onClientRoute && routeSection === "settings" && activeClientId && (
+          <SectionGate clientId={activeClientId} section="settings">
           <ConfigPanel
             variant="page"
             clientName={activeClient.name}
@@ -2855,10 +2863,13 @@ export default function App() {
             usesReferences={usesReferences}
             indexedReferenceCount={indexedReferenceCount}
             onDefaultUsesReferencesChange={setDefaultUsesReferences}
+            readOnly={sectionReadOnly("settings")}
           />
+          </SectionGate>
         )}
 
-        {hasActiveClient && onClientRoute && routeSection === "content_schedule" && (
+        {hasActiveClient && onClientRoute && routeSection === "content_schedule" && activeClientId && (
+          <SectionGate clientId={activeClientId} section="content_schedule">
           <div className="ag-workspace-section">
             <ContentScheduleWorkspace
               items={contentSchedule}
@@ -2866,7 +2877,7 @@ export default function App() {
               brandGemReady={brandGemReady}
               startDate={startDate}
               periodLabel={activePeriodLabel}
-              isReadOnly={isReadOnly}
+              isReadOnly={sectionReadOnly("content_schedule")}
               posts={posts}
               clientBrief={contentScheduleBrief}
               onClientBriefChange={setContentScheduleBrief}
@@ -2877,6 +2888,7 @@ export default function App() {
               }}
             />
           </div>
+          </SectionGate>
         )}
 
         {hasActiveClient &&
@@ -2886,6 +2898,7 @@ export default function App() {
           clientRoute?.clientId === activeClientId &&
           workspace.brandGem.id === activeClientId &&
           !isClientSwitching && (
+          <SectionGate clientId={activeClientId} section="post_scheduling">
           <PostSchedulingWorkspace
             key={`${activeClientId}:${activePlanningPeriodId}`}
             clientId={activeClientId}
@@ -2901,9 +2914,11 @@ export default function App() {
             metaConnectedParam={metaConnectedParam}
             onNavigatePosts={() => void handleNavigate("posts")}
           />
+          </SectionGate>
         )}
 
-        {hasActiveClient && onClientRoute && routeSection === "posts" && (
+        {hasActiveClient && onClientRoute && routeSection === "posts" && activeClientId && (
+          <SectionGate clientId={activeClientId} section="posts">
           <div className="ag-workspace-section">
             <PostsWorkflowBar stats={captionBatchStats} />
 
@@ -3133,9 +3148,11 @@ export default function App() {
               />
             ) : null}
           </div>
+          </SectionGate>
         )}
 
-        {hasActiveClient && onClientRoute && routeSection === "canva_grid" && activeCanvaPage && (
+        {hasActiveClient && onClientRoute && routeSection === "canva_grid" && activeCanvaPage && activeClientId && (
+          <SectionGate clientId={activeClientId} section="canva_grid">
           <StudioSection
             titleMode="hidden"
             actions={
@@ -3284,10 +3301,12 @@ export default function App() {
               />
             )}
           </StudioSection>
+          </SectionGate>
         )}
 
         {/* WORKSPACE VIEW 2: FEED GRID HARMONY SIMULATOR (Instagram 3x3) */}
-        {hasActiveClient && onClientRoute && routeSection === "feed_simulator" && (
+        {hasActiveClient && onClientRoute && routeSection === "feed_simulator" && activeClientId && (
+          <SectionGate clientId={activeClientId} section="feed_simulator">
           <FeedInstagramPreview
             posts={posts}
             canvaPages={canvaPages}
@@ -3305,9 +3324,11 @@ export default function App() {
               void handleNavigate("posts");
             }}
           />
+          </SectionGate>
         )}
 
-        {hasActiveClient && onClientRoute && usesReferences && routeSection === "reference_finder" && (
+        {hasActiveClient && onClientRoute && usesReferences && routeSection === "reference_finder" && activeClientId && (
+          <SectionGate clientId={activeClientId} section="reference_finder">
           <ReferenceFinderPanel
             referenceCatalog={referenceCatalog}
             isEnrichingCatalog={isEnrichingCatalogUi}
@@ -3316,10 +3337,12 @@ export default function App() {
             onViewProfile={(item) => setProfileViewItem(item)}
             clientId={useApiStorage ? activeClientId ?? undefined : undefined}
           />
+          </SectionGate>
         )}
 
         {/* WORKSPACE VIEW 3: REFERENCE CLOTHES BATCH FILES MANAGER */}
-        {hasActiveClient && onClientRoute && routeSection === "catalog" && (
+        {hasActiveClient && onClientRoute && routeSection === "catalog" && activeClientId && (
+          <SectionGate clientId={activeClientId} section="catalog">
           <StudioSection
             titleMode="hidden"
             eyebrow="Acervo"
@@ -3906,6 +3929,7 @@ export default function App() {
             )}
 
           </StudioSection>
+          </SectionGate>
         )}
 
       </AppShell>

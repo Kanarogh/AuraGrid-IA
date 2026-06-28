@@ -731,6 +731,7 @@ export function useCaptionGeneration({
             currentCaption: post.caption,
             instructions,
             brandGem,
+            ...(useApiStorage && activeClientId ? { clientId: activeClientId } : {}),
           }),
         });
 

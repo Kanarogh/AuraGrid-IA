@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { assertClientAccess, requireUser } from "@/server/http/auth";
+import { PUBLISH_READ, PUBLISH_WRITE } from "@/server/http/publishAccess";
 import { errorResponse } from "@/server/http/respond";
 import {
   getClientPublishPrefsPublic,
@@ -15,7 +16,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   try {
     const user = requireUser(req);
     const { clientId } = await params;
-    await assertClientAccess(user, clientId);
+    await assertClientAccess(user, clientId, PUBLISH_READ);
     const prefs = await getClientPublishPrefsPublic(clientId);
     return NextResponse.json(prefs);
   } catch (err) {
@@ -27,7 +28,7 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
   try {
     const user = requireUser(req);
     const { clientId } = await params;
-    await assertClientAccess(user, clientId);
+    await assertClientAccess(user, clientId, PUBLISH_WRITE);
     const body = await req.json();
     const validated = publishPrefsSchema.parse(body);
     const prefs = await saveClientPublishPrefs(clientId, validated);

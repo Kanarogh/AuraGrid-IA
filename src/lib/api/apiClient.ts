@@ -1,3 +1,5 @@
+import type { AuthUserProfile } from "../permissions/types";
+
 const ACCESS_TOKEN_KEY = "auragrid_access_token";
 
 let accessToken: string | null =
@@ -113,11 +115,7 @@ export async function readApiJson<T>(res: Response): Promise<T> {
   return data;
 }
 
-export type AuthUser = {
-  id: string;
-  email: string;
-  displayName: string;
-};
+export type AuthUser = AuthUserProfile;
 
 export async function loginApi(email: string, password: string) {
   const res = await fetch("/api/v1/auth/login", {
@@ -156,6 +154,65 @@ export type StorageHealth = {
   storage?: { mode?: string; database?: { ok?: boolean; configured?: boolean } };
   deploy?: { offlineStorageAllowed?: boolean };
 };
+
+export async function changePasswordApi(currentPassword: string, newPassword: string) {
+  const res = await apiFetch("/api/v1/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  const data = await readApiJson<{ user: AuthUser }>(res);
+  return data.user;
+}
+
+export type TeamMemberRecord = {
+  userId: string;
+  email: string;
+  displayName: string;
+  status: string;
+  displayRole: string;
+  mustChangePassword: boolean;
+  clientAccess: Array<{ clientId: string; permissions: AuthUser["clientGrants"][0]["permissions"] }>;
+  createdAt: string;
+};
+
+export async function fetchTeamMembers() {
+  const res = await apiFetch("/api/v1/team/members");
+  const data = await readApiJson<{ members: TeamMemberRecord[] }>(res);
+  return data.members;
+}
+
+export async function createTeamMemberApi(body: {
+  email: string;
+  displayName: string;
+  temporaryPassword: string;
+  displayRole: string;
+  clientIds: string[];
+  permissionsByClient?: Record<string, AuthUser["clientGrants"][0]["permissions"]>;
+}) {
+  const res = await apiFetch("/api/v1/team/members", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return readApiJson<{ userId: string }>(res);
+}
+
+export async function updateTeamMemberApi(
+  userId: string,
+  body: Record<string, unknown>
+) {
+  const res = await apiFetch(`/api/v1/team/members/${encodeURIComponent(userId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+  return readApiJson<{ ok: boolean }>(res);
+}
+
+export async function deleteTeamMemberApi(userId: string) {
+  const res = await apiFetch(`/api/v1/team/members/${encodeURIComponent(userId)}`, {
+    method: "DELETE",
+  });
+  return readApiJson<{ ok: boolean }>(res);
+}
 
 export async function fetchStorageMode(): Promise<"postgresql" | "local"> {
   try {

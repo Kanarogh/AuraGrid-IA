@@ -19,6 +19,7 @@ import {
   Type,
   CalendarDays,
   Palette,
+  Users,
 } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { toast } from "../../lib/toast";
@@ -47,6 +48,8 @@ import {
 import type { BrandGem } from "../../types";
 import { AiProviderPanel } from "./AiProviderPanel";
 import { AppearanceSettingsPanel } from "./AppearanceSettingsPanel";
+import { TeamMembersPanel } from "../team/TeamMembersPanel";
+import { usePermissionsOptional } from "../../context/PermissionsContext";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { FieldLabel, Input, Textarea } from "../ui/Input";
@@ -82,6 +85,7 @@ export function ConfigPanel({
   defaultUsesReferences = true,
   usesReferences = true,
   indexedReferenceCount = 0,
+  readOnly = false,
 }: {
   open?: boolean;
   variant?: "panel" | "page";
@@ -97,13 +101,17 @@ export function ConfigPanel({
   onDefaultUsesReferencesChange?: (value: boolean) => void | Promise<void>;
   usesReferences?: boolean;
   indexedReferenceCount?: number;
+  readOnly?: boolean;
 }) {
   const { storageMode } = useAuth();
+  const perms = usePermissionsOptional();
+  const showTeamTab = perms?.canManageTeam() ?? false;
   const [footerOpen, setFooterOpen] = useState(true);
   const [captionParamsOpen, setCaptionParamsOpen] = useState(true);
   const [settingsTabLocal, setSettingsTabLocal] = useState<SettingsTab>("brand");
   const settingsTab = settingsTabProp ?? settingsTabLocal;
   const setSettingsTab = onSettingsTabChange ?? setSettingsTabLocal;
+  const formLocked = readOnly && settingsTab !== "team";
   const [draftGem, setDraftGem] = useState<BrandGem>(brandGem);
   const [justSaved, setJustSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -198,6 +206,7 @@ export function ConfigPanel({
   };
 
   const handleSave = async () => {
+    if (formLocked) return;
     setSaving(true);
     try {
       const savedAt = await onSaveBrandGem(draftGem);
@@ -254,7 +263,7 @@ export function ConfigPanel({
         variant="accent"
         size="md"
         onClick={() => void handleSave()}
-        disabled={!isDirty || saving}
+        disabled={!isDirty || saving || formLocked}
         className="shrink-0 w-full sm:w-auto"
       >
         {saving ? (
@@ -279,6 +288,11 @@ export function ConfigPanel({
 
   const content = (
     <>
+      {formLocked && (
+        <p className="mb-3 text-xs text-ag-muted rounded-lg border border-ag-border bg-ag-surface-2/60 px-3 py-2">
+          Modo somente leitura — você não pode alterar configurações deste cliente.
+        </p>
+      )}
       <div className="flex items-center gap-2 mb-1">
         <Sparkles className="h-5 w-5 text-ag-accent" />
         <h2
@@ -320,6 +334,7 @@ export function ConfigPanel({
           { id: "captions" as const, label: "Legendas", icon: Type },
           { id: "ai" as const, label: "IA", icon: Cpu },
           { id: "appearance" as const, label: "Aparência", icon: Palette },
+          ...(showTeamTab ? [{ id: "team" as const, label: "Equipe", icon: Users }] : []),
         ]}
         active={settingsTab}
         onChange={setSettingsTab}
@@ -385,6 +400,12 @@ export function ConfigPanel({
       <div className="mb-8">
         <AiProviderPanel />
       </div>
+      )}
+
+      {settingsTab === "team" && showTeamTab && (
+        <div className="mb-8">
+          <TeamMembersPanel />
+        </div>
       )}
 
       {settingsTab === "brand" && (

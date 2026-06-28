@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { assertClientAccess, requireUser } from "@/server/http/auth";
+import { CONTENT_SCHEDULE_MANAGE } from "@/server/http/sectionAccess";
 import { errorResponse } from "@/server/http/respond";
 import { updatePeriod } from "@/server/services/planningPeriodService";
 
@@ -11,7 +12,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   try {
     const user = requireUser(req);
     const { clientId, periodId } = await params;
-    await assertClientAccess(user, clientId);
+    await assertClientAccess(user, clientId, CONTENT_SCHEDULE_MANAGE);
     const body = (await req.json().catch(() => ({}))) ?? {};
     const period = await updatePeriod(clientId, periodId, {
       label: typeof body.label === "string" ? body.label : undefined,

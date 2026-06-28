@@ -7,6 +7,7 @@ import { sanitizeForHttpHeader } from "../ai/httpHeaders";
 import type { AiProviderId } from "../ai/types";
 import { isDatabaseConfigured } from "../db/client";
 import { assertClientAccess, getOptionalUserFromRequest, requireUser } from "./auth";
+import type { AssertClientAccessOptions } from "./auth";
 import type { AuthUser } from "../services/authService";
 import { HttpError } from "./respond";
 
@@ -15,16 +16,22 @@ export async function applyAiHeadersFromNextRequest(_req: NextRequest): Promise<
   return getAiProviderId();
 }
 
-/** Exige clientId válido e ownership quando DATABASE_URL está configurado. */
+/** Exige clientId válido e acesso quando DATABASE_URL está configurado. */
 export async function assertAiClientAccess(
   user: AuthUser | null,
-  clientId: unknown
-): Promise<string | undefined> {
-  if (typeof clientId !== "string" || !clientId.trim()) return undefined;
+  clientId: unknown,
+  opts?: AssertClientAccessOptions
+): Promise<string> {
+  if (typeof clientId !== "string" || !clientId.trim()) {
+    if (isDatabaseConfigured()) {
+      throw new HttpError(400, "clientId é obrigatório.");
+    }
+    return "";
+  }
   const id = clientId.trim();
   if (isDatabaseConfigured()) {
     if (!user) throw new HttpError(401, "Autenticação necessária.");
-    await assertClientAccess(user, id);
+    await assertClientAccess(user, id, opts);
   }
   return id;
 }

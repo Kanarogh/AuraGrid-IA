@@ -3,6 +3,7 @@ import { buildAiSettingsResponse } from "@/server/ai/index";
 import { withUserAiContext } from "@/server/ai/userAiContext";
 import { isDatabaseConfigured } from "@/server/db/client";
 import { getOptionalUserFromRequest, requireUser } from "@/server/http/auth";
+import { assertTeamAdmin } from "@/server/services/permissionService";
 import { errorResponse } from "@/server/http/respond";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +32,9 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    if (isDatabaseConfigured()) {
+      await assertTeamAdmin(requireUser(req));
+    }
     const body = (await req.json()) as { provider?: string };
     if (body.provider && body.provider !== "gemini") {
       return NextResponse.json(

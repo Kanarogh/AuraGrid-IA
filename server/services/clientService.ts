@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { getDb } from "../db/client";
 import {
   brandGems,
@@ -12,6 +12,8 @@ import {
   planningPeriods,
   userClientState,
 } from "../db/schema";
+import { listAccessibleClientIds, resolveClientAccess } from "./permissionService";
+import { canAccessSection } from "@/src/lib/permissions/roleTemplates";
 import { mediaPublicUrl } from "./mediaService";
 import { parseBrandGemSaveBody } from "../validation/brandGemSchema";
 import {
@@ -62,10 +64,12 @@ export async function uniqueClientId(ownerUserId: string, baseSlug: string): Pro
 
 export async function listClientsForUser(userId: string) {
   const db = getDb();
+  const ids = await listAccessibleClientIds(userId);
+  if (ids.length === 0) return [];
   return db
     .select()
     .from(clients)
-    .where(and(eq(clients.ownerUserId, userId), isNull(clients.deletedAt)))
+    .where(and(inArray(clients.id, ids), isNull(clients.deletedAt)))
     .orderBy(desc(clients.updatedAt));
 }
 
@@ -121,6 +125,10 @@ export async function createClientForUser(userId: string, name: string, slug?: s
 }
 
 export async function setActiveClient(userId: string, clientId: string) {
+  const ids = await listAccessibleClientIds(userId);
+  if (!ids.includes(clientId)) {
+    throw new Error("Cliente não encontrado.");
+  }
   const db = getDb();
   await db
     .insert(userClientState)
@@ -167,12 +175,15 @@ export async function loadWorkspaceDto(
 ) {
   const db = getDb();
 
+  const accessible = await listAccessibleClientIds(userId);
+  if (!accessible.includes(clientId)) {
+    throw new Error("Cliente não encontrado.");
+  }
+
   const [client] = await db
     .select()
     .from(clients)
-    .where(
-      and(eq(clients.id, clientId), eq(clients.ownerUserId, userId), isNull(clients.deletedAt))
-    )
+    .where(and(eq(clients.id, clientId), isNull(clients.deletedAt)))
     .limit(1);
   if (!client) throw new Error("Cliente não encontrado.");
 
@@ -320,7 +331,7 @@ export async function loadWorkspaceDto(
     })
   );
 
-  return {
+  const dto = {
     version: 1 as const,
     client: {
       id: client.id,
@@ -364,6 +375,59 @@ export async function loadWorkspaceDto(
       brandGemSavedAt: gem?.savedAt?.toISOString(),
     },
   };
+
+  return filterWorkspaceByPermissions(dto, userId, clientId);
+}
+
+async function filterWorkspaceByPermissions<T extends {
+  posts: unknown[];
+  catalog: unknown[];
+  canva: { pages: unknown[]; activePageId: string; autoSync: boolean; reversed: boolean; gridFormat: string; gridMaxWidth: number };
+  contentSchedule: unknown;
+  contentScheduleBrief: unknown;
+  brandGem: Record<string, unknown>;
+  planningPeriods: unknown[];
+}>(
+  workspace: T,
+  userId: string,
+  clientId: string
+): Promise<T> {
+  const access = await resolveClientAccess(userId, clientId);
+  if (!access || access.level === "owner") return workspace;
+
+  const perms = access.permissions;
+  const filtered = { ...workspace };
+
+  if (!canAccessSection(perms, "posts", "read")) {
+    filtered.posts = [];
+  }
+  if (!canAccessSection(perms, "catalog", "read")) {
+    filtered.catalog = [];
+  }
+  if (!canAccessSection(perms, "canva_grid", "read")) {
+    filtered.canva = {
+      ...workspace.canva,
+      pages: [],
+    };
+  }
+  if (!canAccessSection(perms, "content_schedule", "read")) {
+    filtered.contentSchedule = [];
+    filtered.contentScheduleBrief = null;
+    filtered.planningPeriods = [];
+  }
+  if (!canAccessSection(perms, "settings", "read")) {
+    filtered.brandGem = {
+      id: workspace.brandGem.id ?? clientId,
+      name: workspace.brandGem.name ?? "",
+      description: "",
+      instructions: "",
+      campaignContext: "",
+      captionParams: {},
+      footer: {},
+    };
+  }
+
+  return filtered;
 }
 
 function findPageForSlot(slots: { id: string; pageId: string }[], slotId: string): string {

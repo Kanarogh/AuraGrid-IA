@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { ALLOW_PUBLIC_REGISTER } from "@/server/config/env";
 import { accessTokenMaxAgeMs, registerUser } from "@/server/services/authService";
 import { assertAuthRateLimit, authRateLimitHeaders } from "@/server/http/authRateLimit";
 import { setRefreshCookie } from "@/server/http/cookies";
@@ -8,6 +9,12 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
+    if (!ALLOW_PUBLIC_REGISTER) {
+      return NextResponse.json(
+        { error: "Cadastro público desabilitado. Solicite acesso ao administrador." },
+        { status: 403 }
+      );
+    }
     assertAuthRateLimit(req, "register", 5);
     const { email, password, displayName } = (await req.json()) as {
       email?: string;

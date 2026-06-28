@@ -82,17 +82,20 @@ export function AppRouteBootstrap() {
       return;
     }
 
+    if (storageMode === "postgresql" && user?.mustChangePassword) {
+      if (pathname !== "/redefinir-senha") {
+        redirect("/redefinir-senha");
+        return;
+      }
+    }
+
     if (parsedLocation.kind === "client") {
       const route = parsedLocation.route;
       if (!route.clientId?.trim()) return;
 
-      if (!clientIds.includes(route.clientId) && effectiveActiveClientId) {
-        redirect(
-          buildClientPath({
-            ...route,
-            clientId: effectiveActiveClientId,
-          })
-        );
+      if (!clientIds.includes(route.clientId)) {
+        redirect("/sem-acesso");
+        return;
       }
     }
   }, [

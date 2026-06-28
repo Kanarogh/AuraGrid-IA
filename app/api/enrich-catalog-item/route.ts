@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { formatAiError, getActiveProviderId } from "@/server/ai/index";
 import { runVisionWithFallback } from "@/server/ai/fallbackChain";
 import { aiAttemptsHeaderValue, assertAiClientAccess, withUserAiFromRequest } from "@/server/http/aiRequest";
+import { CATALOG_WRITE } from "@/server/http/sectionAccess";
 import { isDatabaseConfigured } from "@/server/db/client";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (isDatabaseConfigured()) {
-      await assertAiClientAccess(user, rawClientId ?? id);
+      await assertAiClientAccess(user, rawClientId, CATALOG_WRITE);
     }
 
     const outcome = await runVisionWithFallback(

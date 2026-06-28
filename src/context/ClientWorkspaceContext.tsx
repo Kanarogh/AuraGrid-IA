@@ -77,6 +77,8 @@ import {
   countIndexedReferences,
   effectiveUsesReferencesFromParts,
 } from "../lib/referenceWorkflow";
+import { usePermissionsOptional } from "./PermissionsContext";
+import { canAccessAppSection } from "../lib/permissions/navFilter";
 
 export type ClientSwitchState = {
   isSwitching: boolean;
@@ -214,6 +216,7 @@ function seedRegistryFromLocal(): ClientRegistry {
 
 export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
   const { storageMode, user, loading: authLoading } = useAuth();
+  const permissions = usePermissionsOptional();
   const useApiStorage = storageMode === "postgresql" && !!user;
   const initialMode = resolveInitialStorageMode(getCachedAuthBootstrap()?.storageMode);
   const localSeededRef = useRef(initialMode === "local");
@@ -749,6 +752,10 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
 
   const createClient = useCallback(
     async (name: string, slug?: string): Promise<string> => {
+      if (useApiStorage && user?.accountRole !== "owner") {
+        toast.error("Acesso restrito ao administrador da conta.");
+        throw new Error("Acesso restrito.");
+      }
       if (useApiStorage) {
         const api = getApiHelpers();
         if (!api) {
@@ -796,13 +803,17 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       loadClientIntoState(id, next.clients);
       return id;
     },
-    [registry, flushSave, loadClientIntoState, useApiStorage]
+    [registry, flushSave, loadClientIntoState, useApiStorage, user]
   );
 
   const renameClient = useCallback(
     (clientId: string, name: string) => {
       const trimmed = name.trim();
       if (!trimmed) return;
+      if (useApiStorage && !permissions?.canManageClients(clientId)) {
+        toast.error("Sem permissão para renomear este cliente.");
+        return;
+      }
       if (useApiStorage) {
         void (async () => {
           try {
@@ -834,11 +845,15 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [registry, activeClientId, persistRegistry, setBrandGem, useApiStorage]
+    [registry, activeClientId, persistRegistry, setBrandGem, useApiStorage, permissions]
   );
 
   const deleteClient = useCallback(
     (clientId: string) => {
+      if (useApiStorage && !permissions?.canManageClients(clientId)) {
+        toast.error("Sem permissão para excluir este cliente.");
+        return false;
+      }
       if (useApiStorage) {
         void (async () => {
           const api = getApiHelpers();
@@ -891,8 +906,23 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       }
       return true;
     },
-    [registry, activeClientId, persistRegistry, loadClientIntoState, useApiStorage]
+    [registry, activeClientId, persistRegistry, loadClientIntoState, useApiStorage, permissions]
   );
+
+  const effectiveReadOnly = useMemo(() => {
+    const archived = workspace.isReadOnly ?? false;
+    if (archived || !useApiStorage || !user || user.accountRole === "owner") {
+      return archived;
+    }
+    const section = (workspace.ui?.activeSection ?? "posts") as AppSection;
+    return !canAccessAppSection(user, activeClientId, section, "write");
+  }, [
+    workspace.isReadOnly,
+    workspace.ui?.activeSection,
+    useApiStorage,
+    user,
+    activeClientId,
+  ]);
 
   const switchPlanningPeriod = useCallback(
     async (periodId: string) => {
@@ -1342,7 +1372,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       getPostsSnapshot,
       activePlanningPeriodId: workspace.activePlanningPeriodId,
       planningPeriods: workspace.planningPeriods,
-      isReadOnly: workspace.isReadOnly ?? false,
+      isReadOnly: effectiveReadOnly,
       periodEditMode: workspace.periodEditMode ?? "active",
       usesReferences: workspace.usesReferences !== false,
       setDefaultUsesReferences,
@@ -1409,6 +1439,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       workspaceLoadError,
       retryWorkspaceLoad,
       clientSwitch,
+      effectiveReadOnly,
     ]
   );
 

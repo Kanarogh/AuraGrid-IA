@@ -7,6 +7,7 @@ import {
   refineContentScheduleItem,
 } from "@/server/ai/contentScheduleGenerator";
 import { assertAiClientAccess, withUserAiFromRequest } from "@/server/http/aiRequest";
+import { CONTENT_SCHEDULE_WRITE } from "@/server/http/sectionAccess";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
         refineInstruction,
       } = body;
 
-      await assertAiClientAccess(user, rawClientId);
+      await assertAiClientAccess(user, rawClientId, CONTENT_SCHEDULE_WRITE);
 
       if (mode !== "refine_one") {
         try {

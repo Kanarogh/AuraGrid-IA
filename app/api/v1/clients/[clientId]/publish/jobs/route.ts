@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { assertClientAccess, requireUser } from "@/server/http/auth";
+import { PUBLISH_READ, PUBLISH_WRITE } from "@/server/http/publishAccess";
 import { errorResponse } from "@/server/http/respond";
 import { isPublishMockEnabled } from "@/server/services/publishPrefsService";
 import {
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   try {
     const user = requireUser(req);
     const { clientId } = await params;
-    await assertClientAccess(user, clientId);
+    await assertClientAccess(user, clientId, PUBLISH_READ);
     const periodId = req.nextUrl.searchParams.get("planningPeriodId");
     if (!periodId) {
       return NextResponse.json({ error: "planningPeriodId obrigatório." }, { status: 400 });
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   try {
     const user = requireUser(req);
     const { clientId } = await params;
-    await assertClientAccess(user, clientId);
+    await assertClientAccess(user, clientId, PUBLISH_WRITE);
     const body = await req.json();
     const validated = createJobsSchema.parse(body);
     const jobs = await createPublishJobs(clientId, user.id, validated);

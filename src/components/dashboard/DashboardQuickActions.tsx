@@ -1,5 +1,7 @@
 import type { AppSection } from "../../lib/sectionMeta";
 import { ALL_NAV_ITEMS } from "../../lib/sectionMeta";
+import { filterNavSections } from "../../lib/permissions/navFilter";
+import { useAuth } from "../../context/AuthContext";
 import { cn } from "../../lib/cn";
 import { ChevronRight } from "lucide-react";
 
@@ -17,13 +19,21 @@ const QUICK_SECTIONS: AppSection[] = [
 export function DashboardQuickActions({
   onNavigateSection,
   usesReferences = true,
+  activeClientId,
 }: {
   onNavigateSection: (section: AppSection) => void;
   usesReferences?: boolean;
+  activeClientId?: string | null;
 }) {
-  const items = QUICK_SECTIONS.filter(
-    (id) => usesReferences || id !== "reference_finder"
-  ).map((id) => ALL_NAV_ITEMS.find((i) => i.id === id)!);
+  const { user } = useAuth();
+  const allowed =
+    activeClientId && user
+      ? filterNavSections(user, activeClientId, QUICK_SECTIONS)
+      : QUICK_SECTIONS;
+  const items = allowed
+    .filter((id) => usesReferences || id !== "reference_finder")
+    .map((id) => ALL_NAV_ITEMS.find((i) => i.id === id)!)
+    .filter(Boolean);
 
   return (
     <section className="space-y-3 animate-ag-fade-in">

@@ -6,7 +6,8 @@ import {
   resolveBrandGemFromBody,
 } from "@/server/ai/brandContext";
 import { sanitizeRefinedCaptionOutput } from "@/server/ai/shared";
-import { withUserAiFromRequest } from "@/server/http/aiRequest";
+import { withUserAiFromRequest, assertAiClientAccess } from "@/server/http/aiRequest";
+import { POSTS_WRITE } from "@/server/http/sectionAccess";
 
 export const dynamic = "force-dynamic";
 
@@ -14,11 +15,12 @@ export async function POST(req: NextRequest) {
   return withUserAiFromRequest(req, async (user) => {
     const providerId = getActiveProviderId();
     try {
-    const { currentCaption, instructions, brandGem, promptContext, repeatingText } =
+    const { currentCaption, instructions, brandGem, promptContext, repeatingText, clientId } =
       await req.json();
     if (!currentCaption) {
       return NextResponse.json({ error: "Missing caption to refine." }, { status: 400 });
     }
+    await assertAiClientAccess(user, clientId, POSTS_WRITE);
 
     try {
       assertBrandGemReadyForCaptions(

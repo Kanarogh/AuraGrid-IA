@@ -12,6 +12,7 @@ import { withUserAiContext } from "@/server/ai/userAiContext";
 import { sanitizeGeminiModelId } from "@/server/ai/geminiModels";
 import { isDatabaseConfigured } from "@/server/db/client";
 import { getOptionalUserFromRequest, requireUser } from "@/server/http/auth";
+import { assertTeamAdmin } from "@/server/services/permissionService";
 import { errorResponse } from "@/server/http/respond";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,9 @@ async function runWithAiUser<T>(req: NextRequest, handler: () => Promise<T>): Pr
 
 export async function PUT(req: NextRequest) {
   try {
+    if (isDatabaseConfigured()) {
+      await assertTeamAdmin(requireUser(req));
+    }
     const body = (await req.json()) as {
       model?: string | null;
       catalogModel?: string | null;

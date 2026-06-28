@@ -13,6 +13,10 @@ export const JWT_SECRET = envString("JWT_SECRET", "dev-jwt-secret-change-me");
 export const JWT_ACCESS_TTL = envString("JWT_ACCESS_TTL", "15m");
 export const JWT_REFRESH_TTL_DAYS = envInt("JWT_REFRESH_TTL_DAYS", 30);
 
+/** When false (default in production), public /register is disabled. */
+export const ALLOW_PUBLIC_REGISTER =
+  envString("AURAGRID_ALLOW_PUBLIC_REGISTER", "0") === "1";
+
 export const MINIO_ENDPOINT = envString("MINIO_ENDPOINT", "localhost");
 export const MINIO_PORT = envInt("MINIO_PORT", 9000);
 export const MINIO_USE_SSL = envString("MINIO_USE_SSL", "false") === "true";

@@ -16,7 +16,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   try {
     const user = requireUser(req);
     const { clientId } = await params;
-    await assertClientAccess(user, clientId);
+    await assertClientAccess(user, clientId, { action: "manageClients" });
     const { name, startDate } = (await req.json()) as { name?: string; startDate?: string };
     if (name) await renameClient(user.id, clientId, name);
     if (startDate) await patchWorkspace(user.id, clientId, { startDate });
@@ -30,7 +30,7 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
   try {
     const user = requireUser(req);
     const { clientId } = await params;
-    await assertClientAccess(user, clientId);
+    await assertClientAccess(user, clientId, { action: "manageClients" });
     await softDeleteClient(user.id, clientId);
     await clearCaptionCache(clientId);
     return NextResponse.json({ ok: true });

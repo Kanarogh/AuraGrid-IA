@@ -53,10 +53,8 @@ function shouldDispatchPayload(payload: SyncEventPayload): boolean {
 }
 
 function matchesSubscriber(sub: Subscriber, payload: SyncEventPayload): boolean {
-  if (sub.userId !== payload.ownerUserId) return false;
-
   if (payload.domains.includes("registry")) {
-    return true;
+    return sub.userId === payload.ownerUserId;
   }
 
   if (sub.clientId !== payload.clientId) return false;

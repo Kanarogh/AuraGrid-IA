@@ -2,11 +2,14 @@
 
 import { LayoutDashboard } from "lucide-react";
 import { cn } from "../../../lib/cn";
+import { usePermissionsOptional } from "../../../context/PermissionsContext";
 import {
   getNavGroups,
   type AppSection,
   type NavItem,
 } from "../../../lib/sectionMeta";
+import { canAccessAppSection } from "../../../lib/permissions/navFilter";
+import { useAuth } from "../../../context/AuthContext";
 
 export function SidebarNav({
   active,
@@ -15,6 +18,7 @@ export function SidebarNav({
   hasActiveClient,
   usesReferences,
   catalogCount,
+  activeClientId,
   onNavigate,
   onNavigateDashboard,
   onMobileClose,
@@ -25,11 +29,20 @@ export function SidebarNav({
   hasActiveClient: boolean;
   usesReferences?: boolean;
   catalogCount: number;
+  activeClientId?: string;
   onNavigate: (id: AppSection) => void;
   onNavigateDashboard?: () => void;
   onMobileClose?: () => void;
 }) {
-  const groups = getNavGroups(usesReferences).map((g) => ({
+  const { user } = useAuth();
+  const perms = usePermissionsOptional();
+  const canAccess = (section: AppSection) => {
+    if (!activeClientId || !user) return true;
+    if (perms) return perms.canAccessSection(activeClientId, section, "read");
+    return canAccessAppSection(user, activeClientId, section, "read");
+  };
+
+  const groups = getNavGroups(usesReferences, canAccess).map((g) => ({
     ...g,
     items: g.items.map((item) => {
       if (item.id === "catalog" && catalogCount > 0) {

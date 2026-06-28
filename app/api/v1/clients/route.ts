@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireUser } from "@/server/http/auth";
 import { errorResponse } from "@/server/http/respond";
+import { assertTeamAdmin } from "@/server/services/permissionService";
 import {
   createClientForUser,
   getActiveClientId,
@@ -34,6 +35,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = requireUser(req);
+    await assertTeamAdmin(user);
     const { name, slug } = (await req.json()) as { name?: string; slug?: string };
     if (!name?.trim()) {
       return NextResponse.json({ error: "Nome da marca é obrigatório." }, { status: 400 });

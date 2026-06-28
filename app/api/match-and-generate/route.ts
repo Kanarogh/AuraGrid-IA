@@ -7,6 +7,7 @@ import {
 import { matchOperationHeaders, runMatchOperation } from "@/server/ai/matchOrchestrator";
 import { sanitizeMatchOperationInput } from "@/server/ai/operations";
 import { aiAttemptsHeaderValue, assertAiClientAccess, withUserAiFromRequest } from "@/server/http/aiRequest";
+import { POSTS_WRITE } from "@/server/http/sectionAccess";
 import { getEffectiveUsesReferences } from "@/server/services/planningPeriodService";
 import { isDatabaseConfigured } from "@/server/db/client";
 
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No post image provided." }, { status: 400 });
     }
 
-    const clientId = await assertAiClientAccess(user, rawClientId);
+    const clientId = await assertAiClientAccess(user, rawClientId, POSTS_WRITE);
     if (isDatabaseConfigured() && !clientId) {
       return NextResponse.json({ error: "clientId é obrigatório." }, { status: 400 });
     }

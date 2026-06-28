@@ -11,7 +11,7 @@
     "db:migrate": "tsx server/db/migrate.ts",
     "test:app-routing": "tsx src/lib/appRouting/paths.test.ts && tsx src/lib/appRouting/periodSlug.test.ts && tsx src/lib/appRouting/canvaPageSlug.test.ts",
     "test:navigation": "tsx src/lib/appRouting/navigation.test.ts",
-    "test:publish": "tsx src/lib/publish/suggestScheduleTimes.test.ts && tsx src/components/publish/publishCalendarUtils.test.ts && tsx src/lib/publish/publishClientSwitch.test.ts",
+    "test:publish": "tsx src/lib/publish/suggestScheduleTimes.test.ts && tsx src/components/publish/publishCalendarUtils.test.ts && tsx src/lib/publish/publishClientSwitch.test.ts && tsx server/services/permissionService.test.ts",
     "test:enrich-status": "tsx server/services/catalogEnrichmentSnapshot.test.ts",
     "test:catalog-sync": "tsx server/services/catalogRevision.test.ts",
     "test:sync-revision": "tsx server/services/syncRevision.test.ts && tsx src/lib/sync/syncTokens.test.ts && tsx src/lib/sync/mutationGuard.test.ts && tsx src/lib/sync/revisionDiff.test.ts && tsx src/lib/sync/periodsRevision.test.ts && tsx server/sync/syncEvents.test.ts && tsx server/sync/syncEventHub.test.ts && tsx src/lib/sync/realtimeCoordinator.test.ts",

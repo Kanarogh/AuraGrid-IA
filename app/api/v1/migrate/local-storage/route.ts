@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { randomBytes } from "crypto";
 import { requireUser } from "@/server/http/auth";
+import { assertTeamAdmin } from "@/server/services/permissionService";
 import { errorResponse } from "@/server/http/respond";
 import {
   createClientForUser,
@@ -136,6 +137,7 @@ async function hydrateLegacyPostImages(
 export async function POST(req: NextRequest) {
   try {
     const user = requireUser(req);
+    await assertTeamAdmin(user);
     const userId = user.id;
     const payload = (await req.json()) as LegacyExport;
     const registryClients = payload.registry?.clients ?? [];

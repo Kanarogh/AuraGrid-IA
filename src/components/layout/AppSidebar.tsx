@@ -44,6 +44,7 @@ export function AppSidebar({
   onClientCreated,
   hasActiveClient,
   usesReferences = true,
+  activeClientId,
 }: {
   active: AppSection;
   isDashboardActive?: boolean;
@@ -59,6 +60,7 @@ export function AppSidebar({
   onClientCreated?: (clientId: string) => void;
   hasActiveClient: boolean;
   usesReferences?: boolean;
+  activeClientId?: string;
 }) {
   const asideRef = useRef<HTMLElement>(null);
   const isCollapsed = collapsed && !mobileOpen;
@@ -116,6 +118,7 @@ export function AppSidebar({
           collapsed={isCollapsed}
           hasActiveClient={hasActiveClient}
           usesReferences={usesReferences}
+          activeClientId={activeClientId}
           catalogCount={catalogCount}
           onNavigate={onNavigate}
           onNavigateDashboard={onNavigateDashboard}

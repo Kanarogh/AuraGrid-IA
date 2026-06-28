@@ -27,6 +27,8 @@ import { Alert } from "../ui/Alert";
 import { Skeleton } from "../ui/Skeleton";
 import { cn } from "../../lib/cn";
 import { useDashboardAiUsage } from "../../hooks/useDashboardAiUsage";
+import { usePermissionsOptional } from "../../context/PermissionsContext";
+import { useAuth } from "../../context/AuthContext";
 
 function formatTokens(value: number): string {
   return new Intl.NumberFormat("pt-BR").format(Math.max(0, Math.round(value)));
@@ -96,6 +98,10 @@ export function DashboardView({
   usesReferences?: boolean;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
+  const { storageMode } = useAuth();
+  const permissions = usePermissionsOptional();
+  const canCreateClients =
+    storageMode !== "postgresql" || (permissions?.canManageTeam() ?? false);
   const { captionBatchStats, referenceCount, canvaImageCount, canvaPageCount, brandGemReady, brandGemMissingCount } =
     metrics;
   const { data: aiUsage, isLoading: aiUsageLoading, error: aiUsageError, reload: reloadAiUsage } =
@@ -328,7 +334,11 @@ export function DashboardView({
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 xl:gap-8">
         <div className="xl:col-span-7">
-          <DashboardQuickActions onNavigateSection={onNavigateSection} usesReferences={usesReferences} />
+          <DashboardQuickActions
+            onNavigateSection={onNavigateSection}
+            usesReferences={usesReferences}
+            activeClientId={activeClientId}
+          />
         </div>
         <div className="xl:col-span-5">
           <DashboardClientGrid
@@ -338,6 +348,7 @@ export function DashboardView({
             switchingClientId={switchingClientId}
             onSelectClient={onSelectClient}
             onCreateClient={() => setModalOpen(true)}
+            showCreateButton={canCreateClients}
           />
         </div>
       </div>

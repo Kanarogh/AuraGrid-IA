@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { assertClientAccess, requireUser } from "@/server/http/auth";
+import { META_CONNECT, PUBLISH_READ } from "@/server/http/publishAccess";
 import { errorResponse } from "@/server/http/respond";
 import {
   getMetaConnectionPublic,
@@ -14,7 +15,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   try {
     const user = requireUser(req);
     const { clientId } = await params;
-    await assertClientAccess(user, clientId);
+    await assertClientAccess(user, clientId, PUBLISH_READ);
     const connection = await getMetaConnectionPublic(clientId);
     return NextResponse.json(connection);
   } catch (err) {
@@ -26,7 +27,7 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
   try {
     const user = requireUser(req);
     const { clientId } = await params;
-    await assertClientAccess(user, clientId);
+    await assertClientAccess(user, clientId, META_CONNECT);
     await revokeMetaConnection(clientId);
     return NextResponse.json({ ok: true });
   } catch (err) {

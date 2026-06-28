@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { assertClientAccess, requireUser } from "@/server/http/auth";
+import { assertWorkspacePatchAccess, CONTENT_SCHEDULE_READ } from "@/server/http/sectionAccess";
 import { errorResponse } from "@/server/http/respond";
 import { loadWorkspaceDto, patchWorkspace } from "@/server/services/clientService";
 import { serverSyncDebugLog } from "@/server/sync/syncDebugLog";
@@ -12,7 +13,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   try {
     const user = requireUser(req);
     const { clientId } = await params;
-    await assertClientAccess(user, clientId);
+    await assertClientAccess(user, clientId, CONTENT_SCHEDULE_READ);
     const periodId = req.nextUrl.searchParams.get("periodId") ?? undefined;
     const workspace = await loadWorkspaceDto(user.id, clientId, periodId);
     return NextResponse.json(workspace);
@@ -25,8 +26,8 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   try {
     const user = requireUser(req);
     const { clientId } = await params;
-    await assertClientAccess(user, clientId);
     const body = (await req.json().catch(() => ({}))) ?? {};
+    await assertWorkspacePatchAccess(user, clientId, body);
     serverSyncDebugLog("patch.request", {
       clientId,
       hasCanva: !!body.canva,

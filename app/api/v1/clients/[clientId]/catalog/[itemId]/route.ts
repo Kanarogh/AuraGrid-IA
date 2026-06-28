@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { eq } from "drizzle-orm";
 import { assertClientAccess, requireUser } from "@/server/http/auth";
+import { CATALOG_WRITE } from "@/server/http/sectionAccess";
 import { errorResponse } from "@/server/http/respond";
 import { deleteCatalogItem } from "@/server/services/catalogService";
 import { getDb } from "@/server/db/client";
@@ -14,7 +15,7 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
   try {
     const user = requireUser(req);
     const { clientId, itemId } = await params;
-    await assertClientAccess(user, clientId);
+    await assertClientAccess(user, clientId, CATALOG_WRITE);
     await deleteCatalogItem(clientId, itemId);
     const db = getDb();
     await db

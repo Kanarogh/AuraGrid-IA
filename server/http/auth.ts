@@ -1,14 +1,17 @@
 import type { NextRequest } from "next/server";
-import { and, eq, isNull } from "drizzle-orm";
-import { getDb } from "../db/client";
-import { clients } from "../db/schema";
+import type { AuthUser } from "../services/authService";
+import {
+  assertClientAccessResolved,
+  type AssertClientAccessOptions,
+} from "../services/permissionService";
 import {
   getUserFromRefreshToken,
   verifyAccessToken,
-  type AuthUser,
 } from "../services/authService";
 import { REFRESH_COOKIE } from "./cookies";
 import { HttpError } from "./respond";
+
+export type { AssertClientAccessOptions };
 
 /** Lê o usuário do header Authorization: Bearer, sem lançar erro. */
 export function getOptionalUser(req: NextRequest): AuthUser | null {
@@ -52,19 +55,11 @@ export function requireUser(req: NextRequest): AuthUser {
   return user;
 }
 
-/** Garante que o cliente pertence ao usuário; lança HttpError 404 caso contrário. */
-export async function assertClientAccess(user: AuthUser, clientId: string): Promise<void> {
-  const db = getDb();
-  const [row] = await db
-    .select({ id: clients.id })
-    .from(clients)
-    .where(
-      and(
-        eq(clients.id, clientId),
-        eq(clients.ownerUserId, user.id),
-        isNull(clients.deletedAt)
-      )
-    )
-    .limit(1);
-  if (!row) throw new HttpError(404, "Cliente não encontrado.");
+/** Garante acesso ao cliente (owner ou membro); lança HttpError 404 caso contrário. */
+export async function assertClientAccess(
+  user: AuthUser,
+  clientId: string,
+  opts?: AssertClientAccessOptions
+): Promise<void> {
+  await assertClientAccessResolved(user, clientId, opts);
 }

@@ -20,6 +20,13 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   displayName: text("display_name").notNull(),
+  accountRole: text("account_role").notNull().default("owner"),
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
+  status: text("status").notNull().default("active"),
+  invitedByUserId: uuid("invited_by_user_id").references((): AnyPgColumn => users.id, {
+    onDelete: "set null",
+  }),
+  passwordChangedAt: timestamp("password_changed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -127,6 +134,47 @@ export const clients = pgTable(
   (t) => [
     index("clients_owner_user_id_idx").on(t.ownerUserId),
     index("clients_owner_active_idx").on(t.ownerUserId, t.deletedAt),
+  ]
+);
+
+export const teamMembers = pgTable(
+  "team_members",
+  {
+    ownerUserId: uuid("owner_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    memberUserId: uuid("member_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    displayRole: text("display_role").notNull().default("editor"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.ownerUserId, t.memberUserId] }),
+    index("team_members_member_idx").on(t.memberUserId),
+  ]
+);
+
+export const clientMemberAccess = pgTable(
+  "client_member_access",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    grantedByUserId: uuid("granted_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sections: jsonb("sections").notNull().default({}),
+    actions: jsonb("actions").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.clientId] }),
+    index("client_member_access_client_idx").on(t.clientId),
   ]
 );
 

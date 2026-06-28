@@ -16,6 +16,7 @@ export function ClientOptionsMenu({
   onClose,
   onRename,
   onDelete,
+  canManage = true,
 }: {
   client: ClientMeta;
   anchorEl: HTMLElement | null;
@@ -23,6 +24,7 @@ export function ClientOptionsMenu({
   onClose: () => void;
   onRename: (clientId: string, name: string) => void;
   onDelete: (clientId: string, name: string) => void | Promise<void>;
+  canManage?: boolean;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ top: 0, left: 0 });
@@ -80,37 +82,41 @@ export function ClientOptionsMenu({
         className="fixed z-[70] w-44 rounded-lg border border-ag-border bg-ag-surface-1 shadow-lg py-1 text-xs"
         style={{ top: position.top, left: position.left }}
       >
-        <button
-          type="button"
-          role="menuitem"
-          className="w-full px-3 py-2 text-left hover:bg-ag-surface-2 cursor-pointer"
-          onClick={() => {
-            void (async () => {
-              const next = await promptDialog({
-                title: "Renomear cliente",
-                defaultValue: client.name,
-                placeholder: "Nome do cliente",
-                confirmLabel: "Salvar",
-              });
-              if (next) onRename(client.id, next);
-              onClose();
-            })();
-          }}
-        >
-          Renomear
-        </button>
-        <button
-          type="button"
-          role="menuitem"
-          className="w-full px-3 py-2 text-left text-ag-danger hover:bg-ag-danger/10 cursor-pointer flex items-center gap-1.5"
-          onClick={() => {
-            void onDelete(client.id, client.name);
-            onClose();
-          }}
-        >
-          <Trash2 className="h-3 w-3" />
-          Excluir
-        </button>
+        {canManage ? (
+          <>
+            <button
+              type="button"
+              role="menuitem"
+              className="w-full px-3 py-2 text-left hover:bg-ag-surface-2 cursor-pointer"
+              onClick={() => {
+                void (async () => {
+                  const next = await promptDialog({
+                    title: "Renomear cliente",
+                    defaultValue: client.name,
+                    placeholder: "Nome do cliente",
+                    confirmLabel: "Salvar",
+                  });
+                  if (next) onRename(client.id, next);
+                  onClose();
+                })();
+              }}
+            >
+              Renomear
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="w-full px-3 py-2 text-left text-ag-danger hover:bg-ag-danger/10 cursor-pointer flex items-center gap-1.5"
+              onClick={() => {
+                void onDelete(client.id, client.name);
+                onClose();
+              }}
+            >
+              <Trash2 className="h-3 w-3" />
+              Excluir
+            </button>
+          </>
+        ) : null}
       </div>
     </>,
     document.body

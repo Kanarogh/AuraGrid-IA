@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { assertClientAccess, getOptionalUserFromRequest } from "@/server/http/auth";
+import { CONTENT_SCHEDULE_READ } from "@/server/http/sectionAccess";
 import { errorResponse } from "@/server/http/respond";
 import {
   subscribeSyncStream,
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     }
 
     const { clientId } = await params;
-    await assertClientAccess(user, clientId);
+    await assertClientAccess(user, clientId, CONTENT_SCHEDULE_READ);
     const periodId = req.nextUrl.searchParams.get("periodId") ?? "";
 
     let subscriberId = "";

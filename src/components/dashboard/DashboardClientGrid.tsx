@@ -24,6 +24,7 @@ export function DashboardClientGrid({
   clientSwitchDisabled,
   onSelectClient,
   onCreateClient,
+  showCreateButton = true,
 }: {
   clients: ClientMeta[];
   activeClientId: string;
@@ -31,6 +32,7 @@ export function DashboardClientGrid({
   clientSwitchDisabled?: boolean;
   onSelectClient: (clientId: string) => void;
   onCreateClient: () => void;
+  showCreateButton?: boolean;
 }) {
   return (
     <section className="space-y-3 animate-ag-fade-in">
@@ -41,6 +43,7 @@ export function DashboardClientGrid({
           </p>
           <h2 className="font-display text-lg font-semibold text-ag-text mt-1">Seus clientes</h2>
         </div>
+        {showCreateButton !== false && (
         <button
           type="button"
           onClick={onCreateClient}
@@ -49,6 +52,7 @@ export function DashboardClientGrid({
           <Plus className="h-3.5 w-3.5" />
           Novo
         </button>
+        )}
       </div>
 
       <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 ag-scrollbar-thin snap-x snap-mandatory sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:overflow-visible sm:pb-0">
