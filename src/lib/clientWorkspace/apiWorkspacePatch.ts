@@ -1,5 +1,5 @@
 import type { ClientWorkspace } from "./types";
-import { compactCanvaForApiPatch, stripTransientPostFields } from "./persistence";
+import { compactCanvaForApiPatch, compactPostForApiPatch } from "./persistence";
 
 export function buildWorkspaceApiPatch(ws: ClientWorkspace) {
   if (ws.isReadOnly) return null;
@@ -7,7 +7,7 @@ export function buildWorkspaceApiPatch(ws: ClientWorkspace) {
     brandGem: ws.brandGem,
     startDate: ws.startDate,
     planningPeriodId: ws.activePlanningPeriodId,
-    posts: ws.posts.map(stripTransientPostFields),
+    posts: ws.posts.map(compactPostForApiPatch),
     contentSchedule: ws.contentSchedule ?? [],
     contentScheduleBrief: ws.contentScheduleBrief ?? "",
     canva: compactCanvaForApiPatch(ws.canva),

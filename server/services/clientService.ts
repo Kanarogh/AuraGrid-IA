@@ -8,6 +8,7 @@ import {
   catalogItems,
   clientUiPrefs,
   clients,
+  mediaAssets,
   plannedPosts,
   planningPeriods,
   userClientState,
@@ -441,6 +442,12 @@ function sanitizeCatalogRefId(raw: unknown, validCatalogIds: Set<string>): strin
   return validCatalogIds.has(raw) ? raw : null;
 }
 
+function sanitizeMediaAssetId(raw: unknown, validMediaIds: Set<string>): string | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  return validMediaIds.has(raw) ? raw : null;
+}
+
 type BrandGemPatchInput = {
   name: string;
   description: string;
@@ -699,6 +706,15 @@ export async function patchWorkspace(
       : [];
   const validCatalogIds = new Set(catalogIdRows.map((r) => r.id));
 
+  const mediaIdRows =
+    Array.isArray(patch.posts) || (patch.canva && typeof patch.canva === "object")
+      ? await db
+          .select({ id: mediaAssets.id })
+          .from(mediaAssets)
+          .where(eq(mediaAssets.clientId, clientId))
+      : [];
+  const validMediaIds = new Set(mediaIdRows.map((r) => r.id));
+
   if (patch.canva && typeof patch.canva === "object") {
     const canva = patch.canva as Record<string, unknown>;
     await db
@@ -742,10 +758,7 @@ export async function patchWorkspace(
           if (typeof slot.id !== "string") continue;
           const label = typeof slot.label === "string" ? slot.label : `Look ${slotIndex + 1}`;
           const matchedCatalogId = sanitizeCatalogRefId(slot.matchedCatalogId, validCatalogIds);
-          const imageAssetId =
-            slot.imageAssetId === null || typeof slot.imageAssetId === "string"
-              ? (slot.imageAssetId as string | null)
-              : null;
+          const imageAssetId = sanitizeMediaAssetId(slot.imageAssetId, validMediaIds);
 
           await db
             .insert(canvaSlots)
@@ -843,10 +856,7 @@ export async function patchWorkspace(
         post.error === null || typeof post.error === "string"
           ? (post.error as string | null)
           : null;
-      const imageAssetId =
-        post.imageAssetId === null || typeof post.imageAssetId === "string"
-          ? (post.imageAssetId as string | null)
-          : null;
+      const imageAssetId = sanitizeMediaAssetId(post.imageAssetId, validMediaIds);
       const canvaSlotId =
         post.canvaSlotRef &&
         typeof post.canvaSlotRef === "object" &&

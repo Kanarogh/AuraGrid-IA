@@ -31,6 +31,7 @@ import {
 } from "../lib/sync/remoteApplyGuard";
 import { setWorkspaceSavePending } from "../lib/sync/workspaceSaveGuard";
 import { syncDebugLog } from "../lib/sync/syncDebugLog";
+import { toast } from "../lib/toast";
 
 const SAVE_DEBOUNCE_MS = 200;
 const LOAD_RETRIES = 3;
@@ -199,7 +200,12 @@ export function ApiWorkspaceSync() {
         })
         .catch((err) => {
           console.error("[AuraGrid] Falha ao salvar workspace:", err);
-          if (!isApplyingRemoteWorkspace()) emitCloudSaveStatus("error");
+          if (!isApplyingRemoteWorkspace()) {
+            emitCloudSaveStatus("error");
+            const message =
+              err instanceof Error ? err.message : "Não foi possível salvar na nuvem.";
+            toast.error(message);
+          }
         })
         .finally(() => setWorkspaceSavePending(false));
     }, SAVE_DEBOUNCE_MS);

@@ -1472,6 +1472,10 @@ export default function App() {
 
   // Toggle single post confirmation
   const handleToggleConfirm = (postId: string) => {
+    if (isReadOnly) {
+      toast.warning("Este planejamento está em modo somente leitura.");
+      return;
+    }
     const cloudMode = storageMode === "postgresql";
     setPosts((prev) =>
       prev.map((p) => {

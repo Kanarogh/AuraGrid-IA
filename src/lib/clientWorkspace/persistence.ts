@@ -38,6 +38,28 @@ export function stripTransientPostFields(post: PlannedPost): PlannedPost {
   };
 }
 
+/** PATCH na nuvem: só campos persistidos no Postgres (sem preview local/base64). */
+export function compactPostForApiPatch(post: PlannedPost) {
+  const cleaned = stripTransientPostFields(post);
+  return {
+    id: cleaned.id,
+    dayNumber: cleaned.dayNumber,
+    dateLabel: cleaned.dateLabel,
+    imageAssetId: cleaned.imageAssetId ?? null,
+    matchedCatalogId: cleaned.matchedCatalogId,
+    reasoning: cleaned.reasoning,
+    caption: cleaned.caption ?? "",
+    isGenerated: cleaned.isGenerated ?? false,
+    isConfirmed: cleaned.isConfirmed === true,
+    captionFromImageOnly: cleaned.captionFromImageOnly ?? false,
+    captionFromSchedule: cleaned.captionFromSchedule ?? false,
+    captionModel: cleaned.captionModel ?? null,
+    structuredCopy: cleaned.structuredCopy ?? null,
+    error: cleaned.error,
+    canvaSlotRef: cleaned.canvaSlotRef ?? null,
+  };
+}
+
 /** PATCH na nuvem: só metadados do slot (imagem via imageAssetId). */
 export function compactCanvaForApiPatch(canva: ClientWorkspace["canva"]) {
   return {
