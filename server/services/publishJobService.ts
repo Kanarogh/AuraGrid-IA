@@ -37,8 +37,12 @@ function mapJobStatus(status: string): PublishQueueItem["status"] {
   if (status === "publishing") return "publishing";
   if (status === "published") return "published";
   if (status === "failed") return "failed";
-  if (status === "cancelled") return "cancelled";
   return "eligible";
+}
+
+/** Cancelled jobs are historical only — the post returns to the scheduling tray. */
+function isActivePublishJob(job: PublishJobRow | undefined): job is PublishJobRow {
+  return !!job && job.status !== "cancelled";
 }
 
 export async function listPublishQueue(
@@ -72,7 +76,8 @@ export async function listPublishQueue(
   const jobByPost = new Map(jobs.map((j) => [j.plannedPostId, j]));
 
   return posts.map((post) => {
-    const job = jobByPost.get(post.id);
+    const rawJob = jobByPost.get(post.id);
+    const job = isActivePublishJob(rawJob) ? rawJob : undefined;
     const hasAsset = !!post.imageAssetId;
     const hasCaption = !!post.caption?.trim();
     const isReady = post.isConfirmed && hasAsset && hasCaption;
@@ -168,7 +173,7 @@ export async function createPublishJobs(
     if (!job.caption.trim()) throw new HttpError(400, "Legenda vazia.");
     if (job.caption.length > 2200) throw new HttpError(400, "Legenda longa demais (máx. 2200).");
 
-    const [active] = await db
+    const [existing] = await db
       .select()
       .from(instagramPublishJobs)
       .where(
@@ -176,21 +181,23 @@ export async function createPublishJobs(
           eq(instagramPublishJobs.clientId, clientId),
           eq(instagramPublishJobs.planningPeriodId, payload.planningPeriodId),
           eq(instagramPublishJobs.plannedPostId, job.plannedPostId),
-          inArray(instagramPublishJobs.status, ["queued", "publishing"])
+          inArray(instagramPublishJobs.status, ["queued", "publishing", "cancelled"])
         )
       )
       .limit(1);
 
-    if (active) {
+    if (existing) {
       const [updated] = await db
         .update(instagramPublishJobs)
         .set({
           scheduledAt: scheduled,
           caption: job.caption,
           imageAssetId: job.imageAssetId,
+          status: "queued",
+          lastError: null,
           updatedAt: new Date(),
         })
-        .where(eq(instagramPublishJobs.id, active.id))
+        .where(eq(instagramPublishJobs.id, existing.id))
         .returning();
       if (updated) created.push(updated);
       continue;
@@ -230,15 +237,17 @@ export async function patchPublishJob(
     throw new HttpError(400, "Post já publicado — não pode ser alterado.");
   }
 
+  if (patch.status === "cancelled") {
+    await db.delete(instagramPublishJobs).where(eq(instagramPublishJobs.id, jobId));
+    return { ...existing, status: "cancelled", lastError: null };
+  }
+
   const [row] = await db
     .update(instagramPublishJobs)
     .set({
       scheduledAt: patch.scheduledAt ? new Date(patch.scheduledAt) : existing.scheduledAt,
       status: patch.status ?? existing.status,
       updatedAt: new Date(),
-      ...(patch.status === "cancelled"
-        ? { lastError: null }
-        : {}),
     })
     .where(eq(instagramPublishJobs.id, jobId))
     .returning();
