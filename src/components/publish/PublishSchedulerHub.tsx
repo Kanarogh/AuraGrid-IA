@@ -39,6 +39,11 @@ import {
 
 const CHECKLIST_KEY = "ag_publish_checklist_done";
 
+function loadErrorDetail(err: unknown, fallback: string): string {
+  const msg = err instanceof Error ? err.message.trim() : String(err).trim();
+  return msg || fallback;
+}
+
 export function PublishSchedulerHub({
   clientId,
   planningPeriodId,
@@ -89,15 +94,27 @@ export function PublishSchedulerHub({
     }
     if (!silent) setLoading(true);
     try {
-      const [data, c] = await Promise.all([
+      const [queueResult, metaResult] = await Promise.allSettled([
         fetchPublishQueue(clientId, planningPeriodId),
         fetchMetaConnection(clientId),
       ]);
-      setQueue(data.queue);
-      setSummary(data.summary);
-      setConnection(c);
-    } catch {
-      if (!silent) toast.error("Não foi possível carregar a fila.");
+
+      if (queueResult.status === "fulfilled") {
+        setQueue(queueResult.value.queue);
+        setSummary(queueResult.value.summary);
+      } else if (!silent) {
+        toast.error(
+          `Não foi possível carregar a fila: ${loadErrorDetail(queueResult.reason, "erro desconhecido.")}`
+        );
+      }
+
+      if (metaResult.status === "fulfilled") {
+        setConnection(metaResult.value);
+      } else if (!silent && queueResult.status === "fulfilled") {
+        toast.warning(
+          `Conexão Meta indisponível: ${loadErrorDetail(metaResult.reason, "tente recarregar a página.")}`
+        );
+      }
     } finally {
       if (!silent) setLoading(false);
     }
