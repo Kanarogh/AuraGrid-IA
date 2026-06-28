@@ -4,6 +4,7 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
+  Grid3X3,
   List,
   Settings2,
 } from "lucide-react";
@@ -22,6 +23,8 @@ export function PublishCalendarToolbar({
   onCalendarModeChange,
   onHubViewChange,
   onToday,
+  showFeedPreview,
+  onToggleFeedPreview,
 }: {
   anchorDate: Date;
   calendarMode: CalendarViewMode;
@@ -31,6 +34,8 @@ export function PublishCalendarToolbar({
   onCalendarModeChange: (mode: CalendarViewMode) => void;
   onHubViewChange: (view: HubViewMode) => void;
   onToday: () => void;
+  showFeedPreview?: boolean;
+  onToggleFeedPreview?: () => void;
 }) {
   const weekDays = getWeekDays(anchorDate);
   const periodLabel =
@@ -70,6 +75,18 @@ export function PublishCalendarToolbar({
                 </button>
               ))}
             </div>
+            {onToggleFeedPreview && (
+              <Button
+                type="button"
+                variant={showFeedPreview ? "secondary" : "ghost"}
+                size="sm"
+                onClick={onToggleFeedPreview}
+                className="inline-flex"
+              >
+                <Grid3X3 className="h-3.5 w-3.5" />
+                {showFeedPreview ? "Ocultar feed" : "Ver feed"}
+              </Button>
+            )}
           </div>
         )}
 

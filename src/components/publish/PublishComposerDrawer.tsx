@@ -16,15 +16,8 @@ import {
   localInputToIso,
   scheduledAtToLocalInput,
 } from "./publishUiUtils";
-import { queueItemToPlannedPost, resolveItemSchedule } from "./publishCalendarUtils";
+import { queueItemToPlannedPost, resolveItemSchedule, resolvePublishCaption } from "./publishCalendarUtils";
 import { toast } from "../../lib/toast";
-
-function resolveCaption(item: PublishQueueItem, posts: PlannedPost[]): string {
-  const fromQueue = item.caption?.trim();
-  if (fromQueue) return fromQueue;
-  const post = posts.find((p) => p.id === item.plannedPostId);
-  return post?.caption?.trim() ?? "";
-}
 
 export function PublishComposerDrawer({
   open,
@@ -66,7 +59,7 @@ export function PublishComposerDrawer({
   }, [open, onClose]);
 
   const caption = useMemo(
-    () => (item ? resolveCaption(item, posts) : ""),
+    () => (item ? resolvePublishCaption(item, posts) : ""),
     [item, posts]
   );
 

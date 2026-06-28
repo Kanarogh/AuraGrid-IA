@@ -38,6 +38,12 @@ import {
 } from "./publishCalendarUtils";
 
 const CHECKLIST_KEY = "ag_publish_checklist_done";
+const FEED_PREVIEW_KEY = "ag_publish_show_feed_preview";
+
+function readFeedPreviewPref(): boolean {
+  if (typeof window === "undefined") return true;
+  return window.localStorage.getItem(FEED_PREVIEW_KEY) !== "0";
+}
 
 function loadErrorDetail(err: unknown, fallback: string): string {
   const msg = err instanceof Error ? err.message.trim() : String(err).trim();
@@ -86,6 +92,17 @@ export function PublishSchedulerHub({
   const [mobileFeedOpen, setMobileFeedOpen] = useState(false);
   const [pendingConfirmIds, setPendingConfirmIds] = useState<string[]>([]);
   const [expandedDayKey, setExpandedDayKey] = useState<string | null>(null);
+  const [showFeedPreview, setShowFeedPreview] = useState(readFeedPreviewPref);
+
+  const toggleFeedPreview = useCallback(() => {
+    setShowFeedPreview((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(FEED_PREVIEW_KEY, next ? "1" : "0");
+      }
+      return next;
+    });
+  }, []);
 
   const refresh = useCallback(async (silent = false) => {
     if (!cloudOnly) {
@@ -317,6 +334,8 @@ export function PublishSchedulerHub({
         }}
         onHubViewChange={setHubView}
         onToday={() => setAnchorDate(new Date())}
+        showFeedPreview={showFeedPreview}
+        onToggleFeedPreview={hubView === "calendar" ? toggleFeedPreview : undefined}
       />
 
       {!connected && (
@@ -355,7 +374,13 @@ export function PublishSchedulerHub({
           onItemClick={setComposerItem}
         />
       ) : (
-        <div className="grid gap-4 xl:grid-cols-[1fr_minmax(280px,340px)]">
+        <div
+          className={
+            showFeedPreview
+              ? "grid gap-4 xl:grid-cols-[1fr_minmax(280px,340px)]"
+              : "grid gap-4 grid-cols-1"
+          }
+        >
           <div className="space-y-4 min-w-0">
             <UnscheduledTray
               items={eligible}
@@ -405,34 +430,39 @@ export function PublishSchedulerHub({
             )}
           </div>
 
-          <div className="hidden xl:block">
-            <PublishFeedPreviewPanel
-              posts={posts}
-              queue={queue}
-              draftSchedules={draftSchedules}
-              canvaPages={canvaPages}
-              canvaGridReversed={canvaGridReversed}
-              displayName={displayName}
-              instagramHandle={instagramHandle}
-            />
-          </div>
+          {showFeedPreview && (
+            <div className="hidden xl:block min-h-0">
+              <PublishFeedPreviewPanel
+                posts={posts}
+                queue={queue}
+                draftSchedules={draftSchedules}
+                canvaPages={canvaPages}
+                canvaGridReversed={canvaGridReversed}
+                displayName={displayName}
+                instagramHandle={instagramHandle}
+                onHide={toggleFeedPreview}
+              />
+            </div>
+          )}
         </div>
       )}
 
-      <div className="fixed bottom-4 right-4 xl:hidden z-30">
-        <Button
-          type="button"
-          variant="secondary"
-          size="lg"
-          className="shadow-lg rounded-full h-12 w-12 p-0"
-          onClick={() => setMobileFeedOpen(true)}
-          aria-label="Preview do feed"
-        >
-          <Grid3X3 className="h-5 w-5" />
-        </Button>
-      </div>
+      {showFeedPreview && (
+        <div className="fixed bottom-4 right-4 xl:hidden z-30">
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            className="shadow-lg rounded-full h-12 w-12 p-0"
+            onClick={() => setMobileFeedOpen(true)}
+            aria-label="Preview do feed"
+          >
+            <Grid3X3 className="h-5 w-5" />
+          </Button>
+        </div>
+      )}
 
-      {mobileFeedOpen && (
+      {mobileFeedOpen && showFeedPreview && (
         <div className="fixed inset-x-0 bottom-0 z-40 xl:hidden p-4 pb-6 bg-ag-surface-1 border-t border-ag-border shadow-2xl max-h-[70vh] overflow-auto">
           <div className="flex justify-between items-center mb-2">
             <p className="text-sm font-semibold">Preview do feed</p>
@@ -449,6 +479,10 @@ export function PublishSchedulerHub({
             displayName={displayName}
             instagramHandle={instagramHandle}
             mobileSheet
+            onHide={() => {
+              setMobileFeedOpen(false);
+              toggleFeedPreview();
+            }}
           />
         </div>
       )}

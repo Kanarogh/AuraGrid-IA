@@ -1,3 +1,4 @@
+import type { PlannedPost } from "../../types";
 import type { PublishQueueItem } from "../../lib/publish/publishApi";
 import { calendarDateForPost } from "../../lib/publish/suggestScheduleTimes";
 import { filterQueue } from "./publishUiUtils";
@@ -21,6 +22,13 @@ export function resolveItemSchedule(
   draftSchedules: Record<string, string>
 ): string | null {
   return draftSchedules[item.plannedPostId] ?? item.scheduledAt ?? null;
+}
+
+export function resolvePublishCaption(item: PublishQueueItem, posts: PlannedPost[]): string {
+  const fromQueue = item.caption?.trim();
+  if (fromQueue) return fromQueue;
+  const post = posts.find((p) => p.id === item.plannedPostId);
+  return post?.caption?.trim() ?? "";
 }
 
 export function scheduleToDateKey(

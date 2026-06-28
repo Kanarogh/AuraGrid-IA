@@ -134,7 +134,7 @@ export function PublishPreviewModal({
               <p className="text-[10px] font-mono uppercase tracking-widest text-ag-muted mb-2">
                 Legenda
               </p>
-              <p className="text-sm text-ag-text whitespace-pre-wrap line-clamp-8">{preview.caption}</p>
+              <p className="text-sm text-ag-text whitespace-pre-wrap break-words">{preview.caption}</p>
               {captionLong && (
                 <p className="text-xs text-ag-warning mt-2">
                   Atenção: legenda acima do limite do Instagram (2200 caracteres).
