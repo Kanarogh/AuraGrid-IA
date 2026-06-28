@@ -17,6 +17,7 @@ export const MIGRATION_FILES = [
   "0014_user_appearance_preferences",
   "0015_meta_publish",
   "0016_publish_prefs_auto_schedule",
+  "0017_teams_rbac",
 ] as const;
 
 export type MigrationHash = (typeof MIGRATION_FILES)[number];
