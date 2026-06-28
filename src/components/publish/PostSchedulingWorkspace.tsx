@@ -13,6 +13,7 @@ export function PostSchedulingWorkspace({
   canvaPages,
   canvaGridReversed,
   onNavigatePosts,
+  onNavigateToPost,
   metaConnectedParam,
 }: {
   clientId: string;
@@ -24,6 +25,7 @@ export function PostSchedulingWorkspace({
   canvaPages?: CanvaGridPage[];
   canvaGridReversed?: boolean;
   onNavigatePosts: () => void;
+  onNavigateToPost: (plannedPostId: string) => void;
   metaConnectedParam?: boolean;
 }) {
   return (
@@ -37,6 +39,7 @@ export function PostSchedulingWorkspace({
       canvaPages={canvaPages}
       canvaGridReversed={canvaGridReversed}
       onNavigatePosts={onNavigatePosts}
+      onNavigateToPost={onNavigateToPost}
       metaConnectedParam={metaConnectedParam}
     />
   );

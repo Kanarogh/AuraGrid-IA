@@ -17,6 +17,7 @@ export function PublishListView({
   onDraftSchedule,
   onRefresh,
   onItemClick,
+  onNavigateToPost,
 }: {
   clientId: string;
   queue: PublishQueueItem[];
@@ -24,6 +25,7 @@ export function PublishListView({
   onDraftSchedule: (postId: string, iso: string) => void;
   onRefresh: () => void;
   onItemClick?: (item: PublishQueueItem) => void;
+  onNavigateToPost?: (plannedPostId: string) => void;
 }) {
   const [filter, setFilter] = useState<PublishFilter>("all");
   const metrics = useMemo(() => queueMetrics(queue), [queue]);
@@ -126,6 +128,7 @@ export function PublishListView({
         onToggleSelect={() => {}}
         onSelectDay={() => {}}
         onItemClick={onItemClick}
+        onNavigateToPost={onNavigateToPost}
       />
     </div>
   );

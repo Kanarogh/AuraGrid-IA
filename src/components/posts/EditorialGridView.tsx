@@ -1,5 +1,6 @@
 import type { CatalogItem, PlannedPost } from "../../types";
 import { getPostStatus } from "../../lib/postStatus";
+import { isPublishReadyPost } from "../../lib/publish/publishReadiness";
 import { countPostsWithImage, countUniqueDays, getPostDayLabel } from "../../lib/postDisplay";
 import { WorkspaceCard, WorkspaceCardHeader } from "../layout/WorkspaceCard";
 import { CalendarDays, CalendarPlus, ChevronRight, Sparkles } from "lucide-react";
@@ -41,6 +42,7 @@ export function EditorialGridView({
 }) {
   const withCaption = posts.filter((p) => p.caption?.trim()).length;
   const approved = posts.filter((p) => p.isConfirmed).length;
+  const publishReady = posts.filter((p) => isPublishReadyPost(p)).length;
   const withImage = countPostsWithImage(posts);
   const dayCount = countUniqueDays(posts.filter((p) => p.image || p.caption?.trim()));
 
@@ -48,7 +50,7 @@ export function EditorialGridView({
     <WorkspaceCard variant="primary">
       <WorkspaceCardHeader
         title="Visão do calendário"
-        subtitle={`${dayCount} dias · ${posts.length} posts · ${withImage} com foto · ${withCaption} com legenda · ${approved} aprovadas`}
+        subtitle={`${dayCount} dias · ${posts.length} posts · ${withImage} com foto · ${withCaption} com legenda · ${approved} aprovadas · ${publishReady} prontos para publicar`}
         actions={
           onOpenStudio && activePreviewId ? (
             <Button

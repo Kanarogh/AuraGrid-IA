@@ -14,6 +14,7 @@ import { PublishPreviewModal } from "./PublishPreviewModal";
 import { PublishCalendar } from "./PublishCalendar";
 import { PublishCalendarToolbar, PublishStatusBanner } from "./PublishCalendarToolbar";
 import { UnscheduledTray } from "./UnscheduledTray";
+import { PublishIncompleteTray } from "./PublishIncompleteTray";
 import { PublishListView } from "./PublishListView";
 import { PublishComposerDrawer } from "./PublishComposerDrawer";
 import { PublishFeedPreviewPanel } from "./PublishFeedPreviewPanel";
@@ -81,6 +82,7 @@ export function PublishSchedulerHub({
   canvaPages,
   canvaGridReversed,
   onNavigatePosts,
+  onNavigateToPost,
   metaConnectedParam,
 }: {
   clientId: string;
@@ -92,6 +94,7 @@ export function PublishSchedulerHub({
   canvaPages?: CanvaGridPage[];
   canvaGridReversed?: boolean;
   onNavigatePosts: () => void;
+  onNavigateToPost: (plannedPostId: string) => void;
   metaConnectedParam?: boolean;
 }) {
   const { storageMode } = useAuth();
@@ -118,6 +121,7 @@ export function PublishSchedulerHub({
   const [mobileFeedOpen, setMobileFeedOpen] = useState(false);
   const [pendingConfirmIds, setPendingConfirmIds] = useState<string[]>([]);
   const [expandedDayKey, setExpandedDayKey] = useState<string | null>(null);
+  const [incompleteExpanded, setIncompleteExpanded] = useState(false);
   const [showFeedPreview, setShowFeedPreview] = useState(() => readFeedPreviewPref(clientId));
 
   const toggleFeedPreview = useCallback(() => {
@@ -250,8 +254,17 @@ export function PublishSchedulerHub({
   const leadMinutes = prefs?.defaultLeadMinutes ?? 15;
   const autoScheduleOnDrop = prefs?.autoScheduleOnDrop ?? false;
   const eligible = useMemo(() => filterQueue(queue, "eligible"), [queue]);
+  const notReadyItems = useMemo(() => filterQueue(queue, "not_ready"), [queue]);
   const trayItems = useMemo(() => filterTrayItems(eligible, draftSchedules), [eligible, draftSchedules]);
   const draftCount = Object.keys(draftSchedules).length;
+
+  const focusIncompleteTray = useCallback(() => {
+    setHubView("calendar");
+    setIncompleteExpanded(true);
+    requestAnimationFrame(() => {
+      document.getElementById("publish-incomplete-tray")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
 
   const scheduleOneJob = useCallback(
     async (item: PublishQueueItem, scheduledIso: string) => {
@@ -467,6 +480,7 @@ export function PublishSchedulerHub({
         onToday={() => setAnchorDate(new Date())}
         showFeedPreview={showFeedPreview}
         onToggleFeedPreview={hubView === "calendar" ? toggleFeedPreview : undefined}
+        onIncompletosClick={focusIncompleteTray}
       />
 
       {hubView === "calendar" && (
@@ -503,6 +517,7 @@ export function PublishSchedulerHub({
           onDraftSchedule={(id, iso) => setDraftSchedules((d) => ({ ...d, [id]: iso }))}
           onRefresh={() => void refresh()}
           onItemClick={setComposerItem}
+          onNavigateToPost={onNavigateToPost}
         />
       ) : (
         <div
@@ -520,6 +535,21 @@ export function PublishSchedulerHub({
               onSuggestAll={() => void handleSuggestVisible()}
               suggesting={suggesting}
             />
+
+            <PublishIncompleteTray
+              items={notReadyItems}
+              onNavigateToPost={onNavigateToPost}
+              expanded={incompleteExpanded}
+              onExpandedChange={setIncompleteExpanded}
+            />
+
+            {metrics.notReady > 0 && metrics.eligible < metrics.notReady && (
+              <p className="text-xs text-ag-muted px-1">
+                Posts entram em <strong className="text-ag-text">Prontos para agendar</strong> quando têm
+                foto na nuvem, legenda e aprovação. Complete os {metrics.notReady} incompletos no
+                Planejamento.
+              </p>
+            )}
 
             <PublishCalendar
               queue={queue}

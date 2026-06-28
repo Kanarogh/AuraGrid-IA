@@ -17,6 +17,7 @@ import type { CatalogItem, PlannedPost, RepeatingText } from "../../types";
 import type { PostStatusStyle } from "../../lib/postStatus";
 import { extractMainCaptionText } from "../../lib/captionFormat";
 import { formatGeminiModelIdLabel } from "../../lib/geminiModelDisplay";
+import { canApproveForPublish } from "../../lib/publish/publishReadiness";
 import { INSTAGRAM_CAPTION_HARD_MAX } from "../../lib/captionParams";
 import { cn } from "../../lib/cn";
 import { Button } from "../ui/Button";
@@ -59,6 +60,7 @@ export function PostDayStudio({
   onRefine,
   cardRef,
   showReferenceControls = true,
+  cloudMode = true,
 }: {
   post: PlannedPost;
   position: number;
@@ -94,9 +96,12 @@ export function PostDayStudio({
   onRefine: (instruction?: string) => void;
   cardRef?: Ref<HTMLDivElement>;
   showReferenceControls?: boolean;
+  /** When true, approval requires imageAssetId (cloud publish path). */
+  cloudMode?: boolean;
 }) {
   const inputId = `feed-image-input-${post.id}`;
   const progressPct = total > 0 ? Math.round((position / total) * 100) : 0;
+  const canApprove = canApproveForPublish(post, cloudMode);
 
   return (
     <article
@@ -181,6 +186,12 @@ export function PostDayStudio({
                 variant={post.isConfirmed ? "primary" : "secondary"}
                 size="sm"
                 onClick={onToggleConfirm}
+                disabled={!post.isConfirmed && !canApprove}
+                title={
+                  !post.isConfirmed && !canApprove
+                    ? "Adicione uma foto antes de aprovar"
+                    : undefined
+                }
               >
                 <CheckCheck className="h-4 w-4" />
                 {post.isConfirmed ? "Aprovado" : "Aprovar"}

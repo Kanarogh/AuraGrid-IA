@@ -1,6 +1,7 @@
 import type { CatalogItem, PlannedPost } from "../types";
 import { getReferenceCatalog, isCatalogItemIndexed } from "./catalog";
 import { catalogReadyForTextMatch } from "./catalogEnrichment";
+import { isPublishReadyPost } from "./publish/publishReadiness";
 
 export interface CaptionBatchStats {
   total: number;
@@ -9,6 +10,7 @@ export interface CaptionBatchStats {
   pending: number;
   generated: number;
   confirmed: number;
+  publishReady: number;
   errors: number;
   generating: number;
   catalogTotal: number;
@@ -34,6 +36,7 @@ export function getCaptionBatchStats(
     pending: safePosts.filter((p) => p.image && !p.isGenerated && !p.isGenerating).length,
     generated: safePosts.filter((p) => p.isGenerated && !!p.caption).length,
     confirmed: safePosts.filter((p) => p.isConfirmed).length,
+    publishReady: safePosts.filter((p) => isPublishReadyPost(p)).length,
     errors: safePosts.filter((p) => !!p.error).length,
     generating: safePosts.filter((p) => p.isGenerating).length,
     catalogTotal: refs.length,

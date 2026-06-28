@@ -25,6 +25,7 @@ export function PublishCalendarToolbar({
   onToday,
   showFeedPreview,
   onToggleFeedPreview,
+  onIncompletosClick,
 }: {
   anchorDate: Date;
   calendarMode: CalendarViewMode;
@@ -36,6 +37,7 @@ export function PublishCalendarToolbar({
   onToday: () => void;
   showFeedPreview?: boolean;
   onToggleFeedPreview?: () => void;
+  onIncompletosClick?: () => void;
 }) {
   const weekDays = getWeekDays(anchorDate);
   const periodLabel =
@@ -124,9 +126,15 @@ export function PublishCalendarToolbar({
           {summary.notReady > 0 && (
             <button
               type="button"
-              onClick={() => onHubViewChange("list")}
+              onClick={() => {
+                if (onIncompletosClick) {
+                  onIncompletosClick();
+                } else {
+                  onHubViewChange("list");
+                }
+              }}
               className="hover:text-ag-text ag-focus-ring rounded"
-              title="Ver incompletos na lista"
+              title="Ver incompletos e o que falta em cada post"
             >
               <strong className="text-ag-text">{summary.notReady}</strong> incompletos
             </button>

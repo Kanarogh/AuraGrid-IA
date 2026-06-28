@@ -71,6 +71,7 @@ import { ensurePersistedImage, extractMediaAssetId } from "./lib/api/persistMedi
 import { recalculatePostDates } from "./lib/dates";
 import { resolveActiveCanvaPage, resolveSlotImage, buildCatalogUsageAcrossPages } from "./lib/canva";
 import { getPostStatus } from "./lib/postStatus";
+import { canApproveForPublish } from "./lib/publish/publishReadiness";
 import { useTheme } from "./hooks/useTheme";
 import { useAppRouteSync, type AppRouteSyncHandlers } from "./hooks/useAppRouteSync";
 import { useCanvaPageActions } from "./hooks/useCanvaPageActions";
@@ -1471,13 +1472,18 @@ export default function App() {
 
   // Toggle single post confirmation
   const handleToggleConfirm = (postId: string) => {
-    setPosts(prev => prev.map(p => {
-      if (p.id === postId) {
+    const cloudMode = storageMode === "postgresql";
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p.id !== postId) return p;
         const nextConfirm = !p.isConfirmed;
+        if (nextConfirm && !canApproveForPublish(p, cloudMode)) {
+          toast.warning("Adicione uma foto antes de aprovar.");
+          return p;
+        }
         return { ...p, isConfirmed: nextConfirm };
-      }
-      return p;
-    }));
+      })
+    );
   };
 
   // Move / Swap sequence order of days to fix Feed organization aesthetics
@@ -2913,6 +2919,7 @@ export default function App() {
             canvaGridReversed={canvaGridReversed}
             metaConnectedParam={metaConnectedParam}
             onNavigatePosts={() => void handleNavigate("posts")}
+            onNavigateToPost={(postId) => selectPreviewPost(postId)}
           />
           </SectionGate>
         )}
@@ -3106,6 +3113,7 @@ export default function App() {
                 }
                 onRefine={(instruction) => void handleRefineCaption(activePost.id, instruction)}
                 showReferenceControls={usesReferences}
+                cloudMode={storageMode === "postgresql"}
               />
             ) : routePostsTab === "day" ? (
               <div className="ag-card p-8 text-center text-sm text-ag-muted">

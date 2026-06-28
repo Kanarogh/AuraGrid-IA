@@ -1,4 +1,5 @@
 import type { PlannedPost } from "../types";
+import { isPublishReadyPost, publishReadinessIssuesFromPost } from "./publish/publishReadiness";
 
 export interface PostStatusStyle {
   label: string;
@@ -28,7 +29,22 @@ export function getPostStatus(post: PlannedPost | null | undefined): PostStatusS
       dot: "bg-ag-danger",
     };
   }
+  if (isPublishReadyPost(post)) {
+    return {
+      label: "Pronto para publicar",
+      badge: "bg-ag-success/10 text-ag-success border-ag-success/25",
+      dot: "bg-ag-success",
+    };
+  }
   if (post.isConfirmed) {
+    const issues = publishReadinessIssuesFromPost(post);
+    if (issues.includes("foto")) {
+      return {
+        label: "Aprovado — falta foto",
+        badge: "bg-ag-warning/10 text-ag-warning border-ag-warning/25",
+        dot: "bg-ag-warning",
+      };
+    }
     return {
       label: "Aprovado",
       badge: "bg-ag-success/10 text-ag-success border-ag-success/25",

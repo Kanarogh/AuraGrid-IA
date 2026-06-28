@@ -5,7 +5,7 @@ export function PostsWorkflowBar({ stats }: { stats: CaptionBatchStats }) {
   const hasPhotos = stats.withImage > 0;
   const hasCalendar = stats.total > 0;
   const hasCaptions = stats.generated > 0 || stats.withImage - stats.pending === stats.withImage;
-  const hasApproved = stats.confirmed > 0;
+  const hasPublishReady = stats.publishReady > 0;
 
   const steps: WorkflowStep[] = [
     {
@@ -29,8 +29,8 @@ export function PostsWorkflowBar({ stats }: { stats: CaptionBatchStats }) {
     {
       id: "approve",
       label: "Aprovar",
-      done: hasApproved && stats.confirmed === stats.total && stats.total > 0,
-      active: hasCaptions && stats.pending === 0 && !hasApproved,
+      done: hasPublishReady && stats.publishReady === stats.total && stats.total > 0,
+      active: hasCaptions && stats.pending === 0 && stats.publishReady < stats.total,
     },
   ];
 

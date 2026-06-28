@@ -1,4 +1,8 @@
 import type { PublishQueueItem } from "../../lib/publish/publishApi";
+import {
+  publishReadinessIssuesCore,
+  type PublishReadinessIssue,
+} from "../../lib/publish/publishReadiness";
 import { buildScheduledIso } from "../../lib/publish/suggestScheduleTimes";
 
 export type PublishFilter = "eligible" | "not_ready" | "queued" | "published" | "failed" | "all";
@@ -14,12 +18,12 @@ export function filterTrayItems(
   return eligible.filter((item) => !draftSchedules[item.plannedPostId]);
 }
 
-export function publishReadinessIssues(item: PublishQueueItem): string[] {
-  const missing: string[] = [];
-  if (!item.isConfirmed) missing.push("aprovação");
-  if (!item.imageAssetId) missing.push("foto");
-  if (!item.caption.trim()) missing.push("legenda");
-  return missing;
+export function publishReadinessIssues(item: PublishQueueItem): PublishReadinessIssue[] {
+  return publishReadinessIssuesCore({
+    isConfirmed: item.isConfirmed,
+    imageAssetId: item.imageAssetId,
+    caption: item.caption,
+  });
 }
 
 export function filterQueue(

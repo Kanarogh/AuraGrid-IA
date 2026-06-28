@@ -22,9 +22,11 @@ import {
   filterQueue,
   groupByDay,
   localInputToIso,
+  publishReadinessIssues,
   scheduledAtToLocalInput,
   type PublishFilter,
 } from "./publishUiUtils";
+import { publishReadinessIssueLabel } from "../../lib/publish/publishReadiness";
 import { patchPublishJob, retryPublishJob } from "../../lib/publish/publishApi";
 import { toast } from "../../lib/toast";
 
@@ -46,6 +48,7 @@ function PublishPostRow({
   onToggleSelect,
   selectable,
   onItemClick,
+  onNavigateToPost,
 }: {
   item: PublishQueueItem;
   clientId: string;
@@ -56,11 +59,13 @@ function PublishPostRow({
   onToggleSelect?: () => void;
   selectable?: boolean;
   onItemClick?: (item: PublishQueueItem) => void;
+  onNavigateToPost?: (plannedPostId: string) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const local = draftSchedule
     ? scheduledAtToLocalInput(draftSchedule)
     : scheduledAtToLocalInput(item.scheduledAt);
+  const readinessIssues = item.status === "not_ready" ? publishReadinessIssues(item) : [];
 
   const handleCancel = async () => {
     if (!item.jobId) return;
@@ -121,7 +126,35 @@ function PublishPostRow({
           <span className="text-sm font-semibold text-ag-text">Dia {item.dayNumber}</span>
           <span className="text-xs text-ag-muted">{item.dateLabel}</span>
           <Badge tone={statusTone(item.status)}>{PUBLISH_STATUS_LABELS[item.status]}</Badge>
+          {readinessIssues.map((issue) => (
+            <span
+              key={issue}
+              className={cn(
+                "text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded-full border",
+                issue === "foto"
+                  ? "border-ag-warning/30 bg-ag-warning/10 text-ag-warning"
+                  : issue === "legenda"
+                    ? "border-ag-accent/30 bg-ag-accent/10 text-ag-accent"
+                    : "border-ag-border bg-ag-surface-2 text-ag-muted"
+              )}
+            >
+              {publishReadinessIssueLabel(issue)}
+            </span>
+          ))}
         </div>
+        {item.status === "not_ready" && onNavigateToPost && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onNavigateToPost(item.plannedPostId);
+            }}
+          >
+            Completar no Planejamento
+          </Button>
+        )}
         {(item.status === "eligible" || item.status === "queued" || item.status === "failed") && (
           <div className="flex flex-wrap gap-2 items-center">
             <input
@@ -211,6 +244,7 @@ export function PublishQueuePanel({
   onToggleSelect,
   onSelectDay,
   onItemClick,
+  onNavigateToPost,
 }: {
   clientId: string;
   queue: PublishQueueItem[];
@@ -222,6 +256,7 @@ export function PublishQueuePanel({
   onToggleSelect: (postId: string) => void;
   onSelectDay: (postIds: string[]) => void;
   onItemClick?: (item: PublishQueueItem) => void;
+  onNavigateToPost?: (plannedPostId: string) => void;
 }) {
   const filtered = useMemo(() => filterQueue(queue, filter), [queue, filter]);
   const grouped = useMemo(() => groupByDay(filtered), [filtered]);
@@ -286,6 +321,7 @@ export function PublishQueuePanel({
                       selected={selectedIds.has(item.plannedPostId)}
                       onToggleSelect={() => onToggleSelect(item.plannedPostId)}
                       onItemClick={onItemClick}
+                      onNavigateToPost={onNavigateToPost}
                     />
                   ))}
                 </div>
