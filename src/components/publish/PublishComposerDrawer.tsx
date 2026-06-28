@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ExternalLink, RefreshCw, X } from "lucide-react";
+import { ExternalLink, Eye, EyeOff, RefreshCw, X } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { Button } from "../ui/Button";
 import { InstagramPhonePreview } from "../posts/InstagramPhonePreview";
@@ -44,6 +44,7 @@ export function PublishComposerDrawer({
   onNavigatePosts: () => void;
 }) {
   const [saving, setSaving] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
 
   useEffect(() => {
     if (!open) return;
@@ -162,9 +163,32 @@ export function PublishComposerDrawer({
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          <div className="flex justify-center scale-90 origin-top">
-            <InstagramPhonePreview post={mockPost} username={instagramHandle} variant="compact" />
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowPreview((v) => !v)}
+            className="flex w-full items-center justify-between rounded-lg border border-ag-border bg-ag-surface-2 px-3 py-2 text-sm text-ag-text hover:bg-ag-surface-3 ag-focus-ring"
+          >
+            <span className="font-medium">Preview Instagram</span>
+            <span className="inline-flex items-center gap-1.5 text-xs text-ag-muted">
+              {showPreview ? (
+                <>
+                  <EyeOff className="h-3.5 w-3.5" />
+                  Ocultar
+                </>
+              ) : (
+                <>
+                  <Eye className="h-3.5 w-3.5" />
+                  Mostrar
+                </>
+              )}
+            </span>
+          </button>
+
+          {showPreview && (
+            <div className="flex justify-center scale-90 origin-top">
+              <InstagramPhonePreview post={mockPost} username={instagramHandle} variant="compact" />
+            </div>
+          )}
 
           {(isEligible || isQueued || isFailed) && (
             <div className="flex flex-wrap gap-2">
@@ -194,7 +218,7 @@ export function PublishComposerDrawer({
                 Editar em Planejamento
               </button>
             </div>
-            <p className="text-sm text-ag-text whitespace-pre-wrap line-clamp-6">{item.caption}</p>
+            <p className="text-sm text-ag-text whitespace-pre-wrap">{item.caption}</p>
           </div>
 
           {item.status === "published" && item.permalink && (
