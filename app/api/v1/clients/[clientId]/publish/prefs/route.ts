@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { assertClientAccess, requireUser } from "@/server/http/auth";
 import { errorResponse } from "@/server/http/respond";
 import {
-  getClientPublishPrefs,
+  getClientPublishPrefsPublic,
   saveClientPublishPrefs,
 } from "@/server/services/publishPrefsService";
 import { publishPrefsSchema } from "@/server/validation/publishSchema";
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     const user = requireUser(req);
     const { clientId } = await params;
     await assertClientAccess(user, clientId);
-    const prefs = await getClientPublishPrefs(clientId);
+    const prefs = await getClientPublishPrefsPublic(clientId);
     return NextResponse.json(prefs);
   } catch (err) {
     return errorResponse(err, 401);

@@ -7,7 +7,6 @@ import type { PlannedPost } from "../../types";
 import { Button } from "../ui/Button";
 import { InstagramPhonePreview } from "../posts/InstagramPhonePreview";
 import {
-  createPublishJobs,
   patchPublishJob,
   retryPublishJob,
   type PublishQueueItem,
@@ -16,7 +15,12 @@ import {
   localInputToIso,
   scheduledAtToLocalInput,
 } from "./publishUiUtils";
-import { queueItemToPlannedPost, resolveItemSchedule, resolvePublishCaption } from "./publishCalendarUtils";
+import {
+  queueItemToPlannedPost,
+  resolveItemSchedule,
+  resolvePublishCaption,
+  validateScheduledTime,
+} from "./publishCalendarUtils";
 import { toast } from "../../lib/toast";
 
 export function PublishComposerDrawer({
@@ -27,9 +31,13 @@ export function PublishComposerDrawer({
   draftSchedules,
   posts,
   instagramHandle,
-  connected,
+  canSchedule,
+  scheduleTimezone = "America/Sao_Paulo",
+  leadMinutes = 15,
   onClose,
   onDraftSchedule,
+  onClearDraft,
+  onScheduleJob,
   onRefresh,
   onNavigatePosts,
 }: {
@@ -40,9 +48,13 @@ export function PublishComposerDrawer({
   draftSchedules: Record<string, string>;
   posts: PlannedPost[];
   instagramHandle: string;
-  connected: boolean;
+  canSchedule: boolean;
+  scheduleTimezone?: string;
+  leadMinutes?: number;
   onClose: () => void;
   onDraftSchedule: (postId: string, iso: string) => void;
+  onClearDraft?: (postId: string) => void;
+  onScheduleJob: (item: PublishQueueItem, scheduledIso: string) => Promise<void>;
   onRefresh: () => void;
   onNavigatePosts: () => void;
 }) {
@@ -75,9 +87,10 @@ export function PublishComposerDrawer({
   const isEligible = item.status === "eligible";
   const isQueued = item.status === "queued" || item.status === "publishing";
   const isFailed = item.status === "failed";
+  const hasDraft = Boolean(draftSchedules[item.plannedPostId]);
 
   const updateSchedule = (date: string, time: string) => {
-    onDraftSchedule(item.plannedPostId, localInputToIso(date, time));
+    onDraftSchedule(item.plannedPostId, localInputToIso(date, time, scheduleTimezone));
   };
 
   const handleSchedule = async () => {
@@ -85,21 +98,19 @@ export function PublishComposerDrawer({
       toast.warning("Escolha data e hora.");
       return;
     }
-    if (!connected) {
-      toast.warning("Conecte o Instagram antes de agendar.");
+    const validation = validateScheduledTime(iso, leadMinutes);
+    if (!validation.ok) {
+      toast.warning(validation.reason);
+      return;
+    }
+    if (!canSchedule) {
+      toast.warning("Conecte o Instagram ou use o modo simulação para agendar.");
       return;
     }
     setSaving(true);
     try {
       if (isEligible) {
-        await createPublishJobs(clientId, planningPeriodId, [
-          {
-            plannedPostId: item.plannedPostId,
-            scheduledAt: iso,
-            caption,
-            imageAssetId: item.imageAssetId!,
-          },
-        ]);
+        await onScheduleJob(item, iso);
         toast.success("Post agendado!");
       } else if (isQueued && item.jobId) {
         await patchPublishJob(clientId, item.jobId, { scheduledAt: iso });
@@ -112,6 +123,27 @@ export function PublishComposerDrawer({
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSaveDraft = () => {
+    if (!iso) {
+      toast.warning("Escolha data e hora.");
+      return;
+    }
+    const validation = validateScheduledTime(iso, leadMinutes);
+    if (!validation.ok) {
+      toast.warning(validation.reason);
+      return;
+    }
+    onDraftSchedule(item.plannedPostId, iso);
+    toast.success("Rascunho salvo.");
+    onClose();
+  };
+
+  const handleClearDraft = () => {
+    onClearDraft?.(item.plannedPostId);
+    toast.info("Rascunho removido.");
+    onClose();
   };
 
   const handleCancel = async () => {
@@ -270,15 +302,39 @@ export function PublishComposerDrawer({
 
         <div className="shrink-0 p-4 border-t border-ag-border flex flex-col gap-2">
           {(isEligible || isQueued) && (
-            <Button
-              type="button"
-              variant="accent"
-              className="w-full"
-              disabled={saving || !connected}
-              onClick={() => void handleSchedule()}
-            >
-              {saving ? "Salvando…" : isEligible ? "Agendar post" : "Salvar horário"}
-            </Button>
+            <>
+              {isEligible && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full"
+                  disabled={saving}
+                  onClick={handleSaveDraft}
+                >
+                  Salvar rascunho
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="accent"
+                className="w-full"
+                disabled={saving || !canSchedule}
+                onClick={() => void handleSchedule()}
+              >
+                {saving ? "Salvando…" : isEligible ? "Agendar post" : "Salvar horário"}
+              </Button>
+              {isEligible && hasDraft && onClearDraft && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full text-ag-muted"
+                  disabled={saving}
+                  onClick={handleClearDraft}
+                >
+                  Remover rascunho
+                </Button>
+              )}
+            </>
           )}
           {isFailed && (
             <Button type="button" variant="accent" className="w-full" disabled={saving} onClick={() => void handleRetry()}>

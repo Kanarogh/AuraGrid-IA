@@ -19,20 +19,31 @@ import { PublishFeedPreviewPanel } from "./PublishFeedPreviewPanel";
 import {
   createPublishJobs,
   fetchMetaConnection,
+  fetchPublishPrefs,
   fetchPublishQueue,
   patchPublishJob,
   previewPublishSchedule,
   type MetaConnectionPublic,
+  type PublishPrefs,
   type PublishQueueItem,
   type PublishQueueSummary,
 } from "../../lib/publish/publishApi";
-import { filterQueue, queueMetrics } from "./publishUiUtils";
+import {
+  clearPublishDrafts,
+  loadPublishDrafts,
+  savePublishDrafts,
+} from "../../lib/publish/publishDraftStorage";
+import { filterQueue, filterTrayItems, queueMetrics } from "./publishUiUtils";
 import { calendarDateForPost } from "../../lib/publish/suggestScheduleTimes";
 import {
   combineDateAndTime,
   filterEligibleInVisibleRange,
   findScheduleConflicts,
+  formatScheduleToast,
   getVisibleDateKeys,
+  resolvePublishCaption,
+  validateScheduledTime,
+  wouldCreateConflict,
   type CalendarViewMode,
   type HubViewMode,
 } from "./publishCalendarUtils";
@@ -82,8 +93,11 @@ export function PublishSchedulerHub({
   const [queue, setQueue] = useState<PublishQueueItem[]>([]);
   const [summary, setSummary] = useState<PublishQueueSummary | null>(null);
   const [connection, setConnection] = useState<MetaConnectionPublic | null>(null);
+  const [prefs, setPrefs] = useState<PublishPrefs | null>(null);
   const [loading, setLoading] = useState(true);
-  const [draftSchedules, setDraftSchedules] = useState<Record<string, string>>({});
+  const [draftSchedules, setDraftSchedulesState] = useState<Record<string, string>>(() =>
+    loadPublishDrafts(clientId, planningPeriodId)
+  );
   const [composerItem, setComposerItem] = useState<PublishQueueItem | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -103,6 +117,25 @@ export function PublishSchedulerHub({
       return next;
     });
   }, []);
+
+  const setDraftSchedules = useCallback(
+    (updater: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => {
+      setDraftSchedulesState((prev) => {
+        const next = typeof updater === "function" ? updater(prev) : updater;
+        savePublishDrafts(clientId, planningPeriodId, next);
+        return next;
+      });
+    },
+    [clientId, planningPeriodId]
+  );
+
+  useEffect(() => {
+    setDraftSchedulesState(loadPublishDrafts(clientId, planningPeriodId));
+  }, [clientId, planningPeriodId]);
+
+  useEffect(() => {
+    void fetchPublishPrefs(clientId).then(setPrefs);
+  }, [clientId]);
 
   const refresh = useCallback(async (silent = false) => {
     if (!cloudOnly) {
@@ -178,7 +211,33 @@ export function PublishSchedulerHub({
   const connected = Boolean(
     connection?.connected && connection.status === "active" && !connection.needsReconnect
   );
+  const publishMockEnabled = summary?.publishMockEnabled ?? prefs?.publishMockEnabled ?? false;
+  const canSchedule = connected || publishMockEnabled;
+  const scheduleTimezone = prefs?.timezone ?? "America/Sao_Paulo";
+  const leadMinutes = prefs?.defaultLeadMinutes ?? 15;
+  const autoScheduleOnDrop = prefs?.autoScheduleOnDrop ?? false;
   const eligible = useMemo(() => filterQueue(queue, "eligible"), [queue]);
+  const trayItems = useMemo(() => filterTrayItems(eligible, draftSchedules), [eligible, draftSchedules]);
+  const draftCount = Object.keys(draftSchedules).length;
+
+  const scheduleOneJob = useCallback(
+    async (item: PublishQueueItem, scheduledIso: string) => {
+      await createPublishJobs(clientId, planningPeriodId, [
+        {
+          plannedPostId: item.plannedPostId,
+          scheduledAt: scheduledIso,
+          caption: resolvePublishCaption(item, posts),
+          imageAssetId: item.imageAssetId!,
+        },
+      ]);
+      setDraftSchedules((prev) => {
+        const next = { ...prev };
+        delete next[item.plannedPostId];
+        return next;
+      });
+    },
+    [clientId, planningPeriodId, posts, setDraftSchedules]
+  );
 
   const conflicts = useMemo(
     () => findScheduleConflicts([...queue, ...eligible], draftSchedules),
@@ -189,23 +248,53 @@ export function PublishSchedulerHub({
     const item = queue.find((q) => q.plannedPostId === postId);
     if (!item) return;
 
-    setDraftSchedules((d) => ({ ...d, [postId]: scheduledIso }));
+    const validation = validateScheduledTime(scheduledIso, leadMinutes);
+    if (!validation.ok) {
+      toast.warning(validation.reason);
+      return;
+    }
+
+    if (wouldCreateConflict(scheduledIso, postId, [...queue, ...eligible], draftSchedules)) {
+      toast.warning("Já existe outro post neste horário. Escolha outro minuto.");
+      return;
+    }
 
     if (item.status === "queued" || item.status === "publishing") {
       if (!item.jobId) return;
       try {
         await patchPublishJob(clientId, item.jobId, { scheduledAt: scheduledIso });
-        toast.success(
-          `Reagendado para ${new Date(scheduledIso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}`
-        );
+        toast.success(`Reagendado para ${formatScheduleToast(scheduledIso)}`);
         await refresh(true);
       } catch {
         toast.error("Não foi possível reagendar.");
       }
-    } else {
-      setComposerItem({ ...item });
-      toast.success("Horário definido — confirme no painel.");
+      return;
     }
+
+    if (item.status !== "eligible") {
+      toast.warning("Este post ainda não está pronto para agendar.");
+      return;
+    }
+
+    if (autoScheduleOnDrop) {
+      if (!canSchedule) {
+        toast.warning("Conecte o Instagram ou ative o modo simulação para agendar.");
+        return;
+      }
+      try {
+        await scheduleOneJob(item, scheduledIso);
+        toast.success(`Post agendado para ${formatScheduleToast(scheduledIso)}`);
+        await refresh(true);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Falha ao agendar.");
+      }
+      return;
+    }
+
+    setDraftSchedules((d) => ({ ...d, [postId]: scheduledIso }));
+    toast.success(
+      `Rascunho: ${formatScheduleToast(scheduledIso)} — confirme quando estiver pronto.`
+    );
   };
 
   const handleSuggestVisible = async () => {
@@ -253,6 +342,14 @@ export function PublishSchedulerHub({
   }, [pendingConfirmIds, eligible, draftSchedules]);
 
   const executeBulkSchedule = async () => {
+    if (!canSchedule) {
+      toast.warning("Conecte o Instagram ou use o modo simulação para confirmar.");
+      return;
+    }
+    if (conflicts.size > 0) {
+      toast.warning("Resolva os conflitos de horário antes de confirmar.");
+      return;
+    }
     if (!confirmTargets.length) {
       toast.warning("Nenhum post com horário definido.");
       return;
@@ -265,13 +362,14 @@ export function PublishSchedulerHub({
         confirmTargets.map((t) => ({
           plannedPostId: t.plannedPostId,
           scheduledAt: draftSchedules[t.plannedPostId]!,
-          caption: t.caption,
+          caption: resolvePublishCaption(t, posts),
           imageAssetId: t.imageAssetId!,
         }))
       );
       toast.success(`${confirmTargets.length} posts agendados!`);
       setPreviewOpen(false);
       setDraftSchedules({});
+      clearPublishDrafts(clientId, planningPeriodId);
       setPendingConfirmIds([]);
       localStorage.setItem(CHECKLIST_KEY, "1");
       setShowChecklist(false);
@@ -344,9 +442,34 @@ export function PublishSchedulerHub({
           connection={connection}
           onRefresh={() => void refresh()}
           compact
+          publishMockEnabled={publishMockEnabled}
         />
       )}
 
+      {draftCount > 0 && hubView === "calendar" && !autoScheduleOnDrop && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+          <p className="text-sm text-ag-text">
+            <strong>{draftCount}</strong>{" "}
+            {draftCount === 1 ? "rascunho pendente" : "rascunhos pendentes"} — confirme para salvar no
+            calendário.
+          </p>
+          <Button
+            type="button"
+            variant="accent"
+            size="sm"
+            disabled={!canSchedule || conflicts.size > 0 || confirmTargets.length === 0}
+            onClick={() => setPreviewOpen(true)}
+          >
+            Confirmar agendamento
+          </Button>
+        </div>
+      )}
+
+      {publishMockEnabled && !connected && hubView === "calendar" && (
+        <p className="text-xs text-ag-success rounded-lg border border-ag-success/30 bg-ag-success/5 px-3 py-2">
+          Modo simulação ativo — você pode agendar posts sem conectar o Instagram.
+        </p>
+      )}
       {conflicts.size > 0 && hubView === "calendar" && (
         <p className="text-xs text-ag-warning rounded-lg border border-ag-warning/30 bg-ag-warning/5 px-3 py-2">
           {conflicts.size} conflito(s) de horário — dois posts no mesmo minuto. Ajuste antes de confirmar.
@@ -377,7 +500,9 @@ export function PublishSchedulerHub({
         <PublishPrefsPanel
           clientId={clientId}
           connection={connection}
+          publishMockEnabled={publishMockEnabled}
           onConnectionRefresh={() => void refresh()}
+          onPrefsChange={setPrefs}
           hideConnection={!connected}
         />
       ) : hubView === "list" ? (
@@ -399,14 +524,14 @@ export function PublishSchedulerHub({
         >
           <div className="space-y-4 min-w-0">
             <UnscheduledTray
-              items={eligible}
+              items={trayItems}
               draftSchedules={draftSchedules}
               onItemClick={setComposerItem}
               onSuggestAll={() => void handleSuggestVisible()}
               suggesting={suggesting}
             />
 
-            {eligible.length === 0 && metrics.scheduled === 0 && (
+            {trayItems.length === 0 && eligible.length === 0 && metrics.scheduled === 0 && (
               <div className="rounded-2xl border border-dashed border-ag-border p-8 text-center space-y-3">
                 <p className="text-sm text-ag-muted">Nenhum post aprovado com foto e legenda.</p>
                 <Button type="button" variant="accent" onClick={onNavigatePosts}>
@@ -422,25 +547,29 @@ export function PublishSchedulerHub({
               calendarMode={calendarMode}
               startDate={startDate}
               expandedDayKey={expandedDayKey}
+              scheduleTimezone={scheduleTimezone}
               onExpandDay={handleExpandDay}
               onDrop={(dk, pid, iso) => void handleDrop(dk, pid, iso)}
               onItemClick={setComposerItem}
               onEmptyDayClick={(dateKey) => {
                 const match =
-                  eligible.find(
+                  trayItems.find(
                     (e) => calendarDateForPost(startDate, e.dayNumber) === dateKey
-                  ) ?? eligible[0];
+                  ) ?? trayItems[0];
                 if (!match) return;
-                const iso = combineDateAndTime(dateKey, "10:00");
-                setDraftSchedules((d) => ({ ...d, [match.plannedPostId]: iso }));
-                setComposerItem(match);
+                void handleDrop(dateKey, match.plannedPostId, combineDateAndTime(dateKey, "10:00", scheduleTimezone));
               }}
             />
 
-            {Object.keys(draftSchedules).length > 0 && (
+            {draftCount > 0 && !autoScheduleOnDrop && (
               <div className="flex flex-wrap gap-2 justify-end">
-                <Button type="button" variant="accent" disabled={!connected} onClick={() => setPreviewOpen(true)}>
-                  Confirmar {confirmTargets.length || Object.keys(draftSchedules).length} posts
+                <Button
+                  type="button"
+                  variant="accent"
+                  disabled={!canSchedule || conflicts.size > 0 || confirmTargets.length === 0}
+                  onClick={() => setPreviewOpen(true)}
+                >
+                  Confirmar {confirmTargets.length || draftCount} posts
                 </Button>
               </div>
             )}
@@ -511,9 +640,19 @@ export function PublishSchedulerHub({
         draftSchedules={draftSchedules}
         posts={posts}
         instagramHandle={instagramHandle}
-        connected={connected}
+        canSchedule={canSchedule}
+        scheduleTimezone={scheduleTimezone}
+        leadMinutes={leadMinutes}
         onClose={() => setComposerItem(null)}
         onDraftSchedule={(id, iso) => setDraftSchedules((d) => ({ ...d, [id]: iso }))}
+        onClearDraft={(id) =>
+          setDraftSchedules((d) => {
+            const next = { ...d };
+            delete next[id];
+            return next;
+          })
+        }
+        onScheduleJob={scheduleOneJob}
         onRefresh={() => void refresh()}
         onNavigatePosts={onNavigatePosts}
       />

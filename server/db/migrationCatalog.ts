@@ -16,6 +16,7 @@ export const MIGRATION_FILES = [
   "0013_enrich_jobs",
   "0014_user_appearance_preferences",
   "0015_meta_publish",
+  "0016_publish_prefs_auto_schedule",
 ] as const;
 
 export type MigrationHash = (typeof MIGRATION_FILES)[number];

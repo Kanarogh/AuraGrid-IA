@@ -150,12 +150,27 @@ GET         /api/v1/media/:assetId/publish
 
 1. Aprovar posts em **Planejamento e legendas** (foto + legenda + confirmar).
 2. Abrir **Programar posts** na sidebar.
-3. Conectar Instagram (Config ou card abaixo da toolbar).
-4. Opcional: definir **Horários rápidos** em Config.
+3. Conectar Instagram (Config ou card abaixo da toolbar) — **opcional em dev** com `META_PUBLISH_MOCK=1`.
+4. Opcional em **Config**: **Horários rápidos**, antecedência mínima e **Agendar ao soltar**.
 5. Na bandeja **Prontos**, arrastar posts para o calendário **ou** usar **Preencher automaticamente**.
-6. Ajustar horários no composer ou arrastando de novo.
-7. **Confirmar** → modal com preview → jobs criados.
-8. Worker publica no horário; acompanhar no calendário/lista (status + polling).
+
+### Modo rascunho (padrão)
+
+- Arrastar cria um **rascunho** (persistido na sessão do navegador).
+- O post **sai da bandeja** e aparece no calendário com borda âmbar.
+- Banner **“N rascunhos · Confirmar agendamento”** → modal de preview → jobs `queued` no banco.
+
+### Modo agendar ao soltar (Config)
+
+- Arrastar chama a API imediatamente (`POST createPublishJobs`).
+- Posts já agendados (`queued`) podem ser **rearrastados** (PATCH do horário).
+
+6. Ajustar horários no composer (salvar rascunho, agendar ou remover rascunho).
+7. Worker publica no horário; acompanhar no calendário/lista (status + polling).
+
+### O que conta como “pronto para agendar”
+
+Post com **legenda + foto + aprovação** (`status: eligible`). Os demais aparecem como **incompletos** no contador e na aba Lista.
 
 ---
 
@@ -222,7 +237,7 @@ npm run test:app-routing
 npm run lint
 ```
 
-Fluxo de teste sem Meta real: aprovar posts → Programar posts → Preencher automaticamente → Confirmar → aguardar worker (mock marca como `published`).
+Fluxo de teste sem Meta real: `META_PUBLISH_MOCK=1` → aprovar posts → Programar posts → arrastar ou Preencher automaticamente → Confirmar (ou ativar “Agendar ao soltar”) → worker mock marca como `published`.
 
 ---
 

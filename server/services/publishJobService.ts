@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { getDb, isDatabaseConfigured } from "../db/client";
 import { instagramPublishJobs, plannedPosts, planningPeriods } from "../db/schema";
 import { HttpError } from "../http/respond";
@@ -131,10 +131,7 @@ export async function previewScheduleTimes(
   const queue = await listPublishQueue(clientId, planningPeriodId);
   const eligible = queue.filter(
     (q) =>
-      q.isConfirmed &&
-      q.imageAssetId &&
-      q.caption.trim() &&
-      (!q.jobId || q.status === "failed" || q.status === "cancelled") &&
+      q.status === "eligible" &&
       (!postIds?.length || postIds.includes(q.plannedPostId))
   );
 
@@ -170,6 +167,34 @@ export async function createPublishJobs(
     }
     if (!job.caption.trim()) throw new HttpError(400, "Legenda vazia.");
     if (job.caption.length > 2200) throw new HttpError(400, "Legenda longa demais (máx. 2200).");
+
+    const [active] = await db
+      .select()
+      .from(instagramPublishJobs)
+      .where(
+        and(
+          eq(instagramPublishJobs.clientId, clientId),
+          eq(instagramPublishJobs.planningPeriodId, payload.planningPeriodId),
+          eq(instagramPublishJobs.plannedPostId, job.plannedPostId),
+          inArray(instagramPublishJobs.status, ["queued", "publishing"])
+        )
+      )
+      .limit(1);
+
+    if (active) {
+      const [updated] = await db
+        .update(instagramPublishJobs)
+        .set({
+          scheduledAt: scheduled,
+          caption: job.caption,
+          imageAssetId: job.imageAssetId,
+          updatedAt: new Date(),
+        })
+        .where(eq(instagramPublishJobs.id, active.id))
+        .returning();
+      if (updated) created.push(updated);
+      continue;
+    }
 
     const [row] = await db
       .insert(instagramPublishJobs)

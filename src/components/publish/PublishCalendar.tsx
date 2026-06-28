@@ -142,6 +142,7 @@ export function PublishCalendar({
   onEmptyDayClick,
   onExpandDay,
   expandedDayKey,
+  scheduleTimezone = "America/Sao_Paulo",
 }: {
   queue: PublishQueueItem[];
   draftSchedules: Record<string, string>;
@@ -153,6 +154,7 @@ export function PublishCalendar({
   onEmptyDayClick: (dateKey: string) => void;
   onExpandDay?: (dateKey: string) => void;
   expandedDayKey?: string | null;
+  scheduleTimezone?: string;
 }) {
   const todayKey = calendarDateKey(new Date());
   const calendarItems = useMemo(
@@ -188,7 +190,7 @@ export function PublishCalendar({
   const handleDrop = (dateKey: string, postId: string) => {
     const existing = buckets.get(dateKey)?.length ?? 0;
     const time = defaultTimeForDrop(existing);
-    onDrop(dateKey, postId, combineDateAndTime(dateKey, time));
+    onDrop(dateKey, postId, combineDateAndTime(dateKey, time, scheduleTimezone));
   };
 
   const calendarBody =

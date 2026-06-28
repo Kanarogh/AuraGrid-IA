@@ -1,9 +1,17 @@
 import type { PublishQueueItem } from "../../lib/publish/publishApi";
+import { buildScheduledIso } from "../../lib/publish/suggestScheduleTimes";
 
 export type PublishFilter = "eligible" | "not_ready" | "queued" | "published" | "failed" | "all";
 
 export function isPublishReady(item: PublishQueueItem): boolean {
   return item.status === "eligible";
+}
+
+export function filterTrayItems(
+  eligible: PublishQueueItem[],
+  draftSchedules: Record<string, string>
+): PublishQueueItem[] {
+  return eligible.filter((item) => !draftSchedules[item.plannedPostId]);
 }
 
 export function publishReadinessIssues(item: PublishQueueItem): string[] {
@@ -57,6 +65,6 @@ export function scheduledAtToLocalInput(iso: string | null): { date: string; tim
   return { date, time };
 }
 
-export function localInputToIso(date: string, time: string): string {
-  return new Date(`${date}T${time}:00`).toISOString();
+export function localInputToIso(date: string, time: string, timezone = "America/Sao_Paulo"): string {
+  return buildScheduledIso(date, time, timezone);
 }

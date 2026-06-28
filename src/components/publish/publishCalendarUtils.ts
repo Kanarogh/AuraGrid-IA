@@ -1,6 +1,6 @@
 import type { PlannedPost } from "../../types";
 import type { PublishQueueItem } from "../../lib/publish/publishApi";
-import { calendarDateForPost } from "../../lib/publish/suggestScheduleTimes";
+import { buildScheduledIso, calendarDateForPost } from "../../lib/publish/suggestScheduleTimes";
 import { filterQueue } from "./publishUiUtils";
 
 export const PUBLISH_DRAG_MIME = "application/x-ag-publish-post";
@@ -37,6 +37,13 @@ export function scheduleToDateKey(
 ): string | null {
   const iso = resolveItemSchedule(item, draftSchedules);
   if (!iso) return null;
+  return isoToCalendarDateKey(iso);
+}
+
+/** Extrai YYYY-MM-DD do ISO de agendamento (preserva dia escolhido no calendário). */
+export function isoToCalendarDateKey(iso: string): string {
+  const match = iso.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (match) return match[1];
   return calendarDateKey(new Date(iso));
 }
 
@@ -122,8 +129,55 @@ export function formatTimeLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
-export function combineDateAndTime(dateKey: string, time: string): string {
-  return new Date(`${dateKey}T${time}:00`).toISOString();
+export function combineDateAndTime(
+  dateKey: string,
+  time: string,
+  timezone = "America/Sao_Paulo"
+): string {
+  return buildScheduledIso(dateKey, time, timezone);
+}
+
+export function validateScheduledTime(
+  iso: string,
+  leadMinutes: number
+): { ok: true } | { ok: false; reason: string } {
+  const scheduledMs = new Date(iso).getTime();
+  const minMs = Date.now() + leadMinutes * 60_000;
+  if (scheduledMs < minMs) {
+    return {
+      ok: false,
+      reason: `O horário deve ser pelo menos ${leadMinutes} minutos no futuro.`,
+    };
+  }
+  return { ok: true };
+}
+
+export function wouldCreateConflict(
+  iso: string,
+  postId: string,
+  items: PublishQueueItem[],
+  draftSchedules: Record<string, string>
+): boolean {
+  const d = new Date(iso);
+  const key = `${isoToCalendarDateKey(iso)}T${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  for (const item of items) {
+    if (item.plannedPostId === postId) continue;
+    const otherIso = resolveItemSchedule(item, draftSchedules);
+    if (!otherIso) continue;
+    const od = new Date(otherIso);
+    const otherKey = `${isoToCalendarDateKey(otherIso)}T${String(od.getHours()).padStart(2, "0")}:${String(od.getMinutes()).padStart(2, "0")}`;
+    if (otherKey === key) return true;
+  }
+  return false;
+}
+
+export function formatScheduleToast(iso: string): string {
+  return new Date(iso).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export function defaultTimeForDrop(existingCount: number): string {
@@ -212,7 +266,7 @@ export function findScheduleConflicts(
     const iso = resolveItemSchedule(item, draftSchedules);
     if (!iso) continue;
     const d = new Date(iso);
-    const key = `${calendarDateKey(d)}T${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    const key = `${isoToCalendarDateKey(iso)}T${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
     const list = byMinute.get(key) ?? [];
     list.push(item);
     byMinute.set(key, list);

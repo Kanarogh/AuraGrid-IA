@@ -421,6 +421,7 @@ export const clientPublishPrefs = pgTable("client_publish_prefs", {
       "5": ["09:00", "11:30", "14:00", "17:00", "19:30"],
     }),
   defaultLeadMinutes: smallint("default_lead_minutes").notNull().default(15),
+  autoScheduleOnDrop: boolean("auto_schedule_on_drop").notNull().default(false),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

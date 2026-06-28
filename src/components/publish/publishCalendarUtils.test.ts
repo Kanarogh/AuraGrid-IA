@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import type { PublishQueueItem } from "../../lib/publish/publishApi";
 import {
+  bucketByCalendarDate,
+  combineDateAndTime,
   detectPlanningGaps,
   filterEligibleInVisibleRange,
   findScheduleConflicts,
   getVisibleDateKeys,
+  isoToCalendarDateKey,
 } from "./publishCalendarUtils";
+import { filterTrayItems } from "./publishUiUtils";
 
 function test(name: string, fn: () => void) {
   try {
@@ -66,12 +70,30 @@ test("filterEligibleInVisibleRange respects calendar window", () => {
 test("findScheduleConflicts detects same minute", () => {
   const a = item({ plannedPostId: "a", dayNumber: 1, status: "eligible" });
   const b = item({ plannedPostId: "b", dayNumber: 2, status: "eligible" });
-  const iso = "2024-06-01T10:00:00.000Z";
+  const iso = "2024-06-01T10:00:00-03:00";
   const conflicts = findScheduleConflicts([a, b], {
     a: iso,
     b: iso,
   });
   assert.equal(conflicts.size, 1);
+});
+
+test("combineDateAndTime buckets on same calendar day", () => {
+  const iso = combineDateAndTime("2024-06-26", "10:00");
+  assert.equal(isoToCalendarDateKey(iso), "2024-06-26");
+  const items = [item({ plannedPostId: "a", dayNumber: 3 })];
+  const buckets = bucketByCalendarDate(items, { a: iso });
+  assert.equal(buckets.get("2024-06-26")?.length, 1);
+});
+
+test("filterTrayItems excludes drafted posts", () => {
+  const eligible = [
+    item({ plannedPostId: "a", dayNumber: 1 }),
+    item({ plannedPostId: "b", dayNumber: 2 }),
+  ];
+  const tray = filterTrayItems(eligible, { a: "2024-06-01T10:00:00-03:00" });
+  assert.equal(tray.length, 1);
+  assert.equal(tray[0].plannedPostId, "b");
 });
 
 console.log("\nAll publishCalendarUtils tests passed.");

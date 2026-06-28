@@ -11,6 +11,7 @@ export const publishPrefsSchema = z.object({
   timezone: z.string().min(1).max(64),
   slotTemplates: slotTemplatesSchema,
   defaultLeadMinutes: z.number().int().min(0).max(120),
+  autoScheduleOnDrop: z.boolean().optional(),
 });
 
 export const schedulePreviewSchema = z.object({

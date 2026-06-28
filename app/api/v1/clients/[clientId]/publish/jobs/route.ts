@@ -1,16 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { assertClientAccess, requireUser } from "@/server/http/auth";
 import { errorResponse } from "@/server/http/respond";
+import { isPublishMockEnabled } from "@/server/services/publishPrefsService";
 import {
   createPublishJobs,
   countPublishedLast24h,
   listPublishQueue,
-  previewScheduleTimes,
 } from "@/server/services/publishJobService";
-import {
-  createJobsSchema,
-  schedulePreviewSchema,
-} from "@/server/validation/publishSchema";
+import { createJobsSchema } from "@/server/validation/publishSchema";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +32,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
       failed: queue.filter((q) => q.status === "failed").length,
       publishedLast24h,
       total: queue.length,
+      publishMockEnabled: isPublishMockEnabled(),
     };
     return NextResponse.json({ queue, summary });
   } catch (err) {

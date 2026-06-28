@@ -49,10 +49,18 @@ function formatDateLabel(calendarDate: string): string {
   return `${capitalized} (${dm})`;
 }
 
-/** Offset fixo BRT (UTC-3) — suficiente para MVP. */
-function buildIsoInTimezone(calendarDate: string, timeHHmm: string, _timezone: string): string {
+/** ISO com offset para agendamento (BRT UTC-3 no MVP). */
+export function buildScheduledIso(
+  calendarDate: string,
+  timeHHmm: string,
+  _timezone = "America/Sao_Paulo"
+): string {
   const [hh, mm] = timeHHmm.split(":").map(Number);
   return `${calendarDate}T${pad2(hh)}:${pad2(mm)}:00-03:00`;
+}
+
+function buildIsoInTimezone(calendarDate: string, timeHHmm: string, timezone: string): string {
+  return buildScheduledIso(calendarDate, timeHHmm, timezone);
 }
 
 function slotsForCount(count: number, templates: SlotTemplates): string[] {

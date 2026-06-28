@@ -15,6 +15,8 @@ export type PublishPrefs = {
   timezone: string;
   slotTemplates: Record<string, string[]>;
   defaultLeadMinutes: number;
+  autoScheduleOnDrop: boolean;
+  publishMockEnabled?: boolean;
 };
 
 export type PublishQueueItem = {
@@ -78,6 +80,7 @@ export type PublishQueueSummary = {
   failed: number;
   publishedLast24h: number;
   total: number;
+  publishMockEnabled: boolean;
 };
 
 export async function fetchPublishQueue(

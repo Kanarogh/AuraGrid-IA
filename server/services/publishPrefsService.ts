@@ -1,3 +1,4 @@
+import { META_PUBLISH_MOCK } from "../config/metaEnv";
 import { eq } from "drizzle-orm";
 import { getDb, isDatabaseConfigured } from "../db/client";
 import { clientPublishPrefs } from "../db/schema";
@@ -7,12 +8,19 @@ import {
 } from "../../src/lib/publish/suggestScheduleTimes";
 import type { PublishPrefsPayload } from "../validation/publishSchema";
 
-export type ClientPublishPrefs = PublishPrefsPayload;
+export type ClientPublishPrefs = PublishPrefsPayload & {
+  autoScheduleOnDrop: boolean;
+};
+
+export type PublishPrefsResponse = ClientPublishPrefs & {
+  publishMockEnabled: boolean;
+};
 
 const DEFAULT_PREFS: ClientPublishPrefs = {
   timezone: "America/Sao_Paulo",
   slotTemplates: DEFAULT_SLOT_TEMPLATES,
   defaultLeadMinutes: 15,
+  autoScheduleOnDrop: false,
 };
 
 function mapRow(row: typeof clientPublishPrefs.$inferSelect): ClientPublishPrefs {
@@ -20,7 +28,12 @@ function mapRow(row: typeof clientPublishPrefs.$inferSelect): ClientPublishPrefs
     timezone: row.timezone,
     slotTemplates: (row.slotTemplates as SlotTemplates) ?? DEFAULT_SLOT_TEMPLATES,
     defaultLeadMinutes: row.defaultLeadMinutes,
+    autoScheduleOnDrop: row.autoScheduleOnDrop ?? false,
   };
+}
+
+export function isPublishMockEnabled(): boolean {
+  return META_PUBLISH_MOCK;
 }
 
 export async function getClientPublishPrefs(clientId: string): Promise<ClientPublishPrefs> {
@@ -34,29 +47,50 @@ export async function getClientPublishPrefs(clientId: string): Promise<ClientPub
   return row ? mapRow(row) : { ...DEFAULT_PREFS };
 }
 
+export async function getClientPublishPrefsPublic(clientId: string): Promise<PublishPrefsResponse> {
+  const prefs = await getClientPublishPrefs(clientId);
+  return { ...prefs, publishMockEnabled: isPublishMockEnabled() };
+}
+
 export async function saveClientPublishPrefs(
   clientId: string,
   patch: PublishPrefsPayload
-): Promise<ClientPublishPrefs> {
-  if (!isDatabaseConfigured()) return patch;
+): Promise<PublishPrefsResponse> {
+  if (!isDatabaseConfigured()) {
+    return {
+      ...DEFAULT_PREFS,
+      ...patch,
+      autoScheduleOnDrop: patch.autoScheduleOnDrop ?? DEFAULT_PREFS.autoScheduleOnDrop,
+      publishMockEnabled: isPublishMockEnabled(),
+    };
+  }
   const db = getDb();
+  const existing = await getClientPublishPrefs(clientId);
+  const merged: ClientPublishPrefs = {
+    ...existing,
+    ...patch,
+    autoScheduleOnDrop: patch.autoScheduleOnDrop ?? existing.autoScheduleOnDrop,
+  };
   const [row] = await db
     .insert(clientPublishPrefs)
     .values({
       clientId,
-      timezone: patch.timezone,
-      slotTemplates: patch.slotTemplates,
-      defaultLeadMinutes: patch.defaultLeadMinutes,
+      timezone: merged.timezone,
+      slotTemplates: merged.slotTemplates,
+      defaultLeadMinutes: merged.defaultLeadMinutes,
+      autoScheduleOnDrop: merged.autoScheduleOnDrop,
     })
     .onConflictDoUpdate({
       target: clientPublishPrefs.clientId,
       set: {
-        timezone: patch.timezone,
-        slotTemplates: patch.slotTemplates,
-        defaultLeadMinutes: patch.defaultLeadMinutes,
+        timezone: merged.timezone,
+        slotTemplates: merged.slotTemplates,
+        defaultLeadMinutes: merged.defaultLeadMinutes,
+        autoScheduleOnDrop: merged.autoScheduleOnDrop,
         updatedAt: new Date(),
       },
     })
     .returning();
-  return row ? mapRow(row) : patch;
+  const saved = row ? mapRow(row) : merged;
+  return { ...saved, publishMockEnabled: isPublishMockEnabled() };
 }

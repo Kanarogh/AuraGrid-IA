@@ -12,11 +12,13 @@ export function MetaConnectionCard({
   connection,
   onRefresh,
   compact,
+  publishMockEnabled,
 }: {
   clientId: string;
   connection: MetaConnectionPublic | null;
   onRefresh: () => void;
   compact?: boolean;
+  publishMockEnabled?: boolean;
 }) {
   const connected = connection?.connected && connection.status === "active";
   const needsReconnect = connection?.needsReconnect;
@@ -78,6 +80,11 @@ export function MetaConnectionCard({
               ? "Sua autorização expirou. Entre novamente para continuar programando posts."
               : "Use uma conta Instagram Profissional vinculada a uma Página do Facebook."}
           </p>
+          {publishMockEnabled && (
+            <p className="text-xs text-ag-success mt-2">
+              Modo simulação ativo — você pode agendar posts sem conectar agora.
+            </p>
+          )}
         </div>
       </div>
       <ul className="text-xs text-ag-muted space-y-1 list-disc pl-4">

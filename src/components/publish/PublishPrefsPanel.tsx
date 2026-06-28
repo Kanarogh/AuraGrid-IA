@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Clock, Save } from "lucide-react";
+import { Check, Clock, Save, Zap } from "lucide-react";
 import { DEFAULT_SLOT_TEMPLATES } from "../../lib/publish/suggestScheduleTimes";
 import {
   fetchPublishPrefs,
@@ -21,18 +21,22 @@ export function PublishPrefsPanel({
   clientId,
   connection,
   onConnectionRefresh,
+  onPrefsChange,
   hideConnection,
+  publishMockEnabled,
 }: {
   clientId: string;
   connection: MetaConnectionPublic | null;
   onConnectionRefresh: () => void;
-  /** Quando true, o card Meta fica só no hub (abaixo da toolbar). */
+  onPrefsChange?: (prefs: PublishPrefs) => void;
   hideConnection?: boolean;
+  publishMockEnabled?: boolean;
 }) {
   const [draft, setDraft] = useState<PublishPrefs>({
     timezone: "America/Sao_Paulo",
     slotTemplates: { ...DEFAULT_SLOT_TEMPLATES },
     defaultLeadMinutes: 15,
+    autoScheduleOnDrop: false,
   });
   const [baseline, setBaseline] = useState("");
   const [saving, setSaving] = useState(false);
@@ -42,8 +46,9 @@ export function PublishPrefsPanel({
     void fetchPublishPrefs(clientId).then((prefs) => {
       setDraft(prefs);
       setBaseline(JSON.stringify(prefs));
+      onPrefsChange?.(prefs);
     });
-  }, [clientId]);
+  }, [clientId, onPrefsChange]);
 
   const isDirty = JSON.stringify(draft) !== baseline;
 
@@ -53,15 +58,16 @@ export function PublishPrefsPanel({
       const saved = await savePublishPrefs(clientId, draft);
       setDraft(saved);
       setBaseline(JSON.stringify(saved));
+      onPrefsChange?.(saved);
       setJustSaved(true);
-      toast.success("Horários salvos.");
+      toast.success("Preferências salvas.");
       window.setTimeout(() => setJustSaved(false), 2500);
     } catch {
       toast.error("Não foi possível salvar.");
     } finally {
       setSaving(false);
     }
-  }, [clientId, draft]);
+  }, [clientId, draft, onPrefsChange]);
 
   const updateSlot = (count: number, index: number, value: string) => {
     setDraft((prev) => {
@@ -82,8 +88,37 @@ export function PublishPrefsPanel({
           clientId={clientId}
           connection={connection}
           onRefresh={onConnectionRefresh}
+          publishMockEnabled={publishMockEnabled}
         />
       )}
+
+      <div className="rounded-2xl border border-ag-border bg-ag-surface-2/50 p-5 space-y-5">
+        <div>
+          <h3 className="font-display text-lg font-semibold text-ag-text flex items-center gap-2">
+            <Zap className="h-5 w-5 text-ag-accent" />
+            Comportamento ao arrastar
+          </h3>
+          <p className="text-sm text-ag-muted mt-1">
+            Escolha se arrastar um post para o calendário cria um rascunho ou agenda imediatamente.
+          </p>
+        </div>
+
+        <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-ag-border bg-ag-surface-1 p-4">
+          <input
+            type="checkbox"
+            checked={draft.autoScheduleOnDrop}
+            onChange={(e) => setDraft((p) => ({ ...p, autoScheduleOnDrop: e.target.checked }))}
+            className="mt-0.5 accent-ag-accent"
+          />
+          <span>
+            <span className="text-sm font-semibold text-ag-text block">Agendar ao soltar</span>
+            <span className="text-xs text-ag-muted">
+              Quando desligado (padrão), arrastar cria um rascunho — confirme depois com o botão
+              &quot;Confirmar agendamento&quot;.
+            </span>
+          </span>
+        </label>
+      </div>
 
       <div className="rounded-2xl border border-ag-border bg-ag-surface-2/50 p-5 space-y-5">
         <div>
@@ -172,7 +207,7 @@ export function PublishPrefsPanel({
               </>
             ) : (
               <>
-                <Save className="h-4 w-4" /> Salvar horários
+                <Save className="h-4 w-4" /> Salvar preferências
               </>
             )}
           </Button>
