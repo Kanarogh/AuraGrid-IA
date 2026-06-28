@@ -1,10 +1,14 @@
 import type { AppSection } from "../sectionMeta";
 import {
+  ACCOUNT_TAB_SLUGS,
   CATALOG_TAB_SLUGS,
+  LEGACY_ACCOUNT_SETTINGS_SLUGS,
   POSTS_TAB_SLUGS,
   SECTION_SLUGS,
   SETTINGS_TAB_SLUGS,
+  accountTabFromSlug,
   catalogTabFromSlug,
+  defaultAccountTab,
   defaultCatalogTab,
   defaultPostsTab,
   defaultSettingsTab,
@@ -12,7 +16,7 @@ import {
   sectionFromSlug,
   settingsTabFromSlug,
 } from "./slugs";
-import type { ClientRoute, ParsedLocation, ClientRouteBuildContext } from "./types";
+import type { AccountRoute, ClientRoute, ParsedLocation, ClientRouteBuildContext } from "./types";
 import {
   isLegacyPeriodQuery,
   periodIdToUrlSlug,
@@ -126,6 +130,23 @@ export function buildDashboardPath(): string {
   return "/dashboard";
 }
 
+export function buildAccountPath(route: AccountRoute): string {
+  return `/conta/${ACCOUNT_TAB_SLUGS[route.tab]}`;
+}
+
+/** Redireciona tabs de conta que ainda usam URL antiga em /c/:id/configuracoes/… */
+export function resolveLegacyAccountSettingsRedirect(pathname: string): string | null {
+  const normalized = pathname.replace(/\/+$/, "") || "/";
+  const match = normalized.match(/^\/c\/[^/]+\/configuracoes(?:\/([^/]+))?$/);
+  if (!match) return null;
+  const tabSlug = match[1];
+  if (!tabSlug) return null;
+  if (!LEGACY_ACCOUNT_SETTINGS_SLUGS.has(tabSlug)) return null;
+  const tab = accountTabFromSlug(tabSlug);
+  if (!tab) return null;
+  return buildAccountPath({ tab });
+}
+
 export function buildLoginPath(returnTo?: string): string {
   if (!returnTo || returnTo === "/login") return "/login";
   return `/login?returnTo=${encodeURIComponent(returnTo)}`;
@@ -237,6 +258,18 @@ export function parseAppPath(
   if (normalized === "/login") return { kind: "login" };
   if (normalized === "/welcome") return { kind: "welcome" };
   if (normalized === "/dashboard") return { kind: "dashboard" };
+
+  if (normalized === "/conta" || normalized.startsWith("/conta/")) {
+    const segments = normalized.slice("/conta".length).split("/").filter(Boolean);
+    if (segments.length === 0) {
+      return { kind: "account", route: { tab: defaultAccountTab() } };
+    }
+    if (segments.length === 1) {
+      const tab = accountTabFromSlug(segments[0]);
+      if (tab) return { kind: "account", route: { tab } };
+    }
+    return { kind: "unknown", pathname: normalized };
+  }
 
   const clientMatch = normalized.match(/^\/c\/([^/]+)(?:\/(.*))?$/);
   if (!clientMatch) return { kind: "unknown", pathname: normalized };

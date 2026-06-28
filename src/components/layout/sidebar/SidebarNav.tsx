@@ -4,16 +4,21 @@ import { LayoutDashboard } from "lucide-react";
 import { cn } from "../../../lib/cn";
 import { usePermissionsOptional } from "../../../context/PermissionsContext";
 import {
+  getAccountNavItems,
   getNavGroups,
   type AppSection,
+  type AccountNavItem,
   type NavItem,
 } from "../../../lib/sectionMeta";
 import { canAccessAppSection } from "../../../lib/permissions/navFilter";
 import { useAuth } from "../../../context/AuthContext";
+import type { AccountTab } from "../../../lib/appRouting";
 
 export function SidebarNav({
   active,
   isDashboardActive,
+  isAccountActive,
+  activeAccountTab,
   collapsed,
   hasActiveClient,
   usesReferences,
@@ -21,10 +26,13 @@ export function SidebarNav({
   activeClientId,
   onNavigate,
   onNavigateDashboard,
+  onNavigateAccount,
   onMobileClose,
 }: {
   active: AppSection;
   isDashboardActive?: boolean;
+  isAccountActive?: boolean;
+  activeAccountTab?: AccountTab;
   collapsed: boolean;
   hasActiveClient: boolean;
   usesReferences?: boolean;
@@ -32,10 +40,13 @@ export function SidebarNav({
   activeClientId?: string;
   onNavigate: (id: AppSection) => void;
   onNavigateDashboard?: () => void;
+  onNavigateAccount?: (tab: AccountTab) => void;
   onMobileClose?: () => void;
 }) {
   const { user } = useAuth();
   const perms = usePermissionsOptional();
+  const canManageTeam = perms?.canManageTeam() ?? false;
+
   const canAccess = (section: AppSection) => {
     if (!activeClientId || !user) return true;
     if (perms) return perms.canAccessSection(activeClientId, section, "read");
@@ -52,10 +63,13 @@ export function SidebarNav({
     }),
   }));
 
+  const accountItems = getAccountNavItems({ canManageTeam });
+
   const renderNavButton = (
     item: NavItem & { badge?: number },
     isActive: boolean,
-    disabled: boolean
+    disabled: boolean,
+    onClick: () => void
   ) => {
     const Icon = item.icon;
     const badge = item.badge;
@@ -68,7 +82,7 @@ export function SidebarNav({
         title={collapsed ? (disabled ? "Crie um cliente primeiro" : item.label) : item.description}
         onClick={() => {
           if (disabled) return;
-          onNavigate(item.id);
+          onClick();
           onMobileClose?.();
         }}
         className={cn(
@@ -118,6 +132,38 @@ export function SidebarNav({
     );
   };
 
+  const renderAccountButton = (item: AccountNavItem, isActive: boolean) => {
+    const Icon = item.icon;
+    return (
+      <button
+        type="button"
+        aria-current={isActive ? "page" : undefined}
+        title={collapsed ? item.label : item.description}
+        onClick={() => {
+          onNavigateAccount?.(item.id);
+          onMobileClose?.();
+        }}
+        className={cn(
+          "group w-full flex items-center gap-3 rounded-xl text-left transition-all duration-200 relative ag-focus-ring cursor-pointer",
+          collapsed ? "justify-center p-2.5" : "px-3 py-2.5 max-lg:min-h-[44px]",
+          isActive
+            ? "bg-ag-accent text-ag-accent-fg shadow-sm"
+            : "text-ag-text hover:bg-ag-surface-3/80"
+        )}
+      >
+        <Icon
+          className={cn(
+            "h-[18px] w-[18px] shrink-0 transition-colors",
+            isActive ? "text-ag-accent-fg" : "text-ag-muted group-hover:text-ag-text"
+          )}
+        />
+        {!collapsed && (
+          <span className="flex-1 min-w-0 text-sm font-medium truncate">{item.label}</span>
+        )}
+      </button>
+    );
+  };
+
   return (
     <nav
       className="flex-1 overflow-y-auto py-3 px-2 ag-scrollbar-thin space-y-4 overscroll-contain min-h-0"
@@ -151,6 +197,21 @@ export function SidebarNav({
         </ul>
       </div>
 
+      {accountItems.length > 0 && (
+        <div>
+          {!collapsed && (
+            <p className="px-3 mb-1.5 text-[11px] font-medium text-ag-muted">Conta</p>
+          )}
+          <ul className="space-y-0.5">
+            {accountItems.map((item) => (
+              <li key={item.id}>
+                {renderAccountButton(item, Boolean(isAccountActive && activeAccountTab === item.id))}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {groups.map((group) => (
         <div key={group.title}>
           {!collapsed && (
@@ -167,11 +228,17 @@ export function SidebarNav({
             )}
           >
             {group.items.map((item) => {
-              const isActive = !isDashboardActive && active === item.id;
+              const isActive =
+                !isDashboardActive && !isAccountActive && active === item.id;
               const disabled = !hasActiveClient;
               return (
                 <li key={item.id}>
-                  {renderNavButton(item as NavItem & { badge?: number }, isActive, disabled)}
+                  {renderNavButton(
+                    item as NavItem & { badge?: number },
+                    isActive,
+                    disabled,
+                    () => onNavigate(item.id)
+                  )}
                 </li>
               );
             })}

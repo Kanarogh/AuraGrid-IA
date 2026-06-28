@@ -52,6 +52,10 @@ export const userAiPreferences = pgTable("user_ai_preferences", {
     .references(() => users.id, { onDelete: "cascade" }),
   geminiModel: text("gemini_model"),
   geminiCatalogModel: text("gemini_catalog_model"),
+  indexingModel: text("indexing_model"),
+  planningModel: text("planning_model"),
+  contentScheduleModel: text("content_schedule_model"),
+  referenceModel: text("reference_model"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

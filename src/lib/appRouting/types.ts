@@ -5,7 +5,13 @@ import type { CanvaPageRouteRef } from "./canvaPageSlug";
 
 export type CatalogTab = "references" | "grid";
 
-export type SettingsTab = "brand" | "captions" | "ai" | "appearance" | "team";
+export type SettingsTab = "brand" | "captions";
+
+export type AccountTab = "team" | "appearance" | "ai";
+
+export type AccountRoute = {
+  tab: AccountTab;
+};
 
 /** Rota dentro do workspace de um cliente. */
 export type ClientRoute = {
@@ -25,6 +31,7 @@ export type ParsedLocation =
   | { kind: "login" }
   | { kind: "welcome" }
   | { kind: "dashboard" }
+  | { kind: "account"; route: AccountRoute }
   | { kind: "client"; route: ClientRoute }
   | { kind: "unknown"; pathname: string };
 

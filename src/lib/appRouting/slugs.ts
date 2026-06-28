@@ -1,6 +1,6 @@
 import type { AppSection } from "../sectionMeta";
 import type { PostsWorkTab } from "../../components/posts/PostsWorkspaceToolbar";
-import type { CatalogTab, SettingsTab } from "./types";
+import type { AccountTab, CatalogTab, SettingsTab } from "./types";
 
 export const SECTION_SLUGS: Record<AppSection, string> = {
   content_schedule: "cronograma",
@@ -39,14 +39,24 @@ const SLUG_TO_CATALOG_TAB = Object.fromEntries(
 export const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   brand: "marca",
   captions: "legendas",
-  ai: "ia",
-  appearance: "aparencia",
-  team: "equipe",
 };
 
 const SLUG_TO_SETTINGS_TAB = Object.fromEntries(
   Object.entries(SETTINGS_TAB_SLUGS).map(([tab, slug]) => [slug, tab])
 ) as Record<string, SettingsTab>;
+
+export const ACCOUNT_TAB_SLUGS: Record<AccountTab, string> = {
+  team: "equipe",
+  appearance: "aparencia",
+  ai: "ia",
+};
+
+const SLUG_TO_ACCOUNT_TAB = Object.fromEntries(
+  Object.entries(ACCOUNT_TAB_SLUGS).map(([tab, slug]) => [slug, tab])
+) as Record<string, AccountTab>;
+
+/** Tabs de conta que antes viviam em /c/:id/configuracoes/… */
+export const LEGACY_ACCOUNT_SETTINGS_SLUGS = new Set(["equipe", "aparencia", "ia"]);
 
 export function sectionFromSlug(slug: string): AppSection | undefined {
   return SLUG_TO_SECTION[slug];
@@ -64,6 +74,10 @@ export function settingsTabFromSlug(slug: string): SettingsTab | undefined {
   return SLUG_TO_SETTINGS_TAB[slug];
 }
 
+export function accountTabFromSlug(slug: string): AccountTab | undefined {
+  return SLUG_TO_ACCOUNT_TAB[slug];
+}
+
 export function defaultPostsTab(): PostsWorkTab {
   return "day";
 }
@@ -74,4 +88,8 @@ export function defaultCatalogTab(): CatalogTab {
 
 export function defaultSettingsTab(): SettingsTab {
   return "brand";
+}
+
+export function defaultAccountTab(): AccountTab {
+  return "appearance";
 }

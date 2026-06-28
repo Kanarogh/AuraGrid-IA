@@ -2,13 +2,17 @@ import type { ComponentType } from "react";
 import {
   CalendarClock,
   CalendarRange,
+  Cpu,
   Grid,
   LayoutGrid,
+  Palette,
   ScanSearch,
   Settings,
   ShoppingBag,
   Sliders,
+  Users,
 } from "lucide-react";
+import type { AccountTab } from "./appRouting/types";
 
 export type AppSection =
   | "content_schedule"
@@ -29,6 +33,13 @@ export type NavItem = {
   nested?: boolean;
 };
 
+export type AccountNavItem = {
+  id: AccountTab;
+  label: string;
+  description: string;
+  icon: ComponentType<{ className?: string }>;
+};
+
 export type NavGroup = {
   title: string;
   /** Friendly label shown in sidebar (sentence case) */
@@ -37,6 +48,27 @@ export type NavGroup = {
   variant?: "default" | "planning";
   items: NavItem[];
 };
+
+export const ACCOUNT_NAV_ITEMS: AccountNavItem[] = [
+  {
+    id: "team",
+    label: "Equipe",
+    description: "Membros, convites e permissões da conta",
+    icon: Users,
+  },
+  {
+    id: "appearance",
+    label: "Aparência",
+    description: "Cor de destaque e personalização visual",
+    icon: Palette,
+  },
+  {
+    id: "ai",
+    label: "IA",
+    description: "Modelos Gemini usados em todo o workspace",
+    icon: Cpu,
+  },
+];
 
 export const NAV_GROUPS: NavGroup[] = [
   {
@@ -89,7 +121,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         id: "catalog",
         label: "Catálogo",
-        description: "Referências e peças de grid",
+        description: "Referências indexadas e peças de grid",
         icon: ShoppingBag,
       },
       {
@@ -102,13 +134,13 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    title: "Conta",
-    navLabel: "Conta",
+    title: "Cliente",
+    navLabel: "Cliente",
     items: [
       {
         id: "settings",
-        label: "Configurações",
-        description: "Marca, IA e aparência",
+        label: "Configurações do cliente",
+        description: "Marca, Gem e legendas",
         icon: Settings,
       },
     ],
@@ -139,6 +171,36 @@ export function getNavGroups(
   return groups;
 }
 
+export function getAccountNavItems(options?: {
+  canManageTeam?: boolean;
+}): AccountNavItem[] {
+  const canManageTeam = options?.canManageTeam ?? false;
+  return ACCOUNT_NAV_ITEMS.filter((item) => {
+    if (item.id === "team" || item.id === "ai") return canManageTeam;
+    return true;
+  });
+}
+
+export const ACCOUNT_TAB_LABELS: Record<AccountTab, string> = {
+  team: "Equipe",
+  appearance: "Aparência",
+  ai: "IA",
+};
+
+export const ACCOUNT_TAB_SUBTITLES: Record<AccountTab, string> = {
+  team: "Membros, convites e permissões da conta",
+  appearance: "Cor de destaque e personalização visual",
+  ai: "Modelos Gemini para legendas, catálogo e cronograma",
+};
+
+export function getAccountTabTitle(tab: AccountTab): string {
+  return ACCOUNT_TAB_LABELS[tab];
+}
+
+export function getAccountTabSubtitle(tab: AccountTab): string {
+  return ACCOUNT_TAB_SUBTITLES[tab];
+}
+
 export const SECTION_SUBTITLES: Record<AppSection, string> = {
   content_schedule: "Gere o cronograma mensal de copy com IA",
   posts: "Planeje, gere e aprove legendas do mês",
@@ -147,7 +209,7 @@ export const SECTION_SUBTITLES: Record<AppSection, string> = {
   feed_simulator: "Veja como o feed fica no Instagram",
   catalog: "Gerencie referências indexadas e peças de grid",
   reference_finder: "Identifique o código de uma peça a partir de uma foto",
-  settings: "Configure a voz da marca, IA e aparência",
+  settings: "Configure a voz da marca e parâmetros de legenda",
 };
 
 export const ALL_NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);

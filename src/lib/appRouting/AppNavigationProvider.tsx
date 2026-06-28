@@ -10,8 +10,8 @@ import {
 } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { AppSection } from "../sectionMeta";
-import { mergeClientRoute, buildClientPath, buildLoginPath, parseAppPath } from "./paths";
-import type { ClientRoute, ClientRouteBuildContext, NavigateOptions, ParsedLocation } from "./types";
+import { mergeClientRoute, buildAccountPath, buildClientPath, buildLoginPath, parseAppPath } from "./paths";
+import type { AccountRoute, AccountTab, ClientRoute, ClientRouteBuildContext, NavigateOptions, ParsedLocation } from "./types";
 
 const PENDING_NAV_TIMEOUT_MS = 5000;
 
@@ -47,6 +47,8 @@ type AppNavigationContextValue = {
   registerCommitNavigation: (fn: CommitNavigationFn | null) => void;
   registerRouteBuildContext: (fn: RouteBuildContextFn | null) => void;
   navigateSection: (section: AppSection, options?: NavigateOptions) => Promise<boolean>;
+  navigateAccount: (tab: AccountTab, options?: NavigateOptions) => Promise<boolean>;
+  accountRoute: AccountRoute | null;
   replaceClientRoute: (route: ClientRoute) => void;
   setBeforeNavigate: (fn: BeforeNavigateFn | null) => void;
   isApplyingRouteRef: React.MutableRefObject<boolean>;
@@ -82,6 +84,7 @@ export function AppNavigationProvider({
   );
 
   const clientRoute = parsedLocation.kind === "client" ? parsedLocation.route : null;
+  const accountRoute = parsedLocation.kind === "account" ? parsedLocation.route : null;
   currentRouteRef.current = clientRoute;
 
   const routeBuildCtx = useCallback(
@@ -190,6 +193,19 @@ export function AppNavigationProvider({
     [navigateRoute]
   );
 
+  const navigateAccount = useCallback(
+    (tab: AccountTab, options?: NavigateOptions) => {
+      const path = buildAccountPath({ tab });
+      const currentPath = searchParams.toString()
+        ? `${pathname}?${searchParams.toString()}`
+        : pathname;
+      if (path === currentPath) return Promise.resolve(true);
+      pushPath(path, options?.replace);
+      return Promise.resolve(true);
+    },
+    [pathname, pushPath, searchParams]
+  );
+
   const replaceClientRoute = useCallback(
     (route: ClientRoute) => {
       const path = buildClientPath(route, routeBuildCtx());
@@ -211,6 +227,7 @@ export function AppNavigationProvider({
     () => ({
       parsedLocation,
       clientRoute,
+      accountRoute,
       defaultClientId,
       pendingNavigationRef,
       pendingNavigationPathRef,
@@ -219,6 +236,7 @@ export function AppNavigationProvider({
       registerCommitNavigation,
       registerRouteBuildContext,
       navigateSection,
+      navigateAccount,
       replaceClientRoute,
       setBeforeNavigate,
       isApplyingRouteRef,
@@ -227,12 +245,14 @@ export function AppNavigationProvider({
     [
       parsedLocation,
       clientRoute,
+      accountRoute,
       defaultClientId,
       navigateClient,
       navigateRoute,
       registerCommitNavigation,
       registerRouteBuildContext,
       navigateSection,
+      navigateAccount,
       replaceClientRoute,
       setBeforeNavigate,
       isNavigationInFlight,

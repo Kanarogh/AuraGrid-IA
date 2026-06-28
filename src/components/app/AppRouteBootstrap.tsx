@@ -8,6 +8,7 @@ import {
   buildClientPath,
   buildDashboardPath,
   buildLoginPath,
+  resolveLegacyAccountSettingsRedirect,
   useAppNavigation,
 } from "../../lib/appRouting";
 import { isProtectedPath } from "../../lib/auth/protectedPaths";
@@ -42,6 +43,12 @@ export function AppRouteBootstrap() {
       router.replace(path);
     };
 
+    const legacyAccountPath = resolveLegacyAccountSettingsRedirect(pathname);
+    if (legacyAccountPath) {
+      redirect(legacyAccountPath);
+      return;
+    }
+
     if (storageMode === "local" && pathname === "/login") {
       redirect("/");
       return;
@@ -72,6 +79,10 @@ export function AppRouteBootstrap() {
       if (!hasActiveClient) {
         redirect("/welcome");
       }
+      return;
+    }
+
+    if (parsedLocation.kind === "account") {
       return;
     }
 

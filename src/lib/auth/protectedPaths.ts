@@ -1,4 +1,4 @@
-const PROTECTED_PATH_PREFIXES = ["/c/"] as const;
+const PROTECTED_PATH_PREFIXES = ["/c/", "/conta"] as const;
 
 const PROTECTED_EXACT = ["/", "/welcome", "/dashboard"] as const;
 

@@ -2,7 +2,7 @@
 import path from "path";
 import { sanitizeGeminiModelId } from "./geminiModels";
 import { getUserAiContext, patchUserAiContext } from "./userAiContext";
-import { saveUserClientAiRuntimeSettings } from "../services/clientAiPreferencesService";
+import { saveUserAiRuntimeSettings } from "../services/userAiPreferencesService";
 import { isDatabaseConfigured } from "../db/client";
 import type { AiProviderId } from "./types";
 
@@ -165,12 +165,7 @@ async function persistUserOrFile(patch: {
 }): Promise<void> {
   const userCtx = getUserAiContext();
   if (userCtx && isDatabaseConfigured()) {
-    if (!userCtx.clientId) {
-      throw new Error(
-        "Selecione um cliente ativo antes de salvar configuração de modelo por contexto."
-      );
-    }
-    await saveUserClientAiRuntimeSettings(userCtx.userId, userCtx.clientId, patch);
+    await saveUserAiRuntimeSettings(userCtx.userId, patch);
     patchUserAiContext({
       indexingModel: patch.indexingModel,
       planningModel: patch.planningModel,

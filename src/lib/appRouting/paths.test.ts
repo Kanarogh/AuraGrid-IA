@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  buildAccountPath,
   buildClientPath,
   buildDashboardPath,
   buildHomeRedirectPath,
@@ -7,9 +8,10 @@ import {
   mergeClientRoute,
   parseAppPath,
   pathsEqual,
+  resolveLegacyAccountSettingsRedirect,
 } from "./paths";
 import { resolveHomePath } from "./defaults";
-import type { ClientRoute } from "./types";
+import type { AccountRoute, ClientRoute } from "./types";
 
 function test(name: string, fn: () => void) {
   try {
@@ -22,6 +24,53 @@ function test(name: string, fn: () => void) {
 }
 
 console.log("appRouting/paths");
+
+test("parse account routes", () => {
+  assert.deepEqual(parseAppPath("/conta/equipe"), {
+    kind: "account",
+    route: { tab: "team" },
+  });
+  assert.deepEqual(parseAppPath("/conta/aparencia"), {
+    kind: "account",
+    route: { tab: "appearance" },
+  });
+  assert.deepEqual(parseAppPath("/conta/ia"), {
+    kind: "account",
+    route: { tab: "ai" },
+  });
+  assert.deepEqual(parseAppPath("/conta"), {
+    kind: "account",
+    route: { tab: "appearance" },
+  });
+});
+
+test("account path round-trip", () => {
+  const route: AccountRoute = { tab: "team" };
+  assert.equal(buildAccountPath(route), "/conta/equipe");
+  const parsed = parseAppPath("/conta/equipe");
+  assert.equal(parsed.kind, "account");
+  if (parsed.kind !== "account") return;
+  assert.equal(parsed.route.tab, "team");
+});
+
+test("legacy account settings redirect", () => {
+  assert.equal(
+    resolveLegacyAccountSettingsRedirect("/c/palak-euro/configuracoes/equipe"),
+    "/conta/equipe"
+  );
+  assert.equal(
+    resolveLegacyAccountSettingsRedirect("/c/palak-euro/configuracoes/aparencia"),
+    "/conta/aparencia"
+  );
+  assert.equal(
+    resolveLegacyAccountSettingsRedirect("/c/palak-euro/configuracoes/ia"),
+    "/conta/ia"
+  );
+  assert.equal(
+    resolveLegacyAccountSettingsRedirect("/c/palak-euro/configuracoes/marca"),
+    null
+  );
+});
 
 test("parse home/login/welcome/dashboard", () => {
   assert.deepEqual(parseAppPath("/"), { kind: "home" });

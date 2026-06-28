@@ -1,4 +1,6 @@
 export type {
+  AccountRoute,
+  AccountTab,
   CatalogTab,
   ClientRoute,
   ClientRouteBuildContext,
@@ -10,11 +12,14 @@ export type {
 } from "./types";
 
 export {
+  ACCOUNT_TAB_SLUGS,
   CATALOG_TAB_SLUGS,
   POSTS_TAB_SLUGS,
   SECTION_SLUGS,
   SETTINGS_TAB_SLUGS,
+  accountTabFromSlug,
   catalogTabFromSlug,
+  defaultAccountTab,
   defaultCatalogTab,
   defaultPostsTab,
   defaultSettingsTab,
@@ -24,6 +29,7 @@ export {
 } from "./slugs";
 
 export {
+  buildAccountPath,
   buildClientPath,
   buildDashboardPath,
   buildHomeRedirectPath,
@@ -31,6 +37,7 @@ export {
   mergeClientRoute,
   parseAppPath,
   pathsEqual,
+  resolveLegacyAccountSettingsRedirect,
 } from "./paths";
 
 export { resolveHomePath, validateClientRoute } from "./defaults";

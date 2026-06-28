@@ -1,12 +1,16 @@
 ﻿import { AsyncLocalStorage } from "async_hooks";
 import type { AiProviderId } from "./types";
 import {
-  getUserClientAiRuntimeSettings,
-  type ClientAiRuntimeSettings,
-} from "../services/clientAiPreferencesService";
+  getUserAiRuntimeSettings,
+  saveUserAiRuntimeSettings,
+  type UserAiRuntimeSettings,
+} from "../services/userAiPreferencesService";
 import { getActiveClientId } from "../services/clientService";
 
-export type UserAiContextStore = ClientAiRuntimeSettings & {
+export type UserAiContextStore = Pick<
+  UserAiRuntimeSettings,
+  "indexingModel" | "planningModel" | "contentScheduleModel" | "referenceModel"
+> & {
   userId: string;
   clientId: string | null;
   provider: AiProviderId | null;
@@ -18,7 +22,14 @@ export function getUserAiContext(): UserAiContextStore | undefined {
   return userAiAls.getStore();
 }
 
-export function patchUserAiContext(patch: Partial<ClientAiRuntimeSettings>): void {
+export function patchUserAiContext(
+  patch: Partial<
+    Pick<
+      UserAiRuntimeSettings,
+      "indexingModel" | "planningModel" | "contentScheduleModel" | "referenceModel"
+    >
+  >
+): void {
   const store = userAiAls.getStore();
   if (!store) return;
   if (patch.indexingModel !== undefined) store.indexingModel = patch.indexingModel;
@@ -31,8 +42,19 @@ export function patchUserAiContext(patch: Partial<ClientAiRuntimeSettings>): voi
 
 export async function withUserAiContext<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   const clientId = await getActiveClientId(userId);
-  const prefs = await getUserClientAiRuntimeSettings(userId, clientId);
-  return userAiAls.run({ userId, clientId, provider: null, ...prefs }, fn);
+  const prefs = await getUserAiRuntimeSettings(userId);
+  return userAiAls.run(
+    {
+      userId,
+      clientId,
+      provider: null,
+      indexingModel: prefs.indexingModel,
+      planningModel: prefs.planningModel,
+      contentScheduleModel: prefs.contentScheduleModel,
+      referenceModel: prefs.referenceModel,
+    },
+    fn
+  );
 }
 
 export function isValidAiProvider(value: unknown): value is AiProviderId {

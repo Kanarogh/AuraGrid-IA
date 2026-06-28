@@ -6,7 +6,6 @@ import {
   Building,
   Check,
   ChevronDown,
-  Cpu,
   Hash,
   Info,
   ListOrdered,
@@ -18,8 +17,6 @@ import {
   Settings,
   Type,
   CalendarDays,
-  Palette,
-  Users,
 } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { toast } from "../../lib/toast";
@@ -46,10 +43,6 @@ import {
   REQUIRED_BRAND_GEM_FIELD_COUNT,
 } from "../../lib/brandGemValidation";
 import type { BrandGem } from "../../types";
-import { AiProviderPanel } from "./AiProviderPanel";
-import { AppearanceSettingsPanel } from "./AppearanceSettingsPanel";
-import { TeamMembersPanel } from "../team/TeamMembersPanel";
-import { usePermissionsOptional } from "../../context/PermissionsContext";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { FieldLabel, Input, Textarea } from "../ui/Input";
@@ -104,14 +97,12 @@ export function ConfigPanel({
   readOnly?: boolean;
 }) {
   const { storageMode } = useAuth();
-  const perms = usePermissionsOptional();
-  const showTeamTab = perms?.canManageTeam() ?? false;
   const [footerOpen, setFooterOpen] = useState(true);
   const [captionParamsOpen, setCaptionParamsOpen] = useState(true);
   const [settingsTabLocal, setSettingsTabLocal] = useState<SettingsTab>("brand");
   const settingsTab = settingsTabProp ?? settingsTabLocal;
   const setSettingsTab = onSettingsTabChange ?? setSettingsTabLocal;
-  const formLocked = readOnly && settingsTab !== "team";
+  const formLocked = readOnly;
   const [draftGem, setDraftGem] = useState<BrandGem>(brandGem);
   const [justSaved, setJustSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -332,9 +323,6 @@ export function ConfigPanel({
         tabs={[
           { id: "brand" as const, label: "Marca (Gem)", icon: Sparkles },
           { id: "captions" as const, label: "Legendas", icon: Type },
-          { id: "ai" as const, label: "IA", icon: Cpu },
-          { id: "appearance" as const, label: "Aparência", icon: Palette },
-          ...(showTeamTab ? [{ id: "team" as const, label: "Equipe", icon: Users }] : []),
         ]}
         active={settingsTab}
         onChange={setSettingsTab}
@@ -377,34 +365,6 @@ export function ConfigPanel({
             <strong>Gem pronto.</strong> Tom, idioma e rodapé serão aplicados em cada legenda gerada
             ou refinada.
           </p>
-        </div>
-      )}
-
-      {settingsTab === "appearance" && (
-      <div className="mb-8 rounded-2xl border border-ag-border bg-ag-surface-2/50 p-5 sm:p-6 space-y-4">
-        <div className="flex items-center gap-2">
-          <Palette className="h-4 w-4 text-ag-accent" />
-          <h3 className="font-display text-lg font-semibold text-ag-text tracking-tight">
-            Aparência
-          </h3>
-        </div>
-        <p className="text-sm text-ag-muted leading-relaxed">
-          Escolha a cor de destaque do workspace. Neutros e modo claro/escuro continuam na barra
-          superior.
-        </p>
-        <AppearanceSettingsPanel />
-      </div>
-      )}
-
-      {settingsTab === "ai" && (
-      <div className="mb-8">
-        <AiProviderPanel />
-      </div>
-      )}
-
-      {settingsTab === "team" && showTeamTab && (
-        <div className="mb-8">
-          <TeamMembersPanel />
         </div>
       )}
 

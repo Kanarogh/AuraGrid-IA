@@ -11,6 +11,9 @@ import { AppLogoutButton } from "./AppLogoutButton";
 export function AppTopBar({
   activeSection,
   isDashboardActive,
+  isAccountActive,
+  accountSectionTitle,
+  accountSectionSubtitle,
   clientName,
   onOpenMenu,
   isDark,
@@ -23,6 +26,9 @@ export function AppTopBar({
 }: {
   activeSection: AppSection;
   isDashboardActive?: boolean;
+  isAccountActive?: boolean;
+  accountSectionTitle?: string;
+  accountSectionSubtitle?: string;
   clientName: string;
   onOpenMenu: () => void;
   isDark: boolean;
@@ -33,10 +39,17 @@ export function AppTopBar({
   brandGemMissingCount?: number;
   hasActiveClient?: boolean;
 }) {
-  const sectionTitle = isDashboardActive ? "Dashboard" : getSectionTitle(activeSection);
+  const sectionTitle = isDashboardActive
+    ? "Dashboard"
+    : isAccountActive && accountSectionTitle
+      ? accountSectionTitle
+      : getSectionTitle(activeSection);
   const subtitle = isDashboardActive
-    ? `Visão geral de ${clientName}`
-    : getSectionSubtitle(activeSection);
+    ? `Visão geral de ${clientName === "Conta" ? "sua conta" : clientName}`
+    : isAccountActive && accountSectionSubtitle
+      ? accountSectionSubtitle
+      : getSectionSubtitle(activeSection);
+  const breadcrumbRoot = isAccountActive ? "Conta" : clientName;
 
   return (
     <header className="sticky top-0 z-20 border-b border-ag-border ag-glass shrink-0 min-h-[var(--ag-topbar-height)]">
@@ -56,8 +69,8 @@ export function AppTopBar({
               className="flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest text-ag-muted"
               aria-label="Localização"
             >
-              <span className="truncate max-w-[8rem] sm:max-w-[12rem]" title={clientName}>
-                {clientName}
+              <span className="truncate max-w-[8rem] sm:max-w-[12rem]" title={breadcrumbRoot}>
+                {breadcrumbRoot}
               </span>
               <ChevronRight className="h-3 w-3 opacity-60 shrink-0" aria-hidden />
               <span className="text-ag-accent truncate">{sectionTitle}</span>

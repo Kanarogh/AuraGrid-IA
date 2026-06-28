@@ -77,7 +77,9 @@ import { useAppRouteSync, type AppRouteSyncHandlers } from "./hooks/useAppRouteS
 import { useCanvaPageActions } from "./hooks/useCanvaPageActions";
 import { useCaptionGeneration } from "./hooks/useCaptionGeneration";
 import type { SettingsTab } from "./lib/appRouting";
-import { useAppNavigation, buildDashboardPath } from "./lib/appRouting";
+import { useAppNavigation, buildDashboardPath, type AccountTab } from "./lib/appRouting";
+import { AccountSettingsWorkspace } from "./components/account/AccountSettingsWorkspace";
+import { getAccountTabSubtitle, getAccountTabTitle } from "./lib/sectionMeta";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardView } from "./components/dashboard/DashboardView";
 import { useDashboardMetrics } from "./hooks/useDashboardMetrics";
@@ -2663,11 +2665,13 @@ export default function App() {
     ]
   );
 
-  const { parsedLocation, clientRoute } = useAppNavigation();
+  const { parsedLocation, clientRoute, accountRoute, navigateAccount } = useAppNavigation();
   const searchParams = useSearchParams();
   const metaConnectedParam = searchParams.get("meta_connected") === "1";
   const isDashboardActive = parsedLocation.kind === "dashboard";
+  const isAccountActive = parsedLocation.kind === "account";
   const onClientRoute = parsedLocation.kind === "client";
+  const routeAccountTab: AccountTab = accountRoute?.tab ?? "appearance";
   const routeSection = clientRoute?.section ?? activeSection;
   const routePostsTab = clientRoute?.postsTab ?? postsWorkTab;
   const routePreviewId = clientRoute?.postId ?? activePreviewId;
@@ -2675,6 +2679,33 @@ export default function App() {
   const effectiveCatalogTab =
     usesReferences || routeCatalogTab === "grid" ? routeCatalogTab : "grid";
   const routeSettingsTab = clientRoute?.settingsTab ?? settingsTab;
+
+  const goToAccount = useCallback(
+    async (tab: AccountTab) => {
+      if (activeSection === "settings" && settingsDraftDirty) {
+        const ok = await confirmDialog({
+          title: "Alterações não salvas",
+          message:
+            "Você tem alterações no Gem da marca que ainda não foram salvas. Sair sem salvar?",
+          variant: "danger",
+          confirmLabel: "Sair sem salvar",
+        });
+        if (!ok) return;
+      }
+      void navigateAccount(tab);
+    },
+    [activeSection, settingsDraftDirty, navigateAccount]
+  );
+
+  useEffect(() => {
+    if (!isAccountActive) return;
+    if (
+      (routeAccountTab === "team" || routeAccountTab === "ai") &&
+      !permissions.canManageTeam()
+    ) {
+      void navigateAccount("appearance", { replace: true });
+    }
+  }, [isAccountActive, routeAccountTab, permissions, navigateAccount]);
 
   useEffect(() => {
     if (!usesReferences) {
@@ -2726,9 +2757,18 @@ export default function App() {
       <AppShell
         activeSection={routeSection}
         isDashboardActive={isDashboardActive}
+        isAccountActive={isAccountActive}
+        activeAccountTab={routeAccountTab}
         onNavigate={handleNavigate}
         onNavigateDashboard={goToDashboard}
-        clientName={hasActiveClient ? activeClient.name : "—"}
+        onNavigateAccount={(tab) => void goToAccount(tab)}
+        clientName={
+          isAccountActive ? "Conta" : hasActiveClient ? activeClient.name : "—"
+        }
+        accountSectionTitle={isAccountActive ? getAccountTabTitle(routeAccountTab) : undefined}
+        accountSectionSubtitle={
+          isAccountActive ? getAccountTabSubtitle(routeAccountTab) : undefined
+        }
         catalogCount={referenceCatalog.length}
         brandGemReady={hasActiveClient ? brandGemReady : undefined}
         brandGemMissingCount={hasActiveClient ? brandGemMissingCount : undefined}
@@ -2742,7 +2782,7 @@ export default function App() {
       >
         {connectionStatus === "disconnected" && <ApiAlert />}
 
-        {!hasActiveClient && (
+        {!hasActiveClient && !isDashboardActive && !isAccountActive && (
           <div className="flex flex-col items-center justify-center min-h-[45vh] gap-6 px-4 text-center max-w-lg mx-auto">
             <h2 className="font-display text-2xl font-semibold text-ag-text">
               Crie seu primeiro cliente
@@ -2786,6 +2826,14 @@ export default function App() {
               </li>
             </ol>
           </div>
+        )}
+
+        {isAccountActive && (
+          <AccountSettingsWorkspace
+            accountTab={routeAccountTab}
+            onAccountTabChange={(tab) => void goToAccount(tab)}
+            canManageTeam={permissions.canManageTeam()}
+          />
         )}
 
         {hasActiveClient && isDashboardActive && (

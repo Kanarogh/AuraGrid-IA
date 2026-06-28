@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { cn } from "../../lib/cn";
 import { useFocusTrap } from "../../lib/useFocusTrap";
 import type { AppSection } from "../../lib/sectionMeta";
+import type { AccountTab } from "../../lib/appRouting";
 import { SidebarBrand } from "./sidebar/SidebarBrand";
 import { ClientHub } from "./sidebar/ClientHub";
 import { SidebarNav } from "./sidebar/SidebarNav";
@@ -32,8 +33,11 @@ export function saveSidebarCollapsed(collapsed: boolean) {
 export function AppSidebar({
   active,
   isDashboardActive,
+  isAccountActive,
+  activeAccountTab,
   onNavigate,
   onNavigateDashboard,
+  onNavigateAccount,
   catalogCount,
   brandGemReady,
   brandGemMissingCount = 0,
@@ -48,8 +52,11 @@ export function AppSidebar({
 }: {
   active: AppSection;
   isDashboardActive?: boolean;
+  isAccountActive?: boolean;
+  activeAccountTab?: AccountTab;
   onNavigate: (id: AppSection) => void;
   onNavigateDashboard?: () => void;
+  onNavigateAccount?: (tab: AccountTab) => void;
   catalogCount: number;
   brandGemReady?: boolean;
   brandGemMissingCount?: number;
@@ -115,6 +122,8 @@ export function AppSidebar({
         <SidebarNav
           active={active}
           isDashboardActive={isDashboardActive}
+          isAccountActive={isAccountActive}
+          activeAccountTab={activeAccountTab}
           collapsed={isCollapsed}
           hasActiveClient={hasActiveClient}
           usesReferences={usesReferences}
@@ -122,6 +131,7 @@ export function AppSidebar({
           catalogCount={catalogCount}
           onNavigate={onNavigate}
           onNavigateDashboard={onNavigateDashboard}
+          onNavigateAccount={onNavigateAccount}
           onMobileClose={onMobileClose}
         />
 

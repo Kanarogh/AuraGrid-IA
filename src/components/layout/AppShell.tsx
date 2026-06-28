@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { AppSection } from "../../lib/sectionMeta";
+import type { AccountTab } from "../../lib/appRouting";
 import {
   AppSidebar,
   loadSidebarCollapsed,
@@ -13,14 +14,19 @@ import { ClientSwitchOverlay } from "../app/ClientSwitchOverlay";
 export function AppShell({
   activeSection,
   isDashboardActive,
+  isAccountActive,
+  activeAccountTab,
   onNavigate,
   onNavigateDashboard,
+  onNavigateAccount,
   catalogCount,
   brandGemReady,
   brandGemMissingCount,
   isDark,
   onToggleTheme,
   clientName,
+  accountSectionTitle,
+  accountSectionSubtitle,
   onClientCreated,
   hasActiveClient,
   usesReferences = true,
@@ -29,10 +35,15 @@ export function AppShell({
   footer,
 }: {
   clientName: string;
+  accountSectionTitle?: string;
+  accountSectionSubtitle?: string;
   activeSection: AppSection;
   isDashboardActive?: boolean;
+  isAccountActive?: boolean;
+  activeAccountTab?: AccountTab;
   onNavigate: (section: AppSection) => void;
   onNavigateDashboard?: () => void;
+  onNavigateAccount?: (tab: AccountTab) => void;
   catalogCount: number;
   brandGemReady?: boolean;
   brandGemMissingCount?: number;
@@ -76,8 +87,11 @@ export function AppShell({
       <AppSidebar
         active={activeSection}
         isDashboardActive={isDashboardActive}
+        isAccountActive={isAccountActive}
+        activeAccountTab={activeAccountTab}
         onNavigate={onNavigate}
         onNavigateDashboard={onNavigateDashboard}
+        onNavigateAccount={onNavigateAccount}
         catalogCount={catalogCount}
         brandGemReady={brandGemReady}
         brandGemMissingCount={brandGemMissingCount}
@@ -95,11 +109,14 @@ export function AppShell({
         <AppTopBar
           activeSection={activeSection}
           isDashboardActive={isDashboardActive}
+          isAccountActive={isAccountActive}
+          accountSectionTitle={accountSectionTitle}
+          accountSectionSubtitle={accountSectionSubtitle}
           clientName={clientName}
           onOpenMenu={() => setMobileNavOpen(true)}
           isDark={isDark}
           onToggleTheme={onToggleTheme}
-          onOpenSettings={() => onNavigate("settings")}
+          onOpenSettings={hasActiveClient ? () => onNavigate("settings") : undefined}
           menuButtonRef={menuButtonRef}
           brandGemReady={brandGemReady}
           brandGemMissingCount={brandGemMissingCount}
