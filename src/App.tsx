@@ -77,9 +77,9 @@ import { useAppRouteSync, type AppRouteSyncHandlers } from "./hooks/useAppRouteS
 import { useCanvaPageActions } from "./hooks/useCanvaPageActions";
 import { useCaptionGeneration } from "./hooks/useCaptionGeneration";
 import type { SettingsTab } from "./lib/appRouting";
-import { useAppNavigation, buildDashboardPath, type AccountTab } from "./lib/appRouting";
+import { useAppNavigation, buildDashboardPath, defaultAccountTab, type AccountTab } from "./lib/appRouting";
 import { AccountSettingsWorkspace } from "./components/account/AccountSettingsWorkspace";
-import { getAccountTabSubtitle, getAccountTabTitle } from "./lib/sectionMeta";
+import { ACCOUNT_SETTINGS_SUBTITLE, ACCOUNT_SETTINGS_TITLE } from "./lib/sectionMeta";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardView } from "./components/dashboard/DashboardView";
 import { useDashboardMetrics } from "./hooks/useDashboardMetrics";
@@ -2761,16 +2761,15 @@ export default function App() {
         activeSection={routeSection}
         isDashboardActive={isDashboardActive}
         isAccountActive={isAccountActive}
-        activeAccountTab={routeAccountTab}
         onNavigate={handleNavigate}
         onNavigateDashboard={goToDashboard}
-        onNavigateAccount={(tab) => void goToAccount(tab)}
+        onNavigateAccountSettings={() => void goToAccount(defaultAccountTab())}
         clientName={
           isAccountActive ? "Conta" : hasActiveClient ? activeClient.name : "—"
         }
-        accountSectionTitle={isAccountActive ? getAccountTabTitle(routeAccountTab) : undefined}
+        accountSectionTitle={isAccountActive ? ACCOUNT_SETTINGS_TITLE : undefined}
         accountSectionSubtitle={
-          isAccountActive ? getAccountTabSubtitle(routeAccountTab) : undefined
+          isAccountActive ? ACCOUNT_SETTINGS_SUBTITLE : undefined
         }
         catalogCount={referenceCatalog.length}
         brandGemReady={hasActiveClient ? brandGemReady : undefined}

@@ -2,15 +2,12 @@ import type { ComponentType } from "react";
 import {
   CalendarClock,
   CalendarRange,
-  Cpu,
   Grid,
   LayoutGrid,
-  Palette,
   ScanSearch,
   Settings,
   ShoppingBag,
   Sliders,
-  Users,
 } from "lucide-react";
 import type { AccountTab } from "./appRouting/types";
 
@@ -33,8 +30,7 @@ export type NavItem = {
   nested?: boolean;
 };
 
-export type AccountNavItem = {
-  id: AccountTab;
+export type AccountSettingsNavItem = {
   label: string;
   description: string;
   icon: ComponentType<{ className?: string }>;
@@ -49,26 +45,16 @@ export type NavGroup = {
   items: NavItem[];
 };
 
-export const ACCOUNT_NAV_ITEMS: AccountNavItem[] = [
-  {
-    id: "team",
-    label: "Equipe",
-    description: "Membros, convites e permissões da conta",
-    icon: Users,
-  },
-  {
-    id: "appearance",
-    label: "Aparência",
-    description: "Cor de destaque e personalização visual",
-    icon: Palette,
-  },
-  {
-    id: "ai",
-    label: "IA",
-    description: "Modelos Gemini usados em todo o workspace",
-    icon: Cpu,
-  },
-];
+export const ACCOUNT_SETTINGS_NAV_ITEM: AccountSettingsNavItem = {
+  label: "Configurações da conta",
+  description: "Equipe, aparência e modelos de IA do workspace",
+  icon: Settings,
+};
+
+export const ACCOUNT_SETTINGS_TITLE = ACCOUNT_SETTINGS_NAV_ITEM.label;
+
+export const ACCOUNT_SETTINGS_SUBTITLE =
+  "Preferências globais do workspace — independentes do cliente ativo.";
 
 export const NAV_GROUPS: NavGroup[] = [
   {
@@ -185,14 +171,8 @@ export function getNavGroups(
   return groups;
 }
 
-export function getAccountNavItems(options?: {
-  canManageTeam?: boolean;
-}): AccountNavItem[] {
-  const canManageTeam = options?.canManageTeam ?? false;
-  return ACCOUNT_NAV_ITEMS.filter((item) => {
-    if (item.id === "team" || item.id === "ai") return canManageTeam;
-    return true;
-  });
+export function getAccountSettingsNavItem(): AccountSettingsNavItem {
+  return ACCOUNT_SETTINGS_NAV_ITEM;
 }
 
 export const ACCOUNT_TAB_LABELS: Record<AccountTab, string> = {

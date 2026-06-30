@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { AppSection } from "../../lib/sectionMeta";
-import type { AccountTab } from "../../lib/appRouting";
 import {
   AppSidebar,
   loadSidebarCollapsed,
@@ -15,10 +14,9 @@ export function AppShell({
   activeSection,
   isDashboardActive,
   isAccountActive,
-  activeAccountTab,
   onNavigate,
   onNavigateDashboard,
-  onNavigateAccount,
+  onNavigateAccountSettings,
   catalogCount,
   brandGemReady,
   brandGemMissingCount,
@@ -40,10 +38,9 @@ export function AppShell({
   activeSection: AppSection;
   isDashboardActive?: boolean;
   isAccountActive?: boolean;
-  activeAccountTab?: AccountTab;
   onNavigate: (section: AppSection) => void;
   onNavigateDashboard?: () => void;
-  onNavigateAccount?: (tab: AccountTab) => void;
+  onNavigateAccountSettings?: () => void;
   catalogCount: number;
   brandGemReady?: boolean;
   brandGemMissingCount?: number;
@@ -88,10 +85,9 @@ export function AppShell({
         active={activeSection}
         isDashboardActive={isDashboardActive}
         isAccountActive={isAccountActive}
-        activeAccountTab={activeAccountTab}
         onNavigate={onNavigate}
         onNavigateDashboard={onNavigateDashboard}
-        onNavigateAccount={onNavigateAccount}
+        onNavigateAccountSettings={onNavigateAccountSettings}
         catalogCount={catalogCount}
         brandGemReady={brandGemReady}
         brandGemMissingCount={brandGemMissingCount}

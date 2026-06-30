@@ -4,21 +4,18 @@ import { LayoutDashboard } from "lucide-react";
 import { cn } from "../../../lib/cn";
 import { usePermissionsOptional } from "../../../context/PermissionsContext";
 import {
-  getAccountNavItems,
+  getAccountSettingsNavItem,
   getNavGroups,
   type AppSection,
-  type AccountNavItem,
   type NavItem,
 } from "../../../lib/sectionMeta";
 import { canAccessAppSection } from "../../../lib/permissions/navFilter";
 import { useAuth } from "../../../context/AuthContext";
-import type { AccountTab } from "../../../lib/appRouting";
 
 export function SidebarNav({
   active,
   isDashboardActive,
   isAccountActive,
-  activeAccountTab,
   collapsed,
   hasActiveClient,
   usesReferences,
@@ -26,13 +23,12 @@ export function SidebarNav({
   activeClientId,
   onNavigate,
   onNavigateDashboard,
-  onNavigateAccount,
+  onNavigateAccountSettings,
   onMobileClose,
 }: {
   active: AppSection;
   isDashboardActive?: boolean;
   isAccountActive?: boolean;
-  activeAccountTab?: AccountTab;
   collapsed: boolean;
   hasActiveClient: boolean;
   usesReferences?: boolean;
@@ -40,12 +36,11 @@ export function SidebarNav({
   activeClientId?: string;
   onNavigate: (id: AppSection) => void;
   onNavigateDashboard?: () => void;
-  onNavigateAccount?: (tab: AccountTab) => void;
+  onNavigateAccountSettings?: () => void;
   onMobileClose?: () => void;
 }) {
   const { user } = useAuth();
   const perms = usePermissionsOptional();
-  const canManageTeam = perms?.canManageTeam() ?? false;
 
   const canAccess = (section: AppSection) => {
     if (!activeClientId || !user) return true;
@@ -63,7 +58,7 @@ export function SidebarNav({
     }),
   }));
 
-  const accountItems = getAccountNavItems({ canManageTeam });
+  const accountSettingsItem = getAccountSettingsNavItem();
 
   const renderNavButton = (
     item: NavItem & { badge?: number },
@@ -120,21 +115,21 @@ export function SidebarNav({
     );
   };
 
-  const renderAccountButton = (item: AccountNavItem, isActive: boolean) => {
-    const Icon = item.icon;
+  const renderAccountSettingsButton = () => {
+    const Icon = accountSettingsItem.icon;
     return (
       <button
         type="button"
-        aria-current={isActive ? "page" : undefined}
-        title={collapsed ? item.label : item.description}
+        aria-current={isAccountActive ? "page" : undefined}
+        title={collapsed ? accountSettingsItem.label : accountSettingsItem.description}
         onClick={() => {
-          onNavigateAccount?.(item.id);
+          onNavigateAccountSettings?.();
           onMobileClose?.();
         }}
         className={cn(
           "group w-full flex items-center gap-3 rounded-xl text-left transition-all duration-200 relative ag-focus-ring cursor-pointer",
           collapsed ? "justify-center p-2.5" : "px-3 py-2.5 max-lg:min-h-[44px]",
-          isActive
+          isAccountActive
             ? "ag-sidebar-nav-active text-ag-text"
             : "text-ag-text hover:bg-ag-surface-3/80"
         )}
@@ -142,11 +137,13 @@ export function SidebarNav({
         <Icon
           className={cn(
             "h-[18px] w-[18px] shrink-0 transition-colors",
-            isActive ? "text-[var(--ag-brand-purple)]" : "text-ag-muted group-hover:text-ag-text"
+            isAccountActive ? "text-[var(--ag-brand-purple)]" : "text-ag-muted group-hover:text-ag-text"
           )}
         />
         {!collapsed && (
-          <span className="flex-1 min-w-0 text-sm font-medium truncate">{item.label}</span>
+          <span className="flex-1 min-w-0 text-sm font-medium truncate">
+            {accountSettingsItem.label}
+          </span>
         )}
       </button>
     );
@@ -191,20 +188,14 @@ export function SidebarNav({
         </ul>
       </div>
 
-      {accountItems.length > 0 && (
-        <div>
-          {!collapsed && (
-            <p className="px-3 mb-1.5 text-[11px] font-medium text-ag-muted">Conta</p>
-          )}
-          <ul className="space-y-0.5">
-            {accountItems.map((item) => (
-              <li key={item.id}>
-                {renderAccountButton(item, Boolean(isAccountActive && activeAccountTab === item.id))}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <div>
+        {!collapsed && (
+          <p className="px-3 mb-1.5 text-[11px] font-medium text-ag-muted">Conta</p>
+        )}
+        <ul className="space-y-0.5">
+          <li>{renderAccountSettingsButton()}</li>
+        </ul>
+      </div>
 
       {groups.map((group) => (
         <div key={group.title}>
