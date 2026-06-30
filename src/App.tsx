@@ -2976,6 +2976,13 @@ export default function App() {
                 setPosts(nextPosts);
                 setContentSchedule(nextItems);
               }}
+              onConfigureGem={() =>
+                void navigateClient({
+                  clientId: activeClientId,
+                  section: "settings",
+                  settingsTab: "brand",
+                })
+              }
             />
           </SectionGate>
         )}

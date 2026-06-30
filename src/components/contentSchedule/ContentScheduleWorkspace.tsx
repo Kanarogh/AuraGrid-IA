@@ -24,6 +24,12 @@ import {
   formatScheduleItemCopy,
 } from "../../lib/contentSchedule/format";
 import { pushScheduleToPlanning } from "../../lib/contentSchedule/pushToPlanning";
+import {
+  brandGemFieldLabel,
+  brandGemRequiredMessage,
+  formatMissingBrandGemFields,
+  getMissingBrandGemFields,
+} from "../../lib/brandGemValidation";
 import { cn } from "../../lib/cn";
 import { toast } from "../../lib/toast";
 import { WorkflowStepper, type WorkflowStep } from "../layout/WorkflowStepper";
@@ -31,6 +37,7 @@ import { WorkspaceHero } from "../layout/WorkspaceHero";
 import { WorkspaceCard, WorkspaceCardHeader } from "../layout/WorkspaceCard";
 import { Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
+import { Alert } from "../ui/Alert";
 import { AiErrorBanner } from "../shared/AiErrorBanner";
 
 type ContentScheduleWorkspaceProps = {
@@ -47,6 +54,7 @@ type ContentScheduleWorkspaceProps = {
   onScheduleOptionsChange?: (options: ContentScheduleOptions) => void;
   onItemsChange: (items: ContentScheduleItem[]) => void;
   onPushToPlanning: (posts: PlannedPost[], items: ContentScheduleItem[]) => void;
+  onConfigureGem?: () => void;
 };
 
 const STATUS_TONE: Record<
@@ -77,6 +85,7 @@ export function ContentScheduleWorkspace({
   onScheduleOptionsChange,
   onItemsChange,
   onPushToPlanning,
+  onConfigureGem,
 }: ContentScheduleWorkspaceProps) {
   const resolvedOptions = scheduleOptions ?? DEFAULT_CONTENT_SCHEDULE_OPTIONS;
   const [briefDraft, setBriefDraft] = useState(clientBrief);
@@ -139,6 +148,11 @@ export function ContentScheduleWorkspace({
   const approvedCount = items.filter((i) => i.status === "approved").length;
   const doneCount = items.filter((i) => i.status === "done" || i.status === "handed_off").length;
   const hasItems = items.length > 0;
+  const missingGemFields = useMemo(() => getMissingBrandGemFields(brandGem), [brandGem]);
+  const missingGemLabels = useMemo(
+    () => missingGemFields.map(brandGemFieldLabel),
+    [missingGemFields]
+  );
 
   const workflowSteps: WorkflowStep[] = [
     { id: "brief", label: "Briefing", done: hasItems || briefDraft.trim().length > 20, active: !hasItems },
@@ -161,7 +175,7 @@ export function ContentScheduleWorkspace({
 
   const handleGenerate = useCallback(async () => {
     if (!brandGemReady) {
-      toast.error("Configure o Gem da marca antes de gerar o cronograma.");
+      toast.error(brandGemRequiredMessage(brandGem) || "Configure o Gem da marca antes de gerar o cronograma.");
       return;
     }
     if (!briefDraft.trim()) {
@@ -362,11 +376,34 @@ export function ContentScheduleWorkspace({
             className="mt-1 w-full rounded-lg border border-ag-border/70 bg-ag-surface-2 px-3 py-2 text-sm"
           />
         </label>
-        <div className="mt-4 flex flex-wrap gap-2">
+        {!brandGemReady && !isReadOnly && (
+          <Alert tone="warning" title="Gem da marca incompleto" className="mt-4">
+            O botão de gerar só fica disponível com o Gem configurado. Campos pendentes:{" "}
+            <span className="font-medium text-ag-text">{formatMissingBrandGemFields(brandGem)}</span>
+            {onConfigureGem ? (
+              <>
+                {" "}
+                <button
+                  type="button"
+                  onClick={onConfigureGem}
+                  className="font-semibold text-ag-accent hover:underline cursor-pointer"
+                >
+                  Abrir Gem da marca
+                </button>
+              </>
+            ) : null}
+          </Alert>
+        )}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
           <Button
             type="button"
             onClick={() => void handleGenerate()}
             disabled={isReadOnly || generating || !brandGemReady}
+            title={
+              !brandGemReady && missingGemLabels.length > 0
+                ? `Preencha no Gem: ${missingGemLabels.join(", ")}`
+                : undefined
+            }
           >
             {generating ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -375,6 +412,12 @@ export function ContentScheduleWorkspace({
             )}
             Gerar cronograma com IA
           </Button>
+          {!brandGemReady && !isReadOnly && (
+            <p className="text-xs text-ag-muted">
+              {missingGemFields.length} campo{missingGemFields.length !== 1 ? "s" : ""} pendente
+              {missingGemFields.length !== 1 ? "s" : ""} no Gem
+            </p>
+          )}
         </div>
       </WorkspaceCard>
 
