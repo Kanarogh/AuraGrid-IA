@@ -45,6 +45,8 @@ import {
 } from "../../lib/brandGemValidation";
 import type { BrandGem } from "../../types";
 import { Card } from "../ui/Card";
+import { WorkspaceHero } from "../layout/WorkspaceHero";
+import { WorkspaceCard } from "../layout/WorkspaceCard";
 import { Button } from "../ui/Button";
 import { FieldLabel, Input, Textarea } from "../ui/Input";
 import { TabNav } from "../ui/Tabs";
@@ -285,22 +287,19 @@ export function ConfigPanel({
           Modo somente leitura — você não pode alterar configurações deste cliente.
         </p>
       )}
-      <div className="flex items-center gap-2 mb-1">
-        <Sparkles className="h-5 w-5 text-ag-accent" />
-        <h2
-          className={cn(
-            "font-semibold text-ag-text",
-            isPage ? "font-display text-2xl" : "font-display text-xl"
-          )}
-        >
-          Gem da marca
-        </h2>
-      </div>
-      <p className="text-sm text-ag-muted mb-4">
-        Configure tom, instruções e rodapé fixo para{" "}
-        <strong className="text-ag-text">{clientName}</strong>. As legendas só usam estes dados
-        depois de clicar em <strong className="text-ag-text">Salvar Gem</strong>.
-      </p>
+      {!isPage && (
+        <>
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkles className="h-5 w-5 text-ag-accent" />
+            <h2 className="font-display text-xl font-semibold text-ag-text">Gem da marca</h2>
+          </div>
+          <p className="text-sm text-ag-muted mb-4">
+            Configure tom, instruções e rodapé fixo para{" "}
+            <strong className="text-ag-text">{clientName}</strong>. As legendas só usam estes dados
+            depois de clicar em <strong className="text-ag-text">Salvar Gem</strong>.
+          </p>
+        </>
+      )}
 
       <div className="mb-6">{saveBar}</div>
 
@@ -373,7 +372,7 @@ export function ConfigPanel({
       <div className="rounded-xl border border-ag-border bg-ag-surface-2/50 p-5 sm:p-6 space-y-5">
         <div className="flex items-center gap-4 pb-4 border-b border-ag-border/60">
           <div
-            className="h-14 w-14 rounded-full bg-gradient-to-br from-ag-accent to-ag-accent-strong flex items-center justify-center text-2xl font-display font-semibold text-ag-accent-fg shadow-md shrink-0"
+            className="h-14 w-14 rounded-full bg-gradient-to-br from-ag-accent to-ag-accent-strong flex items-center justify-center text-2xl font-display font-semibold text-ag-accent-fg shadow-[var(--ag-shadow)] shrink-0"
             aria-hidden
           >
             {gemInitial(draftGem.name)}
@@ -873,7 +872,17 @@ export function ConfigPanel({
   );
 
   if (isPage) {
-    return <div className="animate-ag-fade-in">{content}</div>;
+    return (
+      <div className="space-y-5 animate-ag-fade-in">
+        <WorkspaceHero
+          eyebrow="Configurações"
+          sectionTitle="Gem da marca"
+          subtitle={`Configure tom, instruções e rodapé fixo para ${clientName}. Salve o Gem para aplicar nas legendas.`}
+          icon={Sparkles}
+        />
+        <WorkspaceCard>{content}</WorkspaceCard>
+      </div>
+    );
   }
 
   return (

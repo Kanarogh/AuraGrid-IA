@@ -76,6 +76,38 @@ Em [`SocialConnectionsPanel.tsx`](../src/components/publish/SocialConnectionsPan
 
 Ícones sobre gradiente: `text-ag-accent-fg`.
 
+## Sombras (modo claro)
+
+| Token | Uso |
+|-------|-----|
+| `--ag-shadow-sm` | Cards compactos (`WorkspaceCard`, seletor de período) |
+| `--ag-shadow` | Cards padrão, botões accent, hovers leves |
+| `--ag-shadow-lg` | Heroes, modais, drawers, FAB mobile |
+
+Preferir `shadow-[var(--ag-shadow)]` / `-lg` em vez de `shadow-sm|lg|2xl` do Tailwind.
+
+## Superfície glass (modo claro)
+
+| Token | Valor |
+|-------|-------|
+| `--ag-glass-bg` | `#ffffffd1` — topbar e overlays com `ag-glass` |
+
+## Header de módulo — `WorkspaceHero`
+
+Componente discreto em [`WorkspaceHero.tsx`](../src/components/layout/WorkspaceHero.tsx): borda + `bg-ag-surface-1` + `shadow-[var(--ag-shadow-lg)]`, **sem** mesh. Usado em Dashboard, Publicar, Cronograma, Config (page), Conta.
+
+Conteúdo denso (calendário, Post do dia) pode manter `ag-studio` + `ag-studio-mesh`.
+
+## Texto sobre fundo colorido
+
+- Botões / chips accent: `text-ag-accent-fg` (não `text-white`)
+- Sucesso em badge pequeno: `text-ag-text` sobre `bg-ag-success`
+- Overlays sobre imagem ou mockups IG: `text-white` permitido
+
+## Modo escuro
+
+Polish visual do dark mode — fase posterior (fora do escopo atual).
+
 ## Raio
 
 | Token | Valor |

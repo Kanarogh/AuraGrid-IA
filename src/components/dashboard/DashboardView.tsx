@@ -15,7 +15,7 @@ import {
 import type { AppSection } from "../../lib/sectionMeta";
 import type { ClientMeta } from "../../lib/clientWorkspace";
 import type { DashboardMetrics } from "../../hooks/useDashboardMetrics";
-import { WorkspacePageHeader } from "../layout/WorkspacePageHeader";
+import { WorkspaceHero } from "../layout/WorkspaceHero";
 import { PostsWorkflowBar } from "../posts/PostsWorkflowBar";
 import { DashboardStatCard } from "./DashboardStatCard";
 import { DashboardQuickActions } from "./DashboardQuickActions";
@@ -25,7 +25,6 @@ import { Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
 import { Alert } from "../ui/Alert";
 import { Skeleton } from "../ui/Skeleton";
-import { cn } from "../../lib/cn";
 import { useDashboardAiUsage } from "../../hooks/useDashboardAiUsage";
 import { usePermissionsOptional } from "../../context/PermissionsContext";
 import { useAuth } from "../../context/AuthContext";
@@ -127,34 +126,27 @@ export function DashboardView({
 
   return (
     <div className="space-y-8 pb-4">
-      <section
-        className={cn(
-          "relative overflow-hidden rounded-xl border border-ag-border/60",
-          "bg-ag-surface-1 shadow-[var(--ag-shadow-lg)] ag-studio-mesh p-5 sm:p-6 animate-ag-fade-in"
-        )}
-      >
-        <WorkspacePageHeader
-          eyebrow={`${greeting}${userName ? `, ${userName.split(" ")[0]}` : ""}`}
-          sectionTitle={displayName}
-          subtitle={`Período ${activePeriodLabel}${isReadOnly ? " · somente leitura" : ""}`}
-          icon={LayoutDashboard}
-          suppressTitle
-          actions={
-            <div className="flex flex-wrap items-center gap-2">
-              {brandGemReady ? (
-                <Badge tone="success">Gem pronto</Badge>
-              ) : (
-                <Badge tone="warning">{brandGemMissingCount} campos no Gem</Badge>
-              )}
-              {isReadOnly && <Badge tone="neutral">Arquivado</Badge>}
-              <Button variant="accent" size="md" onClick={onContinueWorkspace}>
-                Continuar workspace
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </div>
-          }
-        />
-      </section>
+      <WorkspaceHero
+        eyebrow={`${greeting}${userName ? `, ${userName.split(" ")[0]}` : ""}`}
+        sectionTitle={displayName}
+        subtitle={`Período ${activePeriodLabel}${isReadOnly ? " · somente leitura" : ""}`}
+        icon={LayoutDashboard}
+        suppressTitle
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {brandGemReady ? (
+              <Badge tone="success">Gem pronto</Badge>
+            ) : (
+              <Badge tone="warning">{brandGemMissingCount} campos no Gem</Badge>
+            )}
+            {isReadOnly && <Badge tone="neutral">Arquivado</Badge>}
+            <Button variant="accent" size="md" onClick={onContinueWorkspace}>
+              Continuar workspace
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+        }
+      />
 
       {!brandGemReady && (
         <Alert tone="warning" title="Gem da marca incompleto">

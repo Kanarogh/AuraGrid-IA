@@ -83,7 +83,7 @@ export function TimelineStrip({
                   "rounded-xl p-3 border text-center cursor-pointer transition-all duration-200 relative group flex flex-col min-w-[170px] sm:min-w-[190px] shrink-0 snap-start",
                   isSwapSource && "ring-2 ring-ag-danger border-ag-danger bg-ag-danger/5",
                   isActive && !isSwapSource
-                    ? "border-ag-accent ring-2 ring-ag-accent/20 bg-ag-accent-soft shadow-md"
+                    ? "border-ag-accent ring-2 ring-ag-accent/20 bg-ag-accent-soft shadow-[var(--ag-shadow)]"
                     : !isSwapSource &&
                         (post.isConfirmed
                           ? "border-ag-success/35 bg-ag-success/5 hover:border-ag-success"
@@ -91,7 +91,7 @@ export function TimelineStrip({
                 )}
               >
                 {isSwapSource && (
-                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 z-10 text-[9px] font-bold uppercase tracking-wider bg-ag-danger text-white px-2 py-0.5 rounded-full">
+                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 z-10 text-[9px] font-bold uppercase tracking-wider bg-ag-danger text-ag-accent-fg px-2 py-0.5 rounded-full">
                     Origem
                   </span>
                 )}
@@ -109,7 +109,7 @@ export function TimelineStrip({
                     <span className="text-[9px] text-ag-muted block">{post.dateLabel}</span>
                   </div>
                   {post.isConfirmed ? (
-                    <span className="bg-ag-success text-white p-0.5 rounded-full">
+                    <span className="bg-ag-success text-ag-text p-0.5 rounded-full">
                       <Check className="h-3 w-3" strokeWidth={3} />
                     </span>
                   ) : post.caption ? (
@@ -167,7 +167,7 @@ export function TimelineStrip({
                         e.stopPropagation();
                         onSelectPost(post.id);
                       }}
-                      className="w-full bg-ag-accent text-white text-[10px] font-bold py-1.5 rounded-lg"
+                      className="w-full bg-ag-accent text-ag-accent-fg text-[10px] font-bold py-1.5 rounded-lg"
                     >
                       Editar
                     </button>
@@ -181,7 +181,7 @@ export function TimelineStrip({
                     className={cn(
                       "w-full text-[9px] font-semibold py-1.5 rounded-lg border",
                       isSwapSource
-                        ? "bg-ag-danger text-white border-ag-danger"
+                        ? "bg-ag-danger text-ag-accent-fg border-ag-danger"
                         : "bg-ag-surface-2 border-ag-border text-ag-text"
                     )}
                   >

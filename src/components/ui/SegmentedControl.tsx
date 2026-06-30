@@ -42,7 +42,7 @@ export function SegmentedControl<T extends string>({
               "inline-flex items-center gap-1.5 rounded-lg font-semibold transition-all duration-200 cursor-pointer ag-focus-ring",
               size === "sm" ? "px-2.5 py-1 text-[11px]" : "px-3.5 py-1.5 text-xs",
               active
-                ? "bg-ag-accent-soft text-ag-text shadow-sm"
+                ? "bg-ag-accent-soft text-ag-text shadow-[var(--ag-shadow)]"
                 : "text-ag-muted hover:text-ag-text"
             )}
           >

@@ -8,7 +8,7 @@ type Size = "sm" | "md";
 const variants: Record<Variant, string> = {
   ghost: "text-ag-muted hover:text-ag-text hover:bg-ag-surface-2",
   surface: "bg-ag-surface-2 text-ag-text border border-ag-border hover:bg-ag-surface-3",
-  accent: "bg-ag-accent text-ag-accent-fg hover:bg-ag-accent-strong shadow-sm",
+  accent: "bg-ag-accent text-ag-accent-fg hover:bg-ag-accent-strong shadow-[var(--ag-shadow)]",
   danger: "text-ag-danger hover:bg-ag-danger/10",
 };
 

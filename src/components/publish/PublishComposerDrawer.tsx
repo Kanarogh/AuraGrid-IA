@@ -193,7 +193,7 @@ export function PublishComposerDrawer({
       <aside
         className={cn(
           "fixed z-50 top-0 right-0 h-full w-full max-w-md",
-          "border-l border-ag-border bg-ag-surface-1 shadow-2xl",
+          "border-l border-ag-border bg-ag-surface-1 shadow-[var(--ag-shadow-lg)]",
           "flex flex-col min-h-0 animate-ag-fade-in"
         )}
         role="dialog"

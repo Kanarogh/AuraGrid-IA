@@ -79,7 +79,7 @@ export function ClientOptionsMenu({
       <div
         ref={menuRef}
         role="menu"
-        className="fixed z-[70] w-44 rounded-lg border border-ag-border bg-ag-surface-1 shadow-lg py-1 text-xs"
+        className="fixed z-[70] w-44 rounded-lg border border-ag-border bg-ag-surface-1 shadow-[var(--ag-shadow-lg)] py-1 text-xs"
         style={{ top: position.top, left: position.left }}
       >
         {canManage ? (

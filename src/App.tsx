@@ -2940,7 +2940,6 @@ export default function App() {
 
         {hasActiveClient && onClientRoute && routeSection === "content_schedule" && activeClientId && (
           <SectionGate clientId={activeClientId} section="content_schedule">
-          <div className="ag-workspace-section">
             <ContentScheduleWorkspace
               items={contentSchedule}
               brandGem={brandGem}
@@ -2957,7 +2956,6 @@ export default function App() {
                 setContentSchedule(nextItems);
               }}
             />
-          </div>
           </SectionGate>
         )}
 
@@ -3526,26 +3524,29 @@ export default function App() {
 
               <div className="flex flex-wrap items-center justify-center gap-3 mt-2">
                 {/* Single or Multiple File Trigger */}
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="md"
                   disabled={isUploadingCatalog || isEnrichingCatalogUi}
                   onClick={() => filesUploadInputRef.current?.click()}
-                  className="bg-ag-surface-3 hover:bg-ag-surface-3/80 border border-ag-border text-ag-text text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer shadow-sm transition-colors disabled:opacity-50"
+                  className="shadow-[var(--ag-shadow)]"
                 >
                   <ImageIcon className="h-4 w-4 text-ag-accent" />
                   <span>Selecionar Vários Arquivos</span>
-                </button>
+                </Button>
 
-                {/* Directory Upload Trigger */}
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="md"
                   disabled={isUploadingCatalog || isEnrichingCatalogUi}
                   onClick={() => void openReferenceFolderPicker()}
-                  className="bg-ag-surface-3 hover:bg-ag-surface-3/80 border border-ag-border text-ag-text text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer shadow-sm transition-colors disabled:opacity-50"
+                  className="shadow-[var(--ag-shadow)]"
                 >
                   <FolderOpen className="h-4 w-4 text-ag-accent" />
                   <span>Subir Pasta de Referências</span>
-                </button>
+                </Button>
 
               </div>
 
@@ -3695,7 +3696,7 @@ export default function App() {
                   return (
                   <div 
                     key={item.id}
-                    className="border rounded-xl p-3 flex flex-col gap-2.5 relative group transition-all shadow-xs bg-ag-surface-2 border-ag-border hover:border-ag-border"
+                    className="border rounded-xl p-3 flex flex-col gap-2.5 relative group transition-all shadow-[var(--ag-shadow)] bg-ag-surface-2 border-ag-border hover:border-ag-border"
                     onMouseEnter={() => item.image && preloadCatalogMedia(item.image, "full")}
                   >
                     

@@ -54,8 +54,10 @@
   --ag-success: #00e4b5;
   --ag-warning: #e6a23c;
   --ag-danger: #ef4444;
+  --ag-shadow-sm: 0 1px 2px rgba(13, 15, 20, 0.03), 0 4px 12px rgba(13, 15, 20, 0.04);
   --ag-shadow: 0 1px 2px rgba(13, 15, 20, 0.04), 0 8px 24px rgba(13, 15, 20, 0.06);
   --ag-shadow-lg: 0 4px 12px rgba(13, 15, 20, 0.06), 0 24px 48px rgba(13, 15, 20, 0.1);
+  --ag-glass-bg: #ffffffd1;
 }
 
 .dark {
@@ -77,6 +79,7 @@
   --ag-danger: #f87171;
   --ag-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.4);
   --ag-shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.4), 0 24px 48px rgba(0, 0, 0, 0.5);
+  --ag-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25), 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 /* Accent presets — Aura default + opcionais */
@@ -234,9 +237,10 @@ body {
   }
 
   .ag-glass {
-    background: #ffffffd1;
+    background: var(--ag-glass-bg);
     backdrop-filter: blur(14px) saturate(140%);
     -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border-color: var(--ag-border);
   }
 
   .dark .ag-glass {
@@ -317,7 +321,7 @@ body {
 
   .ag-gradient-btn {
     background: var(--ag-gradient-btn);
-    color: #ffffff;
+    color: var(--ag-accent-fg);
     border: none;
   }
 

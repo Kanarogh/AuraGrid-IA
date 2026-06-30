@@ -201,7 +201,7 @@ function PublishPostRow({
           <MoreHorizontal className="h-4 w-4" />
         </button>
         {menuOpen && (
-          <div className="absolute right-0 top-full mt-1 z-10 min-w-[140px] rounded-xl border border-ag-border bg-ag-surface-1 shadow-lg py-1">
+          <div className="absolute right-0 top-full mt-1 z-10 min-w-[140px] rounded-xl border border-ag-border bg-ag-surface-1 shadow-[var(--ag-shadow-lg)] py-1">
             {item.status === "failed" && (
               <button
                 type="button"

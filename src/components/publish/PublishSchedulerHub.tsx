@@ -15,6 +15,7 @@ import {
 } from "../../lib/appBranding";
 import { toast } from "../../lib/toast";
 import { Button } from "../ui/Button";
+import { WorkspaceHero } from "../layout/WorkspaceHero";
 import { PublishHubStatusStrip } from "./PublishHubStatusStrip";
 import { PublishPrefsPanel } from "./PublishPrefsPanel";
 import { PublishPreviewModal } from "./PublishPreviewModal";
@@ -476,18 +477,15 @@ export function PublishSchedulerHub({
 
   return (
     <div className="ag-workspace-section space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-semibold text-ag-text flex items-center gap-2">
-            <CalendarClock className="h-6 w-6 text-ag-accent" />
-            Programar posts
-          </h1>
-          <p className="text-sm text-ag-muted mt-1">
-            Calendário de publicação · arraste posts prontos para agendar
-          </p>
-        </div>
-        {igUsername && <p className="text-xs text-ag-muted">{igUsername}</p>}
-      </div>
+      <WorkspaceHero
+        sectionTitle="Programar posts"
+        subtitle={
+          igUsername
+            ? `Calendário de publicação · arraste posts prontos para agendar · @${igUsername}`
+            : "Calendário de publicação · arraste posts prontos para agendar"
+        }
+        icon={CalendarClock}
+      />
 
       <PublishStatusBanner
         connected={connected}
@@ -637,7 +635,7 @@ export function PublishSchedulerHub({
             type="button"
             variant="secondary"
             size="lg"
-            className="shadow-lg rounded-full h-12 w-12 p-0"
+            className="shadow-[var(--ag-shadow-lg)] rounded-full h-12 w-12 p-0"
             onClick={() => setMobileFeedOpen(true)}
             aria-label="Preview do feed"
           >
@@ -647,7 +645,7 @@ export function PublishSchedulerHub({
       )}
 
       {mobileFeedOpen && showFeedPreview && (
-        <div className="fixed inset-x-0 bottom-0 z-40 xl:hidden p-4 pb-6 bg-ag-surface-1 border-t border-ag-border shadow-2xl max-h-[70vh] overflow-auto">
+        <div className="fixed inset-x-0 bottom-0 z-40 xl:hidden p-4 pb-6 bg-ag-surface-1 border-t border-ag-border shadow-[var(--ag-shadow-lg)] max-h-[70vh] overflow-auto">
           <div className="flex justify-between items-center mb-2">
             <p className="text-sm font-semibold">Preview do feed</p>
             <button type="button" className="text-ag-muted text-sm" onClick={() => setMobileFeedOpen(false)}>

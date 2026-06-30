@@ -169,7 +169,7 @@ export function AccentPicker({
               )}
             >
               <span
-                className="relative flex h-9 w-9 items-center justify-center rounded-full shadow-sm"
+                className="relative flex h-9 w-9 items-center justify-center rounded-full shadow-[var(--ag-shadow)]"
                 style={
                   preset.id === "aura"
                     ? { background: AURA_GRADIENT }
@@ -202,7 +202,7 @@ export function AccentPicker({
           )}
         >
           <span
-            className="relative flex h-9 w-9 items-center justify-center rounded-full shadow-sm overflow-hidden"
+            className="relative flex h-9 w-9 items-center justify-center rounded-full shadow-[var(--ag-shadow)] overflow-hidden"
             style={{ background: customActive ? customPreview : CUSTOM_SWATCH }}
           >
             {customActive ? (

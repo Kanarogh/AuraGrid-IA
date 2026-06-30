@@ -140,7 +140,7 @@ export function FloatingPopover({
         ref={popoverRef}
         role={role}
         className={cn(
-          "fixed rounded-xl border border-ag-border bg-ag-surface-1 shadow-lg overflow-hidden",
+          "fixed rounded-xl border border-ag-border bg-ag-surface-1 shadow-[var(--ag-shadow-lg)] overflow-hidden",
           className
         )}
         style={{

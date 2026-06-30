@@ -79,11 +79,11 @@ function DayCell({
       className={cn(
         "rounded-xl border flex flex-col transition-all duration-200 group/day",
         density === "month" ? "p-1.5 min-h-[88px]" : "p-2 min-h-[140px]",
-        isToday && "border-ag-accent/60 bg-ag-accent-soft/25 shadow-sm",
+        isToday && "border-ag-accent/60 bg-ag-accent-soft/25 shadow-[var(--ag-shadow)]",
         isWeekend && !isToday && "bg-ag-surface-2/30",
         isGap && allItems.length === 0 && "border-dashed border-ag-warning/40 bg-ag-warning/5",
         dragOver && "border-ag-accent bg-ag-accent-soft/40 ring-2 ring-ag-accent/25 scale-[1.01]",
-        !isToday && !dragOver && !(isGap && allItems.length === 0) && "border-ag-border/50 bg-ag-surface-1 hover:border-ag-border hover:shadow-sm"
+        !isToday && !dragOver && !(isGap && allItems.length === 0) && "border-ag-border/50 bg-ag-surface-1 hover:border-ag-border hover:shadow-[var(--ag-shadow)]"
       )}
     >
       <div className="flex items-center justify-between mb-1.5 shrink-0">
@@ -93,7 +93,7 @@ function DayCell({
           className={cn(
             "text-xs font-semibold transition-colors ag-focus-ring",
             isToday
-              ? "h-6 w-6 flex items-center justify-center rounded-full bg-ag-accent text-white text-[11px]"
+              ? "h-6 w-6 flex items-center justify-center rounded-full bg-ag-accent text-ag-accent-fg text-[11px]"
               : "rounded px-1 -mx-1 hover:bg-ag-surface-2 text-ag-muted",
             onOpenDayDetail && "cursor-pointer"
           )}

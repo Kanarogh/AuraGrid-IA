@@ -95,7 +95,7 @@ export function SmartDistributorPanel({
                   className={cn(
                     "px-3 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer",
                     distributionPrefs.maxPostsPerDay === n
-                      ? "bg-ag-accent text-white"
+                      ? "bg-ag-accent text-ag-accent-fg"
                       : "text-ag-muted hover:text-ag-text"
                   )}
                 >

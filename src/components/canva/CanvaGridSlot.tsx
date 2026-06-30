@@ -104,7 +104,7 @@ export function CanvaGridSlot({
         className={cn(
           "absolute top-1.5 left-1.5 z-10 rounded-md px-1.5 py-0.5 text-[9px] font-mono font-bold",
           isSelected
-            ? "bg-ag-accent text-ag-accent-fg shadow-sm"
+            ? "bg-ag-accent text-ag-accent-fg shadow-[var(--ag-shadow)]"
             : "bg-black/55 text-white backdrop-blur-sm"
         )}
       >

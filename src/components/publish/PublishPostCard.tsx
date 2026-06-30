@@ -74,7 +74,7 @@ export function PublishPostCard({
           "flex items-center gap-3 w-full rounded-xl border bg-ag-surface-1 p-3 transition-all",
           statusBorder,
           draggable && "cursor-grab active:cursor-grabbing",
-          onClick && "cursor-pointer hover:border-ag-accent/50 hover:shadow-sm ag-focus-ring",
+          onClick && "cursor-pointer hover:border-ag-accent/50 hover:shadow-[var(--ag-shadow)] ag-focus-ring",
           selected ? "border-ag-accent ring-2 ring-ag-accent/30" : "border-ag-border/60"
         )}
       >
@@ -135,7 +135,7 @@ export function PublishPostCard({
         compact ? "p-1.5 min-w-[88px]" : "p-2",
         statusBorder,
         draggable && "cursor-grab active:cursor-grabbing",
-        onClick && "cursor-pointer hover:border-ag-accent/50 hover:shadow-sm ag-focus-ring",
+        onClick && "cursor-pointer hover:border-ag-accent/50 hover:shadow-[var(--ag-shadow)] ag-focus-ring",
         selected ? "border-ag-accent ring-2 ring-ag-accent/30" : "border-ag-border"
       )}
     >

@@ -241,7 +241,7 @@ export function CanvaWardrobePanel({
                   onClick={() => onAssignItem(item)}
                   className={cn(
                     "group text-left rounded-xl border p-1.5 transition-all cursor-grab active:cursor-grabbing ag-focus-ring",
-                    "hover:shadow-md hover:border-ag-accent/40",
+                    "hover:shadow-[var(--ag-shadow-lg)] hover:border-ag-accent/40",
                     isInGrid
                       ? onActivePage
                         ? "border-ag-success/40 bg-ag-success/5 ring-1 ring-ag-success/20"
@@ -267,9 +267,9 @@ export function CanvaWardrobePanel({
                             <span
                               key={`${placement.pageNumber}-${placement.slotNumber}`}
                               className={cn(
-                                "text-[7px] font-bold font-mono px-1 py-0.5 rounded-md shadow-sm leading-none",
+                                "text-[7px] font-bold font-mono px-1 py-0.5 rounded-md shadow-[var(--ag-shadow)] leading-none",
                                 onCurrent
-                                  ? "bg-ag-success text-white"
+                                  ? "bg-ag-success text-ag-text"
                                   : "bg-ag-surface-1/95 text-ag-muted border border-ag-border"
                               )}
                             >

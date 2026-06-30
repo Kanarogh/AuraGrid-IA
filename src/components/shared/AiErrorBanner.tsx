@@ -70,7 +70,7 @@ export function AiErrorBanner({
               type="button"
               onClick={onRetry}
               disabled={countdown > 0}
-              className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-md bg-ag-danger text-white disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-md bg-ag-danger text-ag-accent-fg disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               <RefreshCw className="h-3 w-3" />
               {countdown > 0 ? `Tentar em ${countdown}s` : "Tentar de novo"}

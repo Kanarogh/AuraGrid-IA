@@ -16,6 +16,7 @@ import type { CanvaGridFormat } from "../../lib/canvaGridFormats";
 import { isCanvaSlotFilled, resolveCanvaPageNumber, type CanvaCatalogPlacement } from "../../lib/canva";
 import { cn } from "../../lib/cn";
 import { useCanvaWardrobePanelWidth } from "../../hooks/useCanvaWardrobePanelWidth";
+import { WorkspaceCard, WorkspaceCardHeader } from "../layout/WorkspaceCard";
 import { Button } from "../ui/Button";
 import { CanvaGridCanvasToolbar } from "./CanvaGridCanvasToolbar";
 import { CanvaGridSlot } from "./CanvaGridSlot";
@@ -147,8 +148,12 @@ export function CanvaGridWorkspace({
 
   return (
     <div className="space-y-5">
-      {/* Workflow guide */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+      <WorkspaceCard variant="secondary" padding>
+        <WorkspaceCardHeader
+          title="Como montar o grid"
+          subtitle="Selecione um slot, arraste do guarda-roupa ou troque posições entre slots."
+        />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         {WORKFLOW_STEPS.map((step) => (
           <div
             key={step.n}
@@ -176,7 +181,8 @@ export function CanvaGridWorkspace({
             <span className="leading-snug">{step.label}</span>
           </div>
         ))}
-      </div>
+        </div>
+      </WorkspaceCard>
 
       <div
         ref={splitRef}

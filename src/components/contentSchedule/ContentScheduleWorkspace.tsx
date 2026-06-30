@@ -25,6 +25,7 @@ import { pushScheduleToPlanning } from "../../lib/contentSchedule/pushToPlanning
 import { cn } from "../../lib/cn";
 import { toast } from "../../lib/toast";
 import { WorkflowStepper, type WorkflowStep } from "../layout/WorkflowStepper";
+import { WorkspaceHero } from "../layout/WorkspaceHero";
 import { WorkspaceCard, WorkspaceCardHeader } from "../layout/WorkspaceCard";
 import { Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
@@ -233,7 +234,18 @@ export function ContentScheduleWorkspace({
   }, [items, periodLabel]);
 
   return (
-    <div className="ag-workspace-section space-y-5">
+    <div className="space-y-5">
+      <WorkspaceHero
+        eyebrow="Cronograma"
+        sectionTitle="Cronograma de conteúdo"
+        subtitle={
+          periodLabel
+            ? `Planejamento editorial · ${periodLabel}`
+            : "Planejamento editorial com IA para posts e stories"
+        }
+        icon={Sparkles}
+      />
+
       <WorkflowStepper steps={workflowSteps} />
 
       {aiError && (

@@ -135,7 +135,7 @@ export function PublishCalendarToolbar({
                 onClick={() => onHubViewChange(id)}
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors",
-                  hubView === id ? "bg-ag-surface-1 text-ag-text shadow-sm" : "text-ag-muted hover:text-ag-text"
+                  hubView === id ? "bg-ag-surface-1 text-ag-text shadow-[var(--ag-shadow)]" : "text-ag-muted hover:text-ag-text"
                 )}
               >
                 <Icon className="h-3.5 w-3.5" />

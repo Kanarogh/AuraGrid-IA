@@ -78,7 +78,7 @@ export function EditorialPostCard({
       id={`editorial-row-${post.id}`}
       onClick={onFocus}
       className={cn(
-        "rounded-xl border transition-all duration-200 bg-ag-surface-1 overflow-hidden shadow-sm",
+        "rounded-xl border transition-all duration-200 bg-ag-surface-1 overflow-hidden shadow-[var(--ag-shadow)]",
         isFocused ? "border-ag-accent ring-2 ring-ag-accent/20" : "border-ag-border",
         post.isConfirmed && "border-ag-success/40"
       )}

@@ -66,7 +66,7 @@ export function PublishCalendarEventPill({
         isWeek ? "px-2 py-1.5" : "px-1.5 py-1",
         statusPillClass(item.status, hasDraft),
         draggable && "cursor-grab active:cursor-grabbing",
-        onClick && "cursor-pointer ag-focus-ring hover:shadow-sm hover:border-ag-accent/30"
+        onClick && "cursor-pointer ag-focus-ring hover:shadow-[var(--ag-shadow)] hover:border-ag-accent/30"
       )}
     >
       <div

@@ -205,7 +205,7 @@ export function ReferenceFinderPanel({
                 <img
                   src={queryImage}
                   alt="Foto para busca"
-                  className="max-h-[240px] max-w-full object-contain rounded-lg shadow-sm"
+                  className="max-h-[240px] max-w-full object-contain rounded-lg shadow-[var(--ag-shadow)]"
                 />
                 <button
                   type="button"

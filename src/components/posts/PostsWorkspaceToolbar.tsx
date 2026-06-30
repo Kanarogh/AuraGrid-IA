@@ -34,7 +34,7 @@ export function PostsWorkspaceToolbar({
             className={cn(
               "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ag-focus-ring",
               activeTab === id
-                ? "bg-ag-surface-1 text-ag-text shadow-sm border border-ag-border"
+                ? "bg-ag-surface-1 text-ag-text shadow-[var(--ag-shadow)] border border-ag-border"
                 : "text-ag-muted hover:text-ag-text border border-transparent"
             )}
           >

@@ -174,7 +174,7 @@ export function TeamMembersPanel() {
     <div className="space-y-6 max-w-3xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-ag-text">Equipe</h2>
+          <h2 className="font-display text-lg font-semibold text-ag-text">Equipe</h2>
           <p className="text-sm text-ag-muted">
             Convide membros, defina clientes e permissões (incl. Programar posts).
           </p>
@@ -192,7 +192,7 @@ export function TeamMembersPanel() {
               <span className="text-ag-muted">E-mail</span>
               <input
                 type="email"
-                className="mt-1 w-full rounded-xl border border-ag-border bg-ag-bg px-3 py-2"
+                className="mt-1 w-full rounded-lg border border-ag-border bg-ag-bg px-3 py-2"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -200,7 +200,7 @@ export function TeamMembersPanel() {
             <label className="text-sm block">
               <span className="text-ag-muted">Nome</span>
               <input
-                className="mt-1 w-full rounded-xl border border-ag-border bg-ag-bg px-3 py-2"
+                className="mt-1 w-full rounded-lg border border-ag-border bg-ag-bg px-3 py-2"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
               />
@@ -210,7 +210,7 @@ export function TeamMembersPanel() {
               <div className="mt-1 flex gap-2">
                 <input
                   type="text"
-                  className="flex-1 rounded-xl border border-ag-border bg-ag-bg px-3 py-2 font-mono text-sm"
+                  className="flex-1 rounded-lg border border-ag-border bg-ag-bg px-3 py-2 font-mono text-sm"
                   value={tempPassword}
                   onChange={(e) => setTempPassword(e.target.value)}
                 />
@@ -227,7 +227,7 @@ export function TeamMembersPanel() {
             <label className="text-sm block">
               <span className="text-ag-muted">Função</span>
               <select
-                className="mt-1 w-full rounded-xl border border-ag-border bg-ag-bg px-3 py-2"
+                className="mt-1 w-full rounded-lg border border-ag-border bg-ag-bg px-3 py-2"
                 value={displayRole}
                 onChange={(e) => setDisplayRole(e.target.value as DisplayRole)}
               >
@@ -307,7 +307,7 @@ export function TeamMembersPanel() {
               {editingId === m.userId && (
                 <div className="rounded-xl border border-ag-border p-3 space-y-3">
                   <select
-                    className="w-full rounded-xl border border-ag-border bg-ag-bg px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-ag-border bg-ag-bg px-3 py-2 text-sm"
                     value={editRole}
                     onChange={(e) => setEditRole(e.target.value as DisplayRole)}
                   >

@@ -49,7 +49,7 @@ export function WorkspaceCardHeader({
       )}
     >
       <div className="min-w-0">
-        <h2 className="text-sm font-semibold text-ag-text">{title}</h2>
+        <h2 className="font-display text-base font-semibold text-ag-text">{title}</h2>
         {subtitle && <p className="text-xs text-ag-muted mt-1">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap gap-2 shrink-0">{actions}</div>}

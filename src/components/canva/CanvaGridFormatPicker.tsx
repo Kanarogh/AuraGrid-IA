@@ -41,7 +41,7 @@ export function CanvaGridFormatPicker({
                 "rounded-lg px-1.5 py-1.5 text-[11px] @lg/canvas-toolbar:text-xs font-semibold transition-all cursor-pointer ag-focus-ring text-center",
                 "@lg/canvas-toolbar:px-2.5",
                 active
-                  ? "bg-ag-surface-1 text-ag-text shadow-sm ring-1 ring-ag-accent/20"
+                  ? "bg-ag-surface-1 text-ag-text shadow-[var(--ag-shadow)] ring-1 ring-ag-accent/20"
                   : "text-ag-muted hover:text-ag-text"
               )}
             >
@@ -69,7 +69,7 @@ export function CanvaGridFormatPicker({
             onClick={() => onChange(format.id)}
             className={cn(
               "flex flex-col items-center gap-2 rounded-xl border-2 px-3 py-4 transition-all cursor-pointer",
-              "bg-ag-surface-1 shadow-sm hover:shadow-md",
+              "bg-ag-surface-1 shadow-[var(--ag-shadow)] hover:shadow-[var(--ag-shadow-lg)]",
               active
                 ? "border-ag-accent ring-2 ring-ag-accent/25"
                 : "border-ag-border hover:border-ag-accent/40"
