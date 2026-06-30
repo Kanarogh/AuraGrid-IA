@@ -397,6 +397,7 @@ export function ContentScheduleWorkspace({
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <Button
             type="button"
+            variant="accent"
             onClick={() => void handleGenerate()}
             disabled={isReadOnly || generating || !brandGemReady}
             title={
