@@ -15,6 +15,8 @@ export function PostSchedulingWorkspace({
   onNavigatePosts,
   onNavigateToPost,
   metaConnectedParam,
+  linkedinConnectedParam,
+  pinterestConnectedParam,
 }: {
   clientId: string;
   planningPeriodId: string;
@@ -27,6 +29,8 @@ export function PostSchedulingWorkspace({
   onNavigatePosts: () => void;
   onNavigateToPost: (plannedPostId: string) => void;
   metaConnectedParam?: boolean;
+  linkedinConnectedParam?: boolean;
+  pinterestConnectedParam?: boolean;
 }) {
   return (
     <PublishSchedulerHub
@@ -41,6 +45,8 @@ export function PostSchedulingWorkspace({
       onNavigatePosts={onNavigatePosts}
       onNavigateToPost={onNavigateToPost}
       metaConnectedParam={metaConnectedParam}
+      linkedinConnectedParam={linkedinConnectedParam}
+      pinterestConnectedParam={pinterestConnectedParam}
     />
   );
 }

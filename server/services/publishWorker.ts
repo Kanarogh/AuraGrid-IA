@@ -1,5 +1,6 @@
 import { claimDuePublishJobs, resetStalePublishingJobs } from "./publishJobService";
-import { executePublishJob } from "./metaPublishService";
+import { dispatchPublishJob } from "./publish/publishDispatcher";
+import { refreshExpiringSocialTokens } from "./socialTokenRefreshService";
 import { isDatabaseConfigured } from "../db/client";
 
 let workerTimer: ReturnType<typeof setInterval> | null = null;
@@ -9,10 +10,11 @@ async function tick(): Promise<void> {
   if (!isDatabaseConfigured() || running) return;
   running = true;
   try {
+    await refreshExpiringSocialTokens();
     await resetStalePublishingJobs();
     const jobs = await claimDuePublishJobs(5);
     for (const job of jobs) {
-      await executePublishJob(job);
+      await dispatchPublishJob(job);
     }
   } catch (err) {
     console.error("[publish-worker]", err instanceof Error ? err.message : err);

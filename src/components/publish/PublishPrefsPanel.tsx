@@ -1,32 +1,37 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Clock, Save, Zap } from "lucide-react";
+import { Check, Clock, Save, Share2, Zap } from "lucide-react";
 import { DEFAULT_SLOT_TEMPLATES } from "../../lib/publish/suggestScheduleTimes";
+import {
+  PUBLISH_PLATFORMS_V1,
+  PLATFORM_LABELS,
+  type PublishPlatform,
+} from "../../lib/publish/platforms";
 import {
   fetchPublishPrefs,
   savePublishPrefs,
   type PublishPrefs,
+  type SocialConnectionPublic,
 } from "../../lib/publish/publishApi";
 import { cn } from "../../lib/cn";
 import { toast } from "../../lib/toast";
 import { Button } from "../ui/Button";
 import { FieldLabel } from "../ui/Input";
-import { MetaConnectionCard } from "./MetaConnectionCard";
-import type { MetaConnectionPublic } from "../../lib/publish/publishApi";
+import { SocialConnectionsPanel } from "./SocialConnectionsPanel";
 
 const SLOT_COUNTS = [1, 2, 3, 4, 5] as const;
 
 export function PublishPrefsPanel({
   clientId,
-  connection,
+  connections,
   onConnectionRefresh,
   onPrefsChange,
   hideConnection,
   publishMockEnabled,
 }: {
   clientId: string;
-  connection: MetaConnectionPublic | null;
+  connections: SocialConnectionPublic[];
   onConnectionRefresh: () => void;
   onPrefsChange?: (prefs: PublishPrefs) => void;
   hideConnection?: boolean;
@@ -37,6 +42,8 @@ export function PublishPrefsPanel({
     slotTemplates: { ...DEFAULT_SLOT_TEMPLATES },
     defaultLeadMinutes: 15,
     autoScheduleOnDrop: false,
+    defaultPlatforms: ["instagram"],
+    pinterestDefaultBoardId: null,
   });
   const [baseline, setBaseline] = useState("");
   const [saving, setSaving] = useState(false);
@@ -81,16 +88,89 @@ export function PublishPrefsPanel({
     });
   };
 
+  const togglePlatform = (platform: PublishPlatform) => {
+    setDraft((prev) => {
+      const set = new Set(prev.defaultPlatforms);
+      if (set.has(platform)) {
+        if (set.size <= 1) return prev;
+        set.delete(platform);
+      } else {
+        set.add(platform);
+      }
+      return { ...prev, defaultPlatforms: PUBLISH_PLATFORMS_V1.filter((p) => set.has(p)) };
+    });
+  };
+
+  const pinterestConn = connections.find((c) => c.platform === "pinterest");
+  const pinterestBoards =
+    (pinterestConn?.metadata.boards as Array<{ id: string; name: string }> | undefined) ?? [];
+
   return (
     <div className="space-y-6">
       {!hideConnection && (
-        <MetaConnectionCard
+        <SocialConnectionsPanel
           clientId={clientId}
-          connection={connection}
+          connections={connections}
           onRefresh={onConnectionRefresh}
           publishMockEnabled={publishMockEnabled}
         />
       )}
+
+      <div className="rounded-2xl border border-ag-border bg-ag-surface-2/50 p-5 space-y-4">
+        <div>
+          <h3 className="font-display text-lg font-semibold text-ag-text flex items-center gap-2">
+            <Share2 className="h-5 w-5 text-ag-accent" />
+            Redes padrão ao agendar
+          </h3>
+          <p className="text-sm text-ag-muted mt-1">
+            Posts novos serão programados nestas redes. Você pode ajustar por post no composer.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {PUBLISH_PLATFORMS_V1.map((platform) => {
+            const selected = draft.defaultPlatforms.includes(platform);
+            return (
+              <button
+                key={platform}
+                type="button"
+                onClick={() => togglePlatform(platform)}
+                className={cn(
+                  "rounded-full px-3 py-1.5 text-xs font-semibold border transition-colors",
+                  selected
+                    ? "border-ag-accent bg-ag-accent/15 text-ag-accent"
+                    : "border-ag-border text-ag-muted hover:border-ag-accent/40"
+                )}
+              >
+                {PLATFORM_LABELS[platform]}
+              </button>
+            );
+          })}
+        </div>
+
+        {draft.defaultPlatforms.includes("pinterest") && pinterestBoards.length > 0 && (
+          <div className="max-w-md">
+            <FieldLabel htmlFor="pinterest-board">Board padrão (Pinterest)</FieldLabel>
+            <select
+              id="pinterest-board"
+              value={draft.pinterestDefaultBoardId ?? ""}
+              onChange={(e) =>
+                setDraft((p) => ({
+                  ...p,
+                  pinterestDefaultBoardId: e.target.value || null,
+                }))
+              }
+              className="w-full rounded-lg border border-ag-border bg-ag-surface-2 px-3 py-2 text-sm ag-focus-ring"
+            >
+              <option value="">Selecione um board…</option>
+              {pinterestBoards.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
 
       <div className="rounded-2xl border border-ag-border bg-ag-surface-2/50 p-5 space-y-5">
         <div>
@@ -133,7 +213,8 @@ export function PublishPrefsPanel({
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {SLOT_COUNTS.map((count) => {
-            const slots = draft.slotTemplates[String(count)] ?? DEFAULT_SLOT_TEMPLATES[String(count)] ?? ["10:00"];
+            const slots =
+              draft.slotTemplates[String(count)] ?? DEFAULT_SLOT_TEMPLATES[String(count)] ?? ["10:00"];
             return (
               <div
                 key={count}

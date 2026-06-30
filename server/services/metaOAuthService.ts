@@ -26,6 +26,7 @@ export function buildMetaOAuthStartUrl(clientId: string, userId: string): string
     "instagram_content_publish",
     "pages_read_engagement",
     "pages_show_list",
+    "pages_manage_posts",
   ].join(",");
   const params = new URLSearchParams({
     client_id: META_APP_ID,
@@ -85,7 +86,7 @@ export async function completeMetaOAuthCallback(
     pageName: selectedPage.name,
     accessToken: pageToken,
     tokenExpiresAt: expiresAt,
-    scopes: "instagram_basic,instagram_content_publish",
+    scopes: "instagram_basic,instagram_content_publish,pages_manage_posts",
   });
 
   return { clientId, connection };

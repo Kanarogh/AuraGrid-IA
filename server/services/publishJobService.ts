@@ -2,12 +2,28 @@ import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { getDb, isDatabaseConfigured } from "../db/client";
 import { instagramPublishJobs, plannedPosts, planningPeriods } from "../db/schema";
 import { HttpError } from "../http/respond";
+import {
+  DEFAULT_PUBLISH_PLATFORMS,
+  maxCaptionLength,
+  type PublishPlatform,
+  isPublishPlatform,
+} from "../../src/lib/publish/platforms";
 import { suggestScheduleTimes } from "../../src/lib/publish/suggestScheduleTimes";
 import { getClientPublishPrefs } from "./publishPrefsService";
 import { mediaPublicUrl } from "./mediaService";
 import type { CreateJobsPayload } from "../validation/publishSchema";
 
 export type PublishJobRow = typeof instagramPublishJobs.$inferSelect;
+
+export type PlatformJobStatus = {
+  jobId: string;
+  platform: PublishPlatform;
+  status: "queued" | "publishing" | "published" | "failed" | "cancelled";
+  permalink: string | null;
+  lastError: string | null;
+  attempts: number;
+  scheduledAt: string | null;
+};
 
 export type PublishQueueItem = {
   jobId: string | null;
@@ -30,19 +46,41 @@ export type PublishQueueItem = {
   permalink: string | null;
   lastError: string | null;
   attempts: number;
+  platforms: PublishPlatform[];
+  platformJobs: PlatformJobStatus[];
 };
 
-function mapJobStatus(status: string): PublishQueueItem["status"] {
+const ACTIVE_JOB_STATUSES = ["queued", "publishing"] as const;
+
+function mapJobStatus(status: string): PlatformJobStatus["status"] {
   if (status === "queued") return "queued";
   if (status === "publishing") return "publishing";
   if (status === "published") return "published";
   if (status === "failed") return "failed";
-  return "eligible";
+  return "cancelled";
 }
 
-/** Cancelled jobs are historical only — the post returns to the scheduling tray. */
-function isActivePublishJob(job: PublishJobRow | undefined): job is PublishJobRow {
-  return !!job && job.status !== "cancelled";
+function aggregateStatus(jobs: PlatformJobStatus[]): PublishQueueItem["status"] {
+  if (!jobs.length) return "eligible";
+  if (jobs.some((j) => j.status === "publishing")) return "publishing";
+  if (jobs.every((j) => j.status === "published")) return "published";
+  if (jobs.some((j) => j.status === "failed")) return "failed";
+  if (jobs.some((j) => j.status === "queued")) return "queued";
+  if (jobs.every((j) => j.status === "cancelled")) return "cancelled";
+  return "queued";
+}
+
+function toPlatformJob(job: PublishJobRow): PlatformJobStatus {
+  const platform = isPublishPlatform(job.platform) ? job.platform : "instagram";
+  return {
+    jobId: job.id,
+    platform,
+    status: mapJobStatus(job.status),
+    permalink: job.permalink,
+    lastError: job.lastError,
+    attempts: job.attempts ?? 0,
+    scheduledAt: job.scheduledAt?.toISOString() ?? null,
+  };
 }
 
 export async function listPublishQueue(
@@ -73,40 +111,59 @@ export async function listPublishQueue(
       )
     );
 
-  const jobByPost = new Map(jobs.map((j) => [j.plannedPostId, j]));
+  const jobsByPost = new Map<string, PublishJobRow[]>();
+  for (const job of jobs) {
+    if (job.status === "cancelled") continue;
+    const list = jobsByPost.get(job.plannedPostId) ?? [];
+    list.push(job);
+    jobsByPost.set(job.plannedPostId, list);
+  }
 
   return posts.map((post) => {
-    const rawJob = jobByPost.get(post.id);
-    const job = isActivePublishJob(rawJob) ? rawJob : undefined;
+    const postJobs = (jobsByPost.get(post.id) ?? []).map(toPlatformJob);
+    const activeJobs = postJobs.filter((j) => j.status !== "cancelled");
     const hasAsset = !!post.imageAssetId;
     const hasCaption = !!post.caption?.trim();
     const isReady = post.isConfirmed && hasAsset && hasCaption;
 
     let status: PublishQueueItem["status"];
-    if (job) {
-      status = mapJobStatus(job.status);
+    if (activeJobs.length) {
+      status = aggregateStatus(activeJobs);
     } else if (isReady) {
       status = "eligible";
     } else {
       status = "not_ready";
     }
 
+    const primaryJob = activeJobs[0];
+    const scheduledAt =
+      primaryJob?.scheduledAt ??
+      activeJobs.find((j) => j.scheduledAt)?.scheduledAt ??
+      null;
+
     return {
-      jobId: job?.id ?? null,
+      jobId: primaryJob?.jobId ?? null,
       plannedPostId: post.id,
       dayNumber: post.dayNumber,
       dateLabel: post.dateLabel,
-      caption: job?.caption ?? post.caption ?? "",
-      imageAssetId: job?.imageAssetId ?? post.imageAssetId,
-      imageUrl: (job?.imageAssetId ?? post.imageAssetId)
-        ? mediaPublicUrl(job?.imageAssetId ?? post.imageAssetId!)
+      caption:
+        jobs.find((j) => j.plannedPostId === post.id && j.status !== "cancelled")?.caption ??
+        post.caption ??
+        "",
+      imageAssetId:
+        jobs.find((j) => j.plannedPostId === post.id && j.status !== "cancelled")?.imageAssetId ??
+        post.imageAssetId,
+      imageUrl: (post.imageAssetId ?? jobs[0]?.imageAssetId)
+        ? mediaPublicUrl(post.imageAssetId ?? jobs[0]!.imageAssetId)
         : null,
       isConfirmed: post.isConfirmed,
-      scheduledAt: job?.scheduledAt?.toISOString() ?? null,
+      scheduledAt,
       status,
-      permalink: job?.permalink ?? null,
-      lastError: job?.lastError ?? null,
-      attempts: job?.attempts ?? 0,
+      permalink: activeJobs.find((j) => j.permalink)?.permalink ?? null,
+      lastError: activeJobs.find((j) => j.lastError)?.lastError ?? null,
+      attempts: Math.max(0, ...activeJobs.map((j) => j.attempts)),
+      platforms: activeJobs.map((j) => j.platform),
+      platformJobs: activeJobs,
     };
   });
 }
@@ -160,6 +217,9 @@ export async function createPublishJobs(
   const db = getDb();
   const prefs = await getClientPublishPrefs(clientId);
   const minTime = Date.now() + prefs.defaultLeadMinutes * 60_000;
+  const defaultPlatforms = prefs.defaultPlatforms?.length
+    ? prefs.defaultPlatforms
+    : DEFAULT_PUBLISH_PLATFORMS;
 
   const created: PublishJobRow[] = [];
   for (const job of payload.jobs) {
@@ -171,52 +231,70 @@ export async function createPublishJobs(
       );
     }
     if (!job.caption.trim()) throw new HttpError(400, "Legenda vazia.");
-    if (job.caption.length > 2200) throw new HttpError(400, "Legenda longa demais (máx. 2200).");
 
-    const [existing] = await db
-      .select()
-      .from(instagramPublishJobs)
-      .where(
-        and(
-          eq(instagramPublishJobs.clientId, clientId),
-          eq(instagramPublishJobs.planningPeriodId, payload.planningPeriodId),
-          eq(instagramPublishJobs.plannedPostId, job.plannedPostId),
-          inArray(instagramPublishJobs.status, ["queued", "publishing", "cancelled"])
+    const platforms = (job.platforms?.length ? job.platforms : defaultPlatforms).filter(
+      isPublishPlatform
+    );
+    if (!platforms.length) {
+      throw new HttpError(400, "Selecione ao menos uma rede social.");
+    }
+
+    const captionLimit = maxCaptionLength(platforms);
+    if (job.caption.length > captionLimit) {
+      throw new HttpError(
+        400,
+        `Legenda longa demais para as redes selecionadas (máx. ${captionLimit}).`
+      );
+    }
+
+    for (const platform of platforms) {
+      const [existing] = await db
+        .select()
+        .from(instagramPublishJobs)
+        .where(
+          and(
+            eq(instagramPublishJobs.clientId, clientId),
+            eq(instagramPublishJobs.planningPeriodId, payload.planningPeriodId),
+            eq(instagramPublishJobs.plannedPostId, job.plannedPostId),
+            eq(instagramPublishJobs.platform, platform),
+            inArray(instagramPublishJobs.status, [...ACTIVE_JOB_STATUSES, "cancelled"])
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    if (existing) {
-      const [updated] = await db
-        .update(instagramPublishJobs)
-        .set({
+      if (existing) {
+        const [updated] = await db
+          .update(instagramPublishJobs)
+          .set({
+            scheduledAt: scheduled,
+            caption: job.caption,
+            imageAssetId: job.imageAssetId,
+            status: "queued",
+            lastError: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(instagramPublishJobs.id, existing.id))
+          .returning();
+        if (updated) created.push(updated);
+        continue;
+      }
+
+      const [row] = await db
+        .insert(instagramPublishJobs)
+        .values({
+          clientId,
+          planningPeriodId: payload.planningPeriodId,
+          plannedPostId: job.plannedPostId,
+          createdByUserId: userId,
           scheduledAt: scheduled,
           caption: job.caption,
           imageAssetId: job.imageAssetId,
+          platform,
           status: "queued",
-          lastError: null,
-          updatedAt: new Date(),
         })
-        .where(eq(instagramPublishJobs.id, existing.id))
         .returning();
-      if (updated) created.push(updated);
-      continue;
+      if (row) created.push(row);
     }
-
-    const [row] = await db
-      .insert(instagramPublishJobs)
-      .values({
-        clientId,
-        planningPeriodId: payload.planningPeriodId,
-        plannedPostId: job.plannedPostId,
-        createdByUserId: userId,
-        scheduledAt: scheduled,
-        caption: job.caption,
-        imageAssetId: job.imageAssetId,
-        status: "queued",
-      })
-      .returning();
-    if (row) created.push(row);
   }
   return created;
 }
@@ -306,7 +384,7 @@ export async function claimDuePublishJobs(limit = 10): Promise<PublishJobRow[]> 
 
 export async function markJobPublished(
   jobId: string,
-  metaMediaId: string,
+  externalMediaId: string,
   permalink: string | null
 ): Promise<void> {
   const db = getDb();
@@ -314,7 +392,7 @@ export async function markJobPublished(
     .update(instagramPublishJobs)
     .set({
       status: "published",
-      metaMediaId,
+      metaMediaId: externalMediaId,
       permalink,
       publishedAt: new Date(),
       lastError: null,
@@ -345,6 +423,26 @@ export async function countPublishedLast24h(clientId: string): Promise<number> {
     .where(
       and(
         eq(instagramPublishJobs.clientId, clientId),
+        eq(instagramPublishJobs.status, "published"),
+        gte(instagramPublishJobs.publishedAt, since)
+      )
+    );
+  return row?.count ?? 0;
+}
+
+export async function countPublishedLast24hForPlatform(
+  clientId: string,
+  platform: PublishPlatform
+): Promise<number> {
+  const db = getDb();
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(instagramPublishJobs)
+    .where(
+      and(
+        eq(instagramPublishJobs.clientId, clientId),
+        eq(instagramPublishJobs.platform, platform),
         eq(instagramPublishJobs.status, "published"),
         gte(instagramPublishJobs.publishedAt, since)
       )

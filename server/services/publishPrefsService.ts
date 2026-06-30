@@ -3,6 +3,10 @@ import { eq } from "drizzle-orm";
 import { getDb, isDatabaseConfigured } from "../db/client";
 import { clientPublishPrefs } from "../db/schema";
 import {
+  DEFAULT_PUBLISH_PLATFORMS,
+  type PublishPlatform,
+} from "../../src/lib/publish/platforms";
+import {
   DEFAULT_SLOT_TEMPLATES,
   type SlotTemplates,
 } from "../../src/lib/publish/suggestScheduleTimes";
@@ -10,6 +14,8 @@ import type { PublishPrefsPayload } from "../validation/publishSchema";
 
 export type ClientPublishPrefs = PublishPrefsPayload & {
   autoScheduleOnDrop: boolean;
+  defaultPlatforms: PublishPlatform[];
+  pinterestDefaultBoardId: string | null;
 };
 
 export type PublishPrefsResponse = ClientPublishPrefs & {
@@ -21,7 +27,19 @@ const DEFAULT_PREFS: ClientPublishPrefs = {
   slotTemplates: DEFAULT_SLOT_TEMPLATES,
   defaultLeadMinutes: 15,
   autoScheduleOnDrop: false,
+  defaultPlatforms: [...DEFAULT_PUBLISH_PLATFORMS],
+  pinterestDefaultBoardId: null,
 };
+
+function parseDefaultPlatforms(value: unknown): PublishPlatform[] {
+  if (!Array.isArray(value) || !value.length) return [...DEFAULT_PUBLISH_PLATFORMS];
+  const filtered = value.filter(
+    (v): v is PublishPlatform =>
+      typeof v === "string" &&
+      (["instagram", "facebook", "linkedin", "pinterest"] as string[]).includes(v)
+  );
+  return filtered.length ? filtered : [...DEFAULT_PUBLISH_PLATFORMS];
+}
 
 function mapRow(row: typeof clientPublishPrefs.$inferSelect): ClientPublishPrefs {
   return {
@@ -29,6 +47,8 @@ function mapRow(row: typeof clientPublishPrefs.$inferSelect): ClientPublishPrefs
     slotTemplates: (row.slotTemplates as SlotTemplates) ?? DEFAULT_SLOT_TEMPLATES,
     defaultLeadMinutes: row.defaultLeadMinutes,
     autoScheduleOnDrop: row.autoScheduleOnDrop ?? false,
+    defaultPlatforms: parseDefaultPlatforms(row.defaultPlatforms),
+    pinterestDefaultBoardId: row.pinterestDefaultBoardId ?? null,
   };
 }
 
@@ -61,6 +81,9 @@ export async function saveClientPublishPrefs(
       ...DEFAULT_PREFS,
       ...patch,
       autoScheduleOnDrop: patch.autoScheduleOnDrop ?? DEFAULT_PREFS.autoScheduleOnDrop,
+      defaultPlatforms: patch.defaultPlatforms ?? DEFAULT_PREFS.defaultPlatforms,
+      pinterestDefaultBoardId:
+        patch.pinterestDefaultBoardId ?? DEFAULT_PREFS.pinterestDefaultBoardId,
       publishMockEnabled: isPublishMockEnabled(),
     };
   }
@@ -70,6 +93,11 @@ export async function saveClientPublishPrefs(
     ...existing,
     ...patch,
     autoScheduleOnDrop: patch.autoScheduleOnDrop ?? existing.autoScheduleOnDrop,
+    defaultPlatforms: patch.defaultPlatforms ?? existing.defaultPlatforms,
+    pinterestDefaultBoardId:
+      patch.pinterestDefaultBoardId !== undefined
+        ? patch.pinterestDefaultBoardId
+        : existing.pinterestDefaultBoardId,
   };
   const [row] = await db
     .insert(clientPublishPrefs)
@@ -79,6 +107,8 @@ export async function saveClientPublishPrefs(
       slotTemplates: merged.slotTemplates,
       defaultLeadMinutes: merged.defaultLeadMinutes,
       autoScheduleOnDrop: merged.autoScheduleOnDrop,
+      defaultPlatforms: merged.defaultPlatforms,
+      pinterestDefaultBoardId: merged.pinterestDefaultBoardId,
     })
     .onConflictDoUpdate({
       target: clientPublishPrefs.clientId,
@@ -87,6 +117,8 @@ export async function saveClientPublishPrefs(
         slotTemplates: merged.slotTemplates,
         defaultLeadMinutes: merged.defaultLeadMinutes,
         autoScheduleOnDrop: merged.autoScheduleOnDrop,
+        defaultPlatforms: merged.defaultPlatforms,
+        pinterestDefaultBoardId: merged.pinterestDefaultBoardId,
         updatedAt: new Date(),
       },
     })

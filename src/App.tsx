@@ -2668,6 +2668,8 @@ export default function App() {
   const { parsedLocation, clientRoute, accountRoute, navigateAccount } = useAppNavigation();
   const searchParams = useSearchParams();
   const metaConnectedParam = searchParams.get("meta_connected") === "1";
+  const linkedinConnectedParam = searchParams.get("linkedin_connected") === "1";
+  const pinterestConnectedParam = searchParams.get("pinterest_connected") === "1";
   const isDashboardActive = parsedLocation.kind === "dashboard";
   const isAccountActive = parsedLocation.kind === "account";
   const onClientRoute = parsedLocation.kind === "client";
@@ -2980,6 +2982,8 @@ export default function App() {
             canvaPages={canvaPages}
             canvaGridReversed={canvaGridReversed}
             metaConnectedParam={metaConnectedParam}
+            linkedinConnectedParam={linkedinConnectedParam}
+            pinterestConnectedParam={pinterestConnectedParam}
             onNavigatePosts={() => void handleNavigate("posts")}
             onNavigateToPost={(postId) => selectPreviewPost(postId)}
           />

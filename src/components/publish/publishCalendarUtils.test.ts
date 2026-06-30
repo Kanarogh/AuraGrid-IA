@@ -34,6 +34,8 @@ function item(partial: Partial<PublishQueueItem> & { plannedPostId: string; dayN
     permalink: null,
     lastError: null,
     attempts: 0,
+    platforms: [],
+    platformJobs: [],
     ...partial,
   };
 }

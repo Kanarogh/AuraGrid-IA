@@ -145,6 +145,33 @@ export async function publishMediaContainer(input: {
   return { id: data.id, permalink };
 }
 
+export async function publishPagePhoto(input: {
+  pageId: string;
+  accessToken: string;
+  imageUrl: string;
+  caption: string;
+}): Promise<{ id: string; permalink?: string }> {
+  const params = new URLSearchParams({
+    url: input.imageUrl,
+    caption: input.caption,
+    published: "true",
+  });
+  const data = await graphFetch<{ id: string; post_id?: string }>(
+    `/${input.pageId}/photos`,
+    input.accessToken,
+    { method: "POST", body: params }
+  );
+  if (!data.id) throw new Error("Meta não retornou ID da publicação na Página.");
+  let permalink: string | undefined;
+  const postId = data.post_id ?? data.id;
+  try {
+    permalink = `https://www.facebook.com/${postId}`;
+  } catch {
+    /* opcional */
+  }
+  return { id: data.id, permalink };
+}
+
 export function translateMetaError(message: string): string {
   const lower = message.toLowerCase();
   if (/expired|session|oauth|190/.test(lower)) {

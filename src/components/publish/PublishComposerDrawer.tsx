@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, ExternalLink, RefreshCw, X } from "lucide-react";
 import { cn } from "../../lib/cn";
+import { formatPlatformBadges } from "../../lib/publish/platformUi";
+import { PLATFORM_LABELS } from "../../lib/publish/platforms";
 import type { PlannedPost } from "../../types";
 import { Button } from "../ui/Button";
 import { InstagramPhonePreview } from "../posts/InstagramPhonePreview";
@@ -166,19 +168,23 @@ export function PublishComposerDrawer({
     }
   };
 
-  const handleRetry = async () => {
-    if (!item.jobId) return;
+  const handleRetryJob = async (jobId: string) => {
     setSaving(true);
     try {
-      await retryPublishJob(clientId, item.jobId);
+      await retryPublishJob(clientId, jobId);
       toast.success("Tentando publicar novamente.");
-      onClose();
       await onRefresh();
     } catch {
       toast.error("Não foi possível tentar de novo.");
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleRetry = async () => {
+    if (!item.jobId) return;
+    await handleRetryJob(item.jobId);
+    onClose();
   };
 
   return (
@@ -200,6 +206,11 @@ export function PublishComposerDrawer({
               Dia {item.dayNumber}
             </h2>
             <p className="text-xs text-ag-muted">{item.dateLabel}</p>
+            {item.platforms.length > 0 && (
+              <p className="text-[10px] font-semibold text-ag-accent mt-1">
+                {formatPlatformBadges(item.platforms)}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <button
@@ -275,6 +286,44 @@ export function PublishComposerDrawer({
               </p>
             )}
           </section>
+
+          {item.platformJobs.length > 0 && (
+            <section className="rounded-xl border border-ag-border bg-ag-surface-2 p-3 space-y-2">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-ag-muted">
+                Status por rede
+              </p>
+              {item.platformJobs.map((pj) => (
+                <div
+                  key={pj.jobId}
+                  className="flex items-center justify-between gap-2 text-xs border-b border-ag-border/40 last:border-0 pb-2 last:pb-0"
+                >
+                  <span className="font-semibold text-ag-text">{PLATFORM_LABELS[pj.platform]}</span>
+                  <span className="text-ag-muted capitalize">{pj.status}</span>
+                  {pj.status === "failed" && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={saving}
+                      onClick={() => void handleRetryJob(pj.jobId)}
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  {pj.permalink && (
+                    <a
+                      href={pj.permalink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-ag-accent hover:underline inline-flex items-center gap-1"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                </div>
+              ))}
+            </section>
+          )}
 
           {showPreview && (
             <section className="rounded-xl border border-ag-border bg-ag-surface-2 p-3">

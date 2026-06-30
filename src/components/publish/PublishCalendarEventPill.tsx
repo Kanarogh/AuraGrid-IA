@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "../../lib/cn";
+import { formatPlatformBadges } from "../../lib/publish/platformUi";
 import { PostFeedImage } from "../posts/PostFeedImage";
 import type { PublishQueueItem } from "../../lib/publish/publishApi";
 import {
@@ -91,6 +92,11 @@ export function PublishCalendarEventPill({
             </span>
           )}
           <span className="text-[9px] text-ag-muted truncate">{label}</span>
+          {item.platforms.length > 0 && (
+            <span className="text-[8px] font-semibold text-ag-accent/80 truncate">
+              {formatPlatformBadges(item.platforms)}
+            </span>
+          )}
         </div>
         {isWeek && item.caption && (
           <p className="text-[9px] text-ag-muted truncate mt-0.5">{item.caption}</p>

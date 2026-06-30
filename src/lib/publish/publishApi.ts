@@ -1,4 +1,5 @@
 import { apiFetch, readApiJson } from "../api/apiClient";
+import type { PublishPlatform } from "./platforms";
 
 export type MetaConnectionPublic = {
   connected: boolean;
@@ -11,11 +12,35 @@ export type MetaConnectionPublic = {
   needsReconnect: boolean;
 };
 
+export type SocialConnectionPublic = {
+  platform: PublishPlatform;
+  connected: boolean;
+  status: "active" | "expired" | "revoked" | "disconnected";
+  displayName: string | null;
+  tokenExpiresAt: string | null;
+  connectedAt: string | null;
+  needsReconnect: boolean;
+  metadata: Record<string, unknown>;
+  oauthConfigured: boolean;
+};
+
+export type PlatformJobStatus = {
+  jobId: string;
+  platform: PublishPlatform;
+  status: "queued" | "publishing" | "published" | "failed" | "cancelled";
+  permalink: string | null;
+  lastError: string | null;
+  attempts: number;
+  scheduledAt: string | null;
+};
+
 export type PublishPrefs = {
   timezone: string;
   slotTemplates: Record<string, string[]>;
   defaultLeadMinutes: number;
   autoScheduleOnDrop: boolean;
+  defaultPlatforms: PublishPlatform[];
+  pinterestDefaultBoardId: string | null;
   publishMockEnabled?: boolean;
 };
 
@@ -33,6 +58,8 @@ export type PublishQueueItem = {
   permalink: string | null;
   lastError: string | null;
   attempts: number;
+  platforms: PublishPlatform[];
+  platformJobs: PlatformJobStatus[];
 };
 
 export type ScheduleSuggestion = {
@@ -48,14 +75,39 @@ export async function fetchMetaConnection(clientId: string): Promise<MetaConnect
   return readApiJson(res);
 }
 
+export async function fetchSocialConnections(
+  clientId: string
+): Promise<SocialConnectionPublic[]> {
+  const res = await apiFetch(
+    `/api/v1/clients/${encodeURIComponent(clientId)}/social/connections`
+  );
+  const data = await readApiJson<{ connections: SocialConnectionPublic[] }>(res);
+  return data.connections;
+}
+
 export function startMetaOAuth(clientId: string): void {
   window.location.href = `/api/v1/clients/${encodeURIComponent(clientId)}/meta/oauth/start`;
+}
+
+export function startSocialOAuth(clientId: string, platform: PublishPlatform): void {
+  window.location.href = `/api/v1/clients/${encodeURIComponent(clientId)}/social/${encodeURIComponent(platform)}/oauth/start`;
 }
 
 export async function disconnectMeta(clientId: string): Promise<void> {
   const res = await apiFetch(`/api/v1/clients/${encodeURIComponent(clientId)}/meta/connection`, {
     method: "DELETE",
   });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+export async function disconnectSocial(
+  clientId: string,
+  platform: PublishPlatform
+): Promise<void> {
+  const res = await apiFetch(
+    `/api/v1/clients/${encodeURIComponent(clientId)}/social/${encodeURIComponent(platform)}/connection`,
+    { method: "DELETE" }
+  );
   if (!res.ok) throw new Error(await res.text());
 }
 
@@ -119,6 +171,7 @@ export async function createPublishJobs(
     scheduledAt: string;
     caption: string;
     imageAssetId: string;
+    platforms?: PublishPlatform[];
   }>
 ): Promise<void> {
   const res = await apiFetch(`/api/v1/clients/${encodeURIComponent(clientId)}/publish/jobs`, {
@@ -160,3 +213,19 @@ export const PUBLISH_STATUS_LABELS: Record<PublishQueueItem["status"], string> =
   failed: "Não publicou",
   cancelled: "Cancelado",
 };
+
+export function isSocialConnectionActive(conn: SocialConnectionPublic): boolean {
+  return conn.connected && conn.status === "active" && !conn.needsReconnect;
+}
+
+export function platformsReadyForSchedule(
+  connections: SocialConnectionPublic[],
+  platforms: PublishPlatform[],
+  mockEnabled: boolean
+): boolean {
+  if (mockEnabled) return true;
+  return platforms.every((p) => {
+    const c = connections.find((x) => x.platform === p);
+    return c && isSocialConnectionActive(c);
+  });
+}

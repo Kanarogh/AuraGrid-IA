@@ -16,19 +16,29 @@ export const APP_SUMMARY =
 export const APP_WORKSPACE_SUMMARY =
   "Cada marca/cliente tem seu próprio workspace com cronograma, catálogo, grid, roteiro e publicação. Em produção, suporta múltiplos usuários por conta com permissões por equipe.";
 
-/** Redes sociais suportadas pelo produto. */
-export const SUPPORTED_SOCIAL_NETWORKS = [
+/** Redes com publicação foto+legenda no escopo v1. */
+export const SUPPORTED_SOCIAL_NETWORKS_V1 = [
   "Instagram",
   "Facebook",
   "LinkedIn",
-  "TikTok",
   "Pinterest",
+] as const;
+
+/** Roadmap pós-vídeo. */
+export const SUPPORTED_SOCIAL_NETWORKS_VIDEO_ROADMAP = [
+  "TikTok",
   "YouTube",
   "YouTube Shorts",
 ] as const;
 
+/** Redes sociais suportadas pelo produto. */
+export const SUPPORTED_SOCIAL_NETWORKS = [
+  ...SUPPORTED_SOCIAL_NETWORKS_V1,
+  ...SUPPORTED_SOCIAL_NETWORKS_VIDEO_ROADMAP,
+] as const;
+
 export const SUPPORTED_SOCIAL_NETWORKS_LABEL =
-  "Instagram, Facebook, LinkedIn, TikTok, Pinterest, YouTube e YouTube Shorts";
+  "Instagram, Facebook, LinkedIn e Pinterest (TikTok, YouTube e Shorts em breve com suporte a vídeo)";
 
 /** Mensagens reutilizáveis — publicação e conexão. */
 export const MSG_CONNECT_SOCIAL_TO_SCHEDULE =

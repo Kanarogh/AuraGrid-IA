@@ -474,8 +474,31 @@ export const clientPublishPrefs = pgTable("client_publish_prefs", {
     }),
   defaultLeadMinutes: smallint("default_lead_minutes").notNull().default(15),
   autoScheduleOnDrop: boolean("auto_schedule_on_drop").notNull().default(false),
+  defaultPlatforms: jsonb("default_platforms").notNull().default(["instagram"]),
+  pinterestDefaultBoardId: text("pinterest_default_board_id"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const clientSocialConnections = pgTable(
+  "client_social_connections",
+  {
+    clientId: text("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    platform: text("platform").notNull(),
+    connectedByUserId: uuid("connected_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    accessTokenEnc: text("access_token_enc").notNull(),
+    refreshTokenEnc: text("refresh_token_enc"),
+    tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+    metadata: jsonb("metadata").notNull().default({}),
+    status: text("status").notNull().default("active"),
+    connectedAt: timestamp("connected_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.clientId, t.platform] })]
+);
 
 export const instagramPublishJobs = pgTable(
   "instagram_publish_jobs",
@@ -496,6 +519,7 @@ export const instagramPublishJobs = pgTable(
     imageAssetId: uuid("image_asset_id")
       .notNull()
       .references(() => mediaAssets.id, { onDelete: "restrict" }),
+    platform: text("platform").notNull().default("instagram"),
     status: text("status").notNull().default("queued"),
     attempts: smallint("attempts").notNull().default(0),
     lastError: text("last_error"),

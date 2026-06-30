@@ -28,15 +28,16 @@ import { PublishComposerDrawer } from "./PublishComposerDrawer";
 import { PublishFeedPreviewPanel } from "./PublishFeedPreviewPanel";
 import {
   createPublishJobs,
-  fetchMetaConnection,
   fetchPublishPrefs,
   fetchPublishQueue,
+  fetchSocialConnections,
   patchPublishJob,
   previewPublishSchedule,
-  type MetaConnectionPublic,
+  platformsReadyForSchedule,
   type PublishPrefs,
   type PublishQueueItem,
   type PublishQueueSummary,
+  type SocialConnectionPublic,
 } from "../../lib/publish/publishApi";
 import {
   clearPublishDrafts,
@@ -94,6 +95,8 @@ export function PublishSchedulerHub({
   onNavigatePosts,
   onNavigateToPost,
   metaConnectedParam,
+  linkedinConnectedParam,
+  pinterestConnectedParam,
 }: {
   clientId: string;
   planningPeriodId: string;
@@ -106,6 +109,8 @@ export function PublishSchedulerHub({
   onNavigatePosts: () => void;
   onNavigateToPost: (plannedPostId: string) => void;
   metaConnectedParam?: boolean;
+  linkedinConnectedParam?: boolean;
+  pinterestConnectedParam?: boolean;
 }) {
   const { storageMode } = useAuth();
   const { isClientSwitching } = useClientWorkspace();
@@ -117,7 +122,7 @@ export function PublishSchedulerHub({
   const [anchorDate, setAnchorDate] = useState(() => new Date());
   const [queue, setQueue] = useState<PublishQueueItem[]>([]);
   const [summary, setSummary] = useState<PublishQueueSummary | null>(null);
-  const [connection, setConnection] = useState<MetaConnectionPublic | null>(null);
+  const [socialConnections, setSocialConnections] = useState<SocialConnectionPublic[]>([]);
   const [prefs, setPrefs] = useState<PublishPrefs | null>(null);
   const [loading, setLoading] = useState(true);
   const [draftSchedules, setDraftSchedulesState] = useState<Record<string, string>>(() =>
@@ -163,7 +168,7 @@ export function PublishSchedulerHub({
     fetchGenerationRef.current += 1;
     setQueue([]);
     setSummary(null);
-    setConnection(null);
+    setSocialConnections([]);
     setLoading(true);
   }, [clientId, planningPeriodId]);
 
@@ -183,9 +188,9 @@ export function PublishSchedulerHub({
     const generation = fetchGenerationRef.current;
     if (!silent) setLoading(true);
     try {
-      const [queueResult, metaResult] = await Promise.allSettled([
+      const [queueResult, socialResult] = await Promise.allSettled([
         fetchPublishQueue(clientId, planningPeriodId),
-        fetchMetaConnection(clientId),
+        fetchSocialConnections(clientId),
       ]);
 
       if (isStaleFetch(generation, fetchGenerationRef.current)) return;
@@ -199,11 +204,11 @@ export function PublishSchedulerHub({
         );
       }
 
-      if (metaResult.status === "fulfilled") {
-        setConnection(metaResult.value);
+      if (socialResult.status === "fulfilled") {
+        setSocialConnections(socialResult.value);
       } else if (!silent && queueResult.status === "fulfilled") {
         toast.warning(
-          `Conexão Meta indisponível: ${loadErrorDetail(metaResult.reason, "tente recarregar a página.")}`
+          `Conexões sociais indisponíveis: ${loadErrorDetail(socialResult.reason, "tente recarregar a página.")}`
         );
       }
     } finally {
@@ -224,11 +229,11 @@ export function PublishSchedulerHub({
   );
 
   useEffect(() => {
-    if (metaConnectedParam) {
+    if (metaConnectedParam || linkedinConnectedParam || pinterestConnectedParam) {
       toast.success(MSG_SOCIAL_CONNECTED);
       void refresh();
     }
-  }, [metaConnectedParam, refresh]);
+  }, [metaConnectedParam, linkedinConnectedParam, pinterestConnectedParam, refresh]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -255,11 +260,17 @@ export function PublishSchedulerHub({
   }, [hubView, shiftAnchor]);
 
   const metrics = useMemo(() => queueMetrics(queue), [queue]);
-  const connected = Boolean(
-    connection?.connected && connection.status === "active" && !connection.needsReconnect
+  const defaultPlatforms = prefs?.defaultPlatforms ?? ["instagram"];
+  const connected = platformsReadyForSchedule(
+    socialConnections,
+    defaultPlatforms,
+    false
   );
   const publishMockEnabled = summary?.publishMockEnabled ?? prefs?.publishMockEnabled ?? false;
-  const canSchedule = connected || publishMockEnabled;
+  const canSchedule =
+    publishMockEnabled ||
+    platformsReadyForSchedule(socialConnections, defaultPlatforms, false);
+  const igUsername = socialConnections.find((c) => c.platform === "instagram")?.displayName;
   const scheduleTimezone = prefs?.timezone ?? "America/Sao_Paulo";
   const leadMinutes = prefs?.defaultLeadMinutes ?? 15;
   const autoScheduleOnDrop = prefs?.autoScheduleOnDrop ?? false;
@@ -277,13 +288,14 @@ export function PublishSchedulerHub({
   }, []);
 
   const scheduleOneJob = useCallback(
-    async (item: PublishQueueItem, scheduledIso: string) => {
+    async (item: PublishQueueItem, scheduledIso: string, platforms = defaultPlatforms) => {
       await createPublishJobs(clientId, planningPeriodId, [
         {
           plannedPostId: item.plannedPostId,
           scheduledAt: scheduledIso,
           caption: resolvePublishCaption(item, posts),
           imageAssetId: item.imageAssetId!,
+          platforms,
         },
       ]);
       setDraftSchedules((prev) => {
@@ -292,7 +304,7 @@ export function PublishSchedulerHub({
         return next;
       });
     },
-    [clientId, planningPeriodId, posts, setDraftSchedules]
+    [clientId, planningPeriodId, posts, setDraftSchedules, defaultPlatforms]
   );
 
   const conflicts = useMemo(
@@ -326,9 +338,19 @@ export function PublishSchedulerHub({
     }
 
     if (item.status === "queued" || item.status === "publishing") {
-      if (!item.jobId) return;
+      const jobsToPatch =
+        item.platformJobs.length > 0
+          ? item.platformJobs.filter((j) => j.status === "queued" || j.status === "publishing")
+          : item.jobId
+            ? [{ jobId: item.jobId, platform: "instagram" as const, status: item.status, permalink: null, lastError: null, attempts: 0, scheduledAt: null }]
+            : [];
+      if (!jobsToPatch.length) return;
       try {
-        await patchPublishJob(clientId, item.jobId, { scheduledAt: scheduledIso });
+        await Promise.all(
+          jobsToPatch.map((j) =>
+            patchPublishJob(clientId, j.jobId, { scheduledAt: scheduledIso })
+          )
+        );
         toast.success(`Reagendado para ${formatScheduleToast(scheduledIso)}`);
         await refresh(true);
       } catch {
@@ -422,6 +444,7 @@ export function PublishSchedulerHub({
           scheduledAt: draftSchedules[t.plannedPostId]!,
           caption: resolvePublishCaption(t, posts),
           imageAssetId: t.imageAssetId!,
+          platforms: defaultPlatforms,
         }))
       );
       toast.success(`${confirmTargets.length} posts agendados!`);
@@ -463,9 +486,7 @@ export function PublishSchedulerHub({
             Calendário de publicação · arraste posts prontos para agendar
           </p>
         </div>
-        {connection?.igUsername && (
-          <p className="text-xs text-ag-muted">@{connection.igUsername}</p>
-        )}
+        {igUsername && <p className="text-xs text-ag-muted">{igUsername}</p>}
       </div>
 
       <PublishStatusBanner
@@ -516,7 +537,7 @@ export function PublishSchedulerHub({
       ) : hubView === "settings" ? (
         <PublishPrefsPanel
           clientId={clientId}
-          connection={connection}
+          connections={socialConnections}
           publishMockEnabled={publishMockEnabled}
           onConnectionRefresh={() => void refresh()}
           onPrefsChange={setPrefs}
