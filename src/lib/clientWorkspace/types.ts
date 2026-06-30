@@ -5,8 +5,10 @@ import type { PlanningPeriod } from "../planningConstants";
 import type { PeriodSnapshot } from "./planningPeriodLocal";
 import type { DistributionPrefs } from "../smartDistribution";
 
-export const REGISTRY_KEY = "auragrid_client_registry";
-export const WORKSPACE_KEY_PREFIX = "auragrid_ws:";
+import { STORAGE } from "../storageLegacy";
+
+export const REGISTRY_KEY = STORAGE.registry;
+export const WORKSPACE_KEY_PREFIX = STORAGE.workspacePrefix;
 
 export type ClientMeta = {
   id: string;

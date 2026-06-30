@@ -1,6 +1,8 @@
-# Publicação no Instagram (Meta)
+# Publicação nas redes sociais
 
-Guia para configurar e usar a funcionalidade **Programar posts** no AuraGrid.
+Guia para configurar e usar a funcionalidade **Programar posts** no AuraStudio — agendamento e publicação para clientes de agência em **Instagram, Facebook, LinkedIn, TikTok, Pinterest, YouTube e YouTube Shorts**.
+
+> **Integração atual:** OAuth e publicação automática via **Meta** (Instagram feed). Outras redes entram no roadmap de integrações.
 
 > Detalhes da implementação, arquitetura e pendências de produto: [`PROGRAMAR-POSTS.md`](./PROGRAMAR-POSTS.md)
 
@@ -12,7 +14,7 @@ Guia para configurar e usar a funcionalidade **Programar posts** no AuraGrid.
 - **Composer** lateral (preview, legenda, data/hora, agendar/reagendar/cancelar)
 - **Preview Feed 3×3** integrado no hub (desktop + bottom sheet mobile) com badges de horário
 - **Lista operacional** com filtros, retry/cancel em lote
-- Conexão OAuth Instagram Profissional via Meta
+- Conexão OAuth de contas sociais via Meta (Instagram Profissional hoje)
 - Templates de horário (1–5 posts/dia) em **Configurações**
 - Worker em background + polling na UI (30s)
 - Limite Meta **X/100 publicações (24h)** no toolbar
@@ -70,7 +72,7 @@ Migration: `0015_meta_publish.sql` (aplicada automaticamente no deploy).
 - `NEXT_PUBLIC_APP_URL` apontando para o domínio público
 - Health: `database.ok` + storage OK após deploy
 
-## Responsabilidades do usuário (não automatizadas pelo AuraGrid)
+## Responsabilidades do usuário (não automatizadas pelo AuraStudio)
 
 | Item | Quem faz |
 |------|----------|

@@ -114,8 +114,8 @@ export function ApiWorkspaceSync() {
 
   useEffect(() => {
     const onReload = () => setReloadNonce((n) => n + 1);
-    window.addEventListener("auragrid:api-reload-request", onReload);
-    return () => window.removeEventListener("auragrid:api-reload-request", onReload);
+    window.addEventListener("aurastudio:api-reload-request", onReload);
+    return () => window.removeEventListener("aurastudio:api-reload-request", onReload);
   }, []);
 
   // Bootstrap from API
@@ -132,7 +132,7 @@ export function ApiWorkspaceSync() {
         const clientId = reg.activeClientId || reg.clients[0]?.id;
         if (!clientId) {
           window.dispatchEvent(
-            new CustomEvent("auragrid:api-registry", {
+            new CustomEvent("aurastudio:api-registry", {
               detail: { registry: reg, workspace: createOrphanWorkspace() },
             })
           );
@@ -146,7 +146,7 @@ export function ApiWorkspaceSync() {
         const fp = workspaceApiPatchFingerprint(ws);
         if (fp) markWorkspacePatchSynced(clientId, fp);
         window.dispatchEvent(
-          new CustomEvent("auragrid:api-registry", {
+          new CustomEvent("aurastudio:api-registry", {
             detail: { registry: reg, workspace: ws },
           })
         );
@@ -155,12 +155,12 @@ export function ApiWorkspaceSync() {
           skipSaveRef.current = false;
         }, 100);
       } catch (err) {
-        console.error("[AuraGrid] Falha ao carregar workspace da API:", err);
+        console.error("[AuraStudio] Falha ao carregar workspace da API:", err);
         if (!cancelled) {
           const message =
             err instanceof Error ? err.message : "Falha ao carregar workspace da nuvem.";
           window.dispatchEvent(
-            new CustomEvent("auragrid:api-load-failed", { detail: { message } })
+            new CustomEvent("aurastudio:api-load-failed", { detail: { message } })
           );
           loadedRef.current = false;
           skipSaveRef.current = true;
@@ -211,7 +211,7 @@ export function ApiWorkspaceSync() {
           broadcastSyncChanged(activeClientId, ["workspace"]);
         })
         .catch((err) => {
-          console.error("[AuraGrid] Falha ao salvar workspace:", err);
+          console.error("[AuraStudio] Falha ao salvar workspace:", err);
           if (!isApplyingRemoteWorkspace()) {
             emitCloudSaveStatus("error");
             const message =
@@ -267,7 +267,7 @@ export function ApiWorkspaceSync() {
           await new Promise((r) => setTimeout(r, 150));
           return flushWorkspaceNow(ws, false);
         }
-        console.warn("[AuraGrid] Flush do workspace ignorado (bootstrap em andamento).");
+        console.warn("[AuraStudio] Flush do workspace ignorado (bootstrap em andamento).");
         emitCloudSaveStatus("error");
         return;
       }
@@ -308,9 +308,9 @@ export function ApiWorkspaceSync() {
       flushWorkspaceNow,
       toWorkspace: apiWorkspaceToClientWorkspace,
     };
-    (window as unknown as { __auragridApi?: typeof api }).__auragridApi = api;
+    (window as unknown as { __aurastudioApi?: typeof api }).__aurastudioApi = api;
     return () => {
-      delete (window as unknown as { __auragridApi?: typeof api }).__auragridApi;
+      delete (window as unknown as { __aurastudioApi?: typeof api }).__aurastudioApi;
     };
   }, [storageMode, activeClientId]);
 
@@ -331,7 +331,7 @@ export function ApiWorkspaceSync() {
 
 export function getApiHelpers() {
   return (window as unknown as {
-    __auragridApi?: {
+    __aurastudioApi?: {
       fetchRegistry: typeof fetchRegistry;
       fetchWorkspace: typeof fetchWorkspace;
       createClient: typeof createClientApi;
@@ -343,7 +343,7 @@ export function getApiHelpers() {
       flushWorkspaceNow: (ws: ClientWorkspace) => Promise<void>;
       toWorkspace: typeof apiWorkspaceToClientWorkspace;
     };
-  }).__auragridApi;
+  }).__aurastudioApi;
 }
 
 export type ApiRegistryEvent = {

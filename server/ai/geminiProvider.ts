@@ -58,7 +58,7 @@ function getClient() {
   }
   return new GoogleGenAI({
     apiKey,
-    httpOptions: { headers: { "User-Agent": "auragrid-build" } },
+    httpOptions: { headers: { "User-Agent": "aurastudio-build" } },
   });
 }
 

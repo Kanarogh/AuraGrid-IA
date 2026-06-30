@@ -18,7 +18,9 @@ export {
   SECTION_SUBTITLES,
 } from "../../lib/sectionMeta";
 
-const SIDEBAR_COLLAPSED_KEY = "auragrid_sidebar_collapsed";
+import { STORAGE } from "../../lib/storageLegacy";
+
+const SIDEBAR_COLLAPSED_KEY = STORAGE.sidebarCollapsed;
 
 export function loadSidebarCollapsed(): boolean {
   if (typeof window === "undefined") return false;

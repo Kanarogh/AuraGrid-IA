@@ -21,6 +21,6 @@ export function notifyStorageSaveFailure(result: SaveWorkspaceResult): void {
       return;
     }
 
-    console.error("[AuraGrid] Falha ao salvar workspace:", result.message);
+    console.error("[AuraStudio] Falha ao salvar workspace:", result.message);
   }
 }

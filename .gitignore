@@ -6,6 +6,7 @@ coverage/
 *.log
 .env*
 !.env.example
+.aurastudio-ai.json
 .auragrid-ai.json
 certs/*
 !certs/.gitkeep

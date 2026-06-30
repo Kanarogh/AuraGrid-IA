@@ -98,7 +98,7 @@ export function CanvaWardrobePanel({
               Catálogo
             </h3>
             <p className="text-[11px] text-ag-muted mt-0.5">
-              Arraste looks para o grid · {items.length} itens · {gridRatioLabel}
+              Arraste itens para o grid · {items.length} itens · {gridRatioLabel}
             </p>
           </div>
           <div className="text-right shrink-0">
@@ -113,7 +113,7 @@ export function CanvaWardrobePanel({
             <p className="text-xs text-ag-text leading-relaxed">
               Preenchendo o slot{" "}
               <strong className="font-mono text-ag-accent">L{selectedSlotNumber}</strong> — clique
-              em um look ou arraste para o grid.
+              em um item ou arraste para o grid.
             </p>
             <button
               type="button"
@@ -125,7 +125,7 @@ export function CanvaWardrobePanel({
           </div>
         ) : (
           <p className="text-[11px] text-ag-muted leading-relaxed rounded-xl bg-ag-surface-2 border border-ag-border px-3 py-2">
-            Selecione um slot à esquerda, depois escolha o look aqui.{" "}
+            Selecione um slot à esquerda, depois escolha o item aqui.{" "}
             <span className="text-ag-success inline-flex items-center gap-0.5">
               <CheckCircle2 className="h-3 w-3" />
               verde = já usado no grid (Pág·slot, ex.: P4L11)
@@ -194,9 +194,9 @@ export function CanvaWardrobePanel({
             icon={ShoppingBag}
             title={
               filter === "available"
-                ? "Todos os looks já estão no grid"
+                ? "Todos os itens já estão no grid"
                 : filter === "in_grid"
-                  ? "Nenhum look no grid"
+                  ? "Nenhum item no grid"
                   : "Acervo vazio"
             }
             description={

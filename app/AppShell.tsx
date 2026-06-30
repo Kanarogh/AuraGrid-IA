@@ -16,6 +16,7 @@ import { AppNavigationProvider } from "../src/lib/appRouting";
 import { AppRouteBootstrap } from "../src/components/app/AppRouteBootstrap";
 import { AppearanceCloudSync } from "../src/components/app/AppearanceCloudSync";
 import { PlanningPeriodModalProvider } from "../src/components/layout/planningPeriodModalContext";
+import { migrateLegacyStorageKeys } from "../src/lib/storageLegacy";
 import { initTheme } from "../src/hooks/useTheme";
 import { initAccent } from "../src/hooks/useAccent";
 import "../src/lib/sync/syncDebugLog";
@@ -31,6 +32,7 @@ function AppNavigationShell({ children }: { children: React.ReactNode }) {
 
 export default function AppShell() {
   useEffect(() => {
+    migrateLegacyStorageKeys();
     initTheme();
     initAccent();
   }, []);

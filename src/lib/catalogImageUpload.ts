@@ -276,7 +276,7 @@ export async function pickFilesFromFolder(
     return await readDirectoryHandle(handle, handle.name);
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") return null;
-    console.warn("[AuraGrid] showDirectoryPicker falhou:", err);
+    console.warn("[AuraStudio] showDirectoryPicker falhou:", err);
     return null;
   }
 }

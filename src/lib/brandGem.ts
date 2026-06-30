@@ -1,7 +1,9 @@
 import { createEmptyBrandGem } from "./brandGemDefaults";
 import { normalizeCaptionGenerationParams } from "./captionParams";
 import type { BrandGem } from "../types";
-const STORAGE_KEY = "auragrid_brand_gem";
+import { STORAGE } from "./storageLegacy";
+
+const STORAGE_KEY = STORAGE.brandGem;
 const LEGACY_CONTEXT_KEY = "palak_context";
 const LEGACY_REPEATING_KEY = "palak_repeating";
 

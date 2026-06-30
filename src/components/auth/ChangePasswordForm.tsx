@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import { changePasswordApi } from "../../lib/api/apiClient";
-import { APP_NAME } from "../../lib/appBranding";
+import { APP_NAME, APP_TAGLINE } from "../../lib/appBranding";
 
 export function ChangePasswordForm({ onSuccess }: { onSuccess?: () => void }) {
   const { refreshUser } = useAuth();

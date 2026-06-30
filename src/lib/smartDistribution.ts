@@ -194,7 +194,7 @@ export function buildDistributionPreview(
   const summaryLines: string[] = [];
 
   if (imageCount === 0) {
-    summaryLines.push("Nenhum look com foto para distribuir.");
+    summaryLines.push("Nenhum item com foto para distribuir.");
     return { postsPerDay, totalSlots, imageCount, summaryLines, overflowCount, capacity };
   }
 
@@ -202,14 +202,14 @@ export function buildDistributionPreview(
   const multiDays = postsPerDay.filter((c) => c > 1).length;
 
   summaryLines.push(
-    `${imageCount} look${imageCount === 1 ? "" : "s"} → ${totalSlots} slot${totalSlots === 1 ? "" : "s"} em ${daysWithPosts} dia${daysWithPosts === 1 ? "" : "s"}`
+    `${imageCount} item${imageCount === 1 ? "" : "s"} → ${totalSlots} slot${totalSlots === 1 ? "" : "s"} em ${daysWithPosts} dia${daysWithPosts === 1 ? "" : "s"}`
   );
 
   if (imageCount < totalDays) {
     summaryLines.push(
       options.sparseStrategy === "sequential"
-        ? `Sequencial: dias 1–${imageCount} com 1 look; dias ${imageCount + 1}–${totalDays} vazios.`
-        : `Espalhado: looks distribuídos uniformemente nos ${totalDays} dias.`
+        ? `Sequencial: dias 1–${imageCount} com 1 item; dias ${imageCount + 1}–${totalDays} vazios.`
+        : `Espalhado: itens distribuídos uniformemente nos ${totalDays} dias.`
     );
   } else if (multiDays > 0) {
     summaryLines.push(formatDenseRange(postsPerDay, options.maxPostsPerDay));
@@ -218,7 +218,7 @@ export function buildDistributionPreview(
       summaryLines.push(`Demais dias: 1 post por dia (máx. ${options.maxPostsPerDay} nos dias densos).`);
     }
   } else {
-    summaryLines.push(`1 look por dia nos ${totalDays} dias.`);
+    summaryLines.push(`1 item por dia nos ${totalDays} dias.`);
   }
 
   if (options.maxPostsPerDay > 1 && imageCount >= totalDays) {
@@ -229,7 +229,7 @@ export function buildDistributionPreview(
 
   if (overflowCount > 0) {
     summaryLines.push(
-      `Atenção: ${overflowCount} look${overflowCount === 1 ? "" : "s"} excede${overflowCount === 1 ? "" : "m"} a capacidade (${capacity}). Ajuste dias densos ou máx./dia.`
+      `Atenção: ${overflowCount} item${overflowCount === 1 ? "" : "s"} excede${overflowCount === 1 ? "" : "m"} a capacidade (${capacity}). Ajuste dias densos ou máx./dia.`
     );
   }
 

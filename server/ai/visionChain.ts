@@ -7,7 +7,7 @@ export type FallbackOutcome<T> = {
   attempts: Array<{ provider: AiProviderId; error?: string; skipped?: string }>;
 };
 
-export function stripAuraGridMeta<T extends Record<string, unknown>>(result: T): {
+export function stripAuraStudioMeta<T extends Record<string, unknown>>(result: T): {
   profile: T;
   routedModel?: string;
 } {

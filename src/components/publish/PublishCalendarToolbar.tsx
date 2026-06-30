@@ -205,7 +205,7 @@ export function PublishStatusBanner({
     <div className="rounded-xl border border-ag-border/60 bg-ag-surface-2/50 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-ag-muted">
         <span className={connected ? "text-ag-success" : "text-ag-warning"}>
-          {connected ? "✓ Instagram conectado" : "○ Conectar Instagram"}
+          {connected ? "✓ Redes conectadas" : "○ Conectar redes sociais"}
         </span>
         <span>{eligible > 0 ? `✓ ${eligible} posts prontos` : "○ Aprovar posts no planejamento"}</span>
       </div>

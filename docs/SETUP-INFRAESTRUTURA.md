@@ -1,4 +1,4 @@
-# AuraGrid IA — Guia de infraestrutura (Docker, PostgreSQL, MinIO)
+# AuraStudio IA — Guia de infraestrutura (Docker, PostgreSQL, MinIO)
 
 Este documento explica como subir o ambiente de desenvolvimento com **Docker**, configurar o **PostgreSQL** e o **MinIO**, e usar os recursos que foram implementados na migração para persistência multi-usuário.
 
@@ -144,7 +144,7 @@ flowchart LR
     UI[Next.js App Router - React]
   end
 
-  subgraph app [AuraGrid Next.js :3000/80]
+  subgraph app [AuraStudio Next.js :3000/80]
     API[Route Handlers /api/**]
     AI[Provedores IA]
   end
@@ -185,7 +185,7 @@ Após `npm run docker:infra`:
 - **Senha:** `auragridsecret`
 - **Bucket:** `auragrid-media` (criado pelo `minio-init`)
 
-O bucket é **privado** — as imagens só são acessíveis via API autenticada do AuraGrid.
+O bucket é **privado** — as imagens só são acessíveis via API autenticada do AuraStudio.
 
 ---
 
@@ -211,7 +211,7 @@ POST /api/v1/auth/logout
 
 ## Catálogo de referências (fluxo atual)
 
-1. **Subir looks** — pasta ou arquivos na aba *Catálogo*. As fotos vão para o MinIO; os metadados ficam no Postgres com status **Pend.**
+1. **Subir referências** — pasta ou arquivos na aba *Catálogo*. As fotos vão para o MinIO; os metadados ficam no Postgres com status **Pend.**
 2. **Indexação manual** — use **Indexar pendentes** ou **Indexar** em cada card quando quiser gerar o perfil visual (JSON) para match nos roteiros.
 3. **Excluir catálogo** — remove todas as referências do cliente ativo (com confirmação).
 
@@ -339,7 +339,7 @@ npm run db:migrate
 ## Estrutura de arquivos relevante
 
 ```
-AuraGrid-IA/
+AuraStudio-IA/
 ├── docker-compose.dev.yml    # Dev: só Postgres + MinIO
 ├── docker-compose.yml        # Stack completa (app + migrate)
 ├── Dockerfile
@@ -410,13 +410,13 @@ O app agora é um único projeto **Next.js (App Router)** com o backend embutido
 O `squarecloud.app` na raiz define o deploy:
 
 ```
-DISPLAY_NAME=AuraGrid IA
+DISPLAY_NAME=AuraStudio IA
 MAIN=next.config.ts
 MEMORY=2048
 VERSION=recommended
 AUTORESTART=true
 START=NODE_OPTIONS=--max-old-space-size=1536 npm run build && npm run db:migrate && npm run start
-SUBDOMAIN=auragrid
+SUBDOMAIN=aurastudio
 ```
 
 - `START` roda `next build`, **`npm run db:migrate`** (aplica migrations pendentes, incluindo `0007_content_schedule.sql`) e depois `next start -p 80` (a porta 80 é exigida para websites no Square Cloud).

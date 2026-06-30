@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { accessTokenMaxAgeMs, refreshSession } from "@/server/services/authService";
 import { assertAuthRateLimit, authRateLimitHeaders } from "@/server/http/authRateLimit";
-import { REFRESH_COOKIE, setRefreshCookie } from "@/server/http/cookies";
+import { getRefreshTokenFromCookies, setRefreshCookie } from "@/server/http/cookies";
 import { errorResponse, HttpError } from "@/server/http/respond";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   try {
     assertAuthRateLimit(req, "refresh", 30);
-    const token = req.cookies.get(REFRESH_COOKIE)?.value;
+    const token = getRefreshTokenFromCookies(req.cookies);
     if (!token) return NextResponse.json({ error: "Sessão expirada." }, { status: 401 });
     const { user, tokens } = await refreshSession(token);
     const res = NextResponse.json({

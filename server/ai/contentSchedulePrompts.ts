@@ -42,7 +42,7 @@ export function buildContentScheduleTask(
 
 ${campaign}
 
-TAREFA: Gerar um CRONOGRAMA DE CONTEÚDO MENSAL para redes sociais (Instagram).
+TAREFA: Gerar um CRONOGRAMA DE CONTEÚDO MENSAL para redes sociais.
 
 BRIEFING DO CLIENTE:
 ---

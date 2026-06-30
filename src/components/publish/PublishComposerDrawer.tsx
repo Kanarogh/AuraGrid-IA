@@ -21,6 +21,11 @@ import {
   resolvePublishCaption,
   validateScheduledTime,
 } from "./publishCalendarUtils";
+import {
+  MSG_CONNECT_SOCIAL_TO_SCHEDULE,
+  MSG_SOCIAL_PREVIEW,
+  MSG_VIEW_ON_NETWORK,
+} from "../../lib/appBranding";
 import { toast } from "../../lib/toast";
 
 export function PublishComposerDrawer({
@@ -104,7 +109,7 @@ export function PublishComposerDrawer({
       return;
     }
     if (!canSchedule) {
-      toast.warning("Conecte o Instagram ou use o modo simulação para agendar.");
+      toast.warning(MSG_CONNECT_SOCIAL_TO_SCHEDULE);
       return;
     }
     setSaving(true);
@@ -274,7 +279,7 @@ export function PublishComposerDrawer({
           {showPreview && (
             <section className="rounded-xl border border-ag-border bg-ag-surface-2 p-3">
               <p className="text-[10px] font-mono uppercase tracking-widest text-ag-muted mb-3 text-center">
-                Preview Instagram
+                {MSG_SOCIAL_PREVIEW}
               </p>
               <div className="flex justify-center">
                 <InstagramPhonePreview post={mockPost} username={instagramHandle} variant="compact" />
@@ -289,7 +294,7 @@ export function PublishComposerDrawer({
               rel="noopener noreferrer"
               className="text-sm text-ag-accent inline-flex items-center gap-1 hover:underline"
             >
-              Ver no Instagram <ExternalLink className="h-3.5 w-3.5" />
+              {MSG_VIEW_ON_NETWORK} <ExternalLink className="h-3.5 w-3.5" />
             </a>
           )}
 

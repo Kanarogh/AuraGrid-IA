@@ -14,7 +14,7 @@ function test(name: string, fn: () => void) {
 console.log("syncEvents");
 
 test("channel name is stable", () => {
-  assert.equal(SYNC_NOTIFY_CHANNEL, "auragrid_sync");
+  assert.equal(SYNC_NOTIFY_CHANNEL, "aurastudio_sync");
 });
 
 test("parseSyncEventPayload accepts valid payload", () => {

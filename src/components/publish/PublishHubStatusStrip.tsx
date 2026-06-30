@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, FlaskConical, Instagram, Link2 } from "lucide-react";
+import { AlertTriangle, FlaskConical, Link2 } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { Button } from "../ui/Button";
 import { startMetaOAuth } from "../../lib/publish/publishApi";
@@ -44,8 +44,8 @@ export function PublishHubStatusStrip({
     >
       {showConnect && (
         <span className="inline-flex items-center gap-2 rounded-lg border border-ag-border bg-ag-surface-2/80 px-2.5 py-1 text-xs text-ag-muted">
-          <Instagram className="h-3.5 w-3.5 shrink-0" />
-          <span>Instagram não conectado</span>
+          <Link2 className="h-3.5 w-3.5 shrink-0" />
+          <span>Nenhuma rede social conectada</span>
           <button
             type="button"
             onClick={() => startMetaOAuth(clientId)}

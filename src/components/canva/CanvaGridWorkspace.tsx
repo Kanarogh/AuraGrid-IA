@@ -26,7 +26,7 @@ import type { CanvaGridFormatId } from "../../lib/canvaGridFormats";
 
 const WORKFLOW_STEPS = [
   { n: 1, label: "Selecione um slot no grid" },
-  { n: 2, label: "Arraste um look ou envie uma imagem" },
+  { n: 2, label: "Arraste um item ou envie uma imagem" },
   { n: 3, label: "Use ⇄ para trocar a posição com outro slot" },
 ] as const;
 
@@ -213,7 +213,7 @@ export function CanvaGridWorkspace({
                   {cloudSave && (
                     <p className="text-[10.5px] text-ag-muted mt-1.5 leading-relaxed">
                       Cada foto no grid é salva na nuvem ao ser colocada. O catálogo é um acervo
-                      separado — arraste looks para os slots para montar o feed.
+                      separado — arraste itens para os slots para montar o feed.
                     </p>
                   )}
                 </div>

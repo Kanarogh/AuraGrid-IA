@@ -1,6 +1,6 @@
-# Roteamento AuraGrid (SPA-in-Next)
+# Roteamento AuraStudio (SPA-in-Next)
 
-O AuraGrid usa o **Next.js App Router** só para registrar URLs e servir APIs. A UI é uma SPA client-side montada uma vez no layout `(workspace)`.
+O AuraStudio usa o **Next.js App Router** só para registrar URLs e servir APIs. A UI é uma SPA client-side montada uma vez no layout `(workspace)`.
 
 ## Estrutura
 

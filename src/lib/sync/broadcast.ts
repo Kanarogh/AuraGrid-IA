@@ -1,6 +1,6 @@
 import type { SyncDomain } from "./types";
 
-const CHANNEL_NAME = "auragrid-sync";
+const CHANNEL_NAME = "aurastudio-sync";
 
 type SyncChangedMessage = {
   type: "sync-changed";

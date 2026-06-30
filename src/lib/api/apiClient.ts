@@ -1,6 +1,8 @@
 import type { AuthUserProfile } from "../permissions/types";
 
-const ACCESS_TOKEN_KEY = "auragrid_access_token";
+import { STORAGE } from "../storageLegacy";
+
+const ACCESS_TOKEN_KEY = STORAGE.accessToken;
 
 let accessToken: string | null =
   typeof window !== "undefined" ? window.localStorage.getItem(ACCESS_TOKEN_KEY) : null;

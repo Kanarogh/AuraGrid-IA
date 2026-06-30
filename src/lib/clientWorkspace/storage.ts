@@ -83,7 +83,7 @@ export function saveWorkspace(
       };
     }
     const message = err instanceof Error ? err.message : String(err);
-    console.error("[AuraGrid] Falha ao salvar workspace:", err);
+    console.error("[AuraStudio] Falha ao salvar workspace:", err);
     return { ok: false, reason: "error", message };
   }
 }
@@ -111,7 +111,7 @@ export async function saveWorkspaceResilient(
   const second = saveWorkspace(clientId, { ...workspace, catalog });
   if (second.ok) {
     console.warn(
-      "[AuraGrid] Catálogo salvo com compressão extra — limite de armazenamento do navegador."
+      "[AuraStudio] Catálogo salvo com compressão extra — limite de armazenamento do navegador."
     );
   }
   return second;

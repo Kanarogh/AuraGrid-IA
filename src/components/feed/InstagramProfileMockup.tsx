@@ -131,7 +131,7 @@ export function InstagramProfileMockup({
                 </p>
                 {confirmed > 0 && (
                   <p className="text-[10px] text-stone-500">
-                    {confirmed} {confirmed === 1 ? "look confirmado" : "looks confirmados"}
+                    {confirmed} {confirmed === 1 ? "post confirmado" : "posts confirmados"}
                   </p>
                 )}
               </div>
@@ -196,7 +196,7 @@ export function InstagramProfileMockup({
               <div className="py-16 px-6 text-center text-stone-500 text-[11px] leading-relaxed">
                 Sem fotos no feed ainda.
                 <br />
-                Adicione looks em Roteiros.
+                Adicione posts em Planejamento.
               </div>
             ) : (
               <div className="grid grid-cols-3 gap-[2px]">

@@ -184,7 +184,7 @@ function PublishPostRow({
             rel="noopener noreferrer"
             className="text-xs text-ag-accent inline-flex items-center gap-1 hover:underline"
           >
-            Ver no Instagram <ExternalLink className="h-3 w-3" />
+            Ver publicação <ExternalLink className="h-3 w-3" />
           </a>
         )}
         {item.status === "failed" && item.lastError && (

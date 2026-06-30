@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { APP_NAME_SHORT } from "../../../lib/appBranding";
+import { APP_NAME_SHORT, APP_TAGLINE } from "../../../lib/appBranding";
 import { cn } from "../../../lib/cn";
 
 export function SidebarBrand({
@@ -31,7 +31,9 @@ export function SidebarBrand({
           <p className="font-display text-base font-semibold text-ag-text leading-tight tracking-tight truncate">
             {APP_NAME_SHORT}
           </p>
-          <p className="text-[10px] uppercase tracking-widest text-ag-muted font-mono">IA</p>
+          <p className="text-[11px] leading-snug text-ag-muted line-clamp-2">
+            {APP_TAGLINE}
+          </p>
         </div>
       )}
       {!collapsed && onMobileClose && (

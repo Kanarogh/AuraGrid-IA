@@ -59,7 +59,7 @@ function compareByCanvaSchedule(
 }
 
 /**
- * Ordem de exibição no perfil Instagram: canto superior esquerdo = post mais recente.
+ * Ordem de exibição no perfil social: canto superior esquerdo = post mais recente.
  * Com Grid Canva, usa a sequência de publicação do Canva (não só dayNumber do roteiro).
  */
 export function sortPostsForInstagramProfile(

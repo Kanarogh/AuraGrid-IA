@@ -100,6 +100,7 @@ function hasLegacyData(): boolean {
   return (
     !!localStorage.getItem("palak_catalog") ||
     !!localStorage.getItem("palak_posts") ||
+    !!localStorage.getItem("aurastudio_brand_gem") ||
     !!localStorage.getItem("auragrid_brand_gem") ||
     !!localStorage.getItem("palak_context")
   );
@@ -145,7 +146,7 @@ export function ensureClientRegistry(): ClientRegistry {
     };
     saveRegistry(registry);
     console.info(
-      "[AuraGrid] Dados migrados para o cliente «%s». Chaves antigas palak_* mantidas como backup.",
+      "[AuraStudio] Dados migrados para o cliente «%s». Chaves antigas palak_* mantidas como backup.",
       meta.name
     );
     return registry;

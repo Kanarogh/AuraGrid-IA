@@ -1,6 +1,10 @@
 # AuraStudio IA
 
-Planejamento Instagram com catálogo de referências, grid Canva, roteiro 30 dias e geração de legendas via IA.
+Plataforma para **planejamento e produção de conteúdo para redes sociais** voltada a **clientes de agências de marketing digital**.
+
+Cobre o ciclo completo: voz da marca → copy mensal com IA → grid visual → roteiro de 30 dias com legendas (e match de referências quando necessário) → agendamento e publicação nas redes conectadas (**Instagram, Facebook, LinkedIn, TikTok, Pinterest, YouTube e YouTube Shorts**).
+
+Cada marca/cliente tem workspace próprio (cronograma, catálogo, grid, roteiro e publicação). Em produção, suporta múltiplos usuários por conta com permissões por equipe.
 
 ## Desenvolvimento local (sem Docker)
 
@@ -69,7 +73,7 @@ npm run docker:up
 ## API v1
 
 - `POST /api/v1/auth/register|login|refresh|logout`
-- `GET /api/v1/clients` — lista marcas
+- `GET /api/v1/clients` — lista clientes
 - `GET /api/v1/clients/:id/workspace` — workspace completo
 - `POST /api/v1/clients/:id/catalog/batch` — upload de referências
 - `GET /api/v1/media/:id` — serve imagem (auth Bearer ou `?token=`)
@@ -80,4 +84,4 @@ Health: `GET /api/health` inclui status de DB e MinIO.
 
 Arquitetura SPA-in-Next, bootstrap unificado e regras anti-regressão: **[docs/routing.md](docs/routing.md)**.
 
-Com clientes cadastrados, a home do app é **`/dashboard`** (KPIs, pipeline de produção, atalhos e troca de marca).
+Com clientes cadastrados, a home do app é **`/dashboard`** (KPIs, pipeline de produção, atalhos e troca de cliente).

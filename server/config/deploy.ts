@@ -1,6 +1,10 @@
 /** Produção (Vercel, etc.): sem persistência local no navegador nem Ollama. */
+export function isCloudDeploy(): boolean {
+  return process.env.AURASTUDIO_CLOUD_DEPLOY === "1" || process.env.AURAGRID_CLOUD_DEPLOY === "1";
+}
+
 export function isOfflineStorageAllowed(): boolean {
-  if (process.env.AURAGRID_CLOUD_DEPLOY === "1") return false;
+  if (isCloudDeploy()) return false;
   return process.env.NODE_ENV !== "production";
 }
 

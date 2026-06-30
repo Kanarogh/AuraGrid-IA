@@ -1,4 +1,4 @@
-export const SYNC_NOTIFY_CHANNEL = "auragrid_sync";
+export const SYNC_NOTIFY_CHANNEL = "aurastudio_sync";
 
 export type SyncDomain =
   | "catalog"

@@ -26,7 +26,7 @@ export function startPublishWorker(): void {
   if (!isDatabaseConfigured()) return;
   void tick();
   workerTimer = setInterval(() => void tick(), 60_000);
-  console.info("[AuraGrid] Publish worker iniciado (intervalo 60s).");
+  console.info("[AuraStudio] Publish worker iniciado (intervalo 60s).");
 }
 
 export function stopPublishWorker(): void {

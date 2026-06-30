@@ -61,4 +61,4 @@ export async function getImageFileFromDataTransfer(dt: DataTransfer): Promise<Fi
   return null;
 }
 
-export const CATALOG_DRAG_MIME = "application/x-auragrid-catalog-id";
+export const CATALOG_DRAG_MIME = "application/x-aurastudio-catalog-id";

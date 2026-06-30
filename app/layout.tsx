@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import "../src/index.css";
-import { APP_NAME } from "../src/lib/appBranding";
+import { APP_DESCRIPTION, APP_NAME } from "../src/lib/appBranding";
 
 export const metadata: Metadata = {
   title: APP_NAME,
-  description: "Planejamento de Instagram para marcas de moda com IA.",
+  description: APP_DESCRIPTION,
 };
 
 const themeScript = `

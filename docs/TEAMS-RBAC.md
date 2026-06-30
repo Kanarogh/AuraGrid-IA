@@ -20,7 +20,7 @@ Templates ao convidar: **Gerente**, **Editor**, **Visualizador** (+ toggle **Pro
 
 ## Registro público
 
-Desabilitado por padrão. Dev local: `AURAGRID_ALLOW_PUBLIC_REGISTER=1`.
+Desabilitado por padrão. Dev local: `AURASTUDIO_ALLOW_PUBLIC_REGISTER=1` (legado: `AURAGRID_ALLOW_PUBLIC_REGISTER=1`).
 
 ## Migration
 

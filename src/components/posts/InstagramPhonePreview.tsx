@@ -12,7 +12,7 @@ import { PostFeedImage } from "./PostFeedImage";
 export function InstagramPhonePreview({
   post,
   variant = "studio",
-  username = "auragrid_style",
+  username = "aurastudio",
 }: {
   post: PlannedPost;
   variant?: "studio" | "compact";
@@ -50,7 +50,7 @@ export function InstagramPhonePreview({
 
           <div className="pt-4 bg-black text-white text-[10px] min-h-[420px] flex flex-col">
             <div className="flex justify-between items-center px-3 py-2 border-b border-white/10">
-              <span className="font-display italic text-sm">Instagram</span>
+              <span className="font-display italic text-sm">Redes sociais</span>
               <div className="flex gap-2 opacity-80">
                 <Heart className="h-3.5 w-3.5" />
                 <MessageCircle className="h-3.5 w-3.5" />

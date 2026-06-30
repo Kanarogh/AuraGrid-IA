@@ -50,7 +50,7 @@ export async function completeMetaOAuthCallback(
 
   const pages = await getUserPages(userToken);
   if (!pages.length) {
-    throw new Error("Nenhuma Página do Facebook encontrada. Vincule uma Página à conta Instagram.");
+    throw new Error("Nenhuma Página do Facebook encontrada. Vincule uma Página para conectar as redes via Meta.");
   }
 
   let selectedPage = pages[0];
@@ -68,7 +68,7 @@ export async function completeMetaOAuthCallback(
 
   if (!igAccount) {
     throw new Error(
-      "Nenhuma conta Instagram Profissional vinculada às suas Páginas. Converta para Business/Creator e vincule uma Página."
+      "Nenhuma conta Instagram Profissional vinculada às suas Páginas Meta. Converta para Business/Creator e vincule uma Página para publicar no Instagram."
     );
   }
 

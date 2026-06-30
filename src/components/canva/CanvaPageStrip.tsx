@@ -5,7 +5,7 @@ import { isCanvaSlotFilled } from "../../lib/canva";
 import { cn } from "../../lib/cn";
 import { IconButton } from "../ui/IconButton";
 
-const PAGE_DRAG_MIME = "application/x-auragrid-canva-page";
+const PAGE_DRAG_MIME = "application/x-aurastudio-canva-page";
 
 export function CanvaPageStrip({
   pages,
@@ -124,7 +124,7 @@ export function CanvaPageStrip({
                   ))}
                 </div>
                 <p className="text-[11px] font-semibold text-ag-text truncate font-display">{page.name}</p>
-                <p className="text-[9px] text-ag-muted mt-0.5">{filled}/12 looks</p>
+                <p className="text-[9px] text-ag-muted mt-0.5">{filled}/12 itens</p>
               </button>
 
               <button

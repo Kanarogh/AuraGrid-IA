@@ -33,7 +33,7 @@ async function waitForContainer(containerId: string, accessToken: string): Promi
     }
     await sleep(POLL_INTERVAL_MS);
   }
-  throw new Error("Tempo esgotado aguardando processamento da imagem no Instagram.");
+  throw new Error("Tempo esgotado aguardando processamento da imagem na rede social.");
 }
 
 export async function executePublishJob(job: PublishJobRow): Promise<void> {
@@ -57,7 +57,7 @@ export async function executePublishJob(job: PublishJobRow): Promise<void> {
 
     const connection = await getMetaConnectionWithToken(job.clientId);
     if (!connection?.igUserId) {
-      throw new Error("Conta Instagram não conectada. Reconecte em Programar posts.");
+      throw new Error("Nenhuma rede social conectada. Reconecte em Programar posts.");
     }
 
     const imageUrl = await getPublicMediaUrlForMeta(job.imageAssetId);

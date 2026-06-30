@@ -1,6 +1,7 @@
 "use client";
 
-import { CheckCircle2, Instagram, Link2, Loader2, Unlink } from "lucide-react";
+import { CheckCircle2, Link2, Loader2, Share2, Unlink } from "lucide-react";
+import { SUPPORTED_SOCIAL_NETWORKS_LABEL } from "../../lib/appBranding";
 import { cn } from "../../lib/cn";
 import { Button } from "../ui/Button";
 import type { MetaConnectionPublic } from "../../lib/publish/publishApi";
@@ -45,7 +46,7 @@ export function MetaConnectionCard({
       >
         <div className="flex items-center gap-3 min-w-0">
           <div className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shrink-0">
-            <Instagram className="h-5 w-5 text-white" />
+            <Share2 className="h-5 w-5 text-white" />
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold text-ag-text flex items-center gap-1.5">
@@ -69,16 +70,16 @@ export function MetaConnectionCard({
     <div className="rounded-2xl border border-ag-border bg-ag-surface-2/60 p-5 space-y-4">
       <div className="flex items-start gap-3">
         <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shrink-0">
-          <Instagram className="h-6 w-6 text-white" />
+          <Share2 className="h-6 w-6 text-white" />
         </div>
         <div>
           <h3 className="font-display text-lg font-semibold text-ag-text">
-            {needsReconnect ? "Reconecte sua conta" : "Conecte o Instagram"}
+            {needsReconnect ? "Reconecte suas redes sociais" : "Conecte redes sociais"}
           </h3>
           <p className="text-sm text-ag-muted mt-1 leading-relaxed">
             {needsReconnect
               ? "Sua autorização expirou. Entre novamente para continuar programando posts."
-              : "Use uma conta Instagram Profissional vinculada a uma Página do Facebook."}
+              : `Conecte as contas do cliente para publicar em ${SUPPORTED_SOCIAL_NETWORKS_LABEL}.`}
           </p>
           {publishMockEnabled && (
             <p className="text-xs text-ag-success mt-2">
@@ -94,7 +95,7 @@ export function MetaConnectionCard({
       </ul>
       <Button type="button" variant="accent" size="md" className="w-full sm:w-auto" onClick={handleConnect}>
         <Link2 className="h-4 w-4" />
-        Entrar com Facebook / Instagram
+        Conectar contas sociais
       </Button>
     </div>
   );

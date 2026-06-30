@@ -55,7 +55,7 @@ export function PopularCalendarioPanel({
       <div className="p-4 sm:p-5 border-b border-ag-border/60">
         <WorkspaceCardHeader
           title="Popular calendário"
-          subtitle="Distribua looks do Grid Canva no roteiro de 30 dias com regras ajustáveis."
+          subtitle="Distribua itens do Grid Canva no roteiro de 30 dias com regras ajustáveis."
         />
         <div className="flex flex-wrap gap-1 p-1 rounded-xl bg-ag-surface-2 border border-ag-border">
           {tabs.map(({ id, label, icon: Icon }) => (

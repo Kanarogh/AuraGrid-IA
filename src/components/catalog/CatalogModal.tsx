@@ -38,14 +38,14 @@ export function CatalogModal({
         <ModalActions
           onCancel={onClose}
           onConfirm={onSave}
-          confirmLabel="Salvar look"
+          confirmLabel="Salvar referência"
           confirmVariant="accent"
         />
       }
     >
       <div className="space-y-4">
         <div>
-          <FieldLabel>Foto do look</FieldLabel>
+          <FieldLabel>Foto da referência</FieldLabel>
           <div
             onClick={onPickFile}
             onDragOver={onDragOver}

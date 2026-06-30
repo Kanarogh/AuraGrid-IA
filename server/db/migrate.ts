@@ -22,7 +22,7 @@ async function waitForPostgres(url: string, attempts = 30, delayMs = 1000): Prom
         (err as { code?: string }).code === "57P03";
       if (!starting && i === attempts) throw err;
       if (i < attempts) {
-        console.info(`[AuraGrid] Postgres indisponível (${i}/${attempts}) — aguardando…`);
+        console.info(`[AuraStudio] Postgres indisponível (${i}/${attempts}) — aguardando…`);
         await new Promise((r) => setTimeout(r, delayMs));
       }
     }
@@ -32,7 +32,7 @@ async function waitForPostgres(url: string, attempts = 30, delayMs = 1000): Prom
 export async function runMigrations(): Promise<void> {
   const url = envString("DATABASE_URL");
   if (!url) {
-    console.warn("[AuraGrid] DATABASE_URL não definida — migrations ignoradas.");
+    console.warn("[AuraStudio] DATABASE_URL não definida — migrations ignoradas.");
     return;
   }
 
@@ -61,7 +61,7 @@ export async function runMigrations(): Promise<void> {
       const migrationSql = await fs.readFile(migrationPath, "utf-8");
       await sql.unsafe(migrationSql);
       await sql`INSERT INTO "__drizzle_migrations" (hash) VALUES (${hash})`;
-      console.info(`[AuraGrid] Migration ${hash} aplicada.`);
+      console.info(`[AuraStudio] Migration ${hash} aplicada.`);
     }
   } finally {
     await sql.end({ timeout: 5 });

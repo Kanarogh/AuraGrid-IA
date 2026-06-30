@@ -20,7 +20,7 @@ export interface CatalogVisualProfile {
   matchKeywords: string[];
   /** Resumo denso para comparação texto↔imagem */
   visualSummary: string;
-  /** Uma linha única que diferencia este look dos demais do catálogo */
+  /** Uma linha única que diferencia este item dos demais do catálogo */
   distinguishingFingerprint: string;
   /** Cor dominante com tom específico (ex.: "verde-azulado/teal") */
   dominantColorFamily?: string;
@@ -48,7 +48,7 @@ export interface CatalogItem {
   imageAssetId?: string | null;
   imageUrl?: string;
   description?: string; // Optional metadata
-  /** true = look de roupa (match IA); false = peça de grid/atmosfera (não indexada) */
+  /** true = referência indexável (match IA); false = peça de grid/atmosfera (não indexada) */
   isReference?: boolean;
   /** v1 legado ou v2 compacto ({ version: 2, garment, scene }) */
   visualProfile?: CatalogVisualProfile | Record<string, unknown>;

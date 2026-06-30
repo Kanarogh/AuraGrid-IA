@@ -39,7 +39,7 @@ export function DashboardClientGrid({
       <div className="flex items-end justify-between gap-3">
         <div>
           <p className="text-[10px] font-mono uppercase tracking-widest text-ag-accent">
-            Marcas
+            Clientes
           </p>
           <h2 className="font-display text-lg font-semibold text-ag-text mt-1">Seus clientes</h2>
         </div>
@@ -94,7 +94,7 @@ export function DashboardClientGrid({
                   {client.instagramHandle ? (
                     <p className="text-xs text-ag-muted truncate">@{client.instagramHandle}</p>
                   ) : (
-                    <p className="text-xs text-ag-muted truncate">Sem @ configurado</p>
+                    <p className="text-xs text-ag-muted truncate">Sem perfil social configurado</p>
                   )}
                 </div>
               </div>

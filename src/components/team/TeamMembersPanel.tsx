@@ -265,7 +265,7 @@ export function TeamMembersPanel() {
               checked={enablePublish}
               onChange={(e) => setEnablePublish(e.target.checked)}
             />
-            Permitir Programar posts (Instagram)
+            Permitir Programar posts (redes sociais)
           </label>
 
           <div className="flex gap-2">

@@ -1,4 +1,4 @@
-/** Modelos Google Gemini utilizáveis no AuraGrid (texto + visão, curadoria jun/2026). */
+/** Modelos Google Gemini utilizáveis no AuraStudio (texto + visão, curadoria jun/2026). */
 
 export type GeminiModelOption = {
   id: string;

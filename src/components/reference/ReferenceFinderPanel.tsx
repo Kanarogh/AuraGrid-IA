@@ -159,7 +159,7 @@ export function ReferenceFinderPanel({
       }
     >
       <p className="text-sm text-ag-muted leading-relaxed max-w-3xl mb-6">
-        Envie uma foto de look ou peça e a IA identifica qual referência do catálogo corresponde —
+        Envie uma foto e a IA identifica qual referência do catálogo corresponde —
         sem gerar legenda. Use o mesmo índice JSON do catálogo (mais rápido e preciso).
       </p>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

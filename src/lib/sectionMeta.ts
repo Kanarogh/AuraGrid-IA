@@ -91,7 +91,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         id: "post_scheduling",
         label: "Programar posts",
-        description: "Agende publicações no Instagram",
+        description: "Agende publicações nas redes sociais conectadas",
         icon: CalendarClock,
       },
     ],
@@ -103,13 +103,13 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         id: "canva_grid",
         label: "Grid Canva",
-        description: "Monte páginas e organize looks",
+        description: "Monte páginas e organize o conteúdo visual",
         icon: LayoutGrid,
       },
       {
         id: "feed_simulator",
         label: "Feed 3×3",
-        description: "Prévia do Instagram",
+        description: "Prévia do feed social",
         icon: Grid,
       },
     ],
@@ -204,9 +204,9 @@ export function getAccountTabSubtitle(tab: AccountTab): string {
 export const SECTION_SUBTITLES: Record<AppSection, string> = {
   content_schedule: "Gere o cronograma mensal de copy com IA",
   posts: "Planeje, gere e aprove legendas do mês",
-  post_scheduling: "Publique no Instagram o que já foi aprovado",
+  post_scheduling: "Publique nas redes sociais conectadas o que já foi aprovado",
   canva_grid: "Monte páginas de 12 fotos e envie para o planejamento",
-  feed_simulator: "Veja como o feed fica no Instagram",
+  feed_simulator: "Veja como o feed fica nas redes sociais",
   catalog: "Gerencie referências indexadas e peças de grid",
   reference_finder: "Identifique o código de uma peça a partir de uma foto",
   settings: "Configure a voz da marca e parâmetros de legenda",

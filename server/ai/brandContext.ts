@@ -130,7 +130,7 @@ export function buildCampaignContextBlock(gem?: BrandGemConfig): string {
   );
 }
 
-/** Estrutura fixa da legenda (layout padrão MIA / Instagram). */
+/** Estrutura fixa da legenda (layout padrão para redes sociais). */
 export function buildCaptionStructureBlock(gem?: BrandGemConfig): string {
   const custom = gem?.footer?.structure?.trim();
 
@@ -139,7 +139,7 @@ export function buildCaptionStructureBlock(gem?: BrandGemConfig): string {
 Block order in the final post (blank line between each block):
 
 1. MAIN HOOK (JSON "caption" field — you write ONLY this):
-   Marketing text about the garment/look or image message.
+   Marketing text about the product, service or image message.
    - Tone and language from GEM INSTRUCTIONS only.
    - Do NOT include hashtags, CTA, legal note, address, or "Referência" in the caption field.
 
@@ -204,7 +204,7 @@ export function buildCaptionParamsBlock(gem?: BrandGemConfig): string {
 - The character limit applies ONLY to block 1 (main marketing hook). It does NOT include Referência, AI disclosure, address, ➡️ CTA, hashtags, or custom footer fields — those are fixed verbatim blocks appended separately.
 - Max main text length: ${p.maxHookChars} characters (strict).
 - Max main text sentences: ${p.maxHookSentences}.
-- Full Instagram post may be up to 2200 characters including all fixed blocks.
+- Full social media post may be up to 2200 characters including all fixed blocks (platform-dependent).
 - Write COMPLETE sentences within the limit — never end mid-word and never use "..." or ellipsis.
 - Hook style: ${hookRules[p.hookStyle] ?? hookRules.balanced}
 - Sales tone: ${salesRules[p.salesTone] ?? salesRules.balanced}
@@ -417,7 +417,7 @@ export function buildRefineCaptionPrompt(
   instructions: string,
   gem?: BrandGemConfig
 ): string {
-  return `Refine this fashion Instagram caption for the brand configured below.
+  return `Refine this social media caption for the brand configured below.
 
 ${buildBrandVoiceBlock(gem)}
 

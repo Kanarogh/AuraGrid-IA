@@ -114,7 +114,7 @@ export function buildMatchJsonCatalogTask(matchOnly: boolean, gem?: BrandGemConf
   const step4 = matchOnly
     ? "Return ONLY the catalog match (no caption, no social media text)."
     : "After matching, write the full caption using the BRAND GEM rules below (tone, language, footer).";
-  return `You are an expert AI fashion catalog matcher for "${brandLabel(gem)}".
+  return `You are an expert AI visual catalog matcher for social media content — brand "${brandLabel(gem)}".
 
 TASK (catalog JSON mode — post image + indexed profiles only):
 1. Inspect the TARGET POST IMAGE below with maximum detail (colors, print scale, neckline, sleeves, length).
@@ -135,13 +135,13 @@ export function buildMatchImagesCatalogTask(matchOnly: boolean, gem?: BrandGemCo
   const brand = brandLabel(gem);
 
   if (matchOnly) {
-    return `You are an expert fashion planner for "${brand}".
+    return `You are an expert social media content planner for "${brand}".
 Compare the query image to candidate catalog photos. Pick matchedId or null. Do NOT write any caption.
 
 Target query image:`;
   }
 
-  return `You are an expert fashion planner and copywriter for "${brand}".
+  return `You are an expert social media planner and copywriter for "${brand}".
 Compare the target post image to candidate catalog photos. Pick matchedId or null.
 Write the caption using the BRAND GEM tone, language, and footer rules below (do NOT assume Spanish).
 
@@ -351,7 +351,7 @@ export function buildFingerprintMatchTask(matchOnly: boolean, gem?: BrandGemConf
   const step = matchOnly
     ? "Return ONLY the catalog match (no caption)."
     : "After matching, write block 1 caption per GEM rules (no Referência line in caption).";
-  return `You are an expert fashion catalog matcher for "${brandLabel(gem)}".
+  return `You are an expert visual catalog matcher for social media content — brand "${brandLabel(gem)}".
 
 TASK (fingerprint JSON mode — TEXT ONLY, no post image):
 1. Use POST FINGERPRINT JSON as the visual ground truth for the target post.

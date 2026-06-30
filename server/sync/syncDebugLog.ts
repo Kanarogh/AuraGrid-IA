@@ -14,7 +14,7 @@ function printBanner(): void {
   bannerPrinted = true;
   const on = isServerSyncDebugEnabled();
   console.log(
-    `[AuraGrid:sync] terminal debug ${on ? "ON" : "OFF"} — ativar: SYNC_DEBUG=1 no .env e reinicie o servidor`
+    `[AuraStudio:sync] terminal debug ${on ? "ON" : "OFF"} — ativar: SYNC_DEBUG=1 no .env e reinicie o servidor`
   );
 }
 
@@ -27,7 +27,7 @@ export function serverSyncDebugLog(
 
   printBanner();
   const ts = new Date().toISOString().slice(11, 23);
-  const line = `[AuraGrid:sync] ${ts} ${event}`;
+  const line = `[AuraStudio:sync] ${ts} ${event}`;
 
   if (payload && Object.keys(payload).length) {
     console.log(line, JSON.stringify(payload));

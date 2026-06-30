@@ -48,7 +48,7 @@ export function FeedInstagramPreview({
       noPadding
     >
       <p className="text-sm text-ag-muted leading-relaxed max-w-3xl px-4 sm:px-6 pt-5 sm:pt-6">
-        Prévia do perfil no estilo Instagram · miniaturas 4:5.
+        Prévia do perfil nas redes sociais · miniaturas 4:5.
         {ordered.length > 0 ? (
           <>
             {" "}
@@ -58,7 +58,7 @@ export function FeedInstagramPreview({
             {oldest ? `(D${oldest.dayNumber})` : ""}.
           </>
         ) : (
-          " Adicione looks nos roteiros."
+          " Adicione posts no planejamento."
         )}
       </p>
       <div className="relative flex justify-center py-8 sm:py-10 px-4 sm:px-6">

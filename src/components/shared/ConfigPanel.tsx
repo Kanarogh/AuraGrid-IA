@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { MSG_SOCIAL_CAPTION_LIMIT } from "../../lib/appBranding";
 import { confirmDialog } from "../../lib/confirmDialog";
 import { buildDisableReferencesConfirmMessage } from "../../lib/referenceWorkflow";
 import {
@@ -228,7 +229,7 @@ export function ConfigPanel({
         <p className="text-[11px] text-ag-muted mt-0.5 font-mono truncate">
           {storageMode === "postgresql"
             ? `PostgreSQL + mídia na nuvem → cliente ${brandGem.id}`
-            : `localStorage (dev) → auragrid_ws:${brandGem.id}`}
+            : `localStorage (dev) → aurastudio_ws:${brandGem.id}`}
         </p>
         <p className="text-xs mt-1.5">
           {isDirty ? (
@@ -415,7 +416,7 @@ export function ConfigPanel({
             value={draftGem.instructions}
             onChange={(e) => patch({ instructions: e.target.value })}
             rows={14}
-            placeholder="Tom, idioma, regras de venda, estilo Instagram…"
+            placeholder="Tom, idioma, regras de venda, estilo das redes sociais…"
             className="text-sm leading-relaxed font-mono"
           />
           <p className="text-[11px] text-ag-muted mt-1.5">
@@ -531,7 +532,7 @@ export function ConfigPanel({
               />
               <p className="text-[10px] text-ag-muted mt-1 leading-relaxed">
                 Conta só o gancho/marketing. <strong>Não entram:</strong> Referência, nota de IA,
-                endereço, CTA, hashtags e campos extras. O Instagram limita a legenda completa a{" "}
+                endereço, CTA, hashtags e campos extras. {MSG_SOCIAL_CAPTION_LIMIT}{" "}
                 {2200} caracteres.
               </p>
             </div>
@@ -851,8 +852,8 @@ export function ConfigPanel({
                   const workspaces: Record<string, unknown> = {};
                   for (let i = 0; i < localStorage.length; i++) {
                     const key = localStorage.key(i);
-                    if (!key?.startsWith("auragrid_ws:")) continue;
-                    const id = key.replace("auragrid_ws:", "");
+                    if (!key?.startsWith("aurastudio_ws:") && !key?.startsWith("auragrid_ws:")) continue;
+                    const id = key.replace(/^aurastudio_ws:|^auragrid_ws:/, "");
                     const raw = localStorage.getItem(key);
                     if (raw) workspaces[id] = JSON.parse(raw);
                   }

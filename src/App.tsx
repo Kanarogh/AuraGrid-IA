@@ -64,7 +64,7 @@ import {
   resolveCatalogItemImage,
   resolveMediaUrl,
 } from "./lib/api/workspaceApi";
-import { APP_NAME } from "./lib/appBranding";
+import { APP_NAME, APP_SUMMARY } from "./lib/appBranding";
 import { exportRoteiroPdf } from "./lib/exportRoteiroPdf";
 import { exportCanvaGridPdf } from "./lib/exportCanvaGridPdf";
 import { ensurePersistedImage, extractMediaAssetId } from "./lib/api/persistMedia";
@@ -716,7 +716,7 @@ export default function App() {
       const preview = buildDistributionPreview(validItems.length, distributionPrefs);
       if (preview.overflowCount > 0) {
         toast.warning(
-          "Capacidade insuficiente para todos os looks. Ajuste máx. posts/dia ou dias densos."
+          "Capacidade insuficiente para todos os itens. Ajuste máx. posts/dia ou dias densos."
         );
         return;
       }
@@ -754,7 +754,7 @@ export default function App() {
       if (firstWithImg) setActivePreviewId(firstWithImg.id);
       await saveWorkspaceNow();
       toast.success(
-        `${validItems.length} look${validItems.length === 1 ? "" : "s"} distribuído${validItems.length === 1 ? "" : "s"} no calendário de 30 dias.`
+        `${validItems.length} item${validItems.length === 1 ? "" : "s"} distribuído${validItems.length === 1 ? "" : "s"} no calendário de 30 dias.`
       );
     },
     [
@@ -844,7 +844,7 @@ export default function App() {
 
     if (validCount === 0) {
       if (showAlert) {
-        toast.warning("Nenhum look com foto foi encontrado no Canva Grid para sincronizar!");
+        toast.warning("Nenhum item com foto foi encontrado no Canva Grid para sincronizar!");
       }
       return;
     }
@@ -874,7 +874,7 @@ export default function App() {
     if (showAlert) {
       await saveWorkspaceNow();
       toast.success(
-        `Sequência do Canva sincronizada com sucesso no planejamento de 30 dias!\n- ${validCount} looks organizados sequencialmente.\n- Legendas e aprovações existentes nos dias foram preservadas.`
+        `Sequência do Canva sincronizada com sucesso no planejamento de 30 dias!\n- ${validCount} itens organizados sequencialmente.\n- Legendas e aprovações existentes nos dias foram preservadas.`
       );
     }
   };
@@ -917,8 +917,8 @@ export default function App() {
     const onReady = () => {
       apiWorkspaceReadyRef.current = true;
     };
-    window.addEventListener("auragrid:api-registry", onReady);
-    return () => window.removeEventListener("auragrid:api-registry", onReady);
+    window.addEventListener("aurastudio:api-registry", onReady);
+    return () => window.removeEventListener("aurastudio:api-registry", onReady);
   }, [useApiStorage, activeClientId]);
 
   // Handle Automatic Synchronization of Canva Grid into Roteiros
@@ -1220,7 +1220,7 @@ export default function App() {
         imageAssetId = persisted.imageAssetId;
         if (!imageAssetId) {
           toast.error(
-            "Não foi possível vincular a imagem deste look. Tente reenviar a foto pelo Catálogo."
+            "Não foi possível vincular a imagem deste item. Tente reenviar a foto pelo Catálogo."
           );
           return;
         }
@@ -1236,7 +1236,7 @@ export default function App() {
     } catch (err) {
       console.error("Erro ao atribuir look ao slot:", err);
       toast.error(
-        "Não foi possível salvar o look neste slot. Verifique sua conexão e tente novamente."
+        "Não foi possível salvar o item neste slot. Verifique sua conexão e tente novamente."
       );
     }
   };
@@ -1464,7 +1464,7 @@ export default function App() {
     const items = canvaSlotsToScheduleItems(pages, reverseOrder);
     if (items.length === 0) {
       toast.warning(
-        "Nenhuma foto no Grid Canva para aplicar. Adicione looks nas páginas primeiro."
+        "Nenhuma foto no Grid Canva para aplicar. Adicione conteúdos nas páginas primeiro."
       );
       return;
     }
@@ -1916,7 +1916,7 @@ export default function App() {
             image: base64Str,
             description: asReference
               ? `Importado em ${new Date().toLocaleDateString("pt-BR")} do arquivo original '${file.name}'`
-              : `Peça de grid importada em ${new Date().toLocaleDateString("pt-BR")} do arquivo '${file.name}' — não usada como referência de look`,
+              : `Peça de grid importada em ${new Date().toLocaleDateString("pt-BR")} do arquivo '${file.name}' — não usada como referência do catálogo`,
             isReference: asReference,
             enrichmentStatus: asReference ? "pending" : undefined,
           });
@@ -1985,7 +1985,7 @@ export default function App() {
         return;
       }
       const message = err instanceof Error ? err.message : "Falha ao enviar imagens.";
-      console.error("[AuraGrid] upload catálogo:", err);
+      console.error("[AuraStudio] upload catálogo:", err);
       setCatalogUploadProgress({
         phase: "error",
         current: 0,
@@ -2071,7 +2071,7 @@ export default function App() {
     }
     if (
       !(await confirmDialog({
-        message: `Remover todas as ${gridCatalog.length} peça(s) de grid?\n\nAs referências de looks permanecem intactas.`,
+        message: `Remover todas as ${gridCatalog.length} peça(s) de grid?\n\nAs referências do catálogo permanecem intactas.`,
         variant: "danger",
         confirmLabel: "Remover",
       }))
@@ -2346,7 +2346,7 @@ export default function App() {
       return;
     }
     if (!newCatalogImage) {
-      toast.warning("Por favor envie a foto do look correspondente.");
+      toast.warning("Por favor envie a foto do item correspondente.");
       return;
     }
 
@@ -2360,7 +2360,7 @@ export default function App() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("auragrid_access_token") ?? ""}`,
+          Authorization: `Bearer ${localStorage.getItem("aurastudio_access_token") ?? localStorage.getItem("auragrid_access_token") ?? ""}`,
         },
         credentials: "include",
         body: JSON.stringify({
@@ -2569,7 +2569,7 @@ export default function App() {
   // Export 7-day plan as formatted TXT file response
   const handleExportTxt = () => {
     let output = `==================================================================\n`;
-    output += `👑 AURAGRID INTELLIGENCE - DIAS DE PLANEJAMENTO E LEGENDA DE MODA PREMIUM\n`;
+    output += `👑 AURASTUDIO INTELLIGENCE - PLANEJAMENTO E LEGENDAS PARA REDES SOCIAIS\n`;
     output += `Exportado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")}\n`;
     output += `==================================================================\n\n`;
 
@@ -2591,7 +2591,7 @@ export default function App() {
       if (post.reasoning && usesReferences) {
         output += `🧠 Análise de Correlação IA: ${post.reasoning}\n`;
       }
-      output += `\n✍️ LEGENDA FORMATADA (Instagram/WhatsApp):\n`;
+      output += `\n✍️ LEGENDA FORMATADA (redes sociais/WhatsApp):\n`;
       output += `------------------------------------------------------------------\n`;
       output += `${post.caption ? post.caption : "(Ainda nenhuma legenda gerada)"}\n`;
       output += `------------------------------------------------------------------\n\n\n`;
@@ -2601,7 +2601,7 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `planejamento-estetico-auragrid.txt`;
+    a.download = `planejamento-estetico-aurastudio.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -2787,9 +2787,12 @@ export default function App() {
             <h2 className="font-display text-2xl font-semibold text-ag-text">
               Crie seu primeiro cliente
             </h2>
+            <p className="text-sm text-ag-muted max-w-md">
+              {APP_SUMMARY}
+            </p>
             <p className="text-sm text-ag-muted">
               Use <strong className="font-medium text-ag-text">+ Novo</strong> na barra lateral
-              para cadastrar uma marca. Depois siga o fluxo:
+              para cadastrar um cliente. Depois siga o fluxo:
             </p>
             <ol className="text-left text-sm text-ag-muted space-y-2 w-full">
               <li className="flex gap-2">
@@ -2822,6 +2825,13 @@ export default function App() {
                 <span>
                   <strong className="text-ag-text">Configurações</strong> — configure o Gem da
                   marca
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span className="font-bold text-ag-accent shrink-0">6.</span>
+                <span>
+                  <strong className="text-ag-text">Programar posts</strong> — agende e publique nas
+                  redes sociais conectadas
                 </span>
               </li>
             </ol>
@@ -3287,7 +3297,7 @@ export default function App() {
             }
           >
             <p className="text-sm text-ag-muted mb-4 leading-relaxed max-w-3xl">
-              Monte páginas de 12 fotos, organize looks e envie para o planejamento de 30 dias.{" "}
+              Monte páginas de 12 fotos, organize o conteúdo e envie para o planejamento de 30 dias.{" "}
               <CanvaGridOrderHint onOpenRoteiros={() => void handleNavigate("posts")} />
             </p>
             <CanvaGridWorkspace
@@ -3364,7 +3374,7 @@ export default function App() {
           </SectionGate>
         )}
 
-        {/* WORKSPACE VIEW 2: FEED GRID HARMONY SIMULATOR (Instagram 3x3) */}
+        {/* WORKSPACE VIEW 2: FEED GRID HARMONY SIMULATOR (Feed 3×3) */}
         {hasActiveClient && onClientRoute && routeSection === "feed_simulator" && activeClientId && (
           <SectionGate clientId={activeClientId} section="feed_simulator">
           <FeedInstagramPreview
@@ -3568,7 +3578,7 @@ export default function App() {
             <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3 border-ag-border">
               <div>
                 <span className="text-xs font-bold font-mono uppercase tracking-widest text-ag-muted">
-                  Looks Referenciados Ativos ({referenceCatalog.length})
+                  Referências ativas ({referenceCatalog.length})
                 </span>
                 <span className="text-[10.5px] text-ag-muted block mt-0.5">
                   {referenceCatalog.filter((c) => c.enrichmentStatus === "ready").length} indexados ·{" "}
@@ -3659,7 +3669,7 @@ export default function App() {
                 <ImageIcon className="h-8 w-8 text-ag-muted mx-auto animate-pulse mb-1" />
                 <p className="text-xs font-semibold text-ag-muted">Nenhuma referência no acervo</p>
                 <p className="text-[10px] text-ag-muted mt-1">
-                  Use &quot;Subir Pasta de Referências&quot; ou &quot;Adicionar Único&quot; para cadastrar looks que a IA usará no match dos planejamentos.
+                  Use &quot;Subir Pasta de Referências&quot; ou &quot;Adicionar Único&quot; para cadastrar referências que a IA usará no match dos planejamentos.
                 </p>
               </div>
             ) : (
@@ -3849,7 +3859,7 @@ export default function App() {
                     Peças de grid ({gridCatalog.length})
                   </h3>
                   <p className="text-[11px] text-ag-muted mt-0.5 max-w-xl">
-                    Banners, lifestyle e composições para o feed — ficam no acervo junto com os looks,
+                    Banners, lifestyle e composições para o feed — ficam no acervo junto com as referências,
                     mas <strong className="text-ag-text font-semibold">não entram na indexação nem no match da IA</strong>.
                   </p>
                 </div>

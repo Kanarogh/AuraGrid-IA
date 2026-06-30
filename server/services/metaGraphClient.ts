@@ -148,19 +148,19 @@ export async function publishMediaContainer(input: {
 export function translateMetaError(message: string): string {
   const lower = message.toLowerCase();
   if (/expired|session|oauth|190/.test(lower)) {
-    return "Sua conexão com o Instagram expirou. Clique em Reconectar.";
+    return "Sua conexão com as redes sociais expirou. Clique em Reconectar.";
   }
   if (/permission|scope|200|10/.test(lower)) {
     return "Sem permissão para publicar. Verifique se a conta é Profissional e reconecte.";
   }
   if (/rate|limit|429|100/.test(lower)) {
-    return "Limite de publicações do Instagram atingido. Tente mais tarde.";
+    return "Limite de publicações da rede social atingido. Tente mais tarde.";
   }
   if (/image|url|media|download/.test(lower)) {
-    return "Instagram não conseguiu baixar a imagem. Tente novamente em alguns minutos.";
+    return "A rede social não conseguiu baixar a imagem. Tente novamente em alguns minutos.";
   }
   if (/caption|text|length/.test(lower)) {
-    return "Legenda inválida ou longa demais para o Instagram.";
+    return "Legenda inválida ou longa demais para a rede social.";
   }
   return message.length > 120 ? `${message.slice(0, 117)}…` : message;
 }

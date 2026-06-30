@@ -53,12 +53,12 @@ export function SmartDistributorPanel({
           <p className="text-sm text-ag-muted leading-relaxed">
             {canvaImageCount > 0 ? (
               <>
-                <strong className="text-ag-text">{canvaImageCount}</strong> look
+                <strong className="text-ag-text">{canvaImageCount}</strong> item
                 {canvaImageCount === 1 ? "" : "s"} com foto prontos para distribuir na ordem do grid.
               </>
             ) : (
               <>
-                Monte looks no Grid Canva primeiro.{" "}
+                Monte conteúdo no Grid Canva primeiro.{" "}
                 {onOpenCanvaGrid && (
                   <button
                     type="button"
@@ -139,7 +139,7 @@ export function SmartDistributorPanel({
 
           {canvaImageCount > 0 && canvaImageCount < 30 && (
             <div>
-              <p className="text-xs text-ag-muted mb-2">Poucos looks (&lt; 30)</p>
+              <p className="text-xs text-ag-muted mb-2">Poucos itens (&lt; 30)</p>
               <div className="flex flex-col gap-2">
                 {(
                   [

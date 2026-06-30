@@ -8,7 +8,7 @@ import {
   getUserFromRefreshToken,
   verifyAccessToken,
 } from "../services/authService";
-import { REFRESH_COOKIE } from "./cookies";
+import { getRefreshTokenFromCookies } from "./cookies";
 import { HttpError } from "./respond";
 
 export type { AssertClientAccessOptions };
@@ -40,7 +40,7 @@ export async function getOptionalUserFromRequest(req: NextRequest): Promise<Auth
     }
   }
 
-  const refreshToken = req.cookies.get(REFRESH_COOKIE)?.value;
+  const refreshToken = getRefreshTokenFromCookies(req.cookies);
   if (refreshToken) {
     return getUserFromRefreshToken(refreshToken);
   }

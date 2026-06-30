@@ -37,7 +37,7 @@ export function CanvaTimelineSyncPanel({
         <p className="text-xs text-ag-muted leading-relaxed max-w-xl">
           {canvaImageCount > 0 ? (
             <>
-              <strong className="text-ag-text">{canvaImageCount}</strong> look
+              <strong className="text-ag-text">{canvaImageCount}</strong> item
               {canvaImageCount === 1 ? "" : "s"} com foto no grid prontos para espelhar no calendário.
             </>
           ) : (
@@ -72,7 +72,7 @@ export function CanvaTimelineSyncPanel({
             size="sm"
             type="button"
             onClick={() => onCanvaGridReversedChange(!canvaGridReversed)}
-            title="Define se a leitura do grid segue L1→L12 ou de baixo para cima (feed Instagram)"
+            title="Define se a leitura do grid segue L1→L12 ou de baixo para cima (feed social)"
           >
             {canvaGridReversed ? (
               <>

@@ -67,7 +67,7 @@ export function PublishPreviewModal({
           </h2>
           <p className="text-sm text-ag-muted mt-1">
             {count === 1
-              ? "Revise como o post vai aparecer no Instagram."
+              ? "Revise como o post vai aparecer nas redes sociais."
               : `Post ${safeIndex + 1} de ${count} — revise cada um antes de confirmar.`}
           </p>
         </div>
@@ -137,7 +137,7 @@ export function PublishPreviewModal({
               <p className="text-sm text-ag-text whitespace-pre-wrap break-words">{preview.caption}</p>
               {captionLong && (
                 <p className="text-xs text-ag-warning mt-2">
-                  Atenção: legenda acima do limite do Instagram (2200 caracteres).
+                  Atenção: legenda acima do limite de algumas redes sociais (2200 caracteres).
                 </p>
               )}
             </div>

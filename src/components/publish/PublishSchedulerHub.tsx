@@ -6,6 +6,13 @@ import type { CanvaGridPage, PlannedPost } from "../../types";
 import { useAuth } from "../../context/AuthContext";
 import { useClientWorkspace } from "../../context/ClientWorkspaceContext";
 import { usePublishQueuePoll } from "../../hooks/usePublishQueuePoll";
+import {
+  MSG_CONNECT_SOCIAL_TO_CONFIRM,
+  MSG_CONNECT_SOCIAL_TO_SCHEDULE,
+  MSG_SOCIAL_CONNECTED,
+  MSG_SOCIAL_PREVIEW,
+  MSG_VIEW_ON_NETWORK,
+} from "../../lib/appBranding";
 import { toast } from "../../lib/toast";
 import { Button } from "../ui/Button";
 import { PublishHubStatusStrip } from "./PublishHubStatusStrip";
@@ -218,7 +225,7 @@ export function PublishSchedulerHub({
 
   useEffect(() => {
     if (metaConnectedParam) {
-      toast.success("Conta Instagram conectada!");
+      toast.success(MSG_SOCIAL_CONNECTED);
       void refresh();
     }
   }, [metaConnectedParam, refresh]);
@@ -337,7 +344,7 @@ export function PublishSchedulerHub({
 
     if (autoScheduleOnDrop) {
       if (!canSchedule) {
-        toast.warning("Conecte o Instagram ou ative o modo simulação para agendar.");
+        toast.warning(MSG_CONNECT_SOCIAL_TO_SCHEDULE);
         return;
       }
       try {
@@ -394,7 +401,7 @@ export function PublishSchedulerHub({
 
   const executeBulkSchedule = async () => {
     if (!canSchedule) {
-      toast.warning("Conecte o Instagram ou use o modo simulação para confirmar.");
+      toast.warning(MSG_CONNECT_SOCIAL_TO_CONFIRM);
       return;
     }
     if (conflicts.size > 0) {
@@ -438,7 +445,7 @@ export function PublishSchedulerHub({
         <CloudOff className="h-12 w-12 mx-auto text-ag-muted" />
         <h2 className="font-display text-xl font-semibold text-ag-text">Modo nuvem necessário</h2>
         <p className="text-sm text-ag-muted">
-          Programar posts no Instagram requer conta na nuvem com banco de dados e mídia armazenada.
+          Programar posts nas redes sociais conectadas requer conta na nuvem com banco de dados e mídia armazenada.
         </p>
       </div>
     );

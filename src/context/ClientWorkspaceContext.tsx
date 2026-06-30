@@ -259,7 +259,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
   const retryWorkspaceLoad = useCallback(() => {
     setWorkspaceLoadError(null);
     setWorkspaceHydrated(false);
-    window.dispatchEvent(new CustomEvent("auragrid:api-reload-request"));
+    window.dispatchEvent(new CustomEvent("aurastudio:api-reload-request"));
   }, []);
 
   useEffect(() => {
@@ -284,11 +284,11 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       setWorkspaceLoadError(message);
       setWorkspaceHydrated(false);
     };
-    window.addEventListener("auragrid:api-registry", onApiRegistry);
-    window.addEventListener("auragrid:api-load-failed", onLoadFailed);
+    window.addEventListener("aurastudio:api-registry", onApiRegistry);
+    window.addEventListener("aurastudio:api-load-failed", onLoadFailed);
     return () => {
-      window.removeEventListener("auragrid:api-registry", onApiRegistry);
-      window.removeEventListener("auragrid:api-load-failed", onLoadFailed);
+      window.removeEventListener("aurastudio:api-registry", onApiRegistry);
+      window.removeEventListener("aurastudio:api-load-failed", onLoadFailed);
     };
   }, [useApiStorage]);
 
@@ -343,14 +343,14 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
         flush = getApiHelpers()?.flushWorkspaceNow;
       }
       if (!flush) {
-        console.warn("[AuraGrid] API de persistência ainda não disponível.");
+        console.warn("[AuraStudio] API de persistência ainda não disponível.");
         toast.error("Não foi possível salvar na nuvem. Aguarde o carregamento e tente novamente.");
         return;
       }
       try {
         await flush(workspaceRef.current);
       } catch (err) {
-        console.error("[AuraGrid] Falha ao salvar workspace:", err);
+        console.error("[AuraStudio] Falha ao salvar workspace:", err);
         toast.error("Não foi possível salvar o grid na nuvem.");
         throw err;
       }
@@ -451,7 +451,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
               setWorkspace(ws);
               workspaceRef.current = ws;
             } catch (err) {
-              console.error("[AuraGrid] Falha ao trocar cliente:", err);
+              console.error("[AuraStudio] Falha ao trocar cliente:", err);
               toast.error("Não foi possível carregar as informações deste cliente. Tente novamente.");
               throw err;
             } finally {
@@ -742,7 +742,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
         broadcastSyncChanged(activeClientId, ["brandGem"]);
         return savedAt;
       } catch (err) {
-        console.error("[AuraGrid] Falha ao salvar Gem na nuvem:", err);
+        console.error("[AuraStudio] Falha ao salvar Gem na nuvem:", err);
         toast.error("Não foi possível salvar o Gem na nuvem. Tente novamente.");
         return null;
       }
@@ -779,7 +779,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
           broadcastSyncChanged(created.id, ["registry"]);
           return created.id;
         } catch (err) {
-          console.error("[AuraGrid] Falha ao criar cliente:", err);
+          console.error("[AuraStudio] Falha ao criar cliente:", err);
           toast.error("Não foi possível criar o cliente na nuvem.");
           throw err;
         }
@@ -825,7 +825,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
             }
             broadcastSyncChanged(clientId, ["registry"]);
           } catch (err) {
-            console.error("[AuraGrid] Falha ao renomear cliente:", err);
+            console.error("[AuraStudio] Falha ao renomear cliente:", err);
             toast.error("Não foi possível renomear o cliente na nuvem.");
           }
         })();
@@ -879,7 +879,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
             broadcastSyncChanged(clientId, ["registry"]);
             aiQueue.cancelPending();
           } catch (err) {
-            console.error("[AuraGrid] Falha ao excluir cliente:", err);
+            console.error("[AuraStudio] Falha ao excluir cliente:", err);
             toast.error("Não foi possível excluir o cliente na nuvem.");
           }
         })();
@@ -956,7 +956,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
               endRemoteWorkspaceApply();
             }
           } catch (err) {
-            console.error("[AuraGrid] Falha ao visualizar roteiro:", err);
+            console.error("[AuraStudio] Falha ao visualizar roteiro:", err);
             toast.error("Não foi possível carregar o planejamento.");
           }
           return;
@@ -984,7 +984,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
             endRemoteWorkspaceApply();
           }
         } catch (err) {
-          console.error("[AuraGrid] Falha ao trocar roteiro:", err);
+          console.error("[AuraStudio] Falha ao trocar roteiro:", err);
           toast.error("Não foi possível carregar o planejamento.");
         }
         return;
@@ -1025,7 +1025,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
             endRemoteWorkspaceApply();
           }
         } catch (err) {
-          console.error("[AuraGrid] Falha ao visualizar roteiro:", err);
+          console.error("[AuraStudio] Falha ao visualizar roteiro:", err);
           toast.error("Não foi possível carregar o planejamento.");
         }
         return;
@@ -1067,7 +1067,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
           }
           broadcastSyncChanged(activeClientId, ["periods", "workspace"]);
         } catch (err) {
-          console.error("[AuraGrid] Falha ao reativar roteiro:", err);
+          console.error("[AuraStudio] Falha ao reativar roteiro:", err);
           toast.error("Não foi possível reativar o planejamento.");
         }
         return;
@@ -1102,7 +1102,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
             endRemoteWorkspaceApply();
           }
         } catch (err) {
-          console.error("[AuraGrid] Falha ao editar roteiro arquivado:", err);
+          console.error("[AuraStudio] Falha ao editar roteiro arquivado:", err);
           toast.error("Não foi possível carregar o planejamento para edição.");
         }
         return;
@@ -1152,7 +1152,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
           await patchWorkspaceApi(activeClientId, { defaultUsesReferences: value });
           broadcastSyncChanged(activeClientId, ["workspace"]);
         } catch (err) {
-          console.error("[AuraGrid] Falha ao salvar preferência de referências:", err);
+          console.error("[AuraStudio] Falha ao salvar preferência de referências:", err);
           toast.error("Não foi possível salvar a preferência.");
           return;
         }
@@ -1193,7 +1193,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
           });
           broadcastSyncChanged(activeClientId, ["periods", "workspace"]);
         } catch (err) {
-          console.error("[AuraGrid] Falha ao salvar roteiro:", err);
+          console.error("[AuraStudio] Falha ao salvar roteiro:", err);
           toast.error("Não foi possível salvar a preferência do planejamento.");
           return;
         }
@@ -1234,7 +1234,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
           broadcastSyncChanged(activeClientId, ["periods", "workspace"]);
           toast.success("Novo planejamento criado.");
         } catch (err) {
-          console.error("[AuraGrid] Falha ao criar roteiro:", err);
+          console.error("[AuraStudio] Falha ao criar roteiro:", err);
           toast.error("Não foi possível criar o planejamento.");
         }
         return;
@@ -1326,7 +1326,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
           ]);
           toast.success("Cliente resetado na nuvem.");
         } catch (err) {
-          console.error("[AuraGrid] Falha ao resetar cliente:", err);
+          console.error("[AuraStudio] Falha ao resetar cliente:", err);
           toast.error("Não foi possível resetar o cliente na nuvem.");
         }
       })();

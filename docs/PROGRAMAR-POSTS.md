@@ -1,6 +1,6 @@
 # Programar posts — implementação e pendências
 
-Documentação da funcionalidade **Programar posts** no AuraGrid: o que foi construído, como funciona e o que ainda falta.
+Documentação da funcionalidade **Programar posts** no AuraStudio: o que foi construído, como funciona e o que ainda falta.
 
 Para configurar credenciais Meta, App Review e deploy, veja também [`META-PUBLISHING.md`](./META-PUBLISHING.md).
 
@@ -8,13 +8,15 @@ Para configurar credenciais Meta, App Review e deploy, veja também [`META-PUBLI
 
 ## Visão geral
 
-A seção **Programar posts** (`/c/:clientId/programar-posts`) permite agendar no **Instagram** (feed: foto + legenda) os posts já aprovados em **Planejamento e legendas**, por cliente e período de planejamento.
+A seção **Programar posts** (`/c/:clientId/programar-posts`) permite agendar e publicar nas **redes sociais conectadas** (Instagram, Facebook, LinkedIn, TikTok, Pinterest, YouTube e YouTube Shorts) os posts já aprovados em **Planejamento e legendas**, por cliente e período de planejamento.
+
+> **Integração atual:** publicação automática via Meta (Instagram feed). Demais redes estão no escopo do produto e serão conectadas progressivamente.
 
 Requisitos para usar:
 
 - Modo **nuvem** (PostgreSQL + armazenamento de mídia)
 - Posts com **legenda aprovada**, **foto** e `isConfirmed`
-- Conta Instagram **Profissional** conectada via Meta OAuth (ou `META_PUBLISH_MOCK=1` em dev)
+- Contas sociais conectadas via OAuth (Meta para Instagram hoje; ou `META_PUBLISH_MOCK=1` em dev)
 
 ---
 

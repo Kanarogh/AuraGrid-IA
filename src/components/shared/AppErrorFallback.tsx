@@ -2,16 +2,17 @@
 
 import { useMemo } from "react";
 import {
-  clearAllAuraGridStorage,
-  clearAuraGridCaptionCache,
+  clearAllAuraStudioStorage,
+  clearAuraStudioCaptionCache,
 } from "../../lib/clientWorkspace/clearStorage";
 import { APP_NAME } from "../../lib/appBranding";
+import { STORAGE } from "../../lib/storageLegacy";
 
-const ACCESS_TOKEN_KEY = "auragrid_access_token";
+const ACCESS_TOKEN_KEY = STORAGE.accessToken;
 
 function isCloudSessionLikely(): boolean {
   if (typeof window === "undefined") return false;
-  return !!window.localStorage.getItem(ACCESS_TOKEN_KEY);
+  return !!window.localStorage.getItem(ACCESS_TOKEN_KEY) || !!window.localStorage.getItem("auragrid_access_token");
 }
 
 export function AppErrorFallback({
@@ -61,7 +62,7 @@ export function AppErrorFallback({
             type="button"
             className="text-sm font-medium px-4 py-2 rounded-lg border border-ag-border bg-ag-surface-2 text-ag-text cursor-pointer hover:bg-ag-surface-3"
             onClick={() => {
-              clearAuraGridCaptionCache();
+              clearAuraStudioCaptionCache();
               onReload();
             }}
           >
@@ -80,7 +81,7 @@ export function AppErrorFallback({
                   "Isso apaga workspaces, catálogos e planejamentos salvos neste navegador (modo offline). Continuar?"
                 );
                 if (!ok) return;
-                clearAllAuraGridStorage();
+                clearAllAuraStudioStorage();
                 onReload();
               }}
             >

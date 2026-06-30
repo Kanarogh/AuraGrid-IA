@@ -8,7 +8,7 @@ function getClient() {
   if (!apiKey) throw new Error("GEMINI_API_KEY não configurada.");
   return new GoogleGenAI({
     apiKey,
-    httpOptions: { headers: { "User-Agent": "auragrid-build" } },
+    httpOptions: { headers: { "User-Agent": "aurastudio-build" } },
   });
 }
 
@@ -71,7 +71,7 @@ export async function embedCatalogImage(
   const description = profileText?.trim();
   const taskPrefix = description
     ? `task: search document | reference description: ${description} | image:`
-    : "task: search document | query: fashion catalog reference garment";
+    : "task: search document | query: visual catalog reference item";
   return embedImage(dataUrl, taskPrefix, "embed_catalog_image");
 }
 
@@ -79,7 +79,7 @@ export async function embedCatalogImage(
 export async function embedQueryImage(dataUrl: string): Promise<number[]> {
   return embedImage(
     dataUrl,
-    "task: search query | query: fashion post outfit photo",
+    "task: search query | query: social media post visual content",
     "embed_query_image"
   );
 }

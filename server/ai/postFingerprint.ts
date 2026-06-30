@@ -62,7 +62,7 @@ export type PostVisualFingerprint = {
 };
 
 export function buildPostFingerprintPrompt(): string {
-  return `Fashion image analyst — extract COMPACT JSON v2 for catalog matching + caption context.
+  return `Visual content analyst — extract COMPACT JSON v2 for catalog matching + caption context.
 
 KEYWORDS ONLY — kebab-case tokens, NO sentences.
 

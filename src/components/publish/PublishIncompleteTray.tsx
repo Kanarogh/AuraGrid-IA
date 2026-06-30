@@ -72,7 +72,7 @@ export function PublishIncompleteTray({
               <p className="text-[11px] text-ag-muted mt-0.5">{summaryParts.join(" · ")}</p>
             )}
             <p className="text-[11px] text-ag-muted mt-0.5">
-              Para agendar no Instagram: foto na nuvem, legenda e aprovação confirmada.
+              Para agendar nas redes sociais: foto na nuvem, legenda e aprovação confirmada.
             </p>
           </div>
         </button>

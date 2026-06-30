@@ -92,7 +92,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         label,
         description: isReference
           ? `Importado em ${new Date().toLocaleDateString("pt-BR")} do arquivo '${originalName}'`
-          : `Peça de grid importada em ${new Date().toLocaleDateString("pt-BR")} do arquivo '${originalName}' — não usada como referência de look`,
+          : `Peça de grid importada em ${new Date().toLocaleDateString("pt-BR")} do arquivo '${originalName}' — não usada como referência do catálogo`,
         imageAssetId: media.id,
         isReference,
       });

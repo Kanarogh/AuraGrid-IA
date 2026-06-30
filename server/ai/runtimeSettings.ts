@@ -6,7 +6,8 @@ import { saveUserAiRuntimeSettings } from "../services/userAiPreferencesService"
 import { isDatabaseConfigured } from "../db/client";
 import type { AiProviderId } from "./types";
 
-const SETTINGS_FILE = path.join(process.cwd(), ".auragrid-ai.json");
+const SETTINGS_FILE = path.join(process.cwd(), ".aurastudio-ai.json");
+const LEGACY_SETTINGS_FILE = path.join(process.cwd(), ".auragrid-ai.json");
 
 type RuntimeState = {
   provider: AiProviderId | null;
@@ -38,7 +39,12 @@ export function ensureRuntimeAiSettingsLoaded(): Promise<void> {
 
 export async function loadRuntimeAiSettings(): Promise<void> {
   try {
-    const raw = await fs.readFile(SETTINGS_FILE, "utf-8");
+    let raw: string;
+    try {
+      raw = await fs.readFile(SETTINGS_FILE, "utf-8");
+    } catch {
+      raw = await fs.readFile(LEGACY_SETTINGS_FILE, "utf-8");
+    }
     const data = JSON.parse(raw) as {
       provider?: unknown;
       geminiModel?: unknown;
