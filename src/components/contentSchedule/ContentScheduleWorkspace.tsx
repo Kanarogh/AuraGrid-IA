@@ -91,22 +91,47 @@ export function ContentScheduleWorkspace({
   onConfigureGem,
 }: ContentScheduleWorkspaceProps) {
   const resolvedOptions = scheduleOptions ?? DEFAULT_CONTENT_SCHEDULE_OPTIONS;
-  const [briefDraft, setBriefDraft] = useState(clientBrief);
-  const [postCount, setPostCount] = useState(resolvedOptions.postCount);
-  const [storyCount, setStoryCount] = useState(resolvedOptions.storyCount);
-  const [extraInstructions, setExtraInstructions] = useState(resolvedOptions.extraInstructions);
+  const hasGeneratedSchedule = items.length > 0;
+
+  const [briefDraft, setBriefDraft] = useState("");
+  const [postCount, setPostCount] = useState(DEFAULT_CONTENT_SCHEDULE_OPTIONS.postCount);
+  const [storyCount, setStoryCount] = useState(DEFAULT_CONTENT_SCHEDULE_OPTIONS.storyCount);
+  const [extraInstructions, setExtraInstructions] = useState("");
 
   useEffect(() => {
+    if (!hasGeneratedSchedule) {
+      setBriefDraft("");
+      setPostCount(DEFAULT_CONTENT_SCHEDULE_OPTIONS.postCount);
+      setStoryCount(DEFAULT_CONTENT_SCHEDULE_OPTIONS.storyCount);
+      setExtraInstructions("");
+      return;
+    }
     setBriefDraft(clientBrief);
-  }, [clientBrief]);
-
-  useEffect(() => {
     setPostCount(resolvedOptions.postCount);
     setStoryCount(resolvedOptions.storyCount);
     setExtraInstructions(resolvedOptions.extraInstructions);
   }, [
+    hasGeneratedSchedule,
+    clientBrief,
     resolvedOptions.postCount,
     resolvedOptions.storyCount,
+    resolvedOptions.extraInstructions,
+  ]);
+
+  // Remove briefing/options órfãos salvos sem cronograma gerado (ex.: testes antigos).
+  useEffect(() => {
+    if (isReadOnly || hasGeneratedSchedule) return;
+    const staleBrief = clientBrief.trim().length > 0;
+    const staleExtra = resolvedOptions.extraInstructions.trim().length > 0;
+    if (!staleBrief && !staleExtra) return;
+    onClientBriefChange("");
+    onScheduleOptionsChange?.({ ...DEFAULT_CONTENT_SCHEDULE_OPTIONS });
+  }, [
+    clientBrief,
+    hasGeneratedSchedule,
+    isReadOnly,
+    onClientBriefChange,
+    onScheduleOptionsChange,
     resolvedOptions.extraInstructions,
   ]);
 
