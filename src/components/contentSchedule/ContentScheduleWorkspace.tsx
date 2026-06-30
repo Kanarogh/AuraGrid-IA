@@ -17,6 +17,7 @@ import type {
 import type { ContentScheduleOptions } from "../../lib/clientWorkspace/types";
 import { DEFAULT_CONTENT_SCHEDULE_OPTIONS } from "../../lib/clientWorkspace/types";
 import { aiFetch } from "../../lib/aiFetch";
+import { readJsonResponse } from "../../lib/apiResponse";
 import { aiQueue } from "../../lib/aiQueue";
 import {
   CONTENT_SCHEDULE_STATUS_LABELS,
@@ -46,6 +47,7 @@ type ContentScheduleWorkspaceProps = {
   brandGemReady: boolean;
   startDate: string;
   periodLabel?: string;
+  clientId?: string;
   isReadOnly?: boolean;
   posts: PlannedPost[];
   clientBrief: string;
@@ -77,6 +79,7 @@ export function ContentScheduleWorkspace({
   brandGemReady,
   startDate,
   periodLabel,
+  clientId,
   isReadOnly,
   posts,
   clientBrief,
@@ -192,6 +195,7 @@ export function ContentScheduleWorkspace({
           body: JSON.stringify({
             brandGem,
             clientBrief: briefDraft,
+            ...(clientId ? { clientId } : {}),
             mode: "monthly",
             options: {
               postCount,
@@ -202,7 +206,7 @@ export function ContentScheduleWorkspace({
           }),
         })
       );
-      const data = (await res.json()) as { items?: ContentScheduleItem[]; error?: string };
+      const data = await readJsonResponse<{ items?: ContentScheduleItem[]; error?: string }>(res);
       if (!res.ok) throw new Error(data.error ?? "Falha ao gerar cronograma.");
       if (!data.items?.length) throw new Error("A IA não retornou itens.");
       persistBriefAndOptions();
@@ -220,6 +224,7 @@ export function ContentScheduleWorkspace({
     brandGem,
     brandGemReady,
     briefDraft,
+    clientId,
     extraInstructions,
     onItemsChange,
     persistBriefAndOptions,
@@ -239,13 +244,14 @@ export function ContentScheduleWorkspace({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             brandGem,
+            ...(clientId ? { clientId } : {}),
             mode: "refine_one",
             existingItem: selectedItem,
             refineInstruction,
           }),
         })
       );
-      const data = (await res.json()) as { items?: ContentScheduleItem[]; error?: string };
+      const data = await readJsonResponse<{ items?: ContentScheduleItem[]; error?: string }>(res);
       if (!res.ok) throw new Error(data.error ?? "Falha ao refinar item.");
       const refined = data.items?.[0];
       if (!refined) throw new Error("Item refinado vazio.");
@@ -257,7 +263,7 @@ export function ContentScheduleWorkspace({
     } finally {
       setRefining(false);
     }
-  }, [brandGem, refineInstruction, selectedItem, updateItem]);
+  }, [brandGem, clientId, refineInstruction, selectedItem, updateItem]);
 
   const copyText = useCallback(async (text: string, id?: string) => {
     try {

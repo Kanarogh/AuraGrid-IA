@@ -8,6 +8,7 @@
   --ag-gradient-brand: linear-gradient(135deg, #7b5cff 0%, #4361ff 50%, #00d4ff 100%);
   --ag-gradient-btn: linear-gradient(135deg, #7b5cff 0%, #4361ff 100%);
   --ag-gradient-btn-hover: linear-gradient(135deg, #6a4ef0 0%, #3555f5 100%);
+  --ag-gradient-btn-fg: #ffffff;
   --ag-gradient-text: linear-gradient(90deg, #7b5cff 0%, #4361ff 45%, #00d4ff 100%);
   --ag-focus-border: #7b5cff;
   --ag-sidebar-active-bg: #7b5cff1a;
@@ -32,6 +33,7 @@
   --ag-gradient-brand: linear-gradient(135deg, #9b84ff 0%, #4361ff 50%, #00d4ff 100%);
   --ag-gradient-btn: linear-gradient(135deg, #9b84ff 0%, #4361ff 100%);
   --ag-gradient-btn-hover: linear-gradient(135deg, #8a72f5 0%, #3555f5 100%);
+  --ag-gradient-btn-fg: #ffffff;
   --ag-gradient-text: linear-gradient(90deg, #9b84ff 0%, #00d4ff 100%);
 }
 

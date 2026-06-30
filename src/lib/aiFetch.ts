@@ -1,4 +1,5 @@
-﻿import { getState } from "./aiSettingsStore";
+﻿import { apiFetch } from "./api/apiClient";
+import { getState } from "./aiSettingsStore";
 
 export function withAiHeaders(init?: RequestInit): RequestInit {
   const { settings } = getState();
@@ -12,5 +13,5 @@ export function withAiHeaders(init?: RequestInit): RequestInit {
 }
 
 export function aiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  return fetch(input, withAiHeaders(init));
+  return apiFetch(String(input), withAiHeaders(init));
 }

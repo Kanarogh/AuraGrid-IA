@@ -91,6 +91,17 @@ export function applyAccentTokensToElement(el: HTMLElement, tokens: AccentTokens
   el.style.setProperty("--ag-accent-strong", tokens.accentStrong);
   el.style.setProperty("--ag-accent-soft", tokens.accentSoft);
   el.style.setProperty("--ag-accent-fg", tokens.accentFg);
+  const gradientEnd = mix(tokens.accent, "#000000", 0.22);
+  const gradientStart = tokens.accent;
+  el.style.setProperty(
+    "--ag-gradient-btn",
+    `linear-gradient(135deg, ${gradientStart} 0%, ${gradientEnd} 100%)`
+  );
+  el.style.setProperty(
+    "--ag-gradient-btn-hover",
+    `linear-gradient(135deg, ${mix(gradientStart, "#000000", 0.1)} 0%, ${mix(gradientEnd, "#000000", 0.1)} 100%)`
+  );
+  el.style.setProperty("--ag-gradient-btn-fg", contrastForeground(gradientEnd));
 }
 
 export function clearAccentTokensFromElement(el: HTMLElement): void {
@@ -98,6 +109,9 @@ export function clearAccentTokensFromElement(el: HTMLElement): void {
   el.style.removeProperty("--ag-accent-strong");
   el.style.removeProperty("--ag-accent-soft");
   el.style.removeProperty("--ag-accent-fg");
+  el.style.removeProperty("--ag-gradient-btn");
+  el.style.removeProperty("--ag-gradient-btn-hover");
+  el.style.removeProperty("--ag-gradient-btn-fg");
 }
 
 export type StoredCustomAccent = CustomAccentConfig & {

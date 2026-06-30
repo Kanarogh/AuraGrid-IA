@@ -184,8 +184,23 @@ export async function generateContentSchedule(input: {
   );
   await trackGeminiUsage("generate_content_schedule", modelUsed, response);
 
-  const parsed = JSON.parse(response.text || "{}") as { items?: RawItem[] };
-  return normalizeRawItems(Array.isArray(parsed.items) ? parsed.items : []);
+  const rawText = response.text?.trim();
+  if (!rawText) {
+    throw new Error("Gemini: o modelo respondeu sem texto (cronograma vazio).");
+  }
+
+  let parsed: { items?: RawItem[] };
+  try {
+    parsed = JSON.parse(rawText) as { items?: RawItem[] };
+  } catch {
+    throw new Error("Gemini: resposta JSON inválida ao gerar o cronograma.");
+  }
+
+  const items = normalizeRawItems(Array.isArray(parsed.items) ? parsed.items : []);
+  if (!items.length) {
+    throw new Error("Gemini: nenhum item retornado no cronograma.");
+  }
+  return items;
 }
 
 export async function refineContentScheduleItem(input: {
@@ -232,7 +247,18 @@ export async function refineContentScheduleItem(input: {
   );
   await trackGeminiUsage("refine_content_schedule", modelUsed, response);
 
-  const parsed = JSON.parse(response.text || "{}") as { item?: RawItem };
+  const rawText = response.text?.trim();
+  if (!rawText) {
+    throw new Error("Gemini: o modelo respondeu sem texto ao refinar o item.");
+  }
+
+  let parsed: { item?: RawItem };
+  try {
+    parsed = JSON.parse(rawText) as { item?: RawItem };
+  } catch {
+    throw new Error("Gemini: resposta JSON inválida ao refinar o item.");
+  }
+
   const [normalized] = normalizeRawItems(parsed.item ? [parsed.item] : []);
   if (!normalized) throw new Error("IA não retornou item refinado.");
   return {

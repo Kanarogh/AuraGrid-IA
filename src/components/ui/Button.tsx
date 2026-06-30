@@ -14,14 +14,16 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const variants: Record<Variant, string> = {
-  primary: "ag-gradient-btn border border-transparent shadow-[var(--ag-shadow)]",
+  primary:
+    "ag-gradient-btn text-[var(--ag-gradient-btn-fg,#ffffff)] border border-transparent shadow-[var(--ag-shadow)]",
   secondary:
     "bg-ag-surface-2 text-ag-text border border-ag-border hover:bg-ag-surface-3 hover:border-ag-border/80",
   ghost:
     "bg-transparent text-ag-text border border-transparent hover:bg-ag-surface-2",
   danger:
     "bg-ag-danger/10 text-ag-danger border border-ag-danger/25 hover:bg-ag-danger/15",
-  accent: "ag-gradient-btn border border-transparent shadow-[var(--ag-shadow)]",
+  accent:
+    "ag-gradient-btn text-[var(--ag-gradient-btn-fg,#ffffff)] border border-transparent shadow-[var(--ag-shadow)]",
 };
 
 const sizes: Record<Size, string> = {

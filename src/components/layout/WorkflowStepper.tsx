@@ -37,7 +37,7 @@ export function WorkflowStepper({
               step.done
                 ? "bg-ag-success/15 text-ag-success ring-1 ring-ag-success/30"
                 : step.active
-                  ? "ag-gradient-btn text-ag-accent-fg shadow-[var(--ag-shadow)]"
+                  ? "ag-gradient-btn text-[var(--ag-gradient-btn-fg,#ffffff)] shadow-[var(--ag-shadow)]"
                   : "bg-ag-surface-3 text-ag-muted"
             )}
             aria-hidden

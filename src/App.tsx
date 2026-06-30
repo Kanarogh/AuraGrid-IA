@@ -2965,6 +2965,7 @@ export default function App() {
               brandGemReady={brandGemReady}
               startDate={startDate}
               periodLabel={activePeriodLabel}
+              clientId={activeClientId}
               isReadOnly={sectionReadOnly("content_schedule")}
               posts={posts}
               clientBrief={contentScheduleBrief}

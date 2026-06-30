@@ -7,12 +7,14 @@ import {
   refineContentScheduleItem,
 } from "@/server/ai/contentScheduleGenerator";
 import { assertAiClientAccess, withUserAiFromRequest } from "@/server/http/aiRequest";
+import { errorResponse, HttpError } from "@/server/http/respond";
 import { CONTENT_SCHEDULE_WRITE } from "@/server/http/sectionAccess";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  return withUserAiFromRequest(req, async (user) => {
+  try {
+    return await withUserAiFromRequest(req, async (user) => {
     const providerId = getActiveProviderId();
     const modelUsed = getGeminiContentScheduleModel();
     try {
@@ -99,8 +101,14 @@ export async function POST(req: NextRequest) {
       );
     } catch (error: unknown) {
       console.error("Error generating content schedule:", error);
+      if (error instanceof HttpError) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
       const status = /429|quota|RESOURCE_EXHAUSTED|rate.?limit/i.test(String(error)) ? 429 : 500;
       return NextResponse.json({ error: formatAiError(error, providerId) }, { status });
     }
-  });
+    });
+  } catch (error: unknown) {
+    return errorResponse(error);
+  }
 }
