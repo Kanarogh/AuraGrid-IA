@@ -49,7 +49,7 @@ export function PublishIncompleteTray({
   return (
     <div
       id="publish-incomplete-tray"
-      className="rounded-2xl border border-ag-border bg-ag-surface-2/30 p-3 space-y-2"
+      className="rounded-xl border border-ag-border bg-ag-surface-2/30 p-3 space-y-2"
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <button

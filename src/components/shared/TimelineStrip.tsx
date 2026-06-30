@@ -27,7 +27,7 @@ export function TimelineStrip({
   onCancelReorder?: () => void;
 }) {
   return (
-    <div className="mb-4 ag-studio relative overflow-hidden rounded-2xl border border-ag-border/70 p-4 sm:p-5 shadow-[var(--ag-shadow)] animate-ag-fade-in">
+    <div className="mb-4 ag-studio relative overflow-hidden rounded-xl border border-ag-border/70 p-4 sm:p-5 shadow-[var(--ag-shadow)] animate-ag-fade-in">
       <div className="ag-studio-mesh absolute inset-0 pointer-events-none opacity-60" aria-hidden />
       <div className="relative z-10">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
@@ -80,7 +80,7 @@ export function TimelineStrip({
                 key={post.id}
                 onClick={() => onSelectPost(post.id)}
                 className={cn(
-                  "rounded-2xl p-3 border text-center cursor-pointer transition-all duration-200 relative group flex flex-col min-w-[170px] sm:min-w-[190px] shrink-0 snap-start",
+                  "rounded-xl p-3 border text-center cursor-pointer transition-all duration-200 relative group flex flex-col min-w-[170px] sm:min-w-[190px] shrink-0 snap-start",
                   isSwapSource && "ring-2 ring-ag-danger border-ag-danger bg-ag-danger/5",
                   isActive && !isSwapSource
                     ? "border-ag-accent ring-2 ring-ag-accent/20 bg-ag-accent-soft shadow-md"
@@ -154,7 +154,7 @@ export function TimelineStrip({
 
                 <div
                   className={cn(
-                    "absolute inset-0 bg-ag-surface-1/95 flex flex-col justify-center items-center gap-1.5 p-2 rounded-2xl border border-ag-accent/20 transition-opacity",
+                    "absolute inset-0 bg-ag-surface-1/95 flex flex-col justify-center items-center gap-1.5 p-2 rounded-xl border border-ag-accent/20 transition-opacity",
                     reorderMode
                       ? "opacity-100"
                       : "opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto"

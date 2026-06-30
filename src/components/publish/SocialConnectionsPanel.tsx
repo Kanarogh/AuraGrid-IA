@@ -16,11 +16,13 @@ import {
 } from "../../lib/publish/publishApi";
 import { toast } from "../../lib/toast";
 
-const PLATFORM_GRADIENT: Record<PublishPlatform, string> = {
-  instagram: "from-purple-500 to-pink-500",
-  facebook: "from-blue-600 to-blue-800",
-  linkedin: "from-blue-700 to-sky-600",
-  pinterest: "from-red-600 to-rose-700",
+const PLATFORM_ICON_BG: Record<PublishPlatform, string> = {
+  instagram: "bg-[var(--ag-gradient-brand)]",
+  facebook:
+    "bg-gradient-to-br from-[var(--ag-brand-blue)] to-[var(--ag-brand-purple)]",
+  linkedin: "bg-gradient-to-br from-[var(--ag-brand-blue)] to-[var(--ag-brand-cyan)]",
+  pinterest:
+    "bg-gradient-to-br from-[var(--ag-brand-purple)] to-[var(--ag-brand-teal)]",
 };
 
 function PlatformCard({
@@ -70,11 +72,11 @@ function PlatformCard({
         <div className="flex items-center gap-2.5 min-w-0">
           <div
             className={cn(
-              "h-9 w-9 rounded-lg bg-gradient-to-br flex items-center justify-center shrink-0",
-              PLATFORM_GRADIENT[platform]
+              "h-9 w-9 rounded-lg flex items-center justify-center shrink-0",
+              PLATFORM_ICON_BG[platform]
             )}
           >
-            <Share2 className="h-4 w-4 text-white" />
+            <Share2 className="h-4 w-4 text-ag-accent-fg" />
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold text-ag-text flex items-center gap-1">
@@ -98,11 +100,11 @@ function PlatformCard({
       <div className="flex items-center gap-2.5 min-w-0">
         <div
           className={cn(
-            "h-9 w-9 rounded-lg bg-gradient-to-br opacity-60 flex items-center justify-center shrink-0",
-            PLATFORM_GRADIENT[platform]
+            "h-9 w-9 rounded-lg opacity-60 flex items-center justify-center shrink-0",
+            PLATFORM_ICON_BG[platform]
           )}
         >
-          <Share2 className="h-4 w-4 text-white" />
+          <Share2 className="h-4 w-4 text-ag-accent-fg" />
         </div>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-ag-text">{label}</p>

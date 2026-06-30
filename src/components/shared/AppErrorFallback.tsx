@@ -7,6 +7,7 @@ import {
 } from "../../lib/clientWorkspace/clearStorage";
 import { APP_NAME } from "../../lib/appBranding";
 import { STORAGE } from "../../lib/storageLegacy";
+import { AuraLogo } from "../brand/AuraLogo";
 
 const ACCESS_TOKEN_KEY = STORAGE.accessToken;
 
@@ -25,13 +26,14 @@ export function AppErrorFallback({
   const cloudSession = useMemo(() => isCloudSessionLikely(), []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-ag-bg text-ag-text">
+    <div className="min-h-screen flex items-center justify-center p-6 ag-auth-mesh text-ag-text">
       <div className="max-w-md space-y-4 rounded-xl border border-ag-danger/30 bg-ag-surface-1 p-6">
+        <AuraLogo variant="stacked" iconSize={40} />
         <h1 className="text-lg font-semibold text-ag-danger">Erro ao carregar o {APP_NAME}</h1>
         <p className="text-sm text-ag-muted font-mono break-words">{error.message}</p>
 
         {cloudSession ? (
-          <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs text-ag-text leading-relaxed space-y-1">
+          <div className="rounded-lg border border-ag-accent/30 bg-ag-accent/10 px-3 py-2 text-xs text-ag-text leading-relaxed space-y-1">
             <p>
               <strong>Seus planejamentos estão na nuvem</strong> e não são apagados pelos botões
               abaixo.
@@ -53,7 +55,7 @@ export function AppErrorFallback({
         <div className="flex flex-col gap-2">
           <button
             type="button"
-            className="text-sm font-semibold px-4 py-2 rounded-lg bg-ag-accent text-white cursor-pointer"
+            className="text-sm font-semibold px-4 py-2 rounded-lg bg-ag-accent text-ag-accent-fg cursor-pointer"
             onClick={onReload}
           >
             Recarregar página

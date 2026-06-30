@@ -261,11 +261,11 @@ export function statusBorderClass(
   status: PublishQueueItem["status"],
   hasDraft?: boolean
 ): string {
-  if (status === "published") return "border-l-[3px] border-l-emerald-500";
-  if (status === "failed") return "border-l-[3px] border-l-red-500";
-  if (status === "publishing") return "border-l-[3px] border-l-violet-500 animate-pulse";
+  if (status === "published") return "border-l-[3px] border-l-ag-success";
+  if (status === "failed") return "border-l-[3px] border-l-ag-danger";
+  if (status === "publishing") return "border-l-[3px] border-l-ag-accent animate-pulse";
   if (status === "queued") return "border-l-[3px] border-l-ag-accent";
-  if (status === "eligible" && hasDraft) return "border-l-[3px] border-l-amber-500";
+  if (status === "eligible" && hasDraft) return "border-l-[3px] border-l-ag-warning";
   return "";
 }
 
@@ -273,11 +273,11 @@ export function statusPillClass(
   status: PublishQueueItem["status"],
   hasDraft?: boolean
 ): string {
-  if (status === "published") return "border-l-emerald-500 bg-emerald-500/8 hover:bg-emerald-500/12";
-  if (status === "failed") return "border-l-red-500 bg-red-500/8 hover:bg-red-500/12";
-  if (status === "publishing") return "border-l-violet-500 bg-violet-500/8 animate-pulse";
+  if (status === "published") return "border-l-ag-success bg-ag-success/8 hover:bg-ag-success/12";
+  if (status === "failed") return "border-l-ag-danger bg-ag-danger/8 hover:bg-ag-danger/12";
+  if (status === "publishing") return "border-l-ag-accent bg-ag-accent/8 animate-pulse";
   if (status === "queued") return "border-l-ag-accent bg-ag-accent-soft/50 hover:bg-ag-accent-soft/70";
-  if (status === "eligible" && hasDraft) return "border-l-amber-500 bg-amber-500/8 hover:bg-amber-500/12";
+  if (status === "eligible" && hasDraft) return "border-l-ag-warning bg-ag-warning/8 hover:bg-ag-warning/12";
   return "border-l-ag-border bg-ag-surface-2/80 hover:bg-ag-surface-2";
 }
 
@@ -285,11 +285,11 @@ export function statusDotClass(
   status: PublishQueueItem["status"],
   hasDraft?: boolean
 ): string {
-  if (status === "published") return "bg-emerald-500";
-  if (status === "failed") return "bg-red-500";
-  if (status === "publishing") return "bg-violet-500 animate-pulse";
+  if (status === "published") return "bg-ag-success";
+  if (status === "failed") return "bg-ag-danger";
+  if (status === "publishing") return "bg-ag-accent animate-pulse";
   if (status === "queued") return "bg-ag-accent";
-  if (status === "eligible" && hasDraft) return "bg-amber-500";
+  if (status === "eligible" && hasDraft) return "bg-ag-warning";
   return "bg-ag-muted/50";
 }
 

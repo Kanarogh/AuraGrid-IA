@@ -66,14 +66,14 @@ export function PublishHubStatusStrip({
       )}
 
       {showMock && (
-        <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-700 dark:text-emerald-400">
+        <span className="inline-flex items-center gap-1.5 rounded-lg border border-ag-success/25 bg-ag-success/10 px-2.5 py-1 text-xs text-ag-success">
           <FlaskConical className="h-3.5 w-3.5 shrink-0" />
           Simulação — agendar sem conectar
         </span>
       )}
 
       {showDrafts && (
-        <span className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs text-ag-text">
+        <span className="inline-flex items-center gap-2 rounded-lg border border-ag-warning/30 bg-ag-warning/10 px-2.5 py-1 text-xs text-ag-text">
           <strong>{draftCount}</strong>
           {draftCount === 1 ? "rascunho" : "rascunhos"}
           <Button

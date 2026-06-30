@@ -81,7 +81,7 @@ export function CatalogEnrichImageOverlay({
         </p>
         <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/20">
           {indeterminate ? (
-            <div className="h-full w-1/3 rounded-full bg-ag-accent animate-pulse" />
+            <div className="h-full w-8 rounded-full bg-ag-accent animate-pulse" />
           ) : (
             <div
               className="h-full rounded-full bg-ag-accent"

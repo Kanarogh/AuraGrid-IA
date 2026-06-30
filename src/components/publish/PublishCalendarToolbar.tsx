@@ -29,12 +29,12 @@ function SummaryChip({
       className={cn(
         "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors",
         tone === "accent" && "border-ag-accent/30 bg-ag-accent-soft/40 text-ag-accent",
-        tone === "warning" && "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+        tone === "warning" && "border-ag-warning/30 bg-ag-warning/10 text-ag-warning",
         tone === "neutral" && "border-ag-border bg-ag-surface-2/60 text-ag-muted",
-        tone === "success" && "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-        tone === "danger" && "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400",
+        tone === "success" && "border-ag-success/30 bg-ag-success/10 text-ag-success",
+        tone === "danger" && "border-ag-danger/30 bg-ag-danger/10 text-ag-danger",
         tone === "muted" && "border-ag-border/50 bg-transparent text-ag-muted/80",
-        interactive && "hover:bg-amber-500/15 cursor-pointer"
+        interactive && "hover:bg-ag-warning/15 cursor-pointer"
       )}
     >
       {children}

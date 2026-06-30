@@ -1,7 +1,8 @@
 "use client";
 
 import { X } from "lucide-react";
-import { APP_NAME_SHORT, APP_TAGLINE } from "../../../lib/appBranding";
+import { APP_TAGLINE } from "../../../lib/appBranding";
+import { AuraLogo } from "../../brand/AuraLogo";
 import { cn } from "../../../lib/cn";
 
 export function SidebarBrand({
@@ -18,20 +19,12 @@ export function SidebarBrand({
         collapsed ? "justify-center p-3" : "px-4 py-3"
       )}
     >
-      <div
-        className="h-9 w-9 rounded-xl text-ag-accent-fg flex items-center justify-center font-display font-bold text-lg shrink-0 shadow-sm"
-        style={{
-          background: "linear-gradient(135deg, var(--ag-accent), var(--ag-accent-strong))",
-        }}
-      >
-        A
-      </div>
-      {!collapsed && (
+      {collapsed ? (
+        <AuraLogo variant="icon" iconSize={36} />
+      ) : (
         <div className="min-w-0 flex-1">
-          <p className="font-display text-base font-semibold text-ag-text leading-tight tracking-tight truncate">
-            {APP_NAME_SHORT}
-          </p>
-          <p className="text-[11px] leading-snug text-ag-muted line-clamp-2">
+          <AuraLogo variant="horizontal" iconSize={36} />
+          <p className="text-[11px] leading-snug text-ag-muted line-clamp-2 mt-1 pl-12">
             {APP_TAGLINE}
           </p>
         </div>

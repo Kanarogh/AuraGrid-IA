@@ -12,6 +12,7 @@ import {
 import { THEME_CHANGE_EVENT, type Theme } from "./useTheme";
 
 export type FixedAccentId =
+  | "aura"
   | "cobalto"
   | "esmeralda"
   | "argila"
@@ -30,6 +31,7 @@ export type AccentPreset = {
 };
 
 export const ACCENT_PRESETS: AccentPreset[] = [
+  { id: "aura", label: "Aura Studio", swatch: "#7b5cff", swatchDark: "#9b84ff" },
   { id: "cobalto", label: "Cobalto", swatch: "#3d5af1", swatchDark: "#7c8cff" },
   { id: "esmeralda", label: "Esmeralda", swatch: "#0e8c70", swatchDark: "#34d6ad" },
   { id: "argila", label: "Argila", swatch: "#b4632f", swatchDark: "#e08a52" },
@@ -42,7 +44,7 @@ export const ACCENT_PRESETS: AccentPreset[] = [
 const STORAGE_KEY = "ag_accent";
 export const ACCENT_CHANGE_EVENT = "ag-accent-change";
 export const CUSTOM_ACCENT_CHANGE_EVENT = "ag-accent-custom-change";
-const DEFAULT_ACCENT: AccentId = "cobalto";
+const DEFAULT_ACCENT: AccentId = "aura";
 
 export function isAccentId(value: unknown): value is AccentId {
   return value === "custom" || ACCENT_PRESETS.some((p) => p.id === value);

@@ -26,7 +26,7 @@ export function EmptyState({
       )}
     >
       {Icon && (
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-ag-accent-soft text-ag-accent">
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-ag-accent-soft text-ag-accent">
           <Icon className="h-6 w-6" />
         </div>
       )}

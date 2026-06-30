@@ -11,8 +11,8 @@ export type CustomAccentConfig = {
 };
 
 export const DEFAULT_CUSTOM_ACCENT: CustomAccentConfig = {
-  light: "#3d5af1",
-  dark: "#7c8cff",
+  light: "#7b5cff",
+  dark: "#9b84ff",
 };
 
 export const CUSTOM_ACCENT_STORAGE_KEY = "ag_accent_custom";

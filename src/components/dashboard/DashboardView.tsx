@@ -113,7 +113,7 @@ export function DashboardView({
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-32 w-full rounded-2xl" />
+        <Skeleton className="h-32 w-full rounded-xl" />
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-28 rounded-xl" />
@@ -129,7 +129,7 @@ export function DashboardView({
     <div className="space-y-8 pb-4">
       <section
         className={cn(
-          "relative overflow-hidden rounded-2xl border border-ag-border/60",
+          "relative overflow-hidden rounded-xl border border-ag-border/60",
           "bg-ag-surface-1 shadow-[var(--ag-shadow-lg)] ag-studio-mesh p-5 sm:p-6 animate-ag-fade-in"
         )}
       >
@@ -274,7 +274,7 @@ export function DashboardView({
               />
             </div>
 
-            <div className="rounded-2xl border border-ag-border bg-ag-surface-1 p-4 space-y-3">
+            <div className="rounded-xl border border-ag-border bg-ag-surface-1 p-4 space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold text-ag-text">Por modelo</h3>
                 <span className="text-xs text-ag-muted">{aiUsage.usage.byModel.length} modelos</span>
@@ -308,7 +308,7 @@ export function DashboardView({
               )}
             </div>
 
-            <div className="rounded-2xl border border-ag-border bg-ag-surface-1 p-4">
+            <div className="rounded-xl border border-ag-border bg-ag-surface-1 p-4">
               <h3 className="text-sm font-semibold text-ag-text">Quota Google</h3>
               <p className="text-xs text-ag-muted mt-1">{aiUsage.googleQuota.message}</p>
               <p className="text-xs text-ag-muted mt-1">

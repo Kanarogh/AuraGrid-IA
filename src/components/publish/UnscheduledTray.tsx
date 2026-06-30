@@ -21,7 +21,7 @@ export function UnscheduledTray({
   if (items.length === 0) return null;
 
   return (
-    <div className="rounded-2xl border border-ag-border bg-ag-surface-2/40 p-3 space-y-2">
+    <div className="rounded-xl border border-ag-border bg-ag-surface-2/40 p-3 space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-xs font-mono uppercase tracking-widest text-ag-muted">Prontos para agendar</p>

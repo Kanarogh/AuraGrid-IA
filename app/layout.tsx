@@ -5,6 +5,9 @@ import { APP_DESCRIPTION, APP_NAME } from "../src/lib/appBranding";
 export const metadata: Metadata = {
   title: APP_NAME,
   description: APP_DESCRIPTION,
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 const themeScript = `
@@ -14,9 +17,9 @@ const themeScript = `
     var t = localStorage.getItem("palak_theme") === "dark" ? "dark" : "light";
     r.classList.remove("light", "dark");
     r.classList.add(t);
-    var presets = ["cobalto","esmeralda","argila","rose","vermelho","violeta","grafite","custom"];
+    var presets = ["aura","cobalto","esmeralda","argila","rose","vermelho","violeta","grafite","custom"];
     var a = localStorage.getItem("ag_accent");
-    var accent = presets.indexOf(a) !== -1 ? a : "cobalto";
+    var accent = presets.indexOf(a) !== -1 ? a : "aura";
     r.setAttribute("data-accent", accent);
     if (accent === "custom") {
       try {

@@ -306,7 +306,7 @@ function Step({
       <div className="flex items-center gap-1.5 mb-0.5">
         <span
           className={`h-4 w-4 rounded-full text-[9px] font-bold flex items-center justify-center ${
-            done ? "bg-ag-success text-white" : "bg-ag-surface-3 text-ag-muted"
+            done ? "bg-ag-success text-[#0d0f14]" : "bg-ag-surface-3 text-ag-muted"
           }`}
         >
           {done ? <CheckCircle2 className="h-3 w-3" /> : n}

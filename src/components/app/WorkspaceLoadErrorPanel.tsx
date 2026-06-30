@@ -1,6 +1,7 @@
 "use client";
 
 import { APP_NAME } from "../../lib/appBranding";
+import { AuraLogo } from "../brand/AuraLogo";
 
 export function WorkspaceLoadErrorPanel({
   message,
@@ -10,9 +11,10 @@ export function WorkspaceLoadErrorPanel({
   onRetry: () => void;
 }) {
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-ag-bg text-ag-text">
-      <div className="max-w-md space-y-4 rounded-xl border border-amber-500/30 bg-ag-surface-1 p-6">
-        <h1 className="text-lg font-semibold text-amber-700 dark:text-amber-300">
+    <div className="min-h-screen flex items-center justify-center p-6 ag-auth-mesh text-ag-text">
+      <div className="max-w-md space-y-4 rounded-xl border border-ag-warning/30 bg-ag-surface-1 p-6">
+        <AuraLogo variant="stacked" iconSize={40} />
+        <h1 className="text-lg font-semibold text-ag-warning">
           Não foi possível carregar seus dados
         </h1>
         <p className="text-sm text-ag-muted">{message}</p>
@@ -22,7 +24,7 @@ export function WorkspaceLoadErrorPanel({
         </p>
         <button
           type="button"
-          className="text-sm font-semibold px-4 py-2 rounded-lg bg-ag-accent text-white cursor-pointer"
+          className="text-sm font-semibold px-4 py-2 rounded-lg bg-ag-accent text-ag-accent-fg cursor-pointer"
           onClick={onRetry}
         >
           Tentar novamente

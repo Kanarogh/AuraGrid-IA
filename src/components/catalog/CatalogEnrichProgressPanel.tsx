@@ -42,7 +42,7 @@ export function CatalogEnrichProgressPanel({
     <div
       className={cn(
         "pointer-events-auto fixed bottom-4 z-[96] w-[min(100vw-2rem,22rem)]",
-        "rounded-2xl border border-ag-border bg-ag-surface-1/98 shadow-[var(--ag-shadow-lg)] backdrop-blur-md",
+        "rounded-xl border border-ag-border bg-ag-surface-1/98 shadow-[var(--ag-shadow-lg)] backdrop-blur-md",
         "animate-ag-toast-in overflow-hidden",
         "left-4 sm:left-[calc(1rem+min(100vw-2rem,22rem)+0.75rem)]"
       )}

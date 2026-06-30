@@ -206,7 +206,7 @@ function ClientHubCard({
             type="button"
             onClick={() => canCreateClients && setModalOpen(true)}
             disabled={!canCreateClients}
-            className="w-full rounded-2xl border border-dashed border-ag-border py-3 text-xs font-semibold text-ag-accent hover:bg-ag-accent/10 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full rounded-xl border border-dashed border-ag-border py-3 text-xs font-semibold text-ag-accent hover:bg-ag-accent/10 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {canCreateClients ? "Criar primeiro cliente" : "Sem clientes com acesso"}
           </button>
@@ -238,7 +238,7 @@ function ClientHubCard({
             </button>
           </div>
         )}
-        <div className="rounded-2xl border border-ag-border/70 bg-ag-surface-2/60 overflow-hidden">
+        <div className="rounded-xl border border-ag-border/70 bg-ag-surface-2/60 overflow-hidden">
           {hasActiveClient && (
             <>
               <div className="px-1 pt-1 pb-0">
@@ -398,7 +398,7 @@ export function ClientHub({
         onClick={() => setFlyoutOpen((o) => !o)}
         className={cn(
           "h-9 w-9 rounded-full bg-gradient-to-br from-ag-accent to-ag-accent-strong flex items-center justify-center text-sm font-bold text-ag-accent-fg cursor-pointer ring-2 transition-all hover:ring-ag-accent/30",
-          brandGemReady === false ? "ring-amber-500/50" : "ring-transparent"
+          brandGemReady === false ? "ring-ag-warning/50" : "ring-transparent"
         )}
       >
         {hasActiveClient ? gemInitial(activeClient.name) : <Plus className="h-4 w-4" />}

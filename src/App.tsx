@@ -64,7 +64,7 @@ import {
   resolveCatalogItemImage,
   resolveMediaUrl,
 } from "./lib/api/workspaceApi";
-import { APP_NAME, APP_SUMMARY } from "./lib/appBranding";
+import { APP_NAME, APP_SUMMARY, APP_TAGLINE } from "./lib/appBranding";
 import { exportRoteiroPdf } from "./lib/exportRoteiroPdf";
 import { exportCanvaGridPdf } from "./lib/exportCanvaGridPdf";
 import { ensurePersistedImage, extractMediaAssetId } from "./lib/api/persistMedia";
@@ -141,6 +141,7 @@ import {
 import { usePlanningPeriodModal } from "./components/layout/planningPeriodModalContext";
 import { StudioSection } from "./components/ui/StudioSection";
 import { Button } from "./components/ui/Button";
+import { AuraLogo } from "./components/brand/AuraLogo";
 import { CatalogThumbnail } from "./components/ui/CatalogThumbnail";
 import { preloadCatalogMedia } from "./lib/catalogMediaLoader";
 import { EmptyState } from "./components/ui/EmptyState";
@@ -2896,9 +2897,8 @@ export default function App() {
 
         {hasActiveClient && parsedLocation.kind === "welcome" && (
           <div className="flex flex-col items-center justify-center min-h-[45vh] gap-6 px-4 text-center max-w-lg mx-auto">
-            <h2 className="font-display text-2xl font-semibold text-ag-text">
-              Bem-vindo ao {APP_NAME}
-            </h2>
+            <AuraLogo variant="stacked" iconSize={48} showTagline tagline={APP_TAGLINE} />
+            <h2 className="font-display text-2xl font-semibold text-ag-text">Bem-vindo</h2>
             <p className="text-sm text-ag-muted">
               Você já tem clientes cadastrados. Entre no workspace para continuar de onde parou.
             </p>
@@ -3483,7 +3483,7 @@ export default function App() {
 
             {usesReferences && routeCatalogTab === "references" && (
               <>
-            <div className={`p-6 sm:p-8 border-2 border-dashed rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-4 mb-8 ${
+            <div className={`p-6 sm:p-8 border-2 border-dashed rounded-xl text-center transition-all flex flex-col items-center justify-center gap-4 mb-8 ${
               catalogDragOver 
                 ? "border-ag-accent bg-ag-accent/5 rotate-0 scale-99" 
                 : "border-ag-border hover:border-ag-border bg-ag-surface-2/40 hover:bg-ag-surface-2"
@@ -3669,7 +3669,7 @@ export default function App() {
             </div>
 
             {referenceCatalog.length === 0 ? (
-              <div className="p-12 text-center rounded-2xl bg-ag-surface-2 border border-ag-border">
+              <div className="p-12 text-center rounded-xl bg-ag-surface-2 border border-ag-border">
                 <ImageIcon className="h-8 w-8 text-ag-muted mx-auto animate-pulse mb-1" />
                 <p className="text-xs font-semibold text-ag-muted">Nenhuma referência no acervo</p>
                 <p className="text-[10px] text-ag-muted mt-1">
@@ -3695,7 +3695,7 @@ export default function App() {
                   return (
                   <div 
                     key={item.id}
-                    className="border rounded-2xl p-3 flex flex-col gap-2.5 relative group transition-all shadow-xs bg-ag-surface-2 border-ag-border hover:border-ag-border"
+                    className="border rounded-xl p-3 flex flex-col gap-2.5 relative group transition-all shadow-xs bg-ag-surface-2 border-ag-border hover:border-ag-border"
                     onMouseEnter={() => item.image && preloadCatalogMedia(item.image, "full")}
                   >
                     
@@ -3880,7 +3880,7 @@ export default function App() {
               </div>
 
               <div
-                className={`p-5 sm:p-6 border-2 border-dashed rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-3 mb-6 ${
+                className={`p-5 sm:p-6 border-2 border-dashed rounded-xl text-center transition-all flex flex-col items-center justify-center gap-3 mb-6 ${
                   gridCatalogDragOver
                     ? "border-ag-accent/60 bg-ag-accent/5"
                     : "border-ag-border hover:border-ag-accent/30 bg-ag-surface-2/30"
@@ -3951,7 +3951,7 @@ export default function App() {
                   {gridCatalog.map((item, index) => (
                     <div
                       key={item.id}
-                      className="border rounded-2xl p-3 flex flex-col gap-2 relative group bg-ag-surface-2 border-ag-border hover:border-ag-accent/30 transition-all"
+                      className="border rounded-xl p-3 flex flex-col gap-2 relative group bg-ag-surface-2 border-ag-border hover:border-ag-accent/30 transition-all"
                       onMouseEnter={() => item.image && preloadCatalogMedia(item.image, "full")}
                     >
                       <div className="aspect-[3/4] rounded-xl overflow-hidden relative flex items-center justify-center bg-ag-surface-1 border border-ag-border group/img">

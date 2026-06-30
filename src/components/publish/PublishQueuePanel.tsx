@@ -264,7 +264,7 @@ export function PublishQueuePanel({
 
   if (filtered.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-ag-border p-10 text-center space-y-3">
+      <div className="rounded-xl border border-dashed border-ag-border p-10 text-center space-y-3">
         <Calendar className="h-10 w-10 mx-auto text-ag-muted/50" />
         <p className="text-sm text-ag-muted">Nenhum post nesta categoria.</p>
       </div>
@@ -278,7 +278,7 @@ export function PublishQueuePanel({
         .map(([day, items]) => {
           const isOpen = !collapsed[day];
           return (
-            <div key={day} className="rounded-2xl border border-ag-border overflow-hidden">
+            <div key={day} className="rounded-xl border border-ag-border overflow-hidden">
               <button
                 type="button"
                 className="w-full flex items-center justify-between gap-2 px-4 py-3 bg-ag-surface-2/80 hover:bg-ag-surface-2 text-left"

@@ -242,7 +242,7 @@ export function InstagramProfileMockup({
                         </div>
                       )}
                       {post.isConfirmed && !sched && (
-                        <div className="absolute top-1 right-1 bg-emerald-400 text-black p-0.5 rounded-full z-10">
+                        <div className="absolute top-1 right-1 bg-ag-success text-black p-0.5 rounded-full z-10">
                           <Check className="h-2 w-2" strokeWidth={4} />
                         </div>
                       )}
@@ -250,11 +250,11 @@ export function InstagramProfileMockup({
                         <div
                           className={cn(
                             "absolute top-1 left-1 right-1 z-10 rounded px-1 py-0.5 text-[7px] font-semibold text-center truncate",
-                            sched.status === "published" && "bg-emerald-500/90 text-white",
-                            sched.status === "failed" && "bg-red-500/90 text-white",
-                            sched.status === "publishing" && "bg-violet-500/90 text-white",
+                            sched.status === "published" && "bg-ag-success/90 text-white",
+                            sched.status === "failed" && "bg-ag-danger/90 text-white",
+                            sched.status === "publishing" && "bg-ag-accent/90 text-white",
                             sched.status === "queued" && "bg-ag-accent/90 text-white",
-                            sched.status === "eligible" && "bg-amber-500/90 text-black"
+                            sched.status === "eligible" && "bg-ag-warning/90 text-black"
                           )}
                         >
                           {sched.status === "published" ? "No ar" : schedTime}

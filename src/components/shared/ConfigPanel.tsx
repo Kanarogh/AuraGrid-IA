@@ -370,7 +370,7 @@ export function ConfigPanel({
       )}
 
       {settingsTab === "brand" && (
-      <div className="rounded-2xl border border-ag-border bg-ag-surface-2/50 p-5 sm:p-6 space-y-5">
+      <div className="rounded-xl border border-ag-border bg-ag-surface-2/50 p-5 sm:p-6 space-y-5">
         <div className="flex items-center gap-4 pb-4 border-b border-ag-border/60">
           <div
             className="h-14 w-14 rounded-full bg-gradient-to-br from-ag-accent to-ag-accent-strong flex items-center justify-center text-2xl font-display font-semibold text-ag-accent-fg shadow-md shrink-0"

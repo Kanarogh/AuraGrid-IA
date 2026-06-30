@@ -1,0 +1,42 @@
+/* AuraStudio brand tokens — hex explícitos, sem porcentagem em valores de cor */
+
+:root {
+  --ag-brand-purple: #7b5cff;
+  --ag-brand-blue: #4361ff;
+  --ag-brand-cyan: #00d4ff;
+  --ag-brand-teal: #00e4b5;
+  --ag-gradient-brand: linear-gradient(135deg, #7b5cff 0%, #4361ff 50%, #00d4ff 100%);
+  --ag-gradient-btn: linear-gradient(135deg, #7b5cff 0%, #4361ff 100%);
+  --ag-gradient-btn-hover: linear-gradient(135deg, #6a4ef0 0%, #3555f5 100%);
+  --ag-gradient-text: linear-gradient(90deg, #7b5cff 0%, #4361ff 45%, #00d4ff 100%);
+  --ag-focus-border: #7b5cff;
+  --ag-sidebar-active-bg: #7b5cff1a;
+  --ag-sidebar-active-border: linear-gradient(180deg, #7b5cff 0%, #00d4ff 100%);
+  --ag-selection-bg: #7b5cff40;
+  --ag-mesh-purple: #7b5cff24;
+  --ag-mesh-cyan: #00d4ff18;
+  --ag-ring-solid: #7b5cff73;
+}
+
+.light {
+  --ag-ring: var(--ag-ring-solid);
+}
+
+.dark {
+  --ag-ring: #7b5cff99;
+  --ag-sidebar-active-bg: #7b5cff26;
+}
+
+/* Preset Aura — identidade oficial (padrão) */
+html[data-accent="aura"] {
+  --ag-accent: #7b5cff;
+  --ag-accent-strong: #4361ff;
+  --ag-accent-soft: #ede9ff;
+  --ag-accent-fg: #ffffff;
+}
+html.dark[data-accent="aura"] {
+  --ag-accent: #9b84ff;
+  --ag-accent-strong: #00d4ff;
+  --ag-accent-soft: #1a1630;
+  --ag-accent-fg: #0d0f14;
+}

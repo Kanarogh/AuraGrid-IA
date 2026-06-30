@@ -184,14 +184,14 @@ export function PlanningPeriodControls({ compact = false }: { compact?: boolean 
           className={cn(
             "inline-flex rounded-full px-1.5 py-px text-[9px] font-semibold",
             active.status === "active"
-              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+              ? "bg-ag-success/15 text-ag-success"
               : "bg-ag-surface text-ag-muted"
           )}
         >
           {statusLabel(active.status)}
         </span>
         {modeLabel && (
-          <span className="inline-flex rounded-full px-1.5 py-px text-[9px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300">
+          <span className="inline-flex rounded-full px-1.5 py-px text-[9px] font-semibold bg-ag-warning/15 text-ag-warning">
             {modeLabel}
           </span>
         )}

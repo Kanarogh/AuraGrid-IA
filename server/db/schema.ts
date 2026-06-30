@@ -63,7 +63,7 @@ export const userAppearancePreferences = pgTable("user_appearance_preferences", 
   userId: uuid("user_id")
     .primaryKey()
     .references(() => users.id, { onDelete: "cascade" }),
-  accentId: text("accent_id").notNull().default("cobalto"),
+  accentId: text("accent_id").notNull().default("aura"),
   customAccentLight: text("custom_accent_light"),
   customAccentDark: text("custom_accent_dark"),
   theme: text("theme").notNull().default("light"),

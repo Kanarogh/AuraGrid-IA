@@ -85,7 +85,7 @@ export function CanvaWardrobePanel({
   return (
     <aside
       className={cn(
-        "flex min-h-0 flex-1 flex-col rounded-2xl border border-ag-border bg-ag-surface-1 shadow-[var(--ag-shadow)] overflow-hidden"
+        "flex min-h-0 flex-1 flex-col rounded-xl border border-ag-border bg-ag-surface-1 shadow-[var(--ag-shadow)] overflow-hidden"
       )}
     >
       <div className="shrink-0 p-4 border-b border-ag-border bg-ag-surface-2/40 space-y-3">

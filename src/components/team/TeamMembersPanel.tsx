@@ -186,7 +186,7 @@ export function TeamMembersPanel() {
       </div>
 
       {showForm && (
-        <div className="rounded-2xl border border-ag-border bg-ag-surface-2/40 p-4 space-y-4">
+        <div className="rounded-xl border border-ag-border bg-ag-surface-2/40 p-4 space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-sm block">
               <span className="text-ag-muted">E-mail</span>
@@ -282,7 +282,7 @@ export function TeamMembersPanel() {
       {members.length === 0 ? (
         <p className="text-sm text-ag-muted">Nenhum membro na equipe ainda.</p>
       ) : (
-        <ul className="divide-y divide-ag-border rounded-2xl border border-ag-border overflow-hidden">
+        <ul className="divide-y divide-ag-border rounded-xl border border-ag-border overflow-hidden">
           {members.map((m) => (
             <li key={m.userId} className="px-4 py-3 bg-ag-surface space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">

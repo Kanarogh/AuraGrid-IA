@@ -43,14 +43,14 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ag-bg/70 backdrop-blur-md animate-ag-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ag-bg/60 backdrop-blur-sm animate-ag-fade-in"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
     >
       <div
         className={cn(
-          "w-full rounded-2xl border border-ag-border bg-ag-surface-1 shadow-[var(--ag-shadow-lg)] animate-ag-scale-in flex flex-col max-h-[90vh]",
+          "w-full rounded-xl border border-ag-border bg-ag-surface-1 shadow-[var(--ag-shadow-lg)] animate-ag-scale-in flex flex-col max-h-[90vh]",
           sizeMap[size]
         )}
         onClick={(e) => e.stopPropagation()}

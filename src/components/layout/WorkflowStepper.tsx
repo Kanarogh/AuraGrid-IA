@@ -28,16 +28,16 @@ export function WorkflowStepper({
           key={step.id}
           className={cn(
             "flex items-center gap-2 text-xs font-medium sm:px-3 first:sm:pl-0 last:sm:pr-0",
-            step.done ? "text-ag-success" : step.active ? "text-ag-text" : "text-ag-muted"
+            step.done ? "text-ag-success" : step.active ? "ag-gradient-text" : "text-ag-muted"
           )}
         >
           <span
             className={cn(
               "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
               step.done
-                ? "bg-ag-success/15 text-ag-success"
+                ? "bg-ag-success/15 text-ag-success ring-1 ring-ag-success/30"
                 : step.active
-                  ? "bg-ag-accent text-ag-accent-fg"
+                  ? "ag-gradient-btn text-white shadow-sm"
                   : "bg-ag-surface-3 text-ag-muted"
             )}
             aria-hidden

@@ -89,7 +89,7 @@ export function StudioSection({
   return (
     <section
       className={cn(
-        "ag-studio relative w-full overflow-hidden rounded-2xl border border-ag-border/70 shadow-[var(--ag-shadow-lg)] animate-ag-fade-in",
+        "ag-studio relative w-full overflow-hidden rounded-xl border border-ag-border/70 shadow-[var(--ag-shadow-lg)] animate-ag-fade-in",
         className
       )}
     >

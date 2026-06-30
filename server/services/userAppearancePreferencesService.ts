@@ -10,7 +10,7 @@ export type UserAppearanceSettings = AppearanceAccentPayload & {
 };
 
 const DEFAULT_SETTINGS: UserAppearanceSettings = {
-  accentId: "cobalto",
+  accentId: "aura",
   theme: "light",
   customAccentLight: null,
   customAccentDark: null,

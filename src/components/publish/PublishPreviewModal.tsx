@@ -56,7 +56,7 @@ export function PublishPreviewModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div
-        className="w-full max-w-3xl max-h-[90vh] overflow-auto rounded-2xl border border-ag-border bg-ag-surface-1 shadow-2xl"
+        className="w-full max-w-3xl max-h-[90vh] overflow-auto rounded-xl border border-ag-border bg-ag-surface-1 shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="publish-preview-title"

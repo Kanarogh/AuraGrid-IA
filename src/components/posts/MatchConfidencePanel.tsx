@@ -16,13 +16,13 @@ const CONFIDENCE_META: Record<
 > = {
   high: {
     label: "Confiança alta",
-    tone: "text-emerald-500 bg-emerald-500/10 border-emerald-500/30",
+    tone: "text-ag-success bg-ag-success/10 border-ag-success/30",
     Icon: CheckCircle2,
     description: "Match confiável — peça compatível com a foto.",
   },
   medium: {
     label: "Confiança média",
-    tone: "text-amber-500 bg-amber-500/10 border-amber-500/30",
+    tone: "text-ag-warning bg-ag-warning/10 border-ag-warning/30",
     Icon: AlertTriangle,
     description: "Match provável — confirme se a peça está correta.",
   },
@@ -55,9 +55,9 @@ export function MatchConfidencePanel({
       referenceCatalog.find((c) => c.id === currentMatchedId)?.label ??
       diagnostics.chosenId;
     return (
-      <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 space-y-1.5">
+      <div className="rounded-xl border border-ag-success/30 bg-ag-success/10 p-3 space-y-1.5">
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-medium border text-emerald-600 bg-emerald-500/10 border-emerald-500/30 dark:text-emerald-400">
+          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-medium border text-ag-success bg-ag-success/10 border-ag-success/30">
             <CheckCircle2 className="h-3.5 w-3.5" />
             Referência definida
           </span>
@@ -118,7 +118,7 @@ export function MatchConfidencePanel({
                   className={cn(
                     "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer",
                     isActive
-                      ? "bg-ag-accent text-ag-on-accent border-ag-accent"
+                      ? "bg-ag-accent text-ag-accent-fg border-ag-accent"
                       : "bg-ag-surface-1 text-ag-text border-ag-border hover:border-ag-accent/50 hover:bg-ag-accent/5"
                   )}
                   title={`score ${Math.round(cand.score)} · padrão ${cand.pattern} · âncoras ${cand.anchors}${
@@ -129,7 +129,7 @@ export function MatchConfidencePanel({
                   <span
                     className={cn(
                       "font-mono text-[10px]",
-                      isActive ? "text-ag-on-accent/90" : "text-ag-muted"
+                      isActive ? "text-ag-accent-fg opacity-90" : "text-ag-muted"
                     )}
                   >
                     {Math.round(cand.score)}

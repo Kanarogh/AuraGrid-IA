@@ -14,27 +14,25 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const variants: Record<Variant, string> = {
-  primary:
-    "bg-ag-cta text-ag-cta-fg hover:opacity-90 active:opacity-95 border border-transparent shadow-sm",
+  primary: "ag-gradient-btn border border-transparent shadow-sm",
   secondary:
     "bg-ag-surface-2 text-ag-text border border-ag-border hover:bg-ag-surface-3 hover:border-ag-border/80",
   ghost:
     "bg-transparent text-ag-text border border-transparent hover:bg-ag-surface-2",
   danger:
     "bg-ag-danger/10 text-ag-danger border border-ag-danger/25 hover:bg-ag-danger/15",
-  accent:
-    "bg-ag-accent text-ag-accent-fg border border-transparent hover:bg-ag-accent-strong shadow-sm",
+  accent: "ag-gradient-btn border border-transparent shadow-sm",
 };
 
 const sizes: Record<Size, string> = {
   sm: "text-xs px-3 py-1.5 rounded-lg gap-1.5",
-  md: "text-xs px-4 py-2.5 rounded-xl gap-2",
+  md: "text-xs px-4 py-2.5 rounded-lg gap-2",
   lg: "text-sm px-5 py-3 rounded-xl gap-2",
 };
 
 const iconOnlySizes: Record<Size, string> = {
   sm: "p-1.5 rounded-lg",
-  md: "p-2.5 rounded-xl",
+  md: "p-2.5 rounded-lg",
   lg: "p-3 rounded-xl",
 };
 

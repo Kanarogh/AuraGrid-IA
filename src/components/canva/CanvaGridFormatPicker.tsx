@@ -68,7 +68,7 @@ export function CanvaGridFormatPicker({
             type="button"
             onClick={() => onChange(format.id)}
             className={cn(
-              "flex flex-col items-center gap-2 rounded-2xl border-2 px-3 py-4 transition-all cursor-pointer",
+              "flex flex-col items-center gap-2 rounded-xl border-2 px-3 py-4 transition-all cursor-pointer",
               "bg-ag-surface-1 shadow-sm hover:shadow-md",
               active
                 ? "border-ag-accent ring-2 ring-ag-accent/25"

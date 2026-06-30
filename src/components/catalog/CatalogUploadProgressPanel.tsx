@@ -25,7 +25,7 @@ export function CatalogUploadProgressPanel({
     <div
       className={cn(
         "pointer-events-auto fixed bottom-4 left-4 z-[95] w-[min(100vw-2rem,22rem)]",
-        "rounded-2xl border border-ag-border bg-ag-surface-1/98 shadow-[var(--ag-shadow-lg)] backdrop-blur-md",
+        "rounded-xl border border-ag-border bg-ag-surface-1/98 shadow-[var(--ag-shadow-lg)] backdrop-blur-md",
         "animate-ag-toast-in overflow-hidden"
       )}
       role="status"

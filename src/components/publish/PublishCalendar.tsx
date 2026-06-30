@@ -293,7 +293,7 @@ export function PublishCalendar({
     );
 
   return (
-    <div className="ag-studio relative overflow-hidden rounded-2xl border border-ag-border/70 shadow-[var(--ag-shadow)]">
+    <div className="ag-studio relative overflow-hidden rounded-xl border border-ag-border/70 shadow-[var(--ag-shadow)]">
       <div className="ag-studio-mesh absolute inset-0 pointer-events-none opacity-50" aria-hidden />
       <div className="relative z-10 p-4 overflow-x-auto">
         {gaps.size > 0 && (

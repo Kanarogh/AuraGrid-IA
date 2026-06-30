@@ -119,7 +119,7 @@ export function PlanningPeriodSelector({
                   className={cn(
                     "inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold",
                     active.status === "active"
-                      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                      ? "bg-ag-success/15 text-ag-success"
                       : "bg-ag-surface text-ag-muted"
                   )}
                 >
@@ -131,20 +131,20 @@ export function PlanningPeriodSelector({
                   className={cn(
                     "inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold",
                     periodEditMode === "edit_archived"
-                      ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
-                      : "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                      ? "bg-ag-accent/15 text-ag-accent"
+                      : "bg-ag-warning/15 text-ag-warning"
                   )}
                 >
                   {modeLabel}
                 </span>
               )}
               {!usesReferences && (
-                <span className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold bg-violet-500/15 text-violet-700 dark:text-violet-300">
+                <span className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold bg-ag-accent/15 text-ag-accent">
                   Sem referências
                 </span>
               )}
               {isReadOnly && (
-                <span className="text-amber-600 dark:text-amber-400 font-medium">
+                <span className="text-ag-warning font-medium">
                   Somente leitura
                 </span>
               )}
@@ -290,7 +290,7 @@ export function PlanningPeriodReadOnlyBanner({
   onDuplicate: () => void;
 }) {
   return (
-    <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex flex-col gap-3">
+    <div className="mb-4 rounded-xl border border-ag-warning/30 bg-ag-warning/10 px-4 py-3 flex flex-col gap-3">
       <p className="text-sm text-ag-text">
         Você está visualizando o planejamento arquivado <strong>{periodLabel}</strong>. Escolha como
         prosseguir:
@@ -321,7 +321,7 @@ export function PlanningPeriodArchivedEditBanner({
   onExitEdit: () => void;
 }) {
   return (
-    <div className="mb-4 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="mb-4 rounded-xl border border-ag-accent/30 bg-ag-accent/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <p className="text-sm text-ag-text">
         Você está editando o planejamento arquivado <strong>{periodLabel}</strong>. O planejamento ativo do
         cliente não foi alterado.

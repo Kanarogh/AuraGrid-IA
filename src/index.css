@@ -1,15 +1,17 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "./styles/aura-tokens.css";
 @import "tailwindcss";
 
 @source "../app";
 @source "../src";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Inter Tight", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Sora", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Sora", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
   --color-ag-bg: var(--ag-bg);
+  --color-ag-surface: var(--ag-surface-1);
   --color-ag-surface-1: var(--ag-surface-1);
   --color-ag-surface-2: var(--ag-surface-2);
   --color-ag-surface-3: var(--ag-surface-3);
@@ -27,37 +29,33 @@
   --color-ag-danger: var(--ag-danger);
 
   --radius-ag-sm: 0.5rem;
-  --radius-ag-md: 0.75rem;
-  --radius-ag-lg: 1rem;
-  --radius-ag-xl: 1.25rem;
-  --radius-ag-2xl: 1.75rem;
+  --radius-ag-md: 0.5rem;
+  --radius-ag-lg: 0.75rem;
+  --radius-ag-xl: 0.75rem;
+  --radius-ag-2xl: 1rem;
 }
 
-/* ---------------------------------------------------------------------------
-   Neutral ramp (light / dark). The accent family is overridden per preset
-   below via [data-accent="…"]. Default preset = Cobalto.
---------------------------------------------------------------------------- */
+/* Neutral ramp — AuraStudio UX Kit */
 :root,
 .light {
   color-scheme: light;
   --ag-topbar-height: 4rem;
   --ag-sidebar-width-expanded: 280px;
   --ag-sidebar-width-collapsed: 72px;
-  --ag-bg: #f5f5f3;
+  --ag-bg: #f2f4f7;
   --ag-surface-1: #ffffff;
-  --ag-surface-2: #f0f0ed;
-  --ag-surface-3: #e6e6e1;
-  --ag-border: #deded8;
-  --ag-text: #15151a;
-  --ag-muted: #57575f;
-  --ag-cta: #17171c;
-  --ag-cta-fg: #fafafa;
-  --ag-success: #0d9488;
-  --ag-warning: #c2710c;
-  --ag-danger: #dc2626;
-  --ag-shadow: 0 1px 2px rgba(20, 20, 22, 0.04), 0 10px 30px rgba(20, 20, 22, 0.07);
-  --ag-shadow-lg: 0 4px 8px rgba(20, 20, 22, 0.05), 0 28px 56px rgba(20, 20, 22, 0.1);
-  --ag-ring: color-mix(in srgb, var(--ag-accent) 45%, transparent);
+  --ag-surface-2: #f8f9fb;
+  --ag-surface-3: #e6e8ee;
+  --ag-border: #e6e8ee;
+  --ag-text: #0d0f14;
+  --ag-muted: #5c6370;
+  --ag-cta: #0d0f14;
+  --ag-cta-fg: #ffffff;
+  --ag-success: #00e4b5;
+  --ag-warning: #e6a23c;
+  --ag-danger: #ef4444;
+  --ag-shadow: 0 1px 2px rgba(13, 15, 20, 0.04), 0 8px 24px rgba(13, 15, 20, 0.06);
+  --ag-shadow-lg: 0 4px 12px rgba(13, 15, 20, 0.06), 0 24px 48px rgba(13, 15, 20, 0.1);
 }
 
 .dark {
@@ -65,27 +63,36 @@
   --ag-topbar-height: 4rem;
   --ag-sidebar-width-expanded: 280px;
   --ag-sidebar-width-collapsed: 72px;
-  --ag-bg: #08080b;
-  --ag-surface-1: #111117;
-  --ag-surface-2: #18181f;
-  --ag-surface-3: #23232e;
-  --ag-border: #2d2d39;
-  --ag-text: #f3f3f6;
-  --ag-muted: #a3a5b3;
-  --ag-cta: #f3f3f6;
-  --ag-cta-fg: #08080b;
-  --ag-success: #2dd4bf;
+  --ag-bg: #111218;
+  --ag-surface-1: #23242b;
+  --ag-surface-2: #1a1b22;
+  --ag-surface-3: #2d2e36;
+  --ag-border: #2d2e36;
+  --ag-text: #e6e7ed;
+  --ag-muted: #9ca3af;
+  --ag-cta: #e6e7ed;
+  --ag-cta-fg: #111218;
+  --ag-success: #00e4b5;
   --ag-warning: #fbbf24;
   --ag-danger: #f87171;
-  --ag-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.4);
-  --ag-shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.3), 0 28px 56px rgba(0, 0, 0, 0.5);
-  --ag-ring: color-mix(in srgb, var(--ag-accent) 55%, transparent);
+  --ag-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.4);
+  --ag-shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.4), 0 24px 48px rgba(0, 0, 0, 0.5);
 }
 
-/* ---------------------------------------------------------------------------
-   Accent presets — only the accent family changes (surfaces stay neutral).
---------------------------------------------------------------------------- */
-/* html[] beats .light/.dark neutrals; html.dark[] wins in dark mode */
+/* Accent presets — Aura default + opcionais */
+html[data-accent="aura"] {
+  --ag-accent: #7b5cff;
+  --ag-accent-strong: #4361ff;
+  --ag-accent-soft: #ede9ff;
+  --ag-accent-fg: #ffffff;
+}
+html.dark[data-accent="aura"] {
+  --ag-accent: #9b84ff;
+  --ag-accent-strong: #00d4ff;
+  --ag-accent-soft: #1a1630;
+  --ag-accent-fg: #0d0f14;
+}
+
 html[data-accent="cobalto"] {
   --ag-accent: #3d5af1;
   --ag-accent-strong: #2f49d6;
@@ -197,7 +204,7 @@ body {
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--ag-accent) 25%, transparent);
+  background: var(--ag-selection-bg);
 }
 
 ::-webkit-scrollbar {
@@ -208,7 +215,7 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--ag-border) 70%, transparent);
+  background: var(--ag-border);
   border-radius: 99px;
   border: 2px solid transparent;
   background-clip: padding-box;
@@ -227,13 +234,17 @@ body {
   }
 
   .ag-glass {
-    background: color-mix(in srgb, var(--ag-surface-1) 82%, transparent);
+    background: #ffffffd1;
     backdrop-filter: blur(14px) saturate(140%);
     -webkit-backdrop-filter: blur(14px) saturate(140%);
   }
 
+  .dark .ag-glass {
+    background: #23242bd1;
+  }
+
   .ag-focus-ring:focus-visible {
-    outline: 2px solid var(--ag-accent);
+    outline: 2px solid var(--ag-focus-border);
     outline-offset: 2px;
   }
 
@@ -243,7 +254,7 @@ body {
 
   .ag-scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--ag-border) 80%, transparent) transparent;
+    scrollbar-color: var(--ag-border) transparent;
   }
 
   .ag-studio {
@@ -252,13 +263,19 @@ body {
 
   .ag-studio-mesh {
     background:
-      radial-gradient(ellipse 90% 60% at 0% -10%, color-mix(in srgb, var(--ag-accent) 14%, transparent), transparent 55%),
-      radial-gradient(ellipse 70% 50% at 100% 110%, color-mix(in srgb, var(--ag-accent) 9%, transparent), transparent 50%);
+      radial-gradient(ellipse 560px 360px at 0px -40px, var(--ag-mesh-purple), transparent),
+      radial-gradient(ellipse 480px 320px at 100% 110%, var(--ag-mesh-cyan), transparent);
   }
 
   .ag-page-mesh {
     background:
-      radial-gradient(ellipse 120% 90% at 50% -25%, color-mix(in srgb, var(--ag-accent) 7%, transparent), transparent 60%);
+      radial-gradient(ellipse 720px 480px at 50% -120px, var(--ag-mesh-purple), transparent);
+  }
+
+  .ag-auth-mesh {
+    background:
+      radial-gradient(ellipse 600px 400px at 50% 0px, var(--ag-mesh-purple), transparent),
+      var(--ag-bg);
   }
 
   .ag-workspace-section {
@@ -292,10 +309,38 @@ body {
   }
 
   .ag-gradient-text {
-    background: linear-gradient(120deg, var(--ag-accent), var(--ag-accent-strong));
+    background: var(--ag-gradient-text);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+  }
+
+  .ag-gradient-btn {
+    background: var(--ag-gradient-btn);
+    color: #ffffff;
+    border: none;
+  }
+
+  .ag-gradient-btn:hover:not(:disabled) {
+    background: var(--ag-gradient-btn-hover);
+  }
+
+  .ag-brand-wordmark {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    text-transform: lowercase;
+  }
+
+  .ag-brand-studio {
+    font-size: 0.65rem;
+    font-weight: 500;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+  }
+
+  .ag-sidebar-nav-active {
+    background: var(--ag-sidebar-active-bg);
+    border-left: 3px solid var(--ag-brand-purple);
   }
 }
 
@@ -341,7 +386,7 @@ body {
   background: linear-gradient(
     100deg,
     var(--ag-surface-2) 30%,
-    color-mix(in srgb, var(--ag-surface-3) 70%, var(--ag-surface-1)) 50%,
+    var(--ag-surface-3) 50%,
     var(--ag-surface-2) 70%
   );
   background-size: 200% 100%;

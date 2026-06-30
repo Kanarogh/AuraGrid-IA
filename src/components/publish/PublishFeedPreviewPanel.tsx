@@ -103,7 +103,7 @@ export function PublishFeedPreviewPanel({
   return (
     <div
       className={cn(
-        "rounded-2xl border border-ag-border bg-ag-surface-2/30 overflow-hidden flex flex-col min-h-0",
+        "rounded-xl border border-ag-border bg-ag-surface-2/30 overflow-hidden flex flex-col min-h-0",
         mobileSheet && "max-h-[70vh]",
         className
       )}

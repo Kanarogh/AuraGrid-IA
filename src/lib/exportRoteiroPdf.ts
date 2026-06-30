@@ -2,10 +2,13 @@ import type { PlannedPost } from "../types";
 import { buildRoteiroPdf } from "./buildRoteiroPdfNative";
 
 function readAccentHex(): string {
-  if (typeof document === "undefined") return "#0d9488";
-  const raw = getComputedStyle(document.documentElement).getPropertyValue("--ag-accent").trim();
+  if (typeof document === "undefined") return "#7b5cff";
+  const root = document.documentElement;
+  const brand = getComputedStyle(root).getPropertyValue("--ag-brand-purple").trim();
+  if (/^#[0-9a-fA-F]{3,8}$/.test(brand)) return brand;
+  const raw = getComputedStyle(root).getPropertyValue("--ag-accent").trim();
   if (/^#[0-9a-fA-F]{3,8}$/.test(raw)) return raw;
-  return "#0d9488";
+  return "#7b5cff";
 }
 
 export async function exportRoteiroPdf(options: {

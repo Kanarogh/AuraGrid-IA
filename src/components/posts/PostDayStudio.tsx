@@ -107,7 +107,7 @@ export function PostDayStudio({
     <article
       ref={cardRef}
       className={cn(
-        "ag-studio relative w-full overflow-hidden rounded-2xl border border-ag-border/70 shadow-[var(--ag-shadow-lg)] animate-ag-fade-in",
+        "ag-studio relative w-full overflow-hidden rounded-xl border border-ag-border/70 shadow-[var(--ag-shadow-lg)] animate-ag-fade-in",
         post.isConfirmed && "ring-1 ring-ag-success/40"
       )}
     >
@@ -257,7 +257,7 @@ export function PostDayStudio({
               </>
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-ag-muted p-6 text-center">
-                <div className="h-12 w-12 rounded-2xl bg-ag-accent/10 flex items-center justify-center text-ag-accent">
+                <div className="h-12 w-12 rounded-xl bg-ag-accent/10 flex items-center justify-center text-ag-accent">
                   <Upload className="h-6 w-6" />
                 </div>
                 <p className="text-sm font-medium text-ag-text">Arraste a arte do Canva</p>

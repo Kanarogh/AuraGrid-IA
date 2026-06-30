@@ -107,7 +107,7 @@ export function AppSidebar({
       <aside
         ref={asideRef}
         className={cn(
-          "fixed lg:sticky top-0 z-50 lg:z-30 h-[100dvh] shrink-0 border-r border-ag-border bg-ag-surface-1 flex flex-col transition-all duration-200",
+          "fixed lg:sticky top-0 z-50 lg:z-30 h-[100dvh] shrink-0 border-r border-ag-border bg-ag-surface-2 flex flex-col transition-all duration-200",
           isCollapsed ? "w-[var(--ag-sidebar-width-collapsed)]" : "w-[min(100vw-1rem,var(--ag-sidebar-width-expanded))] lg:w-[var(--ag-sidebar-width-expanded)]",
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}

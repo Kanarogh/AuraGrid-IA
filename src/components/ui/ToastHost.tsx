@@ -7,44 +7,48 @@ import { dismiss, subscribe, type ToastItem, type ToastType } from "../../lib/to
 
 const toneConfig: Record<
   ToastType,
-  { icon: typeof Info; className: string; bar: string }
+  { icon: typeof Info; className: string; bar: string; iconClass: string }
 > = {
   success: {
     icon: CheckCircle2,
-    className: "border-ag-success/30 bg-ag-surface-1/95 text-ag-text",
+    className: "border-ag-success/30 bg-ag-success/5 text-ag-text",
     bar: "bg-ag-success",
+    iconClass: "text-ag-success",
   },
   error: {
     icon: AlertCircle,
-    className: "border-ag-danger/35 bg-ag-surface-1/95 text-ag-text",
+    className: "border-ag-danger/35 bg-ag-danger/5 text-ag-text",
     bar: "bg-ag-danger",
+    iconClass: "text-ag-danger",
   },
   warning: {
     icon: AlertCircle,
-    className: "border-ag-warning/35 bg-ag-surface-1/95 text-ag-text",
+    className: "border-ag-warning/35 bg-ag-warning/5 text-ag-text",
     bar: "bg-ag-warning",
+    iconClass: "text-ag-warning",
   },
   info: {
     icon: Info,
-    className: "border-ag-accent/30 bg-ag-surface-1/95 text-ag-text",
+    className: "border-ag-accent/30 bg-ag-accent-soft/50 text-ag-text",
     bar: "bg-ag-accent",
+    iconClass: "text-ag-accent",
   },
 };
 
 function ToastCard({ item }: { item: ToastItem }) {
-  const { icon: Icon, className, bar } = toneConfig[item.type];
+  const { icon: Icon, className, bar, iconClass } = toneConfig[item.type];
 
   return (
     <div
       role="status"
       className={cn(
-        "pointer-events-auto relative overflow-hidden rounded-2xl border shadow-[var(--ag-shadow-lg)] backdrop-blur-md animate-ag-toast-in",
+        "pointer-events-auto relative overflow-hidden rounded-xl border shadow-[var(--ag-shadow-lg)] backdrop-blur-md animate-ag-toast-in",
         className
       )}
     >
       <div className={cn("absolute left-0 top-0 h-full w-1", bar)} />
       <div className="flex items-start gap-3 py-3.5 pl-4 pr-3">
-        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-ag-accent" />
+        <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", iconClass)} />
         <p className="min-w-0 flex-1 text-sm leading-relaxed whitespace-pre-line text-ag-text">
           {item.message}
         </p>

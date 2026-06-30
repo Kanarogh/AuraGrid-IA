@@ -20,6 +20,7 @@ export const MIGRATION_FILES = [
   "0017_teams_rbac",
   "0018_user_ai_models_global",
   "0019_multi_platform_publish",
+  "0020_appearance_default_aura",
 ] as const;
 
 export type MigrationHash = (typeof MIGRATION_FILES)[number];

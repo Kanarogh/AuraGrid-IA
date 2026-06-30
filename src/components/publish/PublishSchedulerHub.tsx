@@ -605,7 +605,7 @@ export function PublishSchedulerHub({
             />
 
             {trayItems.length === 0 && eligible.length === 0 && metrics.scheduled === 0 && (
-              <div className="rounded-2xl border border-dashed border-ag-border p-6 text-center space-y-3">
+              <div className="rounded-xl border border-dashed border-ag-border p-6 text-center space-y-3">
                 <p className="text-sm text-ag-muted">Nenhum post aprovado com foto e legenda.</p>
                 <Button type="button" variant="accent" onClick={onNavigatePosts}>
                   Ir para Planejamento e legendas

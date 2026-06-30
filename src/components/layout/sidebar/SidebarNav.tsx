@@ -91,27 +91,15 @@ export function SidebarNav({
           disabled && "opacity-45 cursor-not-allowed",
           !disabled && "cursor-pointer",
           isActive
-            ? "bg-ag-accent text-ag-accent-fg shadow-sm"
+            ? "ag-sidebar-nav-active text-ag-text"
             : !disabled && "text-ag-text hover:bg-ag-surface-3/80"
         )}
       >
-        {isActive && !collapsed && (
-          <span
-            className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-ag-accent-fg/80"
-            aria-hidden
-          />
-        )}
-        {isActive && collapsed && (
-          <span
-            className="absolute -right-0.5 top-1/2 -translate-y-1/2 h-1.5 w-1.5 rounded-full bg-ag-accent-fg"
-            aria-hidden
-          />
-        )}
         <span className="relative shrink-0">
           <Icon
             className={cn(
               "h-[18px] w-[18px] transition-colors",
-              isActive ? "text-ag-accent-fg" : "text-ag-muted group-hover:text-ag-text"
+              isActive ? "text-[var(--ag-brand-purple)]" : "text-ag-muted group-hover:text-ag-text"
             )}
           />
         </span>
@@ -122,7 +110,7 @@ export function SidebarNav({
           <span
             className={cn(
               "text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md shrink-0",
-              isActive ? "bg-ag-accent-fg/20 text-ag-accent-fg" : "bg-ag-surface-3 text-ag-muted"
+              isActive ? "bg-[var(--ag-sidebar-active-bg)] text-[var(--ag-brand-purple)]" : "bg-ag-surface-3 text-ag-muted"
             )}
           >
             {badge}
@@ -147,14 +135,14 @@ export function SidebarNav({
           "group w-full flex items-center gap-3 rounded-xl text-left transition-all duration-200 relative ag-focus-ring cursor-pointer",
           collapsed ? "justify-center p-2.5" : "px-3 py-2.5 max-lg:min-h-[44px]",
           isActive
-            ? "bg-ag-accent text-ag-accent-fg shadow-sm"
+            ? "ag-sidebar-nav-active text-ag-text"
             : "text-ag-text hover:bg-ag-surface-3/80"
         )}
       >
         <Icon
           className={cn(
             "h-[18px] w-[18px] shrink-0 transition-colors",
-            isActive ? "text-ag-accent-fg" : "text-ag-muted group-hover:text-ag-text"
+            isActive ? "text-[var(--ag-brand-purple)]" : "text-ag-muted group-hover:text-ag-text"
           )}
         />
         {!collapsed && (
@@ -182,15 +170,21 @@ export function SidebarNav({
                 onMobileClose?.();
               }}
               title={collapsed ? "Dashboard" : undefined}
+              aria-current={isDashboardActive ? "page" : undefined}
               className={cn(
                 "w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors cursor-pointer ag-focus-ring",
                 isDashboardActive
-                  ? "bg-ag-accent text-ag-accent-fg shadow-sm"
+                  ? "ag-sidebar-nav-active text-ag-text"
                   : "text-ag-text hover:bg-ag-surface-3/80",
                 collapsed && "justify-center px-2"
               )}
             >
-              <LayoutDashboard className="h-[18px] w-[18px] shrink-0" />
+              <LayoutDashboard
+                className={cn(
+                  "h-[18px] w-[18px] shrink-0",
+                  isDashboardActive ? "text-[var(--ag-brand-purple)]" : "text-ag-muted"
+                )}
+              />
               {!collapsed && <span className="truncate">Dashboard</span>}
             </button>
           </li>
@@ -224,7 +218,7 @@ export function SidebarNav({
               "space-y-0.5",
               !collapsed &&
                 group.variant === "planning" &&
-                "rounded-2xl bg-ag-surface-2/40 p-1.5 border border-ag-border/40"
+                "rounded-xl bg-ag-surface-2/40 p-1.5 border border-ag-border/40"
             )}
           >
             {group.items.map((item) => {

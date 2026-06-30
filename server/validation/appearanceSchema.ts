@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const ACCENT_IDS = [
+  "aura",
   "cobalto",
   "esmeralda",
   "argila",

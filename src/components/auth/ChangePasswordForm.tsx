@@ -4,7 +4,8 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import { changePasswordApi } from "../../lib/api/apiClient";
-import { APP_NAME, APP_TAGLINE } from "../../lib/appBranding";
+import { AuraLogo } from "../brand/AuraLogo";
+import { Button } from "../ui/Button";
 
 export function ChangePasswordForm({ onSuccess }: { onSuccess?: () => void }) {
   const { refreshUser } = useAuth();
@@ -39,55 +40,55 @@ export function ChangePasswordForm({ onSuccess }: { onSuccess?: () => void }) {
     }
   };
 
+  const inputClass =
+    "mt-1.5 w-full rounded-lg border border-ag-border bg-ag-bg px-3 py-2.5 text-ag-text ag-focus-ring focus:border-[var(--ag-focus-border)]";
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-ag-bg px-4">
-      <div className="w-full max-w-md rounded-2xl border border-ag-border bg-ag-surface p-8 shadow-xl">
-        <h1 className="text-xl font-bold text-ag-text mb-1">{APP_NAME}</h1>
-        <p className="text-sm text-ag-muted mb-6">Defina uma nova senha para continuar.</p>
+    <div className="min-h-screen flex items-center justify-center ag-auth-mesh px-4">
+      <div className="w-full max-w-md rounded-xl border border-ag-border bg-ag-surface-1 p-8 shadow-[var(--ag-shadow-lg)]">
+        <div className="flex justify-center mb-8">
+          <AuraLogo variant="stacked" iconSize={48} showTagline tagline="Defina uma nova senha para continuar." />
+        </div>
         <form onSubmit={submit} className="space-y-4">
           <label className="block text-sm">
-            <span className="text-ag-muted">Senha temporária / atual</span>
+            <span className="text-ag-muted font-medium">Senha temporária / atual</span>
             <input
               type="password"
               required
-              className="mt-1 w-full rounded-xl border border-ag-border bg-ag-bg px-3 py-2"
+              className={inputClass}
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               autoComplete="current-password"
             />
           </label>
           <label className="block text-sm">
-            <span className="text-ag-muted">Nova senha</span>
+            <span className="text-ag-muted font-medium">Nova senha</span>
             <input
               type="password"
               required
               minLength={8}
-              className="mt-1 w-full rounded-xl border border-ag-border bg-ag-bg px-3 py-2"
+              className={inputClass}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               autoComplete="new-password"
             />
           </label>
           <label className="block text-sm">
-            <span className="text-ag-muted">Confirmar nova senha</span>
+            <span className="text-ag-muted font-medium">Confirmar nova senha</span>
             <input
               type="password"
               required
               minLength={8}
-              className="mt-1 w-full rounded-xl border border-ag-border bg-ag-bg px-3 py-2"
+              className={inputClass}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               autoComplete="new-password"
             />
           </label>
           {error && <p className="text-sm text-ag-danger">{error}</p>}
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full rounded-xl bg-ag-accent text-white py-2.5 font-semibold disabled:opacity-50"
-          >
-            {submitting ? "Salvando…" : "Salvar nova senha"}
-          </button>
+          <Button type="submit" variant="accent" size="lg" className="w-full ag-gradient-btn" loading={submitting}>
+            Salvar nova senha
+          </Button>
         </form>
       </div>
     </div>

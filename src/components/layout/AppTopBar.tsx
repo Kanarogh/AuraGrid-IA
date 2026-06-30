@@ -73,7 +73,7 @@ export function AppTopBar({
                 {breadcrumbRoot}
               </span>
               <ChevronRight className="h-3 w-3 opacity-60 shrink-0" aria-hidden />
-              <span className="text-ag-accent truncate">{sectionTitle}</span>
+              <span className="ag-gradient-text truncate">{sectionTitle}</span>
             </nav>
             <h1 className="text-base sm:text-lg font-semibold text-ag-text truncate font-display tracking-tight mt-0.5">
               {sectionTitle}

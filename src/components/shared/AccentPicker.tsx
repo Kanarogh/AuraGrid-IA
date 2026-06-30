@@ -10,6 +10,21 @@ import { FieldLabel } from "../ui/Input";
 const CUSTOM_SWATCH =
   "conic-gradient(from 180deg, #ff6b6b, #fbbf24, #34d399, #3d5af1, #a78bfa, #ff6b6b)";
 
+const AURA_GRADIENT = "var(--ag-gradient-brand)";
+
+function presetSwatchStyle(presetId: string, color: string, active: boolean) {
+  if (presetId === "aura") {
+    return {
+      background: AURA_GRADIENT,
+      boxShadow: active ? "0 0 0 2px var(--ag-brand-purple)" : undefined,
+    } as const;
+  }
+  return {
+    backgroundColor: color,
+    boxShadow: active ? `0 0 0 2px ${color}` : undefined,
+  } as const;
+}
+
 function CustomAccentFields({
   customColors,
   setCustomColors,
@@ -103,7 +118,7 @@ export function AccentPicker({
                   "h-6 w-6 rounded-full ag-focus-ring transition-transform duration-150 cursor-pointer",
                   active ? "scale-110 ring-2 ring-offset-2 ring-offset-ag-surface-1" : "hover:scale-110"
                 )}
-                style={{ backgroundColor: color, boxShadow: active ? `0 0 0 2px ${color}` : undefined }}
+                style={presetSwatchStyle(preset.id, color, active)}
               />
             );
           })}
@@ -155,7 +170,11 @@ export function AccentPicker({
             >
               <span
                 className="relative flex h-9 w-9 items-center justify-center rounded-full shadow-sm"
-                style={{ backgroundColor: color }}
+                style={
+                  preset.id === "aura"
+                    ? { background: AURA_GRADIENT }
+                    : { backgroundColor: color }
+                }
               >
                 {active && <Check className="h-4 w-4 text-white" strokeWidth={3} />}
               </span>

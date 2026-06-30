@@ -15,9 +15,9 @@ const paddingMap = {
 };
 
 const variantMap = {
-  default: "ag-card",
-  muted: "rounded-[var(--radius-ag-xl)] border border-ag-border bg-ag-surface-2",
-  elevated: "ag-card shadow-[var(--ag-shadow-lg)]",
+  default: "rounded-xl border border-ag-border bg-ag-surface-1 shadow-[var(--ag-shadow)]",
+  muted: "rounded-xl border border-ag-border bg-ag-surface-2",
+  elevated: "rounded-xl border border-ag-border bg-ag-surface-1 shadow-[var(--ag-shadow-lg)]",
 };
 
 export function Card({

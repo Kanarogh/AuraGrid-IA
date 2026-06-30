@@ -19,7 +19,7 @@ export function TabNav<T extends string>({
 }) {
   return (
     <nav
-      className="flex flex-wrap gap-1 p-1 rounded-2xl bg-ag-surface-2 border border-ag-border mb-8"
+      className="flex flex-wrap gap-1 border-b border-ag-border mb-8"
       aria-label="Áreas do workspace"
     >
       {tabs.map((tab) => {
@@ -31,10 +31,10 @@ export function TabNav<T extends string>({
             type="button"
             onClick={() => onChange(tab.id)}
             className={cn(
-              "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ag-focus-ring",
+              "flex items-center gap-2 px-4 py-2.5 -mb-px text-sm font-medium transition-all cursor-pointer ag-focus-ring border-b-2",
               isActive
-                ? "bg-ag-surface-1 text-ag-text shadow-sm border border-ag-border"
-                : "text-ag-muted hover:text-ag-text hover:bg-ag-surface-1/60 border border-transparent"
+                ? "border-[var(--ag-brand-purple)] text-ag-text"
+                : "border-transparent text-ag-muted hover:text-ag-text"
             )}
           >
             <Icon className={cn("h-4 w-4", isActive ? "text-ag-accent" : "")} />

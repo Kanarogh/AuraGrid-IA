@@ -34,7 +34,7 @@ export function AccountSettingsWorkspace({
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <div className="rounded-2xl border border-ag-border/70 bg-ag-surface-1 shadow-[var(--ag-shadow-sm)] p-4 sm:p-6">
+      <div className="rounded-xl border border-ag-border/70 bg-ag-surface-1 shadow-[var(--ag-shadow-sm)] p-4 sm:p-6">
         <p className="text-[10px] font-mono uppercase tracking-wider text-ag-muted font-semibold mb-1">
           Conta
         </p>

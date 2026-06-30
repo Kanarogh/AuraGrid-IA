@@ -116,7 +116,7 @@ export function PublishPrefsPanel({
         />
       )}
 
-      <div className="rounded-2xl border border-ag-border bg-ag-surface-2/50 p-5 space-y-4">
+      <div className="rounded-xl border border-ag-border bg-ag-surface-2/50 p-5 space-y-4">
         <div>
           <h3 className="font-display text-lg font-semibold text-ag-text flex items-center gap-2">
             <Share2 className="h-5 w-5 text-ag-accent" />
@@ -172,7 +172,7 @@ export function PublishPrefsPanel({
         )}
       </div>
 
-      <div className="rounded-2xl border border-ag-border bg-ag-surface-2/50 p-5 space-y-5">
+      <div className="rounded-xl border border-ag-border bg-ag-surface-2/50 p-5 space-y-5">
         <div>
           <h3 className="font-display text-lg font-semibold text-ag-text flex items-center gap-2">
             <Zap className="h-5 w-5 text-ag-accent" />
@@ -200,7 +200,7 @@ export function PublishPrefsPanel({
         </label>
       </div>
 
-      <div className="rounded-2xl border border-ag-border bg-ag-surface-2/50 p-5 space-y-5">
+      <div className="rounded-xl border border-ag-border bg-ag-surface-2/50 p-5 space-y-5">
         <div>
           <h3 className="font-display text-lg font-semibold text-ag-text flex items-center gap-2">
             <Clock className="h-5 w-5 text-ag-accent" />
