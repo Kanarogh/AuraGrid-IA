@@ -147,6 +147,13 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
+/** Seções ocultas na UI (código permanece; deep links redirecionam). */
+export const HIDDEN_APP_SECTIONS: readonly AppSection[] = ["feed_simulator"];
+
+export function isAppSectionVisible(section: AppSection): boolean {
+  return !HIDDEN_APP_SECTIONS.includes(section);
+}
+
 /** Filtra seções indisponíveis quando o roteiro não usa referências ou sem permissão. */
 export function getNavGroups(
   usesReferences = true,
@@ -158,6 +165,13 @@ export function getNavGroups(
         ...g,
         items: g.items.filter((item) => item.id !== "reference_finder"),
       })).filter((g) => g.items.length > 0);
+
+  groups = groups
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((item) => isAppSectionVisible(item.id)),
+    }))
+    .filter((g) => g.items.length > 0);
 
   if (canAccessSection) {
     groups = groups

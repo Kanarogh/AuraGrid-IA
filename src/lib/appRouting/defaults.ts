@@ -1,4 +1,5 @@
 import type { AppSection } from "../sectionMeta";
+import { isAppSectionVisible } from "../sectionMeta";
 import {
   defaultCatalogTab,
   defaultPostsTab,
@@ -48,6 +49,11 @@ export function validateClientRoute(
   ctx: RouteValidationContext
 ): RouteValidationResult {
   let next = withSectionDefaults(route);
+
+  if (!isAppSectionVisible(next.section)) {
+    next = { ...next, section: "posts", postsTab: defaultPostsTab() };
+    return { ok: false, route: next, reason: "section_hidden" };
+  }
 
   if (!ctx.clientIds.includes(next.clientId)) {
     const fallbackId = ctx.clientIds[0];

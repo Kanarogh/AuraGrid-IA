@@ -1,5 +1,5 @@
 import type { AppSection } from "../../lib/sectionMeta";
-import { ALL_NAV_ITEMS } from "../../lib/sectionMeta";
+import { ALL_NAV_ITEMS, isAppSectionVisible } from "../../lib/sectionMeta";
 import { filterNavSections } from "../../lib/permissions/navFilter";
 import { useAuth } from "../../context/AuthContext";
 import { cn } from "../../lib/cn";
@@ -31,6 +31,7 @@ export function DashboardQuickActions({
       ? filterNavSections(user, activeClientId, QUICK_SECTIONS)
       : QUICK_SECTIONS;
   const items = allowed
+    .filter((id) => isAppSectionVisible(id))
     .filter((id) => usesReferences || id !== "reference_finder")
     .map((id) => ALL_NAV_ITEMS.find((i) => i.id === id)!)
     .filter(Boolean);
