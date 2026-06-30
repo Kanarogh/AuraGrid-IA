@@ -102,3 +102,74 @@ name, section ("posts"|"stories"), postType, headline, subtitle, cta, legenda, h
 Stories com enquete: inclua storyExtras { pollOptions: ["...", "..."], onScreenText?: "..." }.
 Sem texto fora do JSON.`;
 }
+
+export type ContentScheduleExistingItemSummary = {
+  name: string;
+  headline: string;
+  scheduledDate?: string;
+};
+
+export function buildContentScheduleSingleItemTask(
+  gem: BrandGemConfig,
+  clientBrief: string,
+  section: "posts" | "stories",
+  options: {
+    startDate: string;
+    extraInstructions?: string;
+    itemInstruction?: string;
+    existingItems?: ContentScheduleExistingItemSummary[];
+  }
+): string {
+  const campaign = buildCampaignContextBlock(gem);
+  const voice = buildBrandVoiceBlock(gem);
+  const compactBrief = (clientBrief.trim() || "Conteúdo mensal alinhado à marca.")
+    .slice(0, 1000)
+    .trim();
+  const extra = options.extraInstructions?.trim()
+    ? `\nINSTRUÇÕES EXTRAS:\n${options.extraInstructions.trim().slice(0, 500)}`
+    : "";
+  const itemHint = options.itemInstruction?.trim()
+    ? `\nTEMA DESTE ITEM:\n${options.itemInstruction.trim().slice(0, 400)}`
+    : "";
+  const existing =
+    options.existingItems && options.existingItems.length > 0
+      ? `\nITENS JÁ NO CRONOGRAMA (não repita tema/headline):\n${options.existingItems
+          .slice(0, 20)
+          .map(
+            (i) =>
+              `- ${i.name}${i.scheduledDate ? ` (${i.scheduledDate})` : ""}: ${i.headline.slice(0, 80)}`
+          )
+          .join("\n")}`
+      : "";
+
+  const sectionLabel = section === "posts" ? "POST DE ARTE" : "STORY";
+  const formatHint =
+    section === "posts"
+      ? 'postType: "Arte Única"'
+      : `postType: um entre ${STORY_FORMATS.join(", ")}`;
+
+  return `${voice}
+
+${campaign}
+
+TAREFA: Criar UM ÚNICO item (${sectionLabel}) para o cronograma de conteúdo mensal.
+
+BRIEFING DO CLIENTE:
+---
+${compactBrief}
+---
+
+PARÂMETROS:
+- section: "${section}"
+- ${formatHint}
+- Data de início do mês: ${options.startDate}
+- suggestedDate em DD/MM (distribua dentro do mês; evite datas já usadas quando possível)
+- Idioma e tom: conforme GEM INSTRUCTIONS
+${extra}${itemHint}${existing}
+
+ESTRUTURA (obrigatório):
+name, section, postType, headline, subtitle, cta, legenda, hashtags, suggestedDate.
+Stories interativos: storyExtras { pollOptions: ["...", "..."], onScreenText?: "..." }.
+
+Retorne JSON com array "items" contendo EXATAMENTE 1 item.`;
+}

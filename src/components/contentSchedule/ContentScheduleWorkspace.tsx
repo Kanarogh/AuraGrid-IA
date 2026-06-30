@@ -4,6 +4,7 @@ import {
   Copy,
   Download,
   Loader2,
+  Plus,
   RotateCcw,
   Send,
   Sparkles,
@@ -14,6 +15,7 @@ import type {
   BrandGem,
   ContentScheduleItem,
   ContentScheduleItemStatus,
+  ContentScheduleSection,
   PlannedPost,
 } from "../../types";
 import type { ContentScheduleOptions } from "../../lib/clientWorkspace/types";
@@ -159,6 +161,8 @@ export function ContentScheduleWorkspace({
   ]);
 
   const [generating, setGenerating] = useState(false);
+  const [creatingSingle, setCreatingSingle] = useState<ContentScheduleSection | null>(null);
+  const [singleItemTheme, setSingleItemTheme] = useState("");
   const [aiError, setAiError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [refineInstruction, setRefineInstruction] = useState("");
@@ -368,6 +372,82 @@ export function ContentScheduleWorkspace({
     [items, onItemsChange, selectedId]
   );
 
+  const handleCreateSingleItem = useCallback(
+    async (section: ContentScheduleSection) => {
+      if (!brandGemReady) {
+        toast.error(brandGemRequiredMessage(brandGem) || "Configure o Gem da marca.");
+        return;
+      }
+      if (!briefDraft.trim()) {
+        toast.error("Preencha o briefing do mês antes de criar um item.");
+        return;
+      }
+      const sectionItems = items.filter((i) => i.section === section);
+      const nextOrder =
+        sectionItems.length > 0 ? Math.max(...sectionItems.map((i) => i.order)) + 1 : 1;
+
+      setCreatingSingle(section);
+      setAiError(null);
+      try {
+        const res = await aiQueue.enqueue(
+          section === "posts" ? "Criar post avulso" : "Criar story avulsa",
+          () =>
+            aiFetch("/api/generate-content-schedule", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                brandGem,
+                clientBrief: briefDraft,
+                ...(clientId ? { clientId } : {}),
+                mode: "generate_one",
+                section,
+                options: {
+                  startDate,
+                  extraInstructions,
+                  itemInstruction: singleItemTheme.trim() || undefined,
+                  order: nextOrder,
+                  existingItems: sectionItems.map((i) => ({
+                    name: i.name,
+                    headline: i.headline,
+                    scheduledDate: i.scheduledDate,
+                  })),
+                },
+              }),
+            })
+        );
+        const data = await readJsonResponse<{ items?: ContentScheduleItem[]; error?: string }>(res);
+        if (!res.ok) throw new Error(data.error ?? "Falha ao criar item.");
+        const created = data.items?.[0];
+        if (!created) throw new Error("A IA não retornou o item.");
+        persistBriefAndOptions();
+        onItemsChange([...items, created]);
+        setSelectedId(created.id);
+        setSingleItemTheme("");
+        toast.success(
+          section === "posts" ? "Post adicionado ao cronograma." : "Story adicionada ao cronograma."
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setAiError(msg);
+        toast.error(msg);
+      } finally {
+        setCreatingSingle(null);
+      }
+    },
+    [
+      brandGem,
+      brandGemReady,
+      briefDraft,
+      clientId,
+      extraInstructions,
+      items,
+      onItemsChange,
+      persistBriefAndOptions,
+      singleItemTheme,
+      startDate,
+    ]
+  );
+
   const copyText = useCallback(async (text: string, id?: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -540,10 +620,57 @@ export function ContentScheduleWorkspace({
             </p>
           )}
         </div>
+        {!isReadOnly && brandGemReady && (
+          <div className="mt-5 pt-4 border-t border-ag-border/50 space-y-3">
+            <p className="text-xs text-ag-muted">
+              Ou monte o cronograma aos poucos — crie posts e stories avulsos com IA (usa o briefing acima).
+            </p>
+            <label className="block text-xs text-ag-muted">
+              Tema do próximo item (opcional)
+              <input
+                type="text"
+                value={singleItemTheme}
+                onChange={(e) => setSingleItemTheme(e.target.value)}
+                disabled={generating || creatingSingle !== null}
+                placeholder="Ex.: Halloween no PDV, dica de estoque..."
+                className="mt-1 w-full rounded-lg border border-ag-border/70 bg-ag-surface-2 px-3 py-2 text-sm"
+              />
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={generating || creatingSingle !== null}
+                onClick={() => void handleCreateSingleItem("posts")}
+              >
+                {creatingSingle === "posts" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+                Criar 1 post com IA
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={generating || creatingSingle !== null}
+                onClick={() => void handleCreateSingleItem("stories")}
+              >
+                {creatingSingle === "stories" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+                Criar 1 story com IA
+              </Button>
+            </div>
+          </div>
+        )}
       </WorkspaceCard>
 
-      {hasItems && (
+      {(hasItems || (!isReadOnly && brandGemReady)) && (
         <>
+          {hasItems && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ag-border/60 bg-ag-surface-2/60 px-4 py-3">
             <p className="text-sm text-ag-muted">
               <span className="font-medium text-ag-text">{items.length}</span> itens ·{" "}
@@ -581,6 +708,7 @@ export function ContentScheduleWorkspace({
               </Button>
             </div>
           </div>
+          )}
 
           <div className="grid gap-5 lg:grid-cols-2">
             <ScheduleColumn
@@ -589,6 +717,9 @@ export function ContentScheduleWorkspace({
               selectedId={selectedId}
               copiedId={copiedId}
               isReadOnly={isReadOnly}
+              canCreate={!isReadOnly && brandGemReady}
+              creating={creatingSingle === "posts"}
+              onCreateSingle={() => void handleCreateSingleItem("posts")}
               onSelect={setSelectedId}
               onCopy={(item) => void copyText(formatScheduleItemCopy(item), item.id)}
               onApprove={(id) => updateItem(id, { status: "approved" })}
@@ -601,6 +732,9 @@ export function ContentScheduleWorkspace({
               selectedId={selectedId}
               copiedId={copiedId}
               isReadOnly={isReadOnly}
+              canCreate={!isReadOnly && brandGemReady}
+              creating={creatingSingle === "stories"}
+              onCreateSingle={() => void handleCreateSingleItem("stories")}
               onSelect={setSelectedId}
               onCopy={(item) => void copyText(formatScheduleItemCopy(item), item.id)}
               onApprove={(id) => updateItem(id, { status: "approved" })}
@@ -636,6 +770,9 @@ function ScheduleColumn({
   selectedId,
   copiedId,
   isReadOnly,
+  canCreate,
+  creating,
+  onCreateSingle,
   onSelect,
   onCopy,
   onApprove,
@@ -647,6 +784,9 @@ function ScheduleColumn({
   selectedId: string | null;
   copiedId: string | null;
   isReadOnly?: boolean;
+  canCreate?: boolean;
+  creating?: boolean;
+  onCreateSingle?: () => void;
   onSelect: (id: string) => void;
   onCopy: (item: ContentScheduleItem) => void;
   onApprove: (id: string) => void;
@@ -655,10 +795,32 @@ function ScheduleColumn({
 }) {
   return (
     <WorkspaceCard variant="secondary" padding={false}>
-      <div className="border-b border-ag-border/60 px-4 py-3">
+      <div className="border-b border-ag-border/60 px-4 py-3 flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-ag-text">{title}</h3>
+        {canCreate && onCreateSingle && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={creating}
+            onClick={onCreateSingle}
+          >
+            {creating ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Plus className="h-3.5 w-3.5" />
+            )}
+            Criar
+          </Button>
+        )}
       </div>
       <ul className="divide-y divide-ag-border/50 max-h-[520px] overflow-y-auto">
+        {items.length === 0 ? (
+          <li className="px-4 py-10 text-center text-xs text-ag-muted leading-relaxed">
+            Nenhum item ainda.
+            {canCreate ? " Use Criar acima ou no briefing." : ""}
+          </li>
+        ) : null}
         {items.map((item) => (
           <li key={item.id}>
             <button

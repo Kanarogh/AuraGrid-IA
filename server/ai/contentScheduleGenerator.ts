@@ -10,7 +10,9 @@ import { recordAiUsageEvent } from "../services/aiUsageService";
 import {
   buildContentScheduleRefineTask,
   buildContentScheduleResultInstructions,
+  buildContentScheduleSingleItemTask,
   buildContentScheduleTask,
+  type ContentScheduleExistingItemSummary,
   type ContentScheduleGenerateOptions,
 } from "./contentSchedulePrompts";
 
@@ -117,38 +119,42 @@ type RawItem = {
   };
 };
 
+function normalizeRawItem(
+  item: RawItem,
+  section: ContentScheduleSection,
+  order: number
+): GeneratedContentScheduleItem {
+  const poll =
+    item.storyExtras?.pollOptions?.length === 2
+      ? ([item.storyExtras.pollOptions[0], item.storyExtras.pollOptions[1]] as [string, string])
+      : undefined;
+  return {
+    id: createScheduleItemId(section, order),
+    order,
+    section,
+    name: item.name?.trim() || (section === "posts" ? `POST ${order}` : `STORY ${order}`),
+    postType: item.postType?.trim() || (section === "posts" ? "Arte Única" : "Story"),
+    scheduledDate: item.suggestedDate?.trim(),
+    status: "draft" as const,
+    headline: item.headline?.trim() ?? "",
+    subtitle: item.subtitle?.trim() ?? "",
+    cta: item.cta?.trim() ?? "",
+    legenda: item.legenda?.trim() ?? "",
+    hashtags: item.hashtags?.trim() ?? "",
+    storyExtras:
+      poll || item.storyExtras?.onScreenText
+        ? {
+            pollOptions: poll,
+            onScreenText: item.storyExtras?.onScreenText?.trim(),
+          }
+        : undefined,
+  };
+}
+
 function normalizeRawItems(raw: RawItem[]): GeneratedContentScheduleItem[] {
   return raw.map((item, index) => {
     const section = item.section === "stories" ? "stories" : "posts";
-    const order = index + 1;
-    const poll =
-      item.storyExtras?.pollOptions?.length === 2
-        ? ([item.storyExtras.pollOptions[0], item.storyExtras.pollOptions[1]] as [
-            string,
-            string,
-          ])
-        : undefined;
-    return {
-      id: createScheduleItemId(section, order),
-      order,
-      section,
-      name: item.name?.trim() || (section === "posts" ? `POST ${order}` : `STORY ${order}`),
-      postType: item.postType?.trim() || (section === "posts" ? "Arte Única" : "Story"),
-      scheduledDate: item.suggestedDate?.trim(),
-      status: "draft" as const,
-      headline: item.headline?.trim() ?? "",
-      subtitle: item.subtitle?.trim() ?? "",
-      cta: item.cta?.trim() ?? "",
-      legenda: item.legenda?.trim() ?? "",
-      hashtags: item.hashtags?.trim() ?? "",
-      storyExtras:
-        poll || item.storyExtras?.onScreenText
-          ? {
-              pollOptions: poll,
-              onScreenText: item.storyExtras?.onScreenText?.trim(),
-            }
-          : undefined,
-    };
+    return normalizeRawItem(item, section, index + 1);
   });
 }
 
@@ -201,6 +207,68 @@ export async function generateContentSchedule(input: {
     throw new Error("Gemini: nenhum item retornado no cronograma.");
   }
   return items;
+}
+
+export async function generateSingleContentScheduleItem(input: {
+  brandGem?: BrandGemConfig;
+  promptContext?: string;
+  repeatingText?: BrandGemConfig["footer"];
+  clientBrief: string;
+  section: ContentScheduleSection;
+  options: {
+    startDate: string;
+    extraInstructions?: string;
+    itemInstruction?: string;
+    existingItems?: ContentScheduleExistingItemSummary[];
+    order: number;
+  };
+}): Promise<GeneratedContentScheduleItem> {
+  const gem = resolveBrandGemFromBody(input);
+  assertBrandGemReadyForCaptions(gem);
+
+  const ai = getClient();
+  let modelUsed = getGeminiContentScheduleModel();
+  const response = await callGeminiPlanning(
+    getGeminiContentScheduleModel(),
+    "Gemini content schedule single item",
+    (model) =>
+      ai.models.generateContent({
+        model,
+        contents: [
+          {
+            text: buildContentScheduleSingleItemTask(
+              gem,
+              input.clientBrief,
+              input.section,
+              input.options
+            ),
+          },
+          { text: buildContentScheduleResultInstructions() },
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: CONTENT_SCHEDULE_JSON_SCHEMA,
+        },
+      }),
+    { onSuccess: (model) => (modelUsed = model) }
+  );
+  await trackGeminiUsage("generate_content_schedule_item", modelUsed, response);
+
+  const rawText = response.text?.trim();
+  if (!rawText) {
+    throw new Error("Gemini: o modelo respondeu sem texto (item vazio).");
+  }
+
+  let parsed: { items?: RawItem[] };
+  try {
+    parsed = JSON.parse(rawText) as { items?: RawItem[] };
+  } catch {
+    throw new Error("Gemini: resposta JSON inválida ao criar item.");
+  }
+
+  const raw = Array.isArray(parsed.items) ? parsed.items[0] : undefined;
+  if (!raw) throw new Error("Gemini: nenhum item retornado.");
+  return normalizeRawItem(raw, input.section, input.options.order);
 }
 
 export async function refineContentScheduleItem(input: {

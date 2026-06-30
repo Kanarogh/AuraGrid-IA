@@ -4,6 +4,7 @@ import { resolveBrandGemFromBody, assertBrandGemReadyForCaptions } from "@/serve
 import { getGeminiContentScheduleModel } from "@/server/ai/config";
 import {
   generateContentSchedule,
+  generateSingleContentScheduleItem,
   refineContentScheduleItem,
 } from "@/server/ai/contentScheduleGenerator";
 import { assertAiClientAccess, withUserAiFromRequest } from "@/server/http/aiRequest";
@@ -33,24 +34,6 @@ export async function POST(req: NextRequest) {
 
       await assertAiClientAccess(user, rawClientId, CONTENT_SCHEDULE_WRITE);
 
-      if (mode !== "refine_one") {
-        try {
-          assertBrandGemReadyForCaptions(
-            brandGem ?? resolveBrandGemFromBody({ promptContext, repeatingText })
-          );
-        } catch (validationError: unknown) {
-          return NextResponse.json(
-            {
-              error:
-                validationError instanceof Error
-                  ? validationError.message
-                  : String(validationError),
-            },
-            { status: 400 }
-          );
-        }
-      }
-
       if (mode === "refine_one") {
         if (!existingItem?.id) {
           return NextResponse.json({ error: "Item não informado para refinamento." }, { status: 400 });
@@ -71,6 +54,81 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           { items: [item], modelUsed },
           { headers: { "X-AI-Model-Used": modelUsed } }
+        );
+      }
+
+      if (mode === "generate_one") {
+        try {
+          assertBrandGemReadyForCaptions(
+            brandGem ?? resolveBrandGemFromBody({ promptContext, repeatingText })
+          );
+        } catch (validationError: unknown) {
+          return NextResponse.json(
+            {
+              error:
+                validationError instanceof Error
+                  ? validationError.message
+                  : String(validationError),
+            },
+            { status: 400 }
+          );
+        }
+
+        const section = body.section === "stories" ? "stories" : "posts";
+        const order = Math.min(999, Math.max(1, Number(options?.order) || 1));
+        const startDate =
+          typeof options?.startDate === "string" && options.startDate.trim()
+            ? options.startDate.trim()
+            : new Date().toISOString().slice(0, 10);
+        const existingItems = Array.isArray(options?.existingItems)
+          ? options.existingItems
+              .filter(
+                (row: unknown) =>
+                  row &&
+                  typeof row === "object" &&
+                  typeof (row as { name?: unknown }).name === "string" &&
+                  typeof (row as { headline?: unknown }).headline === "string"
+              )
+              .slice(0, 30)
+          : [];
+
+        const item = await generateSingleContentScheduleItem({
+          brandGem: brandGem ?? resolveBrandGemFromBody({ promptContext, repeatingText }),
+          clientBrief: typeof clientBrief === "string" ? clientBrief : "",
+          section,
+          options: {
+            startDate,
+            order,
+            extraInstructions:
+              typeof options?.extraInstructions === "string"
+                ? options.extraInstructions
+                : undefined,
+            itemInstruction:
+              typeof options?.itemInstruction === "string"
+                ? options.itemInstruction
+                : undefined,
+            existingItems,
+          },
+        });
+        return NextResponse.json(
+          { items: [item], modelUsed },
+          { headers: { "X-AI-Model-Used": modelUsed } }
+        );
+      }
+
+      try {
+        assertBrandGemReadyForCaptions(
+          brandGem ?? resolveBrandGemFromBody({ promptContext, repeatingText })
+        );
+      } catch (validationError: unknown) {
+        return NextResponse.json(
+          {
+            error:
+              validationError instanceof Error
+                ? validationError.message
+                : String(validationError),
+          },
+          { status: 400 }
         );
       }
 
