@@ -4,8 +4,10 @@ import {
   Copy,
   Download,
   Loader2,
+  RotateCcw,
   Send,
   Sparkles,
+  Trash2,
   X,
 } from "lucide-react";
 import type {
@@ -32,6 +34,7 @@ import {
   getMissingBrandGemFields,
 } from "../../lib/brandGemValidation";
 import { cn } from "../../lib/cn";
+import { confirmDialog } from "../../lib/confirmDialog";
 import { toast } from "../../lib/toast";
 import { WorkflowStepper, type WorkflowStep } from "../layout/WorkflowStepper";
 import { WorkspaceHero } from "../layout/WorkspaceHero";
@@ -210,6 +213,15 @@ export function ContentScheduleWorkspace({
       toast.error("Preencha o briefing do mês antes de gerar.");
       return;
     }
+    if (hasGeneratedSchedule) {
+      const ok = await confirmDialog({
+        title: "Regenerar cronograma",
+        message:
+          "O cronograma atual será substituído pelo novo. Ajuste o briefing acima se quiser mudar o direcionamento. Itens já enviados ao planejamento não são revertidos automaticamente.",
+        confirmLabel: "Regenerar",
+      });
+      if (!ok) return;
+    }
     setGenerating(true);
     setAiError(null);
     try {
@@ -256,39 +268,105 @@ export function ContentScheduleWorkspace({
     postCount,
     startDate,
     storyCount,
+    hasGeneratedSchedule,
   ]);
+
+  const handleClearSchedule = useCallback(async () => {
+    if (!hasGeneratedSchedule) return;
+    const ok = await confirmDialog({
+      title: "Excluir cronograma",
+      message:
+        "Remove todos os posts e stories gerados e limpa o briefing salvo. Você poderá criar um novo cronograma depois. Itens já enviados ao planejamento não são revertidos.",
+      variant: "danger",
+      confirmLabel: "Excluir",
+    });
+    if (!ok) return;
+    onItemsChange([]);
+    onClientBriefChange("");
+    onScheduleOptionsChange?.({ ...DEFAULT_CONTENT_SCHEDULE_OPTIONS });
+    setSelectedId(null);
+    setAiError(null);
+    toast.success("Cronograma excluído.");
+  }, [
+    hasGeneratedSchedule,
+    onClientBriefChange,
+    onItemsChange,
+    onScheduleOptionsChange,
+  ]);
+
+  const runRefineItem = useCallback(
+    async (item: ContentScheduleItem, instruction: string) => {
+      setRefining(true);
+      setAiError(null);
+      try {
+        const res = await aiQueue.enqueue("Refinar item do cronograma", () =>
+          aiFetch("/api/generate-content-schedule", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              brandGem,
+              ...(clientId ? { clientId } : {}),
+              mode: "refine_one",
+              existingItem: item,
+              refineInstruction: instruction,
+            }),
+          })
+        );
+        const data = await readJsonResponse<{ items?: ContentScheduleItem[]; error?: string }>(res);
+        if (!res.ok) throw new Error(data.error ?? "Falha ao refinar item.");
+        const refined = data.items?.[0];
+        if (!refined) throw new Error("Item refinado vazio.");
+        updateItem(item.id, refined);
+        toast.success("Item atualizado.");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setAiError(msg);
+        toast.error(msg);
+      } finally {
+        setRefining(false);
+      }
+    },
+    [brandGem, clientId, updateItem]
+  );
 
   const handleRefine = useCallback(async () => {
     if (!selectedItem || !refineInstruction.trim()) return;
-    setRefining(true);
-    setAiError(null);
-    try {
-      const res = await aiQueue.enqueue("Refinar item do cronograma", () =>
-        aiFetch("/api/generate-content-schedule", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            brandGem,
-            ...(clientId ? { clientId } : {}),
-            mode: "refine_one",
-            existingItem: selectedItem,
-            refineInstruction,
-          }),
-        })
-      );
-      const data = await readJsonResponse<{ items?: ContentScheduleItem[]; error?: string }>(res);
-      if (!res.ok) throw new Error(data.error ?? "Falha ao refinar item.");
-      const refined = data.items?.[0];
-      if (!refined) throw new Error("Item refinado vazio.");
-      updateItem(selectedItem.id, refined);
-      toast.success("Item refinado.");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setAiError(msg);
-    } finally {
-      setRefining(false);
-    }
-  }, [brandGem, clientId, refineInstruction, selectedItem, updateItem]);
+    await runRefineItem(selectedItem, refineInstruction);
+    setRefineInstruction("");
+  }, [refineInstruction, runRefineItem, selectedItem]);
+
+  const handleRegenerateItem = useCallback(async () => {
+    if (!selectedItem) return;
+    const ok = await confirmDialog({
+      title: "Recriar item",
+      message: `A IA vai recriar "${selectedItem.name}" do zero, mantendo formato e alinhamento ao briefing.`,
+      confirmLabel: "Recriar",
+    });
+    if (!ok) return;
+    await runRefineItem(
+      selectedItem,
+      "Recrie este item completamente do zero com novo ângulo criativo. Mantenha o mesmo formato (post ou story), data sugerida e coerência com o briefing do mês."
+    );
+  }, [runRefineItem, selectedItem]);
+
+  const handleDeleteItem = useCallback(
+    async (item: ContentScheduleItem) => {
+      const ok = await confirmDialog({
+        title: "Excluir item",
+        message: item.status === "handed_off" || item.status === "done"
+          ? `"${item.name}" será removido do cronograma. Se já foi enviado ao planejamento, o conteúdo lá não é revertido.`
+          : `Remover "${item.name}" do cronograma?`,
+        variant: "danger",
+        confirmLabel: "Excluir",
+      });
+      if (!ok) return;
+      const next = items.filter((i) => i.id !== item.id);
+      onItemsChange(next);
+      if (selectedId === item.id) setSelectedId(null);
+      toast.success("Item removido.");
+    },
+    [items, onItemsChange, selectedId]
+  );
 
   const copyText = useCallback(async (text: string, id?: string) => {
     try {
@@ -442,8 +520,19 @@ export function ContentScheduleWorkspace({
             ) : (
               <Sparkles className="h-4 w-4" />
             )}
-            Gerar cronograma com IA
+            {hasGeneratedSchedule ? "Regenerar cronograma com IA" : "Gerar cronograma com IA"}
           </Button>
+          {hasGeneratedSchedule && !isReadOnly && (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void handleClearSchedule()}
+              disabled={generating}
+            >
+              <Trash2 className="h-4 w-4" />
+              Excluir cronograma
+            </Button>
+          )}
           {!brandGemReady && !isReadOnly && (
             <p className="text-xs text-ag-muted">
               {missingGemFields.length} campo{missingGemFields.length !== 1 ? "s" : ""} pendente
@@ -462,6 +551,17 @@ export function ContentScheduleWorkspace({
               <span className="font-medium text-ag-text">{doneCount}</span> entregues
             </p>
             <div className="flex flex-wrap gap-2">
+              {!isReadOnly && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void handleClearSchedule()}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Excluir
+                </Button>
+              )}
               <Button type="button" variant="secondary" size="sm" onClick={() => void copyText(formatFullSchedule(items, periodLabel))}>
                 <Copy className="h-4 w-4" />
                 Copiar tudo
@@ -493,6 +593,7 @@ export function ContentScheduleWorkspace({
               onCopy={(item) => void copyText(formatScheduleItemCopy(item), item.id)}
               onApprove={(id) => updateItem(id, { status: "approved" })}
               onMarkDone={(id) => updateItem(id, { status: "done" })}
+              onDelete={(item) => void handleDeleteItem(item)}
             />
             <ScheduleColumn
               title={`Stories (${storiesItems.length})`}
@@ -504,6 +605,7 @@ export function ContentScheduleWorkspace({
               onCopy={(item) => void copyText(formatScheduleItemCopy(item), item.id)}
               onApprove={(id) => updateItem(id, { status: "approved" })}
               onMarkDone={(id) => updateItem(id, { status: "done" })}
+              onDelete={(item) => void handleDeleteItem(item)}
             />
           </div>
         </>
@@ -519,6 +621,8 @@ export function ContentScheduleWorkspace({
           onClose={() => setSelectedId(null)}
           onChange={(patch) => updateItem(selectedItem.id, patch)}
           onRefine={() => void handleRefine()}
+          onRegenerate={() => void handleRegenerateItem()}
+          onDelete={() => void handleDeleteItem(selectedItem)}
           onCopy={() => void copyText(formatScheduleItemCopy(selectedItem), selectedItem.id)}
         />
       )}
@@ -536,6 +640,7 @@ function ScheduleColumn({
   onCopy,
   onApprove,
   onMarkDone,
+  onDelete,
 }: {
   title: string;
   items: ContentScheduleItem[];
@@ -546,6 +651,7 @@ function ScheduleColumn({
   onCopy: (item: ContentScheduleItem) => void;
   onApprove: (id: string) => void;
   onMarkDone: (id: string) => void;
+  onDelete: (item: ContentScheduleItem) => void;
 }) {
   return (
     <WorkspaceCard variant="secondary" padding={false}>
@@ -591,6 +697,18 @@ function ScheduleColumn({
                     Feito
                   </Button>
                 )}
+                {!isReadOnly && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-ag-danger hover:text-ag-danger"
+                    onClick={() => onDelete(item)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Excluir
+                  </Button>
+                )}
               </div>
             </button>
           </li>
@@ -609,6 +727,8 @@ function ScheduleItemEditor({
   onClose,
   onChange,
   onRefine,
+  onRegenerate,
+  onDelete,
   onCopy,
 }: {
   item: ContentScheduleItem;
@@ -619,6 +739,8 @@ function ScheduleItemEditor({
   onClose: () => void;
   onChange: (patch: Partial<ContentScheduleItem>) => void;
   onRefine: () => void;
+  onRegenerate: () => void;
+  onDelete: () => void;
   onCopy: () => void;
 }) {
   const fieldClass =
@@ -638,10 +760,24 @@ function ScheduleItemEditor({
         title={item.name}
         subtitle={`${item.postType} · ${CONTENT_SCHEDULE_STATUS_LABELS[item.status]}`}
         actions={
-          <Button type="button" variant="secondary" size="sm" onClick={onCopy}>
-            <Copy className="h-4 w-4" />
-            Copiar
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="secondary" size="sm" onClick={onCopy}>
+              <Copy className="h-4 w-4" />
+              Copiar
+            </Button>
+            {!isReadOnly && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="text-ag-danger border-ag-danger/25 hover:bg-ag-danger/10"
+                onClick={onDelete}
+              >
+                <Trash2 className="h-4 w-4" />
+                Excluir
+              </Button>
+            )}
+          </div>
         }
       />
       <div className="grid gap-3 sm:grid-cols-2">
@@ -761,22 +897,35 @@ function ScheduleItemEditor({
         )}
       </div>
       {!isReadOnly && (
-        <div className="mt-4 flex flex-col sm:flex-row gap-2">
-          <input
-            type="text"
-            value={refineInstruction}
-            onChange={(e) => onRefineInstructionChange(e.target.value)}
-            placeholder="Refinar com IA: ex. tom mais direto, foco em offline..."
-            className={cn(fieldClass, "flex-1")}
-          />
+        <div className="mt-4 flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="text"
+              value={refineInstruction}
+              onChange={(e) => onRefineInstructionChange(e.target.value)}
+              placeholder="Refinar com IA: ex. tom mais direto, foco em offline..."
+              className={cn(fieldClass, "flex-1")}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={onRefine}
+              disabled={refining || !refineInstruction.trim()}
+            >
+              {refining ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              Refinar
+            </Button>
+          </div>
           <Button
             type="button"
-            variant="secondary"
-            onClick={onRefine}
-            disabled={refining || !refineInstruction.trim()}
+            variant="ghost"
+            size="sm"
+            className="w-fit"
+            onClick={onRegenerate}
+            disabled={refining}
           >
-            {refining ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            Refinar
+            {refining ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+            Recriar este item com IA
           </Button>
         </div>
       )}
