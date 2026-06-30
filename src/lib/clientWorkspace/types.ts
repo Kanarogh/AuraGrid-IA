@@ -29,6 +29,18 @@ export type ClientRegistry = {
 
 export type PlanningPeriodEditMode = "active" | "view_archived" | "edit_archived";
 
+export type ContentScheduleOptions = {
+  postCount: number;
+  storyCount: number;
+  extraInstructions: string;
+};
+
+export const DEFAULT_CONTENT_SCHEDULE_OPTIONS: ContentScheduleOptions = {
+  postCount: 9,
+  storyCount: 12,
+  extraInstructions: "",
+};
+
 export type ClientWorkspace = {
   version: 1;
   brandGem: BrandGem;
@@ -37,6 +49,8 @@ export type ClientWorkspace = {
   contentSchedule: ContentScheduleItem[];
   /** Briefing do cronograma (por roteiro). */
   contentScheduleBrief?: string;
+  /** Opções do gerador de cronograma (por roteiro). */
+  contentScheduleOptions?: ContentScheduleOptions;
   startDate: string;
   activePlanningPeriodId: string;
   planningPeriods: PlanningPeriod[];

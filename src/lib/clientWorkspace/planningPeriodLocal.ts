@@ -12,6 +12,7 @@ import {
   createEmptyWorkspace,
 } from "./factory";
 import type { ClientMeta, ClientWorkspace } from "./types";
+import { DEFAULT_CONTENT_SCHEDULE_OPTIONS } from "./types";
 import { effectiveUsesReferencesFromParts } from "../referenceWorkflow";
 
 export type PeriodSnapshot = {
@@ -20,6 +21,7 @@ export type PeriodSnapshot = {
   canva: ClientWorkspace["canva"];
   contentSchedule: ClientWorkspace["contentSchedule"];
   contentScheduleBrief: ClientWorkspace["contentScheduleBrief"];
+  contentScheduleOptions: ClientWorkspace["contentScheduleOptions"];
   startDate: string;
   campaignContext: string;
   usesReferences?: boolean | null;
@@ -32,6 +34,7 @@ function snapshotFromWorkspace(ws: ClientWorkspace): PeriodSnapshot {
     canva: ws.canva,
     contentSchedule: ws.contentSchedule,
     contentScheduleBrief: ws.contentScheduleBrief ?? "",
+    contentScheduleOptions: ws.contentScheduleOptions,
     startDate: ws.startDate,
     campaignContext: ws.brandGem.campaignContext ?? "",
     usesReferences: ws.planningPeriods.find((p) => p.id === ws.activePlanningPeriodId)
@@ -47,6 +50,7 @@ function applySnapshot(ws: ClientWorkspace, snapshot: PeriodSnapshot): ClientWor
     canva: snapshot.canva,
     contentSchedule: snapshot.contentSchedule ?? [],
     contentScheduleBrief: snapshot.contentScheduleBrief ?? "",
+    contentScheduleOptions: snapshot.contentScheduleOptions,
     startDate: snapshot.startDate,
     brandGem: {
       ...ws.brandGem,
@@ -81,6 +85,7 @@ export function switchLocalPlanningPeriod(
       catalog: [],
       contentSchedule: [],
       contentScheduleBrief: "",
+      contentScheduleOptions: { ...DEFAULT_CONTENT_SCHEDULE_OPTIONS },
       canva: {
         pages: createDefaultCanvaPages(),
         activePageId: "page_4",
@@ -123,6 +128,7 @@ function cloneSnapshot(snapshot: PeriodSnapshot): PeriodSnapshot {
       id: `${item.id}_dup_${Date.now()}`,
     })),
     contentScheduleBrief: snapshot.contentScheduleBrief ?? "",
+    contentScheduleOptions: snapshot.contentScheduleOptions,
     canva: {
       ...snapshot.canva,
       pages: snapshot.canva.pages.map((page) => ({
@@ -183,7 +189,8 @@ export function createLocalPlanningPeriod(
           posts: recalculatePostDates(startDate, createEmptyPosts()),
           catalog: [],
           contentSchedule: [],
-      contentScheduleBrief: "",
+          contentScheduleBrief: "",
+          contentScheduleOptions: { ...DEFAULT_CONTENT_SCHEDULE_OPTIONS },
           canva: createEmptyWorkspace(meta).canva,
           startDate,
           campaignContext: sourceMeta?.campaignContext ?? "",
@@ -196,6 +203,7 @@ export function createLocalPlanningPeriod(
       catalog: [],
       contentSchedule: [],
       contentScheduleBrief: "",
+      contentScheduleOptions: { ...DEFAULT_CONTENT_SCHEDULE_OPTIONS },
       canva: empty.canva,
       startDate,
       campaignContext: "",
@@ -268,6 +276,7 @@ export function resetLocalActivePeriod(ws: ClientWorkspace, meta: ClientMeta): C
     catalog: [],
     contentSchedule: [],
     contentScheduleBrief: "",
+    contentScheduleOptions: { ...DEFAULT_CONTENT_SCHEDULE_OPTIONS },
     canva: empty.canva,
     startDate: ws.startDate,
     campaignContext: "",

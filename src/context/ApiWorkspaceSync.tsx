@@ -175,9 +175,15 @@ export function ApiWorkspaceSync() {
 
   // Debounced PATCH — só quando conteúdo muda (posts, gem, canva…), não ao trocar de dia na UI
   useEffect(() => {
-    if (storageMode !== "postgresql" || !user || !activeClientId || skipSaveRef.current) return;
+    if (storageMode !== "postgresql" || !user || !activeClientId || skipSaveRef.current) {
+      setWorkspaceSavePending(false);
+      return;
+    }
     if (!loadedRef.current) return;
-    if (isClientSwitching) return;
+    if (isClientSwitching) {
+      setWorkspaceSavePending(false);
+      return;
+    }
     if (isApplyingRemoteWorkspace()) return;
     if (!contentFingerprint) return;
 
@@ -226,7 +232,6 @@ export function ApiWorkspaceSync() {
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
-        setWorkspaceSavePending(false);
       }
     };
   }, [contentFingerprint, activeClientId, storageMode, user?.id, isClientSwitching]);

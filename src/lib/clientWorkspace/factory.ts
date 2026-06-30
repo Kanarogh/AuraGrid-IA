@@ -13,6 +13,7 @@ import { normalizeCaptionGenerationParams } from "../captionParams";
 import { effectiveUsesReferencesFromParts } from "../referenceWorkflow";
 import type { BrandGem, CanvaGridPage, PlannedPost } from "../../types";
 import type { ClientMeta, ClientWorkspace } from "./types";
+import { DEFAULT_CONTENT_SCHEDULE_OPTIONS } from "./types";
 
 import {
   defaultPlanningStartDate,
@@ -113,6 +114,7 @@ export function createEmptyWorkspace(meta: ClientMeta): ClientWorkspace {
     posts,
     contentSchedule: [],
     contentScheduleBrief: "",
+    contentScheduleOptions: { ...DEFAULT_CONTENT_SCHEDULE_OPTIONS },
     startDate,
     activePlanningPeriodId: defaultPeriod.id,
     planningPeriods: [defaultPeriod],
@@ -204,6 +206,23 @@ export function normalizeWorkspace(
     contentSchedule: Array.isArray(raw.contentSchedule) ? raw.contentSchedule : empty.contentSchedule,
     contentScheduleBrief:
       typeof raw.contentScheduleBrief === "string" ? raw.contentScheduleBrief : empty.contentScheduleBrief,
+    contentScheduleOptions:
+      raw.contentScheduleOptions && typeof raw.contentScheduleOptions === "object"
+        ? {
+            postCount:
+              typeof raw.contentScheduleOptions.postCount === "number"
+                ? raw.contentScheduleOptions.postCount
+                : DEFAULT_CONTENT_SCHEDULE_OPTIONS.postCount,
+            storyCount:
+              typeof raw.contentScheduleOptions.storyCount === "number"
+                ? raw.contentScheduleOptions.storyCount
+                : DEFAULT_CONTENT_SCHEDULE_OPTIONS.storyCount,
+            extraInstructions:
+              typeof raw.contentScheduleOptions.extraInstructions === "string"
+                ? raw.contentScheduleOptions.extraInstructions
+                : DEFAULT_CONTENT_SCHEDULE_OPTIONS.extraInstructions,
+          }
+        : empty.contentScheduleOptions,
     startDate: activePeriod.startDate ?? empty.startDate,
     activePlanningPeriodId,
     planningPeriods,

@@ -36,6 +36,7 @@ import {
   type ClientMeta,
   type ClientRegistry,
   type ClientWorkspace,
+  type ContentScheduleOptions,
 } from "../lib/clientWorkspace";
 import { notifyStorageSaveFailure } from "../lib/clientWorkspace/saveNotify";
 import { toast } from "../lib/toast";
@@ -105,6 +106,7 @@ type ClientWorkspaceContextValue = {
   setPosts: Dispatch<SetStateAction<PlannedPost[]>>;
   setContentSchedule: Dispatch<SetStateAction<ContentScheduleItem[]>>;
   setContentScheduleBrief: Dispatch<SetStateAction<string>>;
+  setContentScheduleOptions: Dispatch<SetStateAction<ContentScheduleOptions>>;
   setStartDate: Dispatch<SetStateAction<string>>;
   setBrandGem: Dispatch<SetStateAction<BrandGem>>;
   setCanvaPages: Dispatch<SetStateAction<CanvaGridPage[]>>;
@@ -545,6 +547,27 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
+
+  const setContentScheduleOptions: Dispatch<SetStateAction<ContentScheduleOptions>> = useCallback(
+    (action) => {
+      setWorkspace((prev) => {
+        if (prev.isReadOnly) return prev;
+        const current = prev.contentScheduleOptions ?? {
+          postCount: 9,
+          storyCount: 12,
+          extraInstructions: "",
+        };
+        const nextOptions = typeof action === "function" ? action(current) : action;
+        const next: ClientWorkspace = {
+          ...prev,
+          contentScheduleOptions: nextOptions,
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+    },
+    []
+  );
 
   const getPostsSnapshot = useCallback((): PlannedPost[] => {
     return workspaceRef.current.posts;
@@ -1353,6 +1376,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       setPosts,
       setContentSchedule,
       setContentScheduleBrief,
+      setContentScheduleOptions,
       setStartDate,
       setBrandGem,
       setCanvaPages,
@@ -1405,6 +1429,7 @@ export function ClientWorkspaceProvider({ children }: { children: ReactNode }) {
       setPosts,
       setContentSchedule,
       setContentScheduleBrief,
+      setContentScheduleOptions,
       setStartDate,
       setBrandGem,
       setCanvaPages,

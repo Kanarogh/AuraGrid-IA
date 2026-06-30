@@ -30,6 +30,11 @@ function buildWorkspaceContentBody(ws: ClientWorkspace) {
     posts: ws.posts.map(compactPostForApiPatch),
     contentSchedule: ws.contentSchedule ?? [],
     contentScheduleBrief: ws.contentScheduleBrief ?? "",
+    contentScheduleOptions: ws.contentScheduleOptions ?? {
+      postCount: 9,
+      storyCount: 12,
+      extraInstructions: "",
+    },
     canva: compactCanvaForApiPatch(ws.canva),
   };
 }

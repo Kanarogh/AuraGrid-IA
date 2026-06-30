@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   Copy,
@@ -14,6 +14,8 @@ import type {
   ContentScheduleItemStatus,
   PlannedPost,
 } from "../../types";
+import type { ContentScheduleOptions } from "../../lib/clientWorkspace/types";
+import { DEFAULT_CONTENT_SCHEDULE_OPTIONS } from "../../lib/clientWorkspace/types";
 import { aiFetch } from "../../lib/aiFetch";
 import { aiQueue } from "../../lib/aiQueue";
 import {
@@ -41,6 +43,8 @@ type ContentScheduleWorkspaceProps = {
   posts: PlannedPost[];
   clientBrief: string;
   onClientBriefChange: (brief: string) => void;
+  scheduleOptions?: ContentScheduleOptions;
+  onScheduleOptionsChange?: (options: ContentScheduleOptions) => void;
   onItemsChange: (items: ContentScheduleItem[]) => void;
   onPushToPlanning: (posts: PlannedPost[], items: ContentScheduleItem[]) => void;
 };
@@ -69,12 +73,93 @@ export function ContentScheduleWorkspace({
   posts,
   clientBrief,
   onClientBriefChange,
+  scheduleOptions,
+  onScheduleOptionsChange,
   onItemsChange,
   onPushToPlanning,
 }: ContentScheduleWorkspaceProps) {
-  const [postCount, setPostCount] = useState(9);
-  const [storyCount, setStoryCount] = useState(12);
-  const [extraInstructions, setExtraInstructions] = useState("");
+  const [briefDraft, setBriefDraft] = useState(clientBrief);
+  const briefEditingRef = useRef(false);
+  const briefCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const optionsCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resolvedOptions = scheduleOptions ?? DEFAULT_CONTENT_SCHEDULE_OPTIONS;
+  const [postCount, setPostCount] = useState(resolvedOptions.postCount);
+  const [storyCount, setStoryCount] = useState(resolvedOptions.storyCount);
+  const [extraInstructions, setExtraInstructions] = useState(resolvedOptions.extraInstructions);
+
+  useEffect(() => {
+    if (briefEditingRef.current) return;
+    setBriefDraft(clientBrief);
+  }, [clientBrief]);
+
+  useEffect(() => {
+    setPostCount(resolvedOptions.postCount);
+    setStoryCount(resolvedOptions.storyCount);
+    setExtraInstructions(resolvedOptions.extraInstructions);
+  }, [
+    resolvedOptions.postCount,
+    resolvedOptions.storyCount,
+    resolvedOptions.extraInstructions,
+  ]);
+
+  const commitBriefDraft = useCallback(
+    (nextBrief: string) => {
+      if (nextBrief !== clientBrief) {
+        onClientBriefChange(nextBrief);
+      }
+    },
+    [clientBrief, onClientBriefChange]
+  );
+
+  const handleBriefChange = useCallback(
+    (value: string) => {
+      briefEditingRef.current = true;
+      setBriefDraft(value);
+      if (briefCommitTimerRef.current) clearTimeout(briefCommitTimerRef.current);
+      briefCommitTimerRef.current = setTimeout(() => {
+        briefCommitTimerRef.current = null;
+        briefEditingRef.current = false;
+        commitBriefDraft(value);
+      }, 700);
+    },
+    [commitBriefDraft]
+  );
+
+  const commitScheduleOptions = useCallback(
+    (next: ContentScheduleOptions) => {
+      onScheduleOptionsChange?.(next);
+    },
+    [onScheduleOptionsChange]
+  );
+
+  const updateScheduleOptions = useCallback(
+    (patch: Partial<ContentScheduleOptions>) => {
+      const next: ContentScheduleOptions = {
+        postCount,
+        storyCount,
+        extraInstructions,
+        ...patch,
+      };
+      if (patch.postCount !== undefined) setPostCount(patch.postCount);
+      if (patch.storyCount !== undefined) setStoryCount(patch.storyCount);
+      if (patch.extraInstructions !== undefined) setExtraInstructions(patch.extraInstructions);
+      if (optionsCommitTimerRef.current) clearTimeout(optionsCommitTimerRef.current);
+      optionsCommitTimerRef.current = setTimeout(() => {
+        optionsCommitTimerRef.current = null;
+        commitScheduleOptions(next);
+      }, 500);
+    },
+    [commitScheduleOptions, extraInstructions, postCount, storyCount]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (briefCommitTimerRef.current) clearTimeout(briefCommitTimerRef.current);
+      if (optionsCommitTimerRef.current) clearTimeout(optionsCommitTimerRef.current);
+    };
+  }, []);
+
   const [generating, setGenerating] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -98,8 +183,8 @@ export function ContentScheduleWorkspace({
   const hasItems = items.length > 0;
 
   const workflowSteps: WorkflowStep[] = [
-    { id: "brief", label: "Briefing", done: hasItems || clientBrief.trim().length > 20, active: !hasItems },
-    { id: "gen", label: "Gerar", done: hasItems, active: !hasItems && clientBrief.trim().length > 0 },
+    { id: "brief", label: "Briefing", done: hasItems || briefDraft.trim().length > 20, active: !hasItems },
+    { id: "gen", label: "Gerar", done: hasItems, active: !hasItems && briefDraft.trim().length > 0 },
     { id: "review", label: "Revisar", done: approvedCount > 0, active: hasItems && approvedCount === 0 },
     {
       id: "handoff",
@@ -121,6 +206,15 @@ export function ContentScheduleWorkspace({
       toast.error("Configure o Gem da marca antes de gerar o cronograma.");
       return;
     }
+    if (briefCommitTimerRef.current) {
+      clearTimeout(briefCommitTimerRef.current);
+      briefCommitTimerRef.current = null;
+    }
+    briefEditingRef.current = false;
+    const briefForGeneration = briefDraft;
+    if (briefForGeneration !== clientBrief) {
+      onClientBriefChange(briefForGeneration);
+    }
     setGenerating(true);
     setAiError(null);
     try {
@@ -130,7 +224,7 @@ export function ContentScheduleWorkspace({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             brandGem,
-            clientBrief,
+            clientBrief: briefForGeneration,
             mode: "monthly",
             options: {
               postCount,
@@ -157,7 +251,9 @@ export function ContentScheduleWorkspace({
   }, [
     brandGem,
     brandGemReady,
+    briefDraft,
     clientBrief,
+    onClientBriefChange,
     extraInstructions,
     onItemsChange,
     postCount,
@@ -258,8 +354,16 @@ export function ContentScheduleWorkspace({
           subtitle="Cole a mensagem ou direcionamento do cliente. A IA gera posts e stories com copy estruturado."
         />
         <textarea
-          value={clientBrief}
-          onChange={(e) => onClientBriefChange(e.target.value)}
+          value={briefDraft}
+          onChange={(e) => handleBriefChange(e.target.value)}
+          onBlur={() => {
+            if (briefCommitTimerRef.current) {
+              clearTimeout(briefCommitTimerRef.current);
+              briefCommitTimerRef.current = null;
+            }
+            briefEditingRef.current = false;
+            commitBriefDraft(briefDraft);
+          }}
           disabled={isReadOnly || generating}
           rows={5}
           placeholder="Ex.: Quero focar este mês em PDV offline, gestão de estoque e datas sazonais..."
@@ -273,7 +377,9 @@ export function ContentScheduleWorkspace({
               min={1}
               max={30}
               value={postCount}
-              onChange={(e) => setPostCount(Number(e.target.value) || 9)}
+              onChange={(e) =>
+                updateScheduleOptions({ postCount: Number(e.target.value) || 9 })
+              }
               disabled={isReadOnly || generating}
               className="mt-1 w-full rounded-lg border border-ag-border/70 bg-ag-surface-2 px-3 py-2 text-sm"
             />
@@ -285,7 +391,9 @@ export function ContentScheduleWorkspace({
               min={1}
               max={30}
               value={storyCount}
-              onChange={(e) => setStoryCount(Number(e.target.value) || 12)}
+              onChange={(e) =>
+                updateScheduleOptions({ storyCount: Number(e.target.value) || 12 })
+              }
               disabled={isReadOnly || generating}
               className="mt-1 w-full rounded-lg border border-ag-border/70 bg-ag-surface-2 px-3 py-2 text-sm"
             />
@@ -305,7 +413,7 @@ export function ContentScheduleWorkspace({
           <input
             type="text"
             value={extraInstructions}
-            onChange={(e) => setExtraInstructions(e.target.value)}
+            onChange={(e) => updateScheduleOptions({ extraInstructions: e.target.value })}
             disabled={isReadOnly || generating}
             placeholder="Ex.: 3 posts sobre estoque, tom mais direto..."
             className="mt-1 w-full rounded-lg border border-ag-border/70 bg-ag-surface-2 px-3 py-2 text-sm"

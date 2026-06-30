@@ -232,6 +232,7 @@ import {
   slicesFromDomains,
 } from "./lib/sync/workspaceReloadCoordinator";
 import { syncDebugLog } from "./lib/sync/syncDebugLog";
+import { isWorkspaceSavePending } from "./lib/sync/workspaceSaveGuard";
 import { ContentScheduleWorkspace } from "./components/contentSchedule/ContentScheduleWorkspace";
 import { PostSchedulingWorkspace } from "./components/publish/PostSchedulingWorkspace";
 import { CatalogEnrichProgressPanel } from "./components/catalog/CatalogEnrichProgressPanel";
@@ -255,6 +256,7 @@ export default function App() {
     setPosts,
     setContentSchedule,
     setContentScheduleBrief,
+    setContentScheduleOptions,
     setStartDate,
     setBrandGem,
     saveBrandGem,
@@ -308,6 +310,11 @@ export default function App() {
   const posts = workspace.posts;
   const contentSchedule = workspace.contentSchedule ?? [];
   const contentScheduleBrief = workspace.contentScheduleBrief ?? "";
+  const contentScheduleOptions = workspace.contentScheduleOptions ?? {
+    postCount: 9,
+    storyCount: 12,
+    extraInstructions: "",
+  };
   const startDate = workspace.startDate;
   const brandGem = workspace.brandGem;
   const activePeriodLabel =
@@ -418,10 +425,21 @@ export default function App() {
           setStartDate(ws.startDate);
         }
         if (slices.workspace) {
+          const localBrief = workspace.contentScheduleBrief ?? "";
+          const remoteBrief = ws.contentScheduleBrief ?? "";
+          const skipScheduleFields =
+            isWorkspaceSavePending() ||
+            (localBrief.length > 0 && remoteBrief.length === 0);
+
           setPosts(ws.posts);
           setStartDate(ws.startDate);
-          setContentSchedule(ws.contentSchedule ?? []);
-          setContentScheduleBrief(ws.contentScheduleBrief ?? "");
+          if (!skipScheduleFields) {
+            setContentSchedule(ws.contentSchedule ?? []);
+            setContentScheduleBrief(remoteBrief);
+            if (ws.contentScheduleOptions) {
+              setContentScheduleOptions(ws.contentScheduleOptions);
+            }
+          }
           setCanvaPages(ws.canva.pages);
           setActiveCanvaPageId(ws.canva.activePageId);
           setAutoSyncCanva(ws.canva.autoSync);
@@ -447,12 +465,14 @@ export default function App() {
       setPosts,
       setContentSchedule,
       setContentScheduleBrief,
+      setContentScheduleOptions,
       setCanvaPages,
       setActiveCanvaPageId,
       setAutoSyncCanva,
       setCanvaGridReversed,
       setCanvaGridFormat,
       setCanvaGridMaxWidth,
+      workspace.contentScheduleBrief,
     ]
   );
 
@@ -2949,6 +2969,8 @@ export default function App() {
               posts={posts}
               clientBrief={contentScheduleBrief}
               onClientBriefChange={setContentScheduleBrief}
+              scheduleOptions={contentScheduleOptions}
+              onScheduleOptionsChange={setContentScheduleOptions}
               onItemsChange={setContentSchedule}
               onPushToPlanning={(nextPosts, nextItems) => {
                 setPosts(nextPosts);

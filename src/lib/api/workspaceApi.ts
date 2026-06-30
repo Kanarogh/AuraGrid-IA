@@ -1,7 +1,12 @@
 import { normalizeCanvaPages } from "../canva";
 import { normalizeCaptionGenerationParams } from "../captionParams";
 import type { BrandGem, CatalogItem, ContentScheduleItem, PlannedPost } from "../../types";
-import type { ClientRegistry, ClientWorkspace } from "../clientWorkspace/types";
+import type {
+  ClientRegistry,
+  ClientWorkspace,
+  ContentScheduleOptions,
+} from "../clientWorkspace/types";
+import { DEFAULT_CONTENT_SCHEDULE_OPTIONS } from "../clientWorkspace/types";
 import type { ClientMeta } from "../clientWorkspace/types";
 import type { PlanningPeriod } from "../planningConstants";
 import { withAiHeaders } from "../aiFetch";
@@ -16,6 +21,8 @@ export type ApiWorkspaceResponse = {
   catalog: CatalogItem[];
   posts: PlannedPost[];
   contentSchedule?: ContentScheduleItem[];
+  contentScheduleBrief?: string;
+  contentScheduleOptions?: ClientWorkspace["contentScheduleOptions"];
   startDate: string;
   activePlanningPeriodId: string;
   planningPeriods: PlanningPeriod[];
@@ -25,6 +32,21 @@ export type ApiWorkspaceResponse = {
   canva: ClientWorkspace["canva"];
   ui?: ClientWorkspace["ui"];
 };
+
+export function normalizeContentScheduleOptions(
+  raw: ContentScheduleOptions | null | undefined
+): ContentScheduleOptions {
+  if (!raw || typeof raw !== "object") {
+    return { ...DEFAULT_CONTENT_SCHEDULE_OPTIONS };
+  }
+  const postCount =
+    typeof raw.postCount === "number" && raw.postCount >= 1 ? raw.postCount : 9;
+  const storyCount =
+    typeof raw.storyCount === "number" && raw.storyCount >= 1 ? raw.storyCount : 12;
+  const extraInstructions =
+    typeof raw.extraInstructions === "string" ? raw.extraInstructions : "";
+  return { postCount, storyCount, extraInstructions };
+}
 
 export function apiWorkspaceToClientWorkspace(dto: ApiWorkspaceResponse): ClientWorkspace {
   const normalizedPages = normalizeCanvaPages(
@@ -62,6 +84,9 @@ export function apiWorkspaceToClientWorkspace(dto: ApiWorkspaceResponse): Client
         image: resolveMediaUrl(typeof p.image === "string" ? p.image : null),
       })),
     contentSchedule: Array.isArray(dto.contentSchedule) ? dto.contentSchedule : [],
+    contentScheduleBrief:
+      typeof dto.contentScheduleBrief === "string" ? dto.contentScheduleBrief : "",
+    contentScheduleOptions: normalizeContentScheduleOptions(dto.contentScheduleOptions),
     startDate: dto.startDate,
     activePlanningPeriodId: dto.activePlanningPeriodId,
     planningPeriods: dto.planningPeriods ?? [],

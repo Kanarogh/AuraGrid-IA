@@ -252,6 +252,9 @@ export async function loadWorkspaceDto(
     : [];
   const contentScheduleBrief =
     typeof periodRow?.contentScheduleBrief === "string" ? periodRow.contentScheduleBrief : "";
+  const contentScheduleOptions = normalizeContentScheduleOptions(
+    periodRow?.contentScheduleOptions
+  );
 
   const catalogDto = catalog.map((c) => ({
     id: c.id,
@@ -358,6 +361,7 @@ export async function loadWorkspaceDto(
     posts: postsDto,
     contentSchedule: contentScheduleDto,
     contentScheduleBrief,
+    contentScheduleOptions,
     startDate: periodStartDate,
     activePlanningPeriodId: activePeriodId,
     planningPeriods: planningPeriodsList,
@@ -383,12 +387,28 @@ export async function loadWorkspaceDto(
   return filterWorkspaceByPermissions(dto, userId, clientId);
 }
 
+function normalizeContentScheduleOptions(raw: unknown): {
+  postCount: number;
+  storyCount: number;
+  extraInstructions: string;
+} {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { postCount: 9, storyCount: 12, extraInstructions: "" };
+  }
+  const o = raw as Record<string, unknown>;
+  const postCount = typeof o.postCount === "number" && o.postCount >= 1 ? o.postCount : 9;
+  const storyCount = typeof o.storyCount === "number" && o.storyCount >= 1 ? o.storyCount : 12;
+  const extraInstructions = typeof o.extraInstructions === "string" ? o.extraInstructions : "";
+  return { postCount, storyCount, extraInstructions };
+}
+
 async function filterWorkspaceByPermissions<T extends {
   posts: unknown[];
   catalog: unknown[];
   canva: { pages: unknown[]; activePageId: string; autoSync: boolean; reversed: boolean; gridFormat: string; gridMaxWidth: number };
   contentSchedule: unknown;
   contentScheduleBrief: unknown;
+  contentScheduleOptions: unknown;
   brandGem: Record<string, unknown>;
   planningPeriods: unknown[];
 }>(
@@ -816,6 +836,20 @@ export async function patchWorkspace(
       .update(planningPeriods)
       .set({
         contentScheduleBrief: patch.contentScheduleBrief,
+        updatedAt: new Date(),
+      })
+      .where(eq(planningPeriods.id, periodId));
+  }
+
+  if (
+    patch.contentScheduleOptions &&
+    typeof patch.contentScheduleOptions === "object" &&
+    !Array.isArray(patch.contentScheduleOptions)
+  ) {
+    await db
+      .update(planningPeriods)
+      .set({
+        contentScheduleOptions: normalizeContentScheduleOptions(patch.contentScheduleOptions),
         updatedAt: new Date(),
       })
       .where(eq(planningPeriods.id, periodId));

@@ -106,6 +106,9 @@ export const planningPeriods = pgTable(
     usesReferences: boolean("uses_references"),
     contentSchedule: jsonb("content_schedule").notNull().default([]),
     contentScheduleBrief: text("content_schedule_brief").notNull().default(""),
+    contentScheduleOptions: jsonb("content_schedule_options")
+      .notNull()
+      .default({ postCount: 9, storyCount: 12, extraInstructions: "" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
