@@ -144,7 +144,7 @@ export function CanvaPageStrip({
                   label="Excluir página"
                   size="sm"
                   variant="danger"
-                  className="absolute -top-1.5 -right-1.5 z-10 !p-1 h-5 w-5 rounded-full bg-ag-danger text-ag-accent-fg hover:bg-ag-danger/90 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute -top-1.5 -right-1.5 z-10 !p-1 h-5 w-5 rounded-full bg-ag-danger text-ag-danger-fg hover:bg-ag-danger/90 opacity-0 group-hover:opacity-100 transition-opacity"
                   onClick={() => onDeletePage(page.id)}
                 >
                   <Trash2 className="h-2.5 w-2.5" />

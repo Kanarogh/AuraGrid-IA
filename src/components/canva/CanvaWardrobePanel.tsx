@@ -269,7 +269,7 @@ export function CanvaWardrobePanel({
                               className={cn(
                                 "text-[7px] font-bold font-mono px-1 py-0.5 rounded-md shadow-[var(--ag-shadow)] leading-none",
                                 onCurrent
-                                  ? "bg-ag-success text-ag-text"
+                                  ? "bg-ag-success text-ag-success-fg"
                                   : "bg-ag-surface-1/95 text-ag-muted border border-ag-border"
                               )}
                             >

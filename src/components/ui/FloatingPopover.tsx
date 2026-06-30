@@ -131,7 +131,7 @@ export function FloatingPopover({
         <button
           type="button"
           aria-label="Fechar"
-          className="fixed inset-0 cursor-default bg-black/5"
+          className="fixed inset-0 cursor-default bg-ag-bg/40"
           style={{ zIndex: zIndex - 1 }}
           onClick={onClose}
         />

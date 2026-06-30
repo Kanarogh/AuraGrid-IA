@@ -25,6 +25,14 @@
 .dark {
   --ag-ring: #7b5cff99;
   --ag-sidebar-active-bg: #7b5cff26;
+  --ag-focus-border: #9b84ff;
+  --ag-mesh-purple: #7b5cff38;
+  --ag-mesh-cyan: #00d4ff28;
+  --ag-selection-bg: #7b5cff50;
+  --ag-gradient-brand: linear-gradient(135deg, #9b84ff 0%, #4361ff 50%, #00d4ff 100%);
+  --ag-gradient-btn: linear-gradient(135deg, #9b84ff 0%, #4361ff 100%);
+  --ag-gradient-btn-hover: linear-gradient(135deg, #8a72f5 0%, #3555f5 100%);
+  --ag-gradient-text: linear-gradient(90deg, #9b84ff 0%, #00d4ff 100%);
 }
 
 /* Preset Aura — identidade oficial (padrão) */

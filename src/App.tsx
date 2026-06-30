@@ -3772,7 +3772,7 @@ export default function App() {
 
                       <button
                         onClick={() => removeCatalogItem(item.id)}
-                        className="absolute top-1.5 right-1.5 bg-ag-bg/90 p-1.5 rounded-lg hover:bg-ag-danger hover:text-white text-ag-muted opacity-0 group-hover:opacity-100 transition-all cursor-pointer border border-ag-border"
+                        className="absolute top-1.5 right-1.5 bg-ag-bg/90 p-1.5 rounded-lg hover:bg-ag-danger hover:text-ag-danger-fg text-ag-muted opacity-0 group-hover:opacity-100 transition-all cursor-pointer border border-ag-border"
                         title="Excluir do catálogo"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -3781,7 +3781,7 @@ export default function App() {
 
                     {/* Metadata text inputs */}
                     <div className="font-sans min-w-0">
-                      <span className="text-xs font-bold text-center uppercase block truncate text-ag-accent dark:text-ag-accent" title={item.label}>
+                      <span className="text-xs font-bold text-center uppercase block truncate text-ag-accent" title={item.label}>
                         {item.label}
                       </span>
                       {catalogLimited && (
@@ -3984,7 +3984,7 @@ export default function App() {
                         </span>
                         <button
                           onClick={() => removeCatalogItem(item.id)}
-                          className="absolute top-1.5 right-1.5 bg-ag-bg/90 p-1.5 rounded-lg hover:bg-ag-danger hover:text-white text-ag-muted opacity-0 group-hover:opacity-100 transition-all cursor-pointer border border-ag-border"
+                          className="absolute top-1.5 right-1.5 bg-ag-bg/90 p-1.5 rounded-lg hover:bg-ag-danger hover:text-ag-danger-fg text-ag-muted opacity-0 group-hover:opacity-100 transition-all cursor-pointer border border-ag-border"
                           title="Excluir peça de grid"
                         >
                           <Trash2 className="h-3.5 w-3.5" />

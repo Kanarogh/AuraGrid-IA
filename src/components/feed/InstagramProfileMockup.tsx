@@ -235,14 +235,14 @@ export function InstagramProfileMockup({
                             e.stopPropagation();
                             onSwapDays(swapSourceId, post.id);
                           }}
-                          className="absolute inset-0 bg-ag-accent/90 flex flex-col items-center justify-center text-white z-20"
+                          className="absolute inset-0 bg-ag-accent/90 flex flex-col items-center justify-center text-ag-accent-fg z-20"
                         >
                           <ArrowRight className="h-4 w-4 animate-bounce" />
                           <span className="text-[8px] font-bold mt-0.5">Inverter</span>
                         </div>
                       )}
                       {post.isConfirmed && !sched && (
-                        <div className="absolute top-1 right-1 bg-ag-success text-black p-0.5 rounded-full z-10">
+                        <div className="absolute top-1 right-1 bg-ag-success text-ag-success-fg p-0.5 rounded-full z-10">
                           <Check className="h-2 w-2" strokeWidth={4} />
                         </div>
                       )}
@@ -250,10 +250,10 @@ export function InstagramProfileMockup({
                         <div
                           className={cn(
                             "absolute top-1 left-1 right-1 z-10 rounded px-1 py-0.5 text-[7px] font-semibold text-center truncate",
-                            sched.status === "published" && "bg-ag-success/90 text-white",
-                            sched.status === "failed" && "bg-ag-danger/90 text-white",
-                            sched.status === "publishing" && "bg-ag-accent/90 text-white",
-                            sched.status === "queued" && "bg-ag-accent/90 text-white",
+                            sched.status === "published" && "bg-ag-success/90 text-ag-success-fg",
+                            sched.status === "failed" && "bg-ag-danger/90 text-ag-danger-fg",
+                            sched.status === "publishing" && "bg-ag-accent/90 text-ag-accent-fg",
+                            sched.status === "queued" && "bg-ag-accent/90 text-ag-accent-fg",
                             sched.status === "eligible" && "bg-ag-warning/90 text-black"
                           )}
                         >

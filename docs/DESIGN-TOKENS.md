@@ -54,8 +54,10 @@ Gradientes definidos em [`src/styles/aura-tokens.css`](../src/styles/aura-tokens
 | Token | Hex |
 |-------|-----|
 | `--ag-success` | `#00E4B5` |
+| `--ag-success-fg` | `#0D0F14` (texto sobre fundo success sólido) |
 | `--ag-warning` | `#E6A23C` (light) / `#FBBF24` (dark) |
 | `--ag-danger` | `#EF4444` (light) / `#F87171` (dark) |
+| `--ag-danger-fg` | `#FFFFFF` (light) / `#0D0F14` (dark) |
 
 ## Accent preset padrão
 
@@ -76,21 +78,54 @@ Em [`SocialConnectionsPanel.tsx`](../src/components/publish/SocialConnectionsPan
 
 Ícones sobre gradiente: `text-ag-accent-fg`.
 
-## Sombras (modo claro)
+## Sombras
 
-| Token | Uso |
-|-------|-----|
-| `--ag-shadow-sm` | Cards compactos (`WorkspaceCard`, seletor de período) |
-| `--ag-shadow` | Cards padrão, botões accent, hovers leves |
-| `--ag-shadow-lg` | Heroes, modais, drawers, FAB mobile |
+| Token | Light | Dark |
+|-------|-------|------|
+| `--ag-shadow-sm` | Cards compactos | Idem (opacidade maior) |
+| `--ag-shadow` | Cards padrão, botões | Idem |
+| `--ag-shadow-lg` | Heroes, modais, drawers | Idem |
 
 Preferir `shadow-[var(--ag-shadow)]` / `-lg` em vez de `shadow-sm|lg|2xl` do Tailwind.
 
-## Superfície glass (modo claro)
+## Superfície glass
 
-| Token | Valor |
-|-------|-------|
-| `--ag-glass-bg` | `#ffffffd1` — topbar e overlays com `ag-glass` |
+| Modo | Token | Valor |
+|------|-------|-------|
+| Claro | `--ag-glass-bg` | `#ffffffd1` — topbar (`ag-glass`) |
+| Escuro | `--ag-glass-bg` | `#23242bd1` |
+
+## Mesh e fundos (modo escuro)
+
+Em `.dark` ([`aura-tokens.css`](../src/styles/aura-tokens.css)):
+
+| Token | Valor | Uso |
+|-------|-------|-----|
+| `--ag-mesh-purple` | `#7b5cff38` | `ag-page-mesh`, `ag-auth-mesh`, `ag-studio-mesh` |
+| `--ag-mesh-cyan` | `#00d4ff28` | idem |
+| `--ag-selection-bg` | `#7b5cff50` | seleção de texto |
+
+`WorkspaceHero` permanece **sem** mesh (igual ao claro).
+
+## Gradientes — modo escuro
+
+Overrides em `.dark` (`aura-tokens.css`):
+
+- `--ag-gradient-btn` — `#9B84FF` → `#4361FF`
+- `--ag-gradient-btn-hover` — tons mais escuros
+- `--ag-gradient-text` — `#9B84FF` → `#00D4FF`
+- `--ag-gradient-brand` — stops mais luminosos
+
+Botões usam `text-ag-accent-fg` via `.ag-gradient-btn` (no preset Aura dark: `#0D0F14`).
+
+## Studio section header
+
+| Modo | Token |
+|------|-------|
+| Claro | `--ag-studio-header-bg` = `#ffffffd9` |
+| Escuro | `--ag-studio-header-bg` = `#23242bf2` |
+
+Usado no header de [`StudioSection.tsx`](../src/components/ui/StudioSection.tsx).
 
 ## Header de módulo — `WorkspaceHero`
 
@@ -100,13 +135,10 @@ Conteúdo denso (calendário, Post do dia) pode manter `ag-studio` + `ag-studio-
 
 ## Texto sobre fundo colorido
 
-- Botões / chips accent: `text-ag-accent-fg` (não `text-white`)
-- Sucesso em badge pequeno: `text-ag-text` sobre `bg-ag-success`
-- Overlays sobre imagem ou mockups IG: `text-white` permitido
-
-## Modo escuro
-
-Polish visual do dark mode — fase posterior (fora do escopo atual).
+- Botões / chips accent: `text-ag-accent-fg`
+- Success sólido: `text-ag-success-fg`
+- Danger sólido: `text-ag-danger-fg`
+- Overlays sobre imagem ou mockups IG (fundo escuro): `text-white` permitido
 
 ## Raio
 

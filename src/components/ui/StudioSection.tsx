@@ -98,7 +98,7 @@ export function StudioSection({
       {showHeader && (
         <header
           className={cn(
-            "relative z-10 flex flex-col sm:flex-row sm:items-start justify-between gap-4 px-5 py-4 sm:px-6 border-b border-ag-border/50 bg-ag-surface-1/85 backdrop-blur-sm",
+            "relative z-10 flex flex-col sm:flex-row sm:items-start justify-between gap-4 px-5 py-4 sm:px-6 border-b border-ag-border/50 bg-[var(--ag-studio-header-bg)] backdrop-blur-sm",
             titleMode === "hidden" && !eyebrow && !icon && "sm:justify-end py-3"
           )}
         >
