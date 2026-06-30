@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Check,
   Copy,
@@ -78,18 +78,13 @@ export function ContentScheduleWorkspace({
   onItemsChange,
   onPushToPlanning,
 }: ContentScheduleWorkspaceProps) {
-  const [briefDraft, setBriefDraft] = useState(clientBrief);
-  const briefEditingRef = useRef(false);
-  const briefCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const optionsCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const resolvedOptions = scheduleOptions ?? DEFAULT_CONTENT_SCHEDULE_OPTIONS;
+  const [briefDraft, setBriefDraft] = useState(clientBrief);
   const [postCount, setPostCount] = useState(resolvedOptions.postCount);
   const [storyCount, setStoryCount] = useState(resolvedOptions.storyCount);
   const [extraInstructions, setExtraInstructions] = useState(resolvedOptions.extraInstructions);
 
   useEffect(() => {
-    if (briefEditingRef.current) return;
     setBriefDraft(clientBrief);
   }, [clientBrief]);
 
@@ -103,62 +98,25 @@ export function ContentScheduleWorkspace({
     resolvedOptions.extraInstructions,
   ]);
 
-  const commitBriefDraft = useCallback(
-    (nextBrief: string) => {
-      if (nextBrief !== clientBrief) {
-        onClientBriefChange(nextBrief);
-      }
-    },
-    [clientBrief, onClientBriefChange]
-  );
-
-  const handleBriefChange = useCallback(
-    (value: string) => {
-      briefEditingRef.current = true;
-      setBriefDraft(value);
-      if (briefCommitTimerRef.current) clearTimeout(briefCommitTimerRef.current);
-      briefCommitTimerRef.current = setTimeout(() => {
-        briefCommitTimerRef.current = null;
-        briefEditingRef.current = false;
-        commitBriefDraft(value);
-      }, 700);
-    },
-    [commitBriefDraft]
-  );
-
-  const commitScheduleOptions = useCallback(
-    (next: ContentScheduleOptions) => {
-      onScheduleOptionsChange?.(next);
-    },
-    [onScheduleOptionsChange]
-  );
-
-  const updateScheduleOptions = useCallback(
-    (patch: Partial<ContentScheduleOptions>) => {
-      const next: ContentScheduleOptions = {
-        postCount,
-        storyCount,
-        extraInstructions,
-        ...patch,
-      };
-      if (patch.postCount !== undefined) setPostCount(patch.postCount);
-      if (patch.storyCount !== undefined) setStoryCount(patch.storyCount);
-      if (patch.extraInstructions !== undefined) setExtraInstructions(patch.extraInstructions);
-      if (optionsCommitTimerRef.current) clearTimeout(optionsCommitTimerRef.current);
-      optionsCommitTimerRef.current = setTimeout(() => {
-        optionsCommitTimerRef.current = null;
-        commitScheduleOptions(next);
-      }, 500);
-    },
-    [commitScheduleOptions, extraInstructions, postCount, storyCount]
-  );
-
-  useEffect(() => {
-    return () => {
-      if (briefCommitTimerRef.current) clearTimeout(briefCommitTimerRef.current);
-      if (optionsCommitTimerRef.current) clearTimeout(optionsCommitTimerRef.current);
+  const persistBriefAndOptions = useCallback(() => {
+    if (briefDraft !== clientBrief) {
+      onClientBriefChange(briefDraft);
+    }
+    const nextOptions: ContentScheduleOptions = {
+      postCount,
+      storyCount,
+      extraInstructions,
     };
-  }, []);
+    onScheduleOptionsChange?.(nextOptions);
+  }, [
+    briefDraft,
+    clientBrief,
+    extraInstructions,
+    onClientBriefChange,
+    onScheduleOptionsChange,
+    postCount,
+    storyCount,
+  ]);
 
   const [generating, setGenerating] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -206,14 +164,9 @@ export function ContentScheduleWorkspace({
       toast.error("Configure o Gem da marca antes de gerar o cronograma.");
       return;
     }
-    if (briefCommitTimerRef.current) {
-      clearTimeout(briefCommitTimerRef.current);
-      briefCommitTimerRef.current = null;
-    }
-    briefEditingRef.current = false;
-    const briefForGeneration = briefDraft;
-    if (briefForGeneration !== clientBrief) {
-      onClientBriefChange(briefForGeneration);
+    if (!briefDraft.trim()) {
+      toast.error("Preencha o briefing do mês antes de gerar.");
+      return;
     }
     setGenerating(true);
     setAiError(null);
@@ -224,7 +177,7 @@ export function ContentScheduleWorkspace({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             brandGem,
-            clientBrief: briefForGeneration,
+            clientBrief: briefDraft,
             mode: "monthly",
             options: {
               postCount,
@@ -238,6 +191,7 @@ export function ContentScheduleWorkspace({
       const data = (await res.json()) as { items?: ContentScheduleItem[]; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Falha ao gerar cronograma.");
       if (!data.items?.length) throw new Error("A IA não retornou itens.");
+      persistBriefAndOptions();
       onItemsChange(data.items);
       setSelectedId(data.items[0]?.id ?? null);
       toast.success(`Cronograma gerado: ${data.items.length} itens.`);
@@ -252,10 +206,9 @@ export function ContentScheduleWorkspace({
     brandGem,
     brandGemReady,
     briefDraft,
-    clientBrief,
-    onClientBriefChange,
     extraInstructions,
     onItemsChange,
+    persistBriefAndOptions,
     postCount,
     startDate,
     storyCount,
@@ -334,6 +287,8 @@ export function ContentScheduleWorkspace({
       <WorkspaceHero
         eyebrow="Cronograma"
         sectionTitle="Cronograma de conteúdo"
+        titleHint="Salvo na nuvem ao gerar"
+        titleHintTooltip="Briefing e opções só são salvos na nuvem ao gerar o cronograma — não há autosave enquanto você digita."
         subtitle={
           periodLabel
             ? `Planejamento editorial · ${periodLabel}`
@@ -355,15 +310,7 @@ export function ContentScheduleWorkspace({
         />
         <textarea
           value={briefDraft}
-          onChange={(e) => handleBriefChange(e.target.value)}
-          onBlur={() => {
-            if (briefCommitTimerRef.current) {
-              clearTimeout(briefCommitTimerRef.current);
-              briefCommitTimerRef.current = null;
-            }
-            briefEditingRef.current = false;
-            commitBriefDraft(briefDraft);
-          }}
+          onChange={(e) => setBriefDraft(e.target.value)}
           disabled={isReadOnly || generating}
           rows={5}
           placeholder="Ex.: Quero focar este mês em PDV offline, gestão de estoque e datas sazonais..."
@@ -377,9 +324,7 @@ export function ContentScheduleWorkspace({
               min={1}
               max={30}
               value={postCount}
-              onChange={(e) =>
-                updateScheduleOptions({ postCount: Number(e.target.value) || 9 })
-              }
+              onChange={(e) => setPostCount(Number(e.target.value) || 9)}
               disabled={isReadOnly || generating}
               className="mt-1 w-full rounded-lg border border-ag-border/70 bg-ag-surface-2 px-3 py-2 text-sm"
             />
@@ -391,9 +336,7 @@ export function ContentScheduleWorkspace({
               min={1}
               max={30}
               value={storyCount}
-              onChange={(e) =>
-                updateScheduleOptions({ storyCount: Number(e.target.value) || 12 })
-              }
+              onChange={(e) => setStoryCount(Number(e.target.value) || 12)}
               disabled={isReadOnly || generating}
               className="mt-1 w-full rounded-lg border border-ag-border/70 bg-ag-surface-2 px-3 py-2 text-sm"
             />
@@ -413,7 +356,7 @@ export function ContentScheduleWorkspace({
           <input
             type="text"
             value={extraInstructions}
-            onChange={(e) => updateScheduleOptions({ extraInstructions: e.target.value })}
+            onChange={(e) => setExtraInstructions(e.target.value)}
             disabled={isReadOnly || generating}
             placeholder="Ex.: 3 posts sobre estoque, tom mais direto..."
             className="mt-1 w-full rounded-lg border border-ag-border/70 bg-ag-surface-2 px-3 py-2 text-sm"

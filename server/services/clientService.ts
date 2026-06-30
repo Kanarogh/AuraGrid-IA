@@ -18,6 +18,7 @@ import { canAccessSection } from "@/src/lib/permissions/roleTemplates";
 import { mediaPublicUrl } from "./mediaService";
 import { parseBrandGemSaveBody } from "../validation/brandGemSchema";
 import { normalizeCaptionGenerationParams } from "@/src/lib/captionParams";
+import { toDateOnlyString } from "@/src/lib/dates";
 import {
   defaultPlanningStartDate,
   defaultCanvaPages,
@@ -198,7 +199,7 @@ export async function loadWorkspaceDto(
     planningPeriodsList.find((p) => p.status === "active") ??
     planningPeriodsList[0];
 
-  const periodStartDate = activePeriod?.startDate ?? client.startDate;
+  const periodStartDate = toDateOnlyString(activePeriod?.startDate ?? client.startDate);
   const periodCampaignContext = activePeriod?.campaignContext ?? "";
   const isReadOnly = activePeriod?.status === "archived";
   const defaultUsesReferences = client.defaultUsesReferences ?? true;

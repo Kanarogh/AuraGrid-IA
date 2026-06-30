@@ -6,6 +6,8 @@ import { WorkspacePageHeader } from "./WorkspacePageHeader";
 export function WorkspaceHero({
   sectionTitle,
   subtitle,
+  titleHint,
+  titleHintTooltip,
   icon,
   eyebrow,
   clientName,
@@ -16,6 +18,8 @@ export function WorkspaceHero({
 }: {
   sectionTitle: string;
   subtitle?: string;
+  titleHint?: string;
+  titleHintTooltip?: string;
   icon?: LucideIcon;
   eyebrow?: string;
   clientName?: string;
@@ -35,6 +39,8 @@ export function WorkspaceHero({
         clientName={clientName}
         sectionTitle={sectionTitle}
         subtitle={subtitle}
+        titleHint={titleHint}
+        titleHintTooltip={titleHintTooltip}
         icon={icon}
         eyebrow={eyebrow}
         actions={actions}

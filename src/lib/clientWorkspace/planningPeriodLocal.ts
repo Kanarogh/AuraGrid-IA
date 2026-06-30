@@ -1,5 +1,5 @@
 import { normalizeCaptionGenerationParams } from "../captionParams";
-import { recalculatePostDates } from "../dates";
+import { recalculatePostDates, toDateOnlyString } from "../dates";
 import {
   defaultPlanningStartDate,
   createDefaultPlanningPeriod,
@@ -116,6 +116,15 @@ export function switchLocalPlanningPeriod(
   };
 }
 
+function withStartDate(snapshot: PeriodSnapshot, startDate: string): PeriodSnapshot {
+  const normalized = toDateOnlyString(startDate) || startDate;
+  return {
+    ...snapshot,
+    startDate: normalized,
+    posts: recalculatePostDates(normalized, snapshot.posts),
+  };
+}
+
 function cloneSnapshot(snapshot: PeriodSnapshot): PeriodSnapshot {
   return {
     posts: snapshot.posts.map((p) => ({ ...p, id: `${p.id}_dup_${Date.now()}` })),
@@ -151,7 +160,7 @@ export function createLocalPlanningPeriod(
     usesReferences?: boolean | null;
   }
 ): ClientWorkspace {
-  const startDate = options.startDate ?? defaultPlanningStartDate();
+  const startDate = toDateOnlyString(options.startDate) || defaultPlanningStartDate();
   const label = options.label?.trim() || periodLabelFromDate(startDate);
   const now = new Date().toISOString();
   const newPeriodId = `${meta.id}__period_${Date.now()}`;
@@ -183,37 +192,44 @@ export function createLocalPlanningPeriod(
       (options.sourcePeriodId === ws.activePlanningPeriodId
         ? snapshotFromWorkspace(ws)
         : null);
-    snapshot = source
-      ? cloneSnapshot(source)
-      : {
-          posts: recalculatePostDates(startDate, createEmptyPosts()),
-          catalog: [],
-          contentSchedule: [],
-          contentScheduleBrief: "",
-          contentScheduleOptions: { ...DEFAULT_CONTENT_SCHEDULE_OPTIONS },
-          canva: createEmptyWorkspace(meta).canva,
-          startDate,
-          campaignContext: sourceMeta?.campaignContext ?? "",
-        };
+    snapshot = withStartDate(
+      source
+        ? cloneSnapshot(source)
+        : {
+            posts: createEmptyPosts(),
+            catalog: [],
+            contentSchedule: [],
+            contentScheduleBrief: "",
+            contentScheduleOptions: { ...DEFAULT_CONTENT_SCHEDULE_OPTIONS },
+            canva: createEmptyWorkspace(meta).canva,
+            startDate,
+            campaignContext: sourceMeta?.campaignContext ?? "",
+          },
+      startDate
+    );
     newPeriod.campaignContext = snapshot.campaignContext;
   } else {
     const empty = createEmptyWorkspace(meta);
-    snapshot = {
-      posts: recalculatePostDates(startDate, createEmptyPosts()),
-      catalog: [],
-      contentSchedule: [],
-      contentScheduleBrief: "",
-      contentScheduleOptions: { ...DEFAULT_CONTENT_SCHEDULE_OPTIONS },
-      canva: empty.canva,
-      startDate,
-      campaignContext: "",
-    };
+    snapshot = withStartDate(
+      {
+        posts: createEmptyPosts(),
+        catalog: [],
+        contentSchedule: [],
+        contentScheduleBrief: "",
+        contentScheduleOptions: { ...DEFAULT_CONTENT_SCHEDULE_OPTIONS },
+        canva: empty.canva,
+        startDate,
+        campaignContext: "",
+      },
+      startDate
+    );
   }
 
   const snapshots = { ...(next.periodSnapshots ?? {}), [newPeriodId]: snapshot };
 
   next = {
     ...applySnapshot(next, snapshot),
+    startDate,
     activePlanningPeriodId: newPeriodId,
     planningPeriods: [newPeriod, ...planningPeriods],
     periodSnapshots: snapshots,

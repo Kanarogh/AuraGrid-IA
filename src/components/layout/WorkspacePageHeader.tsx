@@ -7,6 +7,8 @@ export function WorkspacePageHeader({
   clientName,
   sectionTitle,
   subtitle,
+  titleHint,
+  titleHintTooltip,
   icon: Icon,
   eyebrow,
   actions,
@@ -16,6 +18,9 @@ export function WorkspacePageHeader({
   clientName?: string;
   sectionTitle: string;
   subtitle?: string;
+  /** Texto auxiliar pequeno ao lado do título (ex.: dica de salvamento). */
+  titleHint?: string;
+  titleHintTooltip?: string;
   icon?: LucideIcon;
   eyebrow?: string;
   actions?: ReactNode;
@@ -55,8 +60,16 @@ export function WorkspacePageHeader({
             </p>
           )}
           {!clientName && !suppressTitle && (
-            <h1 className="font-display text-xl sm:text-2xl font-semibold text-ag-text tracking-tight">
-              {sectionTitle}
+            <h1 className="font-display text-xl sm:text-2xl font-semibold text-ag-text tracking-tight flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span>{sectionTitle}</span>
+              {titleHint && (
+                <span
+                  className="inline-flex items-center rounded-md border border-ag-border/60 bg-ag-surface-2/80 px-2 py-0.5 text-[11px] font-normal font-sans text-ag-muted leading-snug"
+                  title={titleHintTooltip ?? titleHint}
+                >
+                  {titleHint}
+                </span>
+              )}
             </h1>
           )}
           {subtitle && (

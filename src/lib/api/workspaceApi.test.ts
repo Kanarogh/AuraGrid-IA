@@ -73,3 +73,23 @@ test("apiWorkspaceToClientWorkspace maps contentScheduleOptions", () => {
     extraInstructions: "Tom direto",
   });
 });
+
+test("apiWorkspaceToClientWorkspace normalizes ISO startDate to YYYY-MM-DD", () => {
+  const ws = apiWorkspaceToClientWorkspace({
+    ...baseDto,
+    startDate: "2026-07-10T00:00:00.000Z",
+    planningPeriods: [
+      {
+        id: "period_2",
+        label: "Julho 2026",
+        startDate: "2026-07-10T00:00:00.000Z",
+        status: "active",
+        campaignContext: "",
+        createdAt: "2026-06-29T00:00:00.000Z",
+        updatedAt: "2026-06-29T00:00:00.000Z",
+      },
+    ],
+  });
+  assert.equal(ws.startDate, "2026-07-10");
+  assert.equal(ws.planningPeriods[0]?.startDate, "2026-07-10");
+});

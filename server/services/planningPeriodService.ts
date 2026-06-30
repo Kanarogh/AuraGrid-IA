@@ -19,6 +19,8 @@ import {
 import { emitClientSync, emitEnrichProgress, resolveOwnerUserId } from "../sync/emitSyncEvent";
 import type { SyncDomain } from "../sync/syncEvents";
 import { resolveUsesReferences } from "../lib/referenceWorkflow";
+import { recalculatePostDates, toDateOnlyString } from "@/src/lib/dates";
+import type { PlannedPost } from "@/src/types";
 
 async function notifyPeriodChange(
   clientId: string,
@@ -51,7 +53,7 @@ function toPeriodDto(
   return {
     id: row.id,
     label: row.label,
-    startDate: row.startDate,
+    startDate: toDateOnlyString(row.startDate),
     status: row.status as PlanningPeriodStatus,
     campaignContext: row.campaignContext,
     usesReferences: row.usesReferences ?? null,
@@ -128,7 +130,49 @@ function uniquePeriodId(clientId: string): string {
   return `${clientId}__period_${Date.now()}`;
 }
 
-async function seedEmptyPeriod(clientId: string, periodId: string) {
+async function syncPeriodPostDateLabels(
+  clientId: string,
+  periodId: string,
+  startDate: string
+) {
+  const normalized = toDateOnlyString(startDate);
+  if (!normalized) return;
+
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(plannedPosts)
+    .where(
+      and(eq(plannedPosts.clientId, clientId), eq(plannedPosts.planningPeriodId, periodId))
+    )
+    .orderBy(asc(plannedPosts.dayNumber));
+
+  if (!rows.length) return;
+
+  const asPosts: PlannedPost[] = rows.map((row) => ({
+    id: row.id,
+    dayNumber: row.dayNumber,
+    dateLabel: row.dateLabel,
+    image: null,
+    matchedCatalogId: row.matchedCatalogId,
+    reasoning: row.reasoning,
+    caption: row.caption,
+    isGenerating: false,
+    isGenerated: row.isGenerated,
+    isConfirmed: row.isConfirmed,
+    error: row.lastError,
+  }));
+
+  const recalculated = recalculatePostDates(normalized, asPosts);
+  for (const post of recalculated) {
+    await db
+      .update(plannedPosts)
+      .set({ dateLabel: post.dateLabel })
+      .where(eq(plannedPosts.id, post.id));
+  }
+}
+
+async function seedEmptyPeriod(clientId: string, periodId: string, startDate: string) {
   const db = getDb();
   const { pages, slots, activePageId } = defaultCanvaPages(clientId, periodId);
   await db.insert(canvaSettings).values({
@@ -143,6 +187,7 @@ async function seedEmptyPeriod(clientId: string, periodId: string) {
   await db.insert(canvaPages).values(pages);
   await db.insert(canvaSlots).values(slots);
   await db.insert(plannedPosts).values(defaultPosts(clientId, periodId));
+  await syncPeriodPostDateLabels(clientId, periodId, startDate);
 }
 
 async function archiveActivePeriod(clientId: string) {
@@ -307,7 +352,7 @@ export async function createInitialPeriodForClient(
     updatedAt: now,
   });
 
-  await seedEmptyPeriod(clientId, periodId);
+  await seedEmptyPeriod(clientId, periodId, startDate);
 
   await db
     .update(clients)
@@ -328,7 +373,7 @@ export async function createPeriod(
   } = {}
 ) {
   const db = getDb();
-  const startDate = options.startDate ?? defaultPlanningStartDate();
+  const startDate = toDateOnlyString(options.startDate) || defaultPlanningStartDate();
   const label = options.label?.trim() || periodLabelFromDate(startDate);
   const periodId = uniquePeriodId(clientId);
   const now = new Date();
@@ -360,8 +405,9 @@ export async function createPeriod(
 
   if (options.sourcePeriodId) {
     await duplicatePeriodData(clientId, options.sourcePeriodId, periodId);
+    await syncPeriodPostDateLabels(clientId, periodId, startDate);
   } else {
-    await seedEmptyPeriod(clientId, periodId);
+    await seedEmptyPeriod(clientId, periodId, startDate);
   }
 
   if (options.activate !== false) {
@@ -516,7 +562,7 @@ export async function resetPeriod(clientId: string, periodId: string) {
   await db.delete(canvaPages).where(eq(canvaPages.planningPeriodId, periodId));
   await db.delete(canvaSettings).where(eq(canvaSettings.planningPeriodId, periodId));
 
-  await seedEmptyPeriod(clientId, periodId);
+  await seedEmptyPeriod(clientId, periodId, toDateOnlyString(period.startDate));
 
   const now = new Date();
   await db

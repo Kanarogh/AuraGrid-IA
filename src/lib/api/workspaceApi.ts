@@ -9,6 +9,7 @@ import type {
 import { DEFAULT_CONTENT_SCHEDULE_OPTIONS } from "../clientWorkspace/types";
 import type { ClientMeta } from "../clientWorkspace/types";
 import type { PlanningPeriod } from "../planningConstants";
+import { toDateOnlyString } from "../dates";
 import { withAiHeaders } from "../aiFetch";
 import { apiFetch, readApiJson } from "./apiClient";
 
@@ -87,9 +88,12 @@ export function apiWorkspaceToClientWorkspace(dto: ApiWorkspaceResponse): Client
     contentScheduleBrief:
       typeof dto.contentScheduleBrief === "string" ? dto.contentScheduleBrief : "",
     contentScheduleOptions: normalizeContentScheduleOptions(dto.contentScheduleOptions),
-    startDate: dto.startDate,
+    startDate: toDateOnlyString(dto.startDate) || dto.startDate,
     activePlanningPeriodId: dto.activePlanningPeriodId,
-    planningPeriods: dto.planningPeriods ?? [],
+    planningPeriods: (dto.planningPeriods ?? []).map((p) => ({
+      ...p,
+      startDate: toDateOnlyString(p.startDate) || p.startDate,
+    })),
     isReadOnly: dto.isReadOnly ?? false,
     periodEditMode: dto.isReadOnly ? "view_archived" : "active",
     defaultUsesReferences: dto.defaultUsesReferences ?? dto.client.defaultUsesReferences ?? true,
