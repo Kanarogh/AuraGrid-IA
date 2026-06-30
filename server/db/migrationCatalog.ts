@@ -1,6 +1,7 @@
-﻿/** Migrations SQL aplicadas em ordem pelo runner (`migrate.ts` / boot). */
-export const MIGRATION_FILES = [
-  "0000_initial",
+﻿/** Migrations SQL aplicadas em ordem pelo runner (`migrate.ts` / boot).
+ *  Ao adicionar arquivo em server/db/migrations/, registre o hash aqui.
+ *  Ver docs/MIGRATIONS.md */
+export const MIGRATION_FILES = [  "0000_initial",
   "0001_campaign_context",
   "0002_planned_posts_multi",
   "0003_catalog_embeddings",
@@ -21,6 +22,7 @@ export const MIGRATION_FILES = [
   "0018_user_ai_models_global",
   "0019_multi_platform_publish",
   "0020_appearance_default_aura",
+  "0021_content_schedule_options",
 ] as const;
 
 export type MigrationHash = (typeof MIGRATION_FILES)[number];

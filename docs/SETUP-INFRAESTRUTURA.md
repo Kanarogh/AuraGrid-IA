@@ -425,6 +425,8 @@ SUBDOMAIN=aurastudio
 
 ### Migration 0007 (Cronograma de Conteúdo)
 
+> **Nova migration?** Siga o checklist em **[docs/MIGRATIONS.md](./MIGRATIONS.md)** — criar o `.sql` **e** registrar em `server/db/migrationCatalog.ts`. Sem o catálogo, o Square Cloud não aplica a migration no deploy.
+
 Obrigatória para persistência do cronograma na nuvem. Adiciona:
 
 - `planning_periods.content_schedule` (jsonb) — itens do cronograma mensal
@@ -458,7 +460,7 @@ npm run db:migrate
 
    > Para R2/S3 com domínio (porta 443 + SSL), o `forcePathStyle` já está habilitado em `mediaService.ts`. Crie o bucket previamente no provedor.
 3. **JWT e IA:** defina `JWT_SECRET` forte e a chave `GEMINI_API_KEY`.
-4. **Migrations:** ver seção [Migration 0007](#migration-0007-cronograma-de-conteúdo) acima. Com `DATABASE_URL` definida, `instrumentation.ts` também aplica migrations no boot.
+4. **Migrations:** ver [docs/MIGRATIONS.md](./MIGRATIONS.md) (checklist completo) e a seção [Migration 0007](#migration-0007-cronograma-de-conteúdo) abaixo. Com `DATABASE_URL` definida, `instrumentation.ts` também aplica migrations no boot.
 5. **Upload do projeto:** gere o `.zip` **sem** `node_modules` e **sem** `.next` (o Square Cloud instala dependências e o `START` faz o build). O `.gitignore` já exclui ambos.
 
 ### Health em produção
