@@ -1,20 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Check,
-  Copy,
-  Download,
-  Loader2,
-  Plus,
-  RotateCcw,
-  Send,
-  Sparkles,
-  Trash2,
-  X,
-} from "lucide-react";
+import { Sparkles } from "lucide-react";
 import type {
   BrandGem,
   ContentScheduleItem,
-  ContentScheduleItemStatus,
   ContentScheduleSection,
   PlannedPost,
 } from "../../types";
@@ -23,31 +11,26 @@ import { DEFAULT_CONTENT_SCHEDULE_OPTIONS } from "../../lib/clientWorkspace/type
 import { aiFetch } from "../../lib/aiFetch";
 import { readJsonResponse } from "../../lib/apiResponse";
 import { aiQueue } from "../../lib/aiQueue";
-import {
-  CONTENT_SCHEDULE_STATUS_LABELS,
-  formatFullSchedule,
-  formatScheduleItemCopy,
-} from "../../lib/contentSchedule/format";
-import { getScheduleItemQualityHints } from "../../lib/contentSchedule/quality";
+import { formatFullSchedule, formatScheduleItemCopy } from "../../lib/contentSchedule/format";
 import { exportContentSchedulePdf } from "../../lib/exportContentSchedulePdf";
 import { exportContentScheduleDocx } from "../../lib/exportContentScheduleDocx";
 import { pushScheduleToPlanning } from "../../lib/contentSchedule/pushToPlanning";
 import {
   brandGemFieldLabel,
   brandGemRequiredMessage,
-  formatMissingBrandGemFields,
   getMissingBrandGemFields,
 } from "../../lib/brandGemValidation";
-import { cn } from "../../lib/cn";
 import { confirmDialog } from "../../lib/confirmDialog";
 import { toast } from "../../lib/toast";
 import { WorkflowStepper, type WorkflowStep } from "../layout/WorkflowStepper";
 import { WorkspaceHero } from "../layout/WorkspaceHero";
-import { WorkspaceCard, WorkspaceCardHeader } from "../layout/WorkspaceCard";
-import { Button } from "../ui/Button";
-import { Badge } from "../ui/Badge";
-import { Alert } from "../ui/Alert";
 import { AiErrorBanner } from "../shared/AiErrorBanner";
+import { ScheduleBriefingPanel } from "./ScheduleBriefingPanel";
+import { ScheduleGeneratingState, ScheduleBoardSkeleton } from "./ScheduleGeneratingState";
+import { ScheduleProgressSummary } from "./ScheduleProgressSummary";
+import { ScheduleBulkActions } from "./ScheduleBulkActions";
+import { ScheduleBoard } from "./ScheduleBoard";
+import { ScheduleEditorPanel, ScheduleEditorEmpty } from "./ScheduleEditorPanel";
 
 type ContentScheduleWorkspaceProps = {
   items: ContentScheduleItem[];
@@ -67,20 +50,6 @@ type ContentScheduleWorkspaceProps = {
   onPushToPlanning: (posts: PlannedPost[], items: ContentScheduleItem[]) => void;
   onConfigureGem?: () => void;
 };
-
-const STATUS_TONE: Record<
-  ContentScheduleItemStatus,
-  "neutral" | "success" | "warning" | "accent"
-> = {
-  draft: "neutral",
-  approved: "success",
-  handed_off: "warning",
-  done: "accent",
-};
-
-function statusBadgeTone(status: ContentScheduleItemStatus) {
-  return STATUS_TONE[status] ?? "neutral";
-}
 
 export function ContentScheduleWorkspace({
   items,
@@ -128,7 +97,6 @@ export function ContentScheduleWorkspace({
     resolvedOptions.extraInstructions,
   ]);
 
-  // Remove briefing/options órfãos salvos sem cronograma gerado (ex.: testes antigos).
   useEffect(() => {
     if (isReadOnly || hasGeneratedSchedule) return;
     const staleBrief = clientBrief.trim().length > 0;
@@ -146,15 +114,8 @@ export function ContentScheduleWorkspace({
   ]);
 
   const persistBriefAndOptions = useCallback(() => {
-    if (briefDraft !== clientBrief) {
-      onClientBriefChange(briefDraft);
-    }
-    const nextOptions: ContentScheduleOptions = {
-      postCount,
-      storyCount,
-      extraInstructions,
-    };
-    onScheduleOptionsChange?.(nextOptions);
+    if (briefDraft !== clientBrief) onClientBriefChange(briefDraft);
+    onScheduleOptionsChange?.({ postCount, storyCount, extraInstructions });
   }, [
     briefDraft,
     clientBrief,
@@ -188,9 +149,11 @@ export function ContentScheduleWorkspace({
     [items]
   );
 
+  const draftCount = items.filter((i) => i.status === "draft").length;
   const approvedCount = items.filter((i) => i.status === "approved").length;
   const doneCount = items.filter((i) => i.status === "done" || i.status === "handed_off").length;
   const hasItems = items.length > 0;
+  const hasBrief = briefDraft.trim().length > 0;
   const missingGemFields = useMemo(() => getMissingBrandGemFields(brandGem), [brandGem]);
   const missingGemLabels = useMemo(
     () => missingGemFields.map(brandGemFieldLabel),
@@ -198,12 +161,31 @@ export function ContentScheduleWorkspace({
   );
 
   const workflowSteps: WorkflowStep[] = [
-    { id: "brief", label: "Briefing", done: hasItems || briefDraft.trim().length > 20, active: !hasItems },
-    { id: "gen", label: "Gerar", done: hasItems, active: !hasItems && briefDraft.trim().length > 0 },
-    { id: "review", label: "Revisar", done: approvedCount > 0, active: hasItems && approvedCount === 0 },
+    {
+      id: "brief",
+      label: "Briefing",
+      description: "Direcionamento e temas do mês",
+      done: hasItems || briefDraft.trim().length > 20,
+      active: !hasItems && !generating,
+    },
+    {
+      id: "gen",
+      label: "Gerar",
+      description: "IA cria posts e stories",
+      done: hasItems,
+      active: generating || (!hasItems && briefDraft.trim().length > 0 && brandGemReady),
+    },
+    {
+      id: "review",
+      label: "Revisar",
+      description: "Aprovar e ajustar copy",
+      done: approvedCount > 0,
+      active: hasItems && approvedCount === 0 && !generating,
+    },
     {
       id: "handoff",
-      label: "Handoff",
+      label: "Enviar",
+      description: "Mandar ao planejamento",
       done: doneCount > 0,
       active: approvedCount > 0 && doneCount === 0,
     },
@@ -218,7 +200,7 @@ export function ContentScheduleWorkspace({
 
   const handleGenerate = useCallback(async () => {
     if (!brandGemReady) {
-      toast.error(brandGemRequiredMessage(brandGem) || "Configure o Gem da marca antes de gerar o cronograma.");
+      toast.error(brandGemRequiredMessage(brandGem) || "Configure o Gem da marca antes de gerar.");
       return;
     }
     if (!briefDraft.trim()) {
@@ -229,13 +211,14 @@ export function ContentScheduleWorkspace({
       const ok = await confirmDialog({
         title: "Regenerar cronograma",
         message:
-          "O cronograma atual será substituído pelo novo. Ajuste o briefing acima se quiser mudar o direcionamento. Itens já enviados ao planejamento não são revertidos automaticamente.",
+          "O cronograma atual será substituído pelo novo. Itens já enviados ao planejamento não são revertidos automaticamente.",
         confirmLabel: "Regenerar",
       });
       if (!ok) return;
     }
     setGenerating(true);
     setAiError(null);
+    setSelectedId(null);
     try {
       const res = await aiQueue.enqueue("Gerar cronograma", () =>
         aiFetch("/api/generate-content-schedule", {
@@ -246,12 +229,7 @@ export function ContentScheduleWorkspace({
             clientBrief: briefDraft,
             ...(clientId ? { clientId } : {}),
             mode: "monthly",
-            options: {
-              postCount,
-              storyCount,
-              startDate,
-              extraInstructions,
-            },
+            options: { postCount, storyCount, startDate, extraInstructions },
           }),
         })
       );
@@ -287,8 +265,7 @@ export function ContentScheduleWorkspace({
     if (!hasGeneratedSchedule) return;
     const ok = await confirmDialog({
       title: "Excluir cronograma",
-      message:
-        "Remove todos os posts e stories gerados e limpa o briefing salvo. Você poderá criar um novo cronograma depois. Itens já enviados ao planejamento não são revertidos.",
+      message: "Remove todos os itens e limpa o briefing salvo. Itens no planejamento não são revertidos.",
       variant: "danger",
       confirmLabel: "Excluir",
     });
@@ -299,12 +276,7 @@ export function ContentScheduleWorkspace({
     setSelectedId(null);
     setAiError(null);
     toast.success("Cronograma excluído.");
-  }, [
-    hasGeneratedSchedule,
-    onClientBriefChange,
-    onItemsChange,
-    onScheduleOptionsChange,
-  ]);
+  }, [hasGeneratedSchedule, onClientBriefChange, onItemsChange, onScheduleOptionsChange]);
 
   const runRefineItem = useCallback(
     async (item: ContentScheduleItem, instruction: string) => {
@@ -351,13 +323,13 @@ export function ContentScheduleWorkspace({
     if (!selectedItem) return;
     const ok = await confirmDialog({
       title: "Recriar item",
-      message: `A IA vai recriar "${selectedItem.name}" do zero, mantendo formato e alinhamento ao briefing.`,
+      message: `A IA vai recriar "${selectedItem.name}" do zero.`,
       confirmLabel: "Recriar",
     });
     if (!ok) return;
     await runRefineItem(
       selectedItem,
-      "Recrie este item completamente do zero com novo ângulo criativo. Mantenha o mesmo formato (post ou story), data sugerida e coerência com o briefing do mês."
+      "Recrie este item completamente do zero com novo ângulo criativo. Mantenha formato e coerência com o briefing."
     );
   }, [runRefineItem, selectedItem]);
 
@@ -365,15 +337,12 @@ export function ContentScheduleWorkspace({
     async (item: ContentScheduleItem) => {
       const ok = await confirmDialog({
         title: "Excluir item",
-        message: item.status === "handed_off" || item.status === "done"
-          ? `"${item.name}" será removido do cronograma. Se já foi enviado ao planejamento, o conteúdo lá não é revertido.`
-          : `Remover "${item.name}" do cronograma?`,
+        message: `Remover "${item.name}" do cronograma?`,
         variant: "danger",
         confirmLabel: "Excluir",
       });
       if (!ok) return;
-      const next = items.filter((i) => i.id !== item.id);
-      onItemsChange(next);
+      onItemsChange(items.filter((i) => i.id !== item.id));
       if (selectedId === item.id) setSelectedId(null);
       toast.success("Item removido.");
     },
@@ -431,9 +400,7 @@ export function ContentScheduleWorkspace({
         onItemsChange([...items, created]);
         setSelectedId(created.id);
         setSingleItemTheme("");
-        toast.success(
-          section === "posts" ? "Post adicionado ao cronograma." : "Story adicionada ao cronograma."
-        );
+        toast.success(section === "posts" ? "Post adicionado." : "Story adicionada.");
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setAiError(msg);
@@ -472,12 +439,12 @@ export function ContentScheduleWorkspace({
   const handlePushToPlanning = useCallback(() => {
     const result = pushScheduleToPlanning(items, posts, startDate);
     if (result.pushedCount === 0) {
-      toast.error("Nenhum item aprovado para enviar. Aprove os itens primeiro.");
+      toast.error("Nenhum item aprovado para enviar.");
       return;
     }
     onPushToPlanning(result.posts, result.items);
     toast.success(
-      `${result.pushedCount} item(ns) enviado(s) ao planejamento.` +
+      `${result.pushedCount} item(ns) enviado(s).` +
         (result.skippedCount ? ` ${result.skippedCount} ignorado(s).` : "")
     );
   }, [items, onPushToPlanning, posts, startDate]);
@@ -487,7 +454,7 @@ export function ContentScheduleWorkspace({
     setStrengthening(true);
     setAiError(null);
     try {
-      const res = await aiQueue.enqueue("Reforçar copy do cronograma", () =>
+      const res = await aiQueue.enqueue("Reforçar copy", () =>
         aiFetch("/api/generate-content-schedule", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -504,7 +471,7 @@ export function ContentScheduleWorkspace({
       const refined = data.items?.[0];
       if (!refined) throw new Error("Item vazio.");
       updateItem(selectedItem.id, refined);
-      toast.success("Copy reforçada com IA.");
+      toast.success("Copy reforçada.");
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setAiError(msg);
@@ -541,8 +508,7 @@ export function ContentScheduleWorkspace({
       });
       toast.success("PDF exportado.");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      toast.error(msg);
+      toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setExportingPdf(false);
     }
@@ -559,20 +525,21 @@ export function ContentScheduleWorkspace({
       });
       toast.success("DOCX exportado.");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      toast.error(msg);
+      toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setExportingDocx(false);
     }
   }, [brandName, items, periodLabel]);
 
+  const showResultsArea = hasItems || (!isReadOnly && brandGemReady) || generating;
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" aria-busy={generating}>
       <WorkspaceHero
         eyebrow="Cronograma"
         sectionTitle="Cronograma de conteúdo"
         titleHint="Salvo na nuvem ao gerar"
-        titleHintTooltip="Briefing e opções só são salvos na nuvem ao gerar o cronograma — não há autosave enquanto você digita."
+        titleHintTooltip="Briefing e opções só são salvos na nuvem ao gerar o cronograma."
         subtitle={
           periodLabel
             ? `Planejamento editorial · ${periodLabel}`
@@ -581,681 +548,113 @@ export function ContentScheduleWorkspace({
         icon={Sparkles}
       />
 
-      <WorkflowStepper steps={workflowSteps} />
+      <WorkflowStepper steps={workflowSteps} ariaLabel="Progresso do cronograma" />
 
-      {aiError && (
-        <AiErrorBanner message={aiError} onRetry={() => setAiError(null)} />
-      )}
+      {aiError && <AiErrorBanner message={aiError} onRetry={() => setAiError(null)} />}
 
-      <WorkspaceCard variant="primary">
-        <WorkspaceCardHeader
-          title="Briefing do mês"
-          subtitle="Cole a mensagem ou direcionamento do cliente. Quanto mais específico (ex.: 3 posts sobre Halloween, 2 sobre estoque), melhor a aderência da IA."
-        />
-        <textarea
-          value={briefDraft}
-          onChange={(e) => setBriefDraft(e.target.value)}
-          disabled={isReadOnly || generating}
-          rows={5}
-          placeholder="Ex.: Quero focar este mês em PDV offline, gestão de estoque e datas sazonais..."
-          className="w-full rounded-xl border border-ag-border/70 bg-ag-surface-2/60 px-4 py-3 text-sm text-ag-text placeholder:text-ag-muted focus:outline-none focus:ring-2 focus:ring-ag-accent/40 resize-y min-h-[120px]"
-        />
-        <div className="mt-4 grid gap-4 sm:grid-cols-3">
-          <label className="block text-xs text-ag-muted">
-            Posts de arte
-            <input
-              type="number"
-              min={1}
-              max={30}
-              value={postCount}
-              onChange={(e) => setPostCount(Number(e.target.value) || 9)}
-              disabled={isReadOnly || generating}
-              className="mt-1 w-full rounded-lg border border-ag-border/70 bg-ag-surface-2 px-3 py-2 text-sm"
-            />
-          </label>
-          <label className="block text-xs text-ag-muted">
-            Stories
-            <input
-              type="number"
-              min={1}
-              max={30}
-              value={storyCount}
-              onChange={(e) => setStoryCount(Number(e.target.value) || 12)}
-              disabled={isReadOnly || generating}
-              className="mt-1 w-full rounded-lg border border-ag-border/70 bg-ag-surface-2 px-3 py-2 text-sm"
-            />
-          </label>
-          <label className="block text-xs text-ag-muted">
-            Início do mês
-            <input
-              type="date"
-              value={startDate}
-              readOnly
-              className="mt-1 w-full rounded-lg border border-ag-border/70 bg-ag-surface-3 px-3 py-2 text-sm text-ag-muted"
-            />
-          </label>
-        </div>
-        <label className="mt-4 block text-xs text-ag-muted">
-          Temas obrigatórios neste mês (opcional)
-          <textarea
-            value={extraInstructions}
-            onChange={(e) => setExtraInstructions(e.target.value)}
-            disabled={isReadOnly || generating}
-            rows={2}
-            placeholder="Ex.: 3 posts sobre estoque, 2 stories de bastidores, tom mais direto..."
-            className="mt-1 w-full rounded-lg border border-ag-border/70 bg-ag-surface-2 px-3 py-2 text-sm resize-y"
-          />
-        </label>
-        {!brandGemReady && !isReadOnly && (
-          <Alert tone="warning" title="Gem da marca incompleto" className="mt-4">
-            O botão de gerar só fica disponível com o Gem configurado. Campos pendentes:{" "}
-            <span className="font-medium text-ag-text">{formatMissingBrandGemFields(brandGem)}</span>
-            {onConfigureGem ? (
-              <>
-                {" "}
-                <button
-                  type="button"
-                  onClick={onConfigureGem}
-                  className="font-semibold text-ag-accent hover:underline cursor-pointer"
-                >
-                  Abrir Gem da marca
-                </button>
-              </>
-            ) : null}
-          </Alert>
-        )}
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            variant="accent"
-            onClick={() => void handleGenerate()}
-            disabled={isReadOnly || generating || !brandGemReady}
-            title={
-              !brandGemReady && missingGemLabels.length > 0
-                ? `Preencha no Gem: ${missingGemLabels.join(", ")}`
-                : undefined
-            }
-          >
-            {generating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="h-4 w-4" />
+      <ScheduleBriefingPanel
+        briefDraft={briefDraft}
+        onBriefDraftChange={setBriefDraft}
+        postCount={postCount}
+        onPostCountChange={setPostCount}
+        storyCount={storyCount}
+        onStoryCountChange={setStoryCount}
+        startDate={startDate}
+        extraInstructions={extraInstructions}
+        onExtraInstructionsChange={setExtraInstructions}
+        singleItemTheme={singleItemTheme}
+        onSingleItemThemeChange={setSingleItemTheme}
+        brandGem={brandGem}
+        brandGemReady={brandGemReady}
+        isReadOnly={isReadOnly}
+        generating={generating}
+        creatingSingle={creatingSingle}
+        hasGeneratedSchedule={hasGeneratedSchedule}
+        missingGemLabels={missingGemLabels}
+        onGenerate={() => void handleGenerate()}
+        onClearSchedule={() => void handleClearSchedule()}
+        onCreateSingle={(section) => void handleCreateSingleItem(section)}
+        onConfigureGem={onConfigureGem}
+      />
+
+      {showResultsArea && (
+        <div className="grid gap-5 xl:grid-cols-[1fr_400px]">
+          <div className="space-y-4 min-w-0">
+            {generating && (
+              <ScheduleGeneratingState postCount={postCount} storyCount={storyCount} />
             )}
-            {hasGeneratedSchedule ? "Regenerar cronograma com IA" : "Gerar cronograma com IA"}
-          </Button>
-          {hasGeneratedSchedule && !isReadOnly && (
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => void handleClearSchedule()}
-              disabled={generating}
-            >
-              <Trash2 className="h-4 w-4" />
-              Excluir cronograma
-            </Button>
-          )}
-          {!brandGemReady && !isReadOnly && (
-            <p className="text-xs text-ag-muted">
-              {missingGemFields.length} campo{missingGemFields.length !== 1 ? "s" : ""} pendente
-              {missingGemFields.length !== 1 ? "s" : ""} no Gem
-            </p>
-          )}
-        </div>
-        {!isReadOnly && brandGemReady && (
-          <div className="mt-5 pt-4 border-t border-ag-border/50 space-y-3">
-            <p className="text-xs text-ag-muted">
-              Ou monte o cronograma aos poucos — crie posts e stories avulsos com IA (usa o briefing acima).
-            </p>
-            <label className="block text-xs text-ag-muted">
-              Tema do próximo item (opcional)
-              <input
-                type="text"
-                value={singleItemTheme}
-                onChange={(e) => setSingleItemTheme(e.target.value)}
-                disabled={generating || creatingSingle !== null}
-                placeholder="Ex.: Halloween no PDV, dica de estoque..."
-                className="mt-1 w-full rounded-lg border border-ag-border/70 bg-ag-surface-2 px-3 py-2 text-sm"
+
+            {hasItems && !generating && (
+              <>
+                <ScheduleProgressSummary
+                  total={items.length}
+                  draftCount={draftCount}
+                  approvedCount={approvedCount}
+                  doneCount={doneCount}
+                  postsCount={postsItems.length}
+                  storiesCount={storiesItems.length}
+                />
+                <ScheduleBulkActions
+                  isReadOnly={isReadOnly}
+                  approvedCount={approvedCount}
+                  exportingPdf={exportingPdf}
+                  exportingDocx={exportingDocx}
+                  onClearSchedule={() => void handleClearSchedule()}
+                  onCopyAll={() => void copyText(formatFullSchedule(items, scheduleExportOptions))}
+                  onExportTxt={handleExportTxt}
+                  onExportPdf={() => void handleExportPdf()}
+                  onExportDocx={() => void handleExportDocx()}
+                  onPushToPlanning={handlePushToPlanning}
+                />
+              </>
+            )}
+
+            {generating ? (
+              <ScheduleBoardSkeleton />
+            ) : (
+              <ScheduleBoard
+                postsItems={postsItems}
+                storiesItems={storiesItems}
+                selectedId={selectedId}
+                copiedId={copiedId}
+                isReadOnly={isReadOnly}
+                brandGemReady={brandGemReady}
+                creatingSingle={creatingSingle}
+                hasBrief={hasBrief}
+                onSelect={setSelectedId}
+                onCreateSingle={(section) => void handleCreateSingleItem(section)}
+                onCopy={(item) => void copyText(formatScheduleItemCopy(item), item.id)}
+                onApprove={(id) => updateItem(id, { status: "approved" })}
+                onMarkDone={(id) => updateItem(id, { status: "done" })}
+                onDelete={(item) => void handleDeleteItem(item)}
               />
-            </label>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={generating || creatingSingle !== null}
-                onClick={() => void handleCreateSingleItem("posts")}
-              >
-                {creatingSingle === "posts" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Plus className="h-4 w-4" />
-                )}
-                Criar 1 post com IA
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={generating || creatingSingle !== null}
-                onClick={() => void handleCreateSingleItem("stories")}
-              >
-                {creatingSingle === "stories" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Plus className="h-4 w-4" />
-                )}
-                Criar 1 story com IA
-              </Button>
-            </div>
+            )}
           </div>
-        )}
-      </WorkspaceCard>
 
-      {(hasItems || (!isReadOnly && brandGemReady)) && (
-        <>
-          {hasItems && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ag-border/60 bg-ag-surface-2/60 px-4 py-3">
-            <p className="text-sm text-ag-muted">
-              <span className="font-medium text-ag-text">{items.length}</span> itens ·{" "}
-              <span className="font-medium text-ag-success">{approvedCount}</span> aprovados ·{" "}
-              <span className="font-medium text-ag-text">{doneCount}</span> entregues
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {!isReadOnly && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => void handleClearSchedule()}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Excluir
-                </Button>
-              )}
-              <Button type="button" variant="secondary" size="sm" onClick={() => void copyText(formatFullSchedule(items, scheduleExportOptions))}>
-                <Copy className="h-4 w-4" />
-                Copiar tudo
-              </Button>
-              <Button type="button" variant="secondary" size="sm" onClick={handleExportTxt}>
-                <Download className="h-4 w-4" />
-                Exportar TXT
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => void handleExportPdf()}
-                disabled={exportingPdf}
-              >
-                {exportingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                Exportar PDF
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => void handleExportDocx()}
-                disabled={exportingDocx}
-              >
-                {exportingDocx ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                Exportar DOCX
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={handlePushToPlanning}
-                disabled={isReadOnly || approvedCount === 0}
-              >
-                <Send className="h-4 w-4" />
-                Enviar ao Planejamento
-              </Button>
-            </div>
-          </div>
-          )}
-
-          <div className="grid gap-5 lg:grid-cols-2">
-            <ScheduleColumn
-              title={`Posts de Arte (${postsItems.length})`}
-              items={postsItems}
-              selectedId={selectedId}
-              copiedId={copiedId}
-              isReadOnly={isReadOnly}
-              canCreate={!isReadOnly && brandGemReady}
-              creating={creatingSingle === "posts"}
-              onCreateSingle={() => void handleCreateSingleItem("posts")}
-              onSelect={setSelectedId}
-              onCopy={(item) => void copyText(formatScheduleItemCopy(item), item.id)}
-              onApprove={(id) => updateItem(id, { status: "approved" })}
-              onMarkDone={(id) => updateItem(id, { status: "done" })}
-              onDelete={(item) => void handleDeleteItem(item)}
-            />
-            <ScheduleColumn
-              title={`Stories (${storiesItems.length})`}
-              items={storiesItems}
-              selectedId={selectedId}
-              copiedId={copiedId}
-              isReadOnly={isReadOnly}
-              canCreate={!isReadOnly && brandGemReady}
-              creating={creatingSingle === "stories"}
-              onCreateSingle={() => void handleCreateSingleItem("stories")}
-              onSelect={setSelectedId}
-              onCopy={(item) => void copyText(formatScheduleItemCopy(item), item.id)}
-              onApprove={(id) => updateItem(id, { status: "approved" })}
-              onMarkDone={(id) => updateItem(id, { status: "done" })}
-              onDelete={(item) => void handleDeleteItem(item)}
-            />
-          </div>
-        </>
-      )}
-
-      {selectedItem && (
-        <ScheduleItemEditor
-          item={selectedItem}
-          isReadOnly={isReadOnly}
-          refining={refining}
-          strengthening={strengthening}
-          refineInstruction={refineInstruction}
-          onRefineInstructionChange={setRefineInstruction}
-          onClose={() => setSelectedId(null)}
-          onChange={(patch) => updateItem(selectedItem.id, patch)}
-          onRefine={() => void handleRefine()}
-          onStrengthen={() => void handleStrengthenCopy()}
-          onRegenerate={() => void handleRegenerateItem()}
-          onDelete={() => void handleDeleteItem(selectedItem)}
-          onCopy={() => void copyText(formatScheduleItemCopy(selectedItem), selectedItem.id)}
-        />
+          <aside className="min-w-0">
+            {selectedItem ? (
+              <ScheduleEditorPanel
+                item={selectedItem}
+                isReadOnly={isReadOnly}
+                refining={refining}
+                strengthening={strengthening}
+                refineInstruction={refineInstruction}
+                onRefineInstructionChange={setRefineInstruction}
+                onClose={() => setSelectedId(null)}
+                onChange={(patch) => updateItem(selectedItem.id, patch)}
+                onRefine={() => void handleRefine()}
+                onStrengthen={() => void handleStrengthenCopy()}
+                onRegenerate={() => void handleRegenerateItem()}
+                onDelete={() => void handleDeleteItem(selectedItem)}
+                onCopy={() => void copyText(formatScheduleItemCopy(selectedItem), selectedItem.id)}
+                onApprove={() => updateItem(selectedItem.id, { status: "approved" })}
+              />
+            ) : (
+              <ScheduleEditorEmpty hasItems={hasItems} />
+            )}
+          </aside>
+        </div>
       )}
     </div>
-  );
-}
-
-function ScheduleColumn({
-  title,
-  items,
-  selectedId,
-  copiedId,
-  isReadOnly,
-  canCreate,
-  creating,
-  onCreateSingle,
-  onSelect,
-  onCopy,
-  onApprove,
-  onMarkDone,
-  onDelete,
-}: {
-  title: string;
-  items: ContentScheduleItem[];
-  selectedId: string | null;
-  copiedId: string | null;
-  isReadOnly?: boolean;
-  canCreate?: boolean;
-  creating?: boolean;
-  onCreateSingle?: () => void;
-  onSelect: (id: string) => void;
-  onCopy: (item: ContentScheduleItem) => void;
-  onApprove: (id: string) => void;
-  onMarkDone: (id: string) => void;
-  onDelete: (item: ContentScheduleItem) => void;
-}) {
-  return (
-    <WorkspaceCard variant="secondary" padding={false}>
-      <div className="border-b border-ag-border/60 px-4 py-3 flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-ag-text">{title}</h3>
-        {canCreate && onCreateSingle && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={creating}
-            onClick={onCreateSingle}
-          >
-            {creating ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Plus className="h-3.5 w-3.5" />
-            )}
-            Criar
-          </Button>
-        )}
-      </div>
-      <ul className="divide-y divide-ag-border/50 max-h-[520px] overflow-y-auto">
-        {items.length === 0 ? (
-          <li className="px-4 py-10 text-center text-xs text-ag-muted leading-relaxed">
-            Nenhum item ainda.
-            {canCreate ? " Use Criar acima ou no briefing." : ""}
-          </li>
-        ) : null}
-        {items.map((item) => (
-          <li key={item.id}>
-            <button
-              type="button"
-              onClick={() => onSelect(item.id)}
-              className={cn(
-                "w-full text-left px-4 py-3 transition-colors hover:bg-ag-surface-3/50",
-                selectedId === item.id && "bg-ag-accent/10"
-              )}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-ag-text truncate">{item.name}</p>
-                  <p className="text-xs text-ag-muted mt-0.5">
-                    {item.postType}
-                    {item.scheduledDate ? ` · ${item.scheduledDate}` : ""}
-                  </p>
-                  <p className="text-xs text-ag-text/80 mt-2 line-clamp-2">{item.headline}</p>
-                </div>
-                <Badge tone={statusBadgeTone(item.status)}>
-                  {CONTENT_SCHEDULE_STATUS_LABELS[item.status]}
-                </Badge>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
-                <Button type="button" variant="ghost" size="sm" onClick={() => onCopy(item)}>
-                  {copiedId === item.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                  Copiar
-                </Button>
-                {!isReadOnly && item.status === "draft" && (
-                  <Button type="button" variant="ghost" size="sm" onClick={() => onApprove(item.id)}>
-                    Aprovar
-                  </Button>
-                )}
-                {!isReadOnly && item.status !== "done" && (
-                  <Button type="button" variant="ghost" size="sm" onClick={() => onMarkDone(item.id)}>
-                    Feito
-                  </Button>
-                )}
-                {!isReadOnly && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-ag-danger hover:text-ag-danger"
-                    onClick={() => onDelete(item)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Excluir
-                  </Button>
-                )}
-              </div>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </WorkspaceCard>
-  );
-}
-
-function ScheduleItemEditor({
-  item,
-  isReadOnly,
-  refining,
-  strengthening,
-  refineInstruction,
-  onRefineInstructionChange,
-  onClose,
-  onChange,
-  onRefine,
-  onStrengthen,
-  onRegenerate,
-  onDelete,
-  onCopy,
-}: {
-  item: ContentScheduleItem;
-  isReadOnly?: boolean;
-  refining: boolean;
-  strengthening: boolean;
-  refineInstruction: string;
-  onRefineInstructionChange: (v: string) => void;
-  onClose: () => void;
-  onChange: (patch: Partial<ContentScheduleItem>) => void;
-  onRefine: () => void;
-  onStrengthen: () => void;
-  onRegenerate: () => void;
-  onDelete: () => void;
-  onCopy: () => void;
-}) {
-  const fieldClass =
-    "w-full rounded-lg border border-ag-border/70 bg-ag-surface-2 px-3 py-2 text-sm text-ag-text focus:outline-none focus:ring-2 focus:ring-ag-accent/40";
-  const isStory = item.section === "stories";
-  const qualityHints = getScheduleItemQualityHints(item);
-  const legendaLabel = isStory ? "Texto de apoio" : "Legenda";
-  const imagePromptPlaceholder = isStory
-    ? "Frame 9:16, texto na tela, safe zones, elementos interativos se enquete..."
-    : "Composição 4:5, hierarquia de texto na arte, paleta da marca...";
-
-  return (
-    <WorkspaceCard variant="primary" className="relative">
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute top-4 right-4 p-1 rounded-lg text-ag-muted hover:text-ag-text hover:bg-ag-surface-3"
-        aria-label="Fechar editor"
-      >
-        <X className="h-4 w-4" />
-      </button>
-      <WorkspaceCardHeader
-        title={item.name}
-        subtitle={`${item.postType} · ${CONTENT_SCHEDULE_STATUS_LABELS[item.status]}`}
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="secondary" size="sm" onClick={onCopy}>
-              <Copy className="h-4 w-4" />
-              Copiar
-            </Button>
-            {!isReadOnly && (
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className="text-ag-danger border-ag-danger/25 hover:bg-ag-danger/10"
-                onClick={onDelete}
-              >
-                <Trash2 className="h-4 w-4" />
-                Excluir
-              </Button>
-            )}
-          </div>
-        }
-      />
-      {qualityHints.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-2">
-          {qualityHints.map((hint) => (
-            <Badge key={hint.issue} tone="warning" className="text-[10px]">
-              {hint.label}
-            </Badge>
-          ))}
-        </div>
-      )}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="text-xs text-ag-muted sm:col-span-2">
-          Nome
-          <input
-            className={cn(fieldClass, "mt-1")}
-            value={item.name}
-            disabled={isReadOnly}
-            onChange={(e) => onChange({ name: e.target.value })}
-          />
-        </label>
-        <label className="text-xs text-ag-muted">
-          Formato
-          <input
-            className={cn(fieldClass, "mt-1")}
-            value={item.postType}
-            disabled={isReadOnly}
-            onChange={(e) => onChange({ postType: e.target.value })}
-          />
-        </label>
-        <label className="text-xs text-ag-muted">
-          Data (DD/MM)
-          <input
-            className={cn(fieldClass, "mt-1")}
-            value={item.scheduledDate ?? ""}
-            disabled={isReadOnly}
-            onChange={(e) => onChange({ scheduledDate: e.target.value })}
-          />
-        </label>
-        <label className="text-xs text-ag-muted sm:col-span-2">
-          Headline
-          <input
-            className={cn(fieldClass, "mt-1")}
-            value={item.headline}
-            disabled={isReadOnly}
-            onChange={(e) => onChange({ headline: e.target.value })}
-          />
-        </label>
-        <label className="text-xs text-ag-muted sm:col-span-2">
-          Frase de Apoio
-          <input
-            className={cn(fieldClass, "mt-1")}
-            value={item.subtitle}
-            disabled={isReadOnly}
-            onChange={(e) => onChange({ subtitle: e.target.value })}
-          />
-        </label>
-        <label className="text-xs text-ag-muted sm:col-span-2">
-          CTA
-          <input
-            className={cn(fieldClass, "mt-1")}
-            value={item.cta}
-            disabled={isReadOnly}
-            onChange={(e) => onChange({ cta: e.target.value })}
-          />
-        </label>
-        <label className="text-xs text-ag-muted sm:col-span-2">
-          {legendaLabel}
-          <textarea
-            className={cn(fieldClass, "mt-1 min-h-[100px] resize-y")}
-            value={item.legenda}
-            disabled={isReadOnly}
-            onChange={(e) => onChange({ legenda: e.target.value })}
-          />
-        </label>
-        {!isStory && (
-          <label className="text-xs text-ag-muted sm:col-span-2">
-            Hashtags
-            <input
-              className={cn(fieldClass, "mt-1")}
-              value={item.hashtags}
-              disabled={isReadOnly}
-              onChange={(e) => onChange({ hashtags: e.target.value })}
-            />
-          </label>
-        )}
-        <label className="text-xs text-ag-muted sm:col-span-2">
-          Prompt de imagem
-          <textarea
-            className={cn(fieldClass, "mt-1 min-h-[80px] resize-y")}
-            value={item.imagePrompt ?? ""}
-            disabled={isReadOnly}
-            placeholder={imagePromptPlaceholder}
-            onChange={(e) => onChange({ imagePrompt: e.target.value })}
-          />
-        </label>
-        {isStory && (
-          <>
-            <label className="text-xs text-ag-muted sm:col-span-2">
-              Texto na tela (on-screen)
-              <input
-                className={cn(fieldClass, "mt-1")}
-                value={item.storyExtras?.onScreenText ?? ""}
-                disabled={isReadOnly}
-                onChange={(e) =>
-                  onChange({
-                    storyExtras: {
-                      ...item.storyExtras,
-                      onScreenText: e.target.value,
-                    },
-                  })
-                }
-              />
-            </label>
-            <label className="text-xs text-ag-muted">
-              Enquete A
-              <input
-                className={cn(fieldClass, "mt-1")}
-                value={item.storyExtras?.pollOptions?.[0] ?? ""}
-                disabled={isReadOnly}
-                onChange={(e) =>
-                  onChange({
-                    storyExtras: {
-                      ...item.storyExtras,
-                      pollOptions: [
-                        e.target.value,
-                        item.storyExtras?.pollOptions?.[1] ?? "",
-                      ],
-                    },
-                  })
-                }
-              />
-            </label>
-            <label className="text-xs text-ag-muted">
-              Enquete B
-              <input
-                className={cn(fieldClass, "mt-1")}
-                value={item.storyExtras?.pollOptions?.[1] ?? ""}
-                disabled={isReadOnly}
-                onChange={(e) =>
-                  onChange({
-                    storyExtras: {
-                      ...item.storyExtras,
-                      pollOptions: [
-                        item.storyExtras?.pollOptions?.[0] ?? "",
-                        e.target.value,
-                      ],
-                    },
-                  })
-                }
-              />
-            </label>
-          </>
-        )}
-      </div>
-      {!isReadOnly && (
-        <div className="mt-4 flex flex-col gap-3">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="w-fit"
-            onClick={onStrengthen}
-            disabled={refining || strengthening}
-          >
-            {strengthening ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="h-4 w-4" />
-            )}
-            Reforçar copy com IA
-          </Button>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <input
-              type="text"
-              value={refineInstruction}
-              onChange={(e) => onRefineInstructionChange(e.target.value)}
-              placeholder="Refinar com IA: ex. tom mais direto, foco em offline..."
-              className={cn(fieldClass, "flex-1")}
-            />
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={onRefine}
-              disabled={refining || strengthening || !refineInstruction.trim()}
-            >
-              {refining ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              Refinar
-            </Button>
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="w-fit"
-            onClick={onRegenerate}
-            disabled={refining || strengthening}
-          >
-            {refining ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
-            Recriar este item com IA
-          </Button>
-        </div>
-      )}
-    </WorkspaceCard>
   );
 }
