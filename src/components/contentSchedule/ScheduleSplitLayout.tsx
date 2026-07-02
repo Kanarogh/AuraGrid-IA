@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { cn } from "../../lib/cn";
 
 const STORAGE_KEY = "auragrid:content-schedule-editor-width";
-const DEFAULT_WIDTH = 520;
+const DEFAULT_WIDTH = 580;
 const MIN_WIDTH = 380;
 const MAX_WIDTH = 800;
 

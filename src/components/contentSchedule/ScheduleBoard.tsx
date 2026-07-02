@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Copy, Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import type { ContentScheduleItem, ContentScheduleSection } from "../../types";
 import { CONTENT_SCHEDULE_STATUS_LABELS } from "../../lib/contentSchedule/format";
 import { cn } from "../../lib/cn";
@@ -12,34 +12,26 @@ type ScheduleBoardProps = {
   postsItems: ContentScheduleItem[];
   storiesItems: ContentScheduleItem[];
   selectedId: string | null;
-  copiedId: string | null;
   isReadOnly?: boolean;
   brandGemReady: boolean;
   creatingSingle: ContentScheduleSection | null;
   hasBrief: boolean;
   onSelect: (id: string) => void;
   onCreateSingle: (section: ContentScheduleSection) => void;
-  onCopy: (item: ContentScheduleItem) => void;
   onApprove: (id: string) => void;
-  onMarkDone: (id: string) => void;
-  onDelete: (item: ContentScheduleItem) => void;
 };
 
 export function ScheduleBoard({
   postsItems,
   storiesItems,
   selectedId,
-  copiedId,
   isReadOnly,
   brandGemReady,
   creatingSingle,
   hasBrief,
   onSelect,
   onCreateSingle,
-  onCopy,
   onApprove,
-  onMarkDone,
-  onDelete,
 }: ScheduleBoardProps) {
   const [activeTab, setActiveTab] = useState<ContentScheduleSection | "all">("all");
 
@@ -47,9 +39,9 @@ export function ScheduleBoard({
   const showStories = activeTab === "all" || activeTab === "stories";
 
   return (
-    <div className="space-y-3">
+    <div id="schedule-board" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-ag-text">3. Revisar itens</p>
+        <p className="text-xs font-semibold text-ag-text">Revisar itens</p>
         <div className="flex rounded-lg border border-ag-border/60 p-0.5 bg-ag-surface-2/80">
           {(
             [
@@ -87,17 +79,13 @@ export function ScheduleBoard({
             title="Posts de Arte"
             items={postsItems}
             selectedId={selectedId}
-            copiedId={copiedId}
             isReadOnly={isReadOnly}
             canCreate={!isReadOnly && brandGemReady}
             creating={creatingSingle === "posts"}
             hasBrief={hasBrief}
             onCreateSingle={() => onCreateSingle("posts")}
             onSelect={onSelect}
-            onCopy={onCopy}
             onApprove={onApprove}
-            onMarkDone={onMarkDone}
-            onDelete={onDelete}
           />
         )}
         {showStories && (
@@ -106,17 +94,13 @@ export function ScheduleBoard({
             title="Stories"
             items={storiesItems}
             selectedId={selectedId}
-            copiedId={copiedId}
             isReadOnly={isReadOnly}
             canCreate={!isReadOnly && brandGemReady}
             creating={creatingSingle === "stories"}
             hasBrief={hasBrief}
             onCreateSingle={() => onCreateSingle("stories")}
             onSelect={onSelect}
-            onCopy={onCopy}
             onApprove={onApprove}
-            onMarkDone={onMarkDone}
-            onDelete={onDelete}
           />
         )}
       </div>
@@ -129,33 +113,25 @@ function ScheduleColumn({
   title,
   items,
   selectedId,
-  copiedId,
   isReadOnly,
   canCreate,
   creating,
   hasBrief,
   onCreateSingle,
   onSelect,
-  onCopy,
   onApprove,
-  onMarkDone,
-  onDelete,
 }: {
   section: ContentScheduleSection;
   title: string;
   items: ContentScheduleItem[];
   selectedId: string | null;
-  copiedId: string | null;
   isReadOnly?: boolean;
   canCreate?: boolean;
   creating?: boolean;
   hasBrief: boolean;
   onCreateSingle?: () => void;
   onSelect: (id: string) => void;
-  onCopy: (item: ContentScheduleItem) => void;
   onApprove: (id: string) => void;
-  onMarkDone: (id: string) => void;
-  onDelete: (item: ContentScheduleItem) => void;
 }) {
   return (
     <WorkspaceCard variant="secondary" padding={false}>
@@ -196,7 +172,7 @@ function ScheduleColumn({
             <li key={item.id}>
               <article
                 className={cn(
-                  "rounded-lg border transition-all cursor-pointer",
+                  "rounded-lg border transition-all",
                   selectedId === item.id
                     ? "border-ag-accent/50 bg-ag-accent/8 ring-1 ring-ag-accent/25 shadow-sm"
                     : "border-ag-border/50 bg-ag-surface-1/50 hover:border-ag-border hover:bg-ag-surface-2/60"
@@ -205,7 +181,7 @@ function ScheduleColumn({
                 <button
                   type="button"
                   onClick={() => onSelect(item.id)}
-                  className="w-full text-left p-3"
+                  className="w-full text-left p-3 cursor-pointer"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -223,11 +199,8 @@ function ScheduleColumn({
                     {item.headline || "Sem headline"}
                   </p>
                 </button>
-                <div
-                  className="flex flex-wrap gap-1 px-3 pb-3 border-t border-ag-border/30 pt-2"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {!isReadOnly && item.status === "draft" && (
+                {!isReadOnly && item.status === "draft" && (
+                  <div className="px-3 pb-3 flex justify-end border-t border-ag-border/30 pt-2">
                     <Button
                       type="button"
                       variant="accent"
@@ -237,28 +210,8 @@ function ScheduleColumn({
                     >
                       Aprovar
                     </Button>
-                  )}
-                  <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onCopy(item)}>
-                    {copiedId === item.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                    Copiar
-                  </Button>
-                  {!isReadOnly && item.status !== "done" && item.status !== "handed_off" && (
-                    <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onMarkDone(item.id)}>
-                      Feito
-                    </Button>
-                  )}
-                  {!isReadOnly && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs text-ag-danger hover:text-ag-danger"
-                      onClick={() => onDelete(item)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  )}
-                </div>
+                  </div>
+                )}
               </article>
             </li>
           ))

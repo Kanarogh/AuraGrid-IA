@@ -48,10 +48,14 @@ export function WorkflowStepper({
               aria-current={step.selected ? "step" : step.active ? "step" : undefined}
               title={
                 clickable && step.id === "brief"
-                  ? "Clique para abrir ou fechar o briefing"
+                  ? "Abrir ou fechar o briefing"
                   : clickable && step.id === "gen"
-                    ? "Clique para abrir o briefing e regenerar o cronograma"
-                    : undefined
+                    ? "Abrir briefing para gerar ou regenerar"
+                    : clickable && step.id === "review"
+                      ? "Ir para a lista de itens"
+                      : clickable && step.id === "handoff"
+                        ? "Ir para exportar e enviar"
+                        : undefined
               }
             >
               <span

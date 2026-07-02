@@ -27,8 +27,7 @@ import { WorkspaceHero } from "../layout/WorkspaceHero";
 import { AiErrorBanner } from "../shared/AiErrorBanner";
 import { ScheduleBriefingPanel } from "./ScheduleBriefingPanel";
 import { ScheduleGeneratingState, ScheduleBoardSkeleton } from "./ScheduleGeneratingState";
-import { ScheduleProgressSummary } from "./ScheduleProgressSummary";
-import { ScheduleBulkActions } from "./ScheduleBulkActions";
+import { ScheduleReviewToolbar } from "./ScheduleReviewToolbar";
 import { ScheduleBoard } from "./ScheduleBoard";
 import { ScheduleEditorPanel, ScheduleEditorEmpty } from "./ScheduleEditorPanel";
 import { ScheduleSplitLayout } from "./ScheduleSplitLayout";
@@ -129,7 +128,6 @@ export function ContentScheduleWorkspace({
 
   const [generating, setGenerating] = useState(false);
   const [creatingSingle, setCreatingSingle] = useState<ContentScheduleSection | null>(null);
-  const [singleItemTheme, setSingleItemTheme] = useState("");
   const [aiError, setAiError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [refineInstruction, setRefineInstruction] = useState("");
@@ -138,9 +136,11 @@ export function ContentScheduleWorkspace({
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingDocx, setExportingDocx] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [briefingPanelOpen, setBriefingPanelOpen] = useState(true);
-  const briefingOpenedManually = useRef(false);
+  const [briefingExpanded, setBriefingExpanded] = useState(() => items.length === 0);
+  const [focusedStep, setFocusedStep] = useState<string>(items.length > 0 ? "review" : "brief");
   const briefingPanelRef = useRef<HTMLDivElement>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
 
   const selectedItem = items.find((i) => i.id === selectedId) ?? null;
 
@@ -159,18 +159,25 @@ export function ContentScheduleWorkspace({
   const hasItems = items.length > 0;
   const hasBrief = briefDraft.trim().length > 0;
 
-  // Oculta briefing após gerar; usuário reabre clicando no passo "Briefing".
-  useEffect(() => {
-    if (!hasItems) {
-      briefingOpenedManually.current = false;
-      setBriefingPanelOpen(true);
-      return;
-    }
-    if (generating) return;
-    if (!briefingOpenedManually.current) {
-      setBriefingPanelOpen(false);
-    }
-  }, [hasItems, generating]);
+  const scrollToRef = useCallback((ref: React.RefObject<HTMLElement | null>) => {
+    requestAnimationFrame(() => {
+      ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
+
+  const closeBriefing = useCallback(() => {
+    setBriefingExpanded(false);
+    setFocusedStep("review");
+  }, []);
+
+  const openBriefing = useCallback(
+    (step: "brief" | "gen") => {
+      setBriefingExpanded(true);
+      setFocusedStep(step);
+      scrollToRef(briefingPanelRef);
+    },
+    [scrollToRef]
+  );
 
   const missingGemFields = useMemo(() => getMissingBrandGemFields(brandGem), [brandGem]);
   const missingGemLabels = useMemo(
@@ -182,32 +189,34 @@ export function ContentScheduleWorkspace({
     {
       id: "brief",
       label: "Briefing",
-      description: "Direcionamento e temas do mês",
+      description: hasItems ? "Abrir ou fechar edição" : "Direcionamento do mês",
       done: hasItems || briefDraft.trim().length > 20,
       active: !hasItems && !generating,
-      selected: briefingPanelOpen && hasItems,
+      selected: focusedStep === "brief",
     },
     {
       id: "gen",
       label: "Gerar",
-      description: "IA cria posts e stories",
+      description: hasItems ? "Regenerar com IA" : "Cria posts e stories",
       done: hasItems,
       active: generating || (!hasItems && briefDraft.trim().length > 0 && brandGemReady),
-      selected: briefingPanelOpen && hasItems,
+      selected: focusedStep === "gen",
     },
     {
       id: "review",
       label: "Revisar",
-      description: "Aprovar e ajustar copy",
+      description: "Aprovar e editar itens",
       done: approvedCount > 0,
-      active: hasItems && approvedCount === 0 && !generating,
+      active: hasItems && approvedCount === 0 && !generating && !briefingExpanded,
+      selected: focusedStep === "review",
     },
     {
       id: "handoff",
       label: "Enviar",
-      description: "Mandar ao planejamento",
+      description: "Exportar ou planejamento",
       done: doneCount > 0,
-      active: approvedCount > 0 && doneCount === 0,
+      active: approvedCount > 0 && doneCount === 0 && !briefingExpanded,
+      selected: focusedStep === "handoff",
     },
   ];
 
@@ -237,6 +246,8 @@ export function ContentScheduleWorkspace({
       if (!ok) return;
     }
     setGenerating(true);
+    setBriefingExpanded(false);
+    setFocusedStep("gen");
     setAiError(null);
     setSelectedId(null);
     try {
@@ -259,7 +270,8 @@ export function ContentScheduleWorkspace({
       persistBriefAndOptions();
       onItemsChange(data.items);
       setSelectedId(data.items[0]?.id ?? null);
-      briefingOpenedManually.current = false;
+      setBriefingExpanded(false);
+      setFocusedStep("review");
       toast.success(`Cronograma gerado: ${data.items.length} itens.`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -295,8 +307,8 @@ export function ContentScheduleWorkspace({
     onClientBriefChange("");
     onScheduleOptionsChange?.({ ...DEFAULT_CONTENT_SCHEDULE_OPTIONS });
     setSelectedId(null);
-    setBriefingPanelOpen(true);
-    briefingOpenedManually.current = false;
+    setBriefingExpanded(true);
+    setFocusedStep("brief");
     setAiError(null);
     toast.success("Cronograma excluído.");
   }, [hasGeneratedSchedule, onClientBriefChange, onItemsChange, onScheduleOptionsChange]);
@@ -404,7 +416,7 @@ export function ContentScheduleWorkspace({
                 options: {
                   startDate,
                   extraInstructions,
-                  itemInstruction: singleItemTheme.trim() || undefined,
+                  itemInstruction: undefined,
                   order: nextOrder,
                   existingItems: sectionItems.map((i) => ({
                     name: i.name,
@@ -422,7 +434,6 @@ export function ContentScheduleWorkspace({
         persistBriefAndOptions();
         onItemsChange([...items, created]);
         setSelectedId(created.id);
-        setSingleItemTheme("");
         toast.success(section === "posts" ? "Post adicionado." : "Story adicionada.");
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -441,7 +452,6 @@ export function ContentScheduleWorkspace({
       items,
       onItemsChange,
       persistBriefAndOptions,
-      singleItemTheme,
       startDate,
     ]
   );
@@ -554,39 +564,42 @@ export function ContentScheduleWorkspace({
     }
   }, [brandName, items, periodLabel]);
 
-  const showResultsArea = hasItems || (!isReadOnly && brandGemReady) || generating;
-  const showBriefingPanel = briefingPanelOpen || !hasItems || generating;
-
-  const openBriefingPanel = useCallback((scrollIntoView = false) => {
-    briefingOpenedManually.current = true;
-    setBriefingPanelOpen(true);
-    if (scrollIntoView) {
-      requestAnimationFrame(() => {
-        briefingPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    }
-  }, []);
+  const showBriefingPanel = !hasItems || briefingExpanded;
+  const briefingCompact = hasItems && briefingExpanded;
 
   const handleWorkflowStepClick = useCallback(
     (stepId: string) => {
       if (stepId === "brief") {
-        briefingOpenedManually.current = true;
-        setBriefingPanelOpen((open) => {
-          const next = !open;
-          if (next) {
-            requestAnimationFrame(() => {
-              briefingPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-            });
-          }
-          return next;
-        });
+        if (hasItems) {
+          setBriefingExpanded((open) => {
+            const next = !open;
+            setFocusedStep(next ? "brief" : "review");
+            if (next) scrollToRef(briefingPanelRef);
+            return next;
+          });
+        } else {
+          setFocusedStep("brief");
+          setBriefingExpanded(true);
+        }
         return;
       }
       if (stepId === "gen") {
-        openBriefingPanel(true);
+        openBriefing("gen");
+        return;
+      }
+      if (stepId === "review") {
+        setBriefingExpanded(false);
+        setFocusedStep("review");
+        scrollToRef(boardRef);
+        return;
+      }
+      if (stepId === "handoff") {
+        setBriefingExpanded(false);
+        setFocusedStep("handoff");
+        scrollToRef(toolbarRef);
       }
     },
-    [openBriefingPanel]
+    [hasItems, openBriefing, scrollToRef]
   );
 
   const editorPanel = selectedItem ? (
@@ -609,6 +622,8 @@ export function ContentScheduleWorkspace({
   ) : (
     <ScheduleEditorEmpty hasItems={hasItems} />
   );
+
+  const showResultsArea = hasItems || (!isReadOnly && brandGemReady) || generating;
 
   return (
     <div className="space-y-5" aria-busy={generating}>
@@ -633,32 +648,52 @@ export function ContentScheduleWorkspace({
 
       {aiError && <AiErrorBanner message={aiError} onRetry={() => setAiError(null)} />}
 
+      {hasItems && !briefingExpanded && !generating && (
+        <p className="text-xs text-ag-muted rounded-lg border border-ag-border/50 bg-ag-surface-2/40 px-3 py-2">
+          Briefing salvo. Para editar ou regenerar, use os passos{" "}
+          <button
+            type="button"
+            className="font-semibold text-ag-accent hover:underline"
+            onClick={() => openBriefing("brief")}
+          >
+            Briefing
+          </button>{" "}
+          ou{" "}
+          <button
+            type="button"
+            className="font-semibold text-ag-accent hover:underline"
+            onClick={() => openBriefing("gen")}
+          >
+            Gerar
+          </button>{" "}
+          acima.
+        </p>
+      )}
+
       {showBriefingPanel && (
         <div ref={briefingPanelRef} id="schedule-briefing-panel" className="scroll-mt-4">
           <ScheduleBriefingPanel
-          briefDraft={briefDraft}
-          onBriefDraftChange={setBriefDraft}
-          postCount={postCount}
-          onPostCountChange={setPostCount}
-          storyCount={storyCount}
-          onStoryCountChange={setStoryCount}
-          startDate={startDate}
-          extraInstructions={extraInstructions}
-          onExtraInstructionsChange={setExtraInstructions}
-          singleItemTheme={singleItemTheme}
-          onSingleItemThemeChange={setSingleItemTheme}
-          brandGem={brandGem}
-          brandGemReady={brandGemReady}
-          isReadOnly={isReadOnly}
-          generating={generating}
-          creatingSingle={creatingSingle}
-          hasGeneratedSchedule={hasGeneratedSchedule}
-          missingGemLabels={missingGemLabels}
-          onGenerate={() => void handleGenerate()}
-          onClearSchedule={() => void handleClearSchedule()}
-          onCreateSingle={(section) => void handleCreateSingleItem(section)}
-          onConfigureGem={onConfigureGem}
-        />
+            briefDraft={briefDraft}
+            onBriefDraftChange={setBriefDraft}
+            postCount={postCount}
+            onPostCountChange={setPostCount}
+            storyCount={storyCount}
+            onStoryCountChange={setStoryCount}
+            startDate={startDate}
+            extraInstructions={extraInstructions}
+            onExtraInstructionsChange={setExtraInstructions}
+            brandGem={brandGem}
+            brandGemReady={brandGemReady}
+            isReadOnly={isReadOnly}
+            generating={generating}
+            hasGeneratedSchedule={hasGeneratedSchedule}
+            missingGemLabels={missingGemLabels}
+            compact={briefingCompact}
+            onGenerate={() => void handleGenerate()}
+            onClearSchedule={() => void handleClearSchedule()}
+            onClose={closeBriefing}
+            onConfigureGem={onConfigureGem}
+          />
         </div>
       )}
 
@@ -671,18 +706,15 @@ export function ContentScheduleWorkspace({
               )}
 
               {hasItems && !generating && (
-                <>
-                  <ScheduleProgressSummary
+                <div ref={toolbarRef} className="scroll-mt-4">
+                  <ScheduleReviewToolbar
                     total={items.length}
                     draftCount={draftCount}
                     approvedCount={approvedCount}
                     doneCount={doneCount}
                     postsCount={postsItems.length}
                     storiesCount={storiesItems.length}
-                  />
-                  <ScheduleBulkActions
                     isReadOnly={isReadOnly}
-                    approvedCount={approvedCount}
                     exportingPdf={exportingPdf}
                     exportingDocx={exportingDocx}
                     onClearSchedule={() => void handleClearSchedule()}
@@ -692,28 +724,26 @@ export function ContentScheduleWorkspace({
                     onExportDocx={() => void handleExportDocx()}
                     onPushToPlanning={handlePushToPlanning}
                   />
-                </>
+                </div>
               )}
 
               {generating ? (
                 <ScheduleBoardSkeleton />
               ) : (
-                <ScheduleBoard
-                  postsItems={postsItems}
-                  storiesItems={storiesItems}
-                  selectedId={selectedId}
-                  copiedId={copiedId}
-                  isReadOnly={isReadOnly}
-                  brandGemReady={brandGemReady}
-                  creatingSingle={creatingSingle}
-                  hasBrief={hasBrief}
-                  onSelect={setSelectedId}
-                  onCreateSingle={(section) => void handleCreateSingleItem(section)}
-                  onCopy={(item) => void copyText(formatScheduleItemCopy(item), item.id)}
-                  onApprove={(id) => updateItem(id, { status: "approved" })}
-                  onMarkDone={(id) => updateItem(id, { status: "done" })}
-                  onDelete={(item) => void handleDeleteItem(item)}
-                />
+                <div ref={boardRef} id="schedule-board" className="scroll-mt-4">
+                  <ScheduleBoard
+                    postsItems={postsItems}
+                    storiesItems={storiesItems}
+                    selectedId={selectedId}
+                    isReadOnly={isReadOnly}
+                    brandGemReady={brandGemReady}
+                    creatingSingle={creatingSingle}
+                    hasBrief={hasBrief}
+                    onSelect={setSelectedId}
+                    onCreateSingle={(section) => void handleCreateSingleItem(section)}
+                    onApprove={(id) => updateItem(id, { status: "approved" })}
+                  />
+                </div>
               )}
             </>
           }

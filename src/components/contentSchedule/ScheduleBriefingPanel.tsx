@@ -1,6 +1,5 @@
-import { Loader2, Plus, Sparkles, Trash2 } from "lucide-react";
+import { Loader2, Sparkles, Trash2, X } from "lucide-react";
 import type { BrandGem } from "../../types";
-import type { ContentScheduleSection } from "../../types";
 import {
   brandGemRequiredMessage,
   formatMissingBrandGemFields,
@@ -19,18 +18,16 @@ type ScheduleBriefingPanelProps = {
   startDate: string;
   extraInstructions: string;
   onExtraInstructionsChange: (v: string) => void;
-  singleItemTheme: string;
-  onSingleItemThemeChange: (v: string) => void;
   brandGem: BrandGem;
   brandGemReady: boolean;
   isReadOnly?: boolean;
   generating: boolean;
-  creatingSingle: ContentScheduleSection | null;
   hasGeneratedSchedule: boolean;
   missingGemLabels: string[];
+  compact?: boolean;
   onGenerate: () => void;
   onClearSchedule: () => void;
-  onCreateSingle: (section: ContentScheduleSection) => void;
+  onClose?: () => void;
   onConfigureGem?: () => void;
 };
 
@@ -44,36 +41,47 @@ export function ScheduleBriefingPanel({
   startDate,
   extraInstructions,
   onExtraInstructionsChange,
-  singleItemTheme,
-  onSingleItemThemeChange,
   brandGem,
   brandGemReady,
   isReadOnly,
   generating,
-  creatingSingle,
   hasGeneratedSchedule,
   missingGemLabels,
+  compact,
   onGenerate,
   onClearSchedule,
-  onCreateSingle,
+  onClose,
   onConfigureGem,
 }: ScheduleBriefingPanelProps) {
   const disabled = isReadOnly || generating;
-  const canCreateSingle = !isReadOnly && brandGemReady && !generating && creatingSingle === null;
 
   return (
-    <WorkspaceCard variant="primary">
+    <WorkspaceCard variant="primary" className="relative">
+      {compact && onClose && (
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-4 right-4 p-1.5 rounded-lg text-ag-muted hover:text-ag-text hover:bg-ag-surface-3 z-10"
+          aria-label="Fechar briefing"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
       <WorkspaceCardHeader
-        title="1. Briefing e parâmetros"
-        subtitle="Defina o direcionamento do mês. Quanto mais específico (ex.: 3 posts sobre Halloween), melhor a aderência da IA."
+        title={compact ? "Editar briefing e regenerar" : "Briefing do mês"}
+        subtitle={
+          compact
+            ? "Ajuste o direcionamento e clique em Regenerar. Ao fechar, você volta para a revisão dos itens."
+            : "Cole o direcionamento do cliente. Depois de gerar, este painel fica oculto — reabra pelo passo Briefing ou Gerar."
+        }
       />
       <textarea
         value={briefDraft}
         onChange={(e) => onBriefDraftChange(e.target.value)}
         disabled={disabled}
-        rows={5}
+        rows={compact ? 4 : 5}
         placeholder="Ex.: Quero focar este mês em PDV offline, gestão de estoque e datas sazonais..."
-        className="w-full rounded-xl border border-ag-border/70 bg-ag-surface-2/60 px-4 py-3 text-sm text-ag-text placeholder:text-ag-muted focus:outline-none focus:ring-2 focus:ring-ag-accent/40 resize-y min-h-[120px]"
+        className="w-full rounded-xl border border-ag-border/70 bg-ag-surface-2/60 px-4 py-3 text-sm text-ag-text placeholder:text-ag-muted focus:outline-none focus:ring-2 focus:ring-ag-accent/40 resize-y min-h-[100px]"
         aria-label="Briefing do mês"
       />
       <div className="mt-4 grid gap-4 sm:grid-cols-3">
@@ -117,7 +125,7 @@ export function ScheduleBriefingPanel({
           value={extraInstructions}
           onChange={(e) => onExtraInstructionsChange(e.target.value)}
           disabled={disabled}
-          rows={2}
+          rows={compact ? 2 : 2}
           placeholder="Ex.: 3 posts sobre estoque, 2 stories de bastidores..."
           className="mt-1 w-full rounded-lg border border-ag-border/70 bg-ag-surface-2 px-3 py-2 text-sm resize-y"
         />
@@ -142,90 +150,38 @@ export function ScheduleBriefingPanel({
         </Alert>
       )}
 
-      <div className="mt-5 pt-4 border-t border-ag-border/50">
-        <p className="text-xs font-medium text-ag-text mb-3">2. Gerar cronograma</p>
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            variant="accent"
-            onClick={onGenerate}
-            disabled={isReadOnly || generating || !brandGemReady}
-            title={
-              !brandGemReady && missingGemLabels.length > 0
-                ? `Preencha no Gem: ${missingGemLabels.join(", ")}`
-                : brandGemRequiredMessage(brandGem) || undefined
-            }
-            aria-busy={generating}
-          >
-            {generating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="h-4 w-4" />
-            )}
-            {hasGeneratedSchedule ? "Regenerar cronograma com IA" : "Gerar cronograma com IA"}
-          </Button>
-          {hasGeneratedSchedule && !isReadOnly && (
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={onClearSchedule}
-              disabled={generating}
-            >
-              <Trash2 className="h-4 w-4" />
-              Excluir cronograma
-            </Button>
+      <div className={compact ? "mt-4 flex flex-wrap gap-2" : "mt-5 pt-4 border-t border-ag-border/50 flex flex-wrap gap-3"}>
+        <Button
+          type="button"
+          variant="accent"
+          onClick={onGenerate}
+          disabled={isReadOnly || generating || !brandGemReady}
+          title={
+            !brandGemReady && missingGemLabels.length > 0
+              ? `Preencha no Gem: ${missingGemLabels.join(", ")}`
+              : brandGemRequiredMessage(brandGem) || undefined
+          }
+          aria-busy={generating}
+        >
+          {generating ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Sparkles className="h-4 w-4" />
           )}
-        </div>
+          {hasGeneratedSchedule ? "Regenerar cronograma com IA" : "Gerar cronograma com IA"}
+        </Button>
+        {hasGeneratedSchedule && !isReadOnly && (
+          <Button type="button" variant="secondary" onClick={onClearSchedule} disabled={generating}>
+            <Trash2 className="h-4 w-4" />
+            Excluir cronograma
+          </Button>
+        )}
+        {compact && onClose && (
+          <Button type="button" variant="ghost" onClick={onClose} disabled={generating}>
+            Voltar à revisão
+          </Button>
+        )}
       </div>
-
-      {!isReadOnly && brandGemReady && (
-        <div className="mt-5 pt-4 border-t border-ag-border/50 space-y-3">
-          <p className="text-xs text-ag-muted">
-            Ou monte aos poucos — crie posts e stories avulsos com o briefing acima.
-          </p>
-          <label className="block text-xs text-ag-muted">
-            Tema do próximo item (opcional)
-            <input
-              type="text"
-              value={singleItemTheme}
-              onChange={(e) => onSingleItemThemeChange(e.target.value)}
-              disabled={!canCreateSingle}
-              placeholder="Ex.: Halloween no PDV, dica de estoque..."
-              className="mt-1 w-full rounded-lg border border-ag-border/70 bg-ag-surface-2 px-3 py-2 text-sm"
-            />
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={!canCreateSingle}
-              onClick={() => onCreateSingle("posts")}
-            >
-              {creatingSingle === "posts" ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="h-4 w-4" />
-              )}
-              Criar 1 post
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={!canCreateSingle}
-              onClick={() => onCreateSingle("stories")}
-            >
-              {creatingSingle === "stories" ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="h-4 w-4" />
-              )}
-              Criar 1 story
-            </Button>
-          </div>
-        </div>
-      )}
     </WorkspaceCard>
   );
 }
