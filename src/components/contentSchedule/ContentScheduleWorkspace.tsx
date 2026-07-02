@@ -28,6 +28,9 @@ import {
   formatFullSchedule,
   formatScheduleItemCopy,
 } from "../../lib/contentSchedule/format";
+import { getScheduleItemQualityHints } from "../../lib/contentSchedule/quality";
+import { exportContentSchedulePdf } from "../../lib/exportContentSchedulePdf";
+import { exportContentScheduleDocx } from "../../lib/exportContentScheduleDocx";
 import { pushScheduleToPlanning } from "../../lib/contentSchedule/pushToPlanning";
 import {
   brandGemFieldLabel,
@@ -52,6 +55,7 @@ type ContentScheduleWorkspaceProps = {
   brandGemReady: boolean;
   startDate: string;
   periodLabel?: string;
+  brandName?: string;
   clientId?: string;
   isReadOnly?: boolean;
   posts: PlannedPost[];
@@ -84,6 +88,7 @@ export function ContentScheduleWorkspace({
   brandGemReady,
   startDate,
   periodLabel,
+  brandName,
   clientId,
   isReadOnly,
   posts,
@@ -167,6 +172,9 @@ export function ContentScheduleWorkspace({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [refineInstruction, setRefineInstruction] = useState("");
   const [refining, setRefining] = useState(false);
+  const [strengthening, setStrengthening] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [exportingDocx, setExportingDocx] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const selectedItem = items.find((i) => i.id === selectedId) ?? null;
@@ -474,8 +482,45 @@ export function ContentScheduleWorkspace({
     );
   }, [items, onPushToPlanning, posts, startDate]);
 
+  const handleStrengthenCopy = useCallback(async () => {
+    if (!selectedItem) return;
+    setStrengthening(true);
+    setAiError(null);
+    try {
+      const res = await aiQueue.enqueue("Reforçar copy do cronograma", () =>
+        aiFetch("/api/generate-content-schedule", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            brandGem,
+            ...(clientId ? { clientId } : {}),
+            mode: "strengthen_one",
+            existingItem: selectedItem,
+          }),
+        })
+      );
+      const data = await readJsonResponse<{ items?: ContentScheduleItem[]; error?: string }>(res);
+      if (!res.ok) throw new Error(data.error ?? "Falha ao reforçar copy.");
+      const refined = data.items?.[0];
+      if (!refined) throw new Error("Item vazio.");
+      updateItem(selectedItem.id, refined);
+      toast.success("Copy reforçada com IA.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setAiError(msg);
+      toast.error(msg);
+    } finally {
+      setStrengthening(false);
+    }
+  }, [brandGem, clientId, selectedItem, updateItem]);
+
+  const scheduleExportOptions = useMemo(
+    () => ({ periodLabel, brandName: brandName ?? "Cliente" }),
+    [brandName, periodLabel]
+  );
+
   const handleExportTxt = useCallback(() => {
-    const text = formatFullSchedule(items, periodLabel);
+    const text = formatFullSchedule(items, scheduleExportOptions);
     const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -483,7 +528,43 @@ export function ContentScheduleWorkspace({
     a.download = `cronograma-${periodLabel?.replace(/\s+/g, "-") ?? "conteudo"}.txt`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [items, periodLabel]);
+  }, [items, periodLabel, scheduleExportOptions]);
+
+  const handleExportPdf = useCallback(async () => {
+    setExportingPdf(true);
+    try {
+      await exportContentSchedulePdf({
+        items,
+        brandName: brandName ?? "Cliente",
+        periodLabel: periodLabel ?? "Conteúdo",
+        clientSlug: brandName,
+      });
+      toast.success("PDF exportado.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(msg);
+    } finally {
+      setExportingPdf(false);
+    }
+  }, [brandName, items, periodLabel]);
+
+  const handleExportDocx = useCallback(async () => {
+    setExportingDocx(true);
+    try {
+      await exportContentScheduleDocx({
+        items,
+        brandName: brandName ?? "Cliente",
+        periodLabel: periodLabel ?? "Conteúdo",
+        clientSlug: brandName,
+      });
+      toast.success("DOCX exportado.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(msg);
+    } finally {
+      setExportingDocx(false);
+    }
+  }, [brandName, items, periodLabel]);
 
   return (
     <div className="space-y-5">
@@ -509,7 +590,7 @@ export function ContentScheduleWorkspace({
       <WorkspaceCard variant="primary">
         <WorkspaceCardHeader
           title="Briefing do mês"
-          subtitle="Cole a mensagem ou direcionamento do cliente. A IA gera posts e stories com copy estruturado."
+          subtitle="Cole a mensagem ou direcionamento do cliente. Quanto mais específico (ex.: 3 posts sobre Halloween, 2 sobre estoque), melhor a aderência da IA."
         />
         <textarea
           value={briefDraft}
@@ -555,14 +636,14 @@ export function ContentScheduleWorkspace({
           </label>
         </div>
         <label className="mt-4 block text-xs text-ag-muted">
-          Instruções extras (opcional)
-          <input
-            type="text"
+          Temas obrigatórios neste mês (opcional)
+          <textarea
             value={extraInstructions}
             onChange={(e) => setExtraInstructions(e.target.value)}
             disabled={isReadOnly || generating}
-            placeholder="Ex.: 3 posts sobre estoque, tom mais direto..."
-            className="mt-1 w-full rounded-lg border border-ag-border/70 bg-ag-surface-2 px-3 py-2 text-sm"
+            rows={2}
+            placeholder="Ex.: 3 posts sobre estoque, 2 stories de bastidores, tom mais direto..."
+            className="mt-1 w-full rounded-lg border border-ag-border/70 bg-ag-surface-2 px-3 py-2 text-sm resize-y"
           />
         </label>
         {!brandGemReady && !isReadOnly && (
@@ -689,13 +770,33 @@ export function ContentScheduleWorkspace({
                   Excluir
                 </Button>
               )}
-              <Button type="button" variant="secondary" size="sm" onClick={() => void copyText(formatFullSchedule(items, periodLabel))}>
+              <Button type="button" variant="secondary" size="sm" onClick={() => void copyText(formatFullSchedule(items, scheduleExportOptions))}>
                 <Copy className="h-4 w-4" />
                 Copiar tudo
               </Button>
               <Button type="button" variant="secondary" size="sm" onClick={handleExportTxt}>
                 <Download className="h-4 w-4" />
                 Exportar TXT
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => void handleExportPdf()}
+                disabled={exportingPdf}
+              >
+                {exportingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                Exportar PDF
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => void handleExportDocx()}
+                disabled={exportingDocx}
+              >
+                {exportingDocx ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                Exportar DOCX
               </Button>
               <Button
                 type="button"
@@ -750,11 +851,13 @@ export function ContentScheduleWorkspace({
           item={selectedItem}
           isReadOnly={isReadOnly}
           refining={refining}
+          strengthening={strengthening}
           refineInstruction={refineInstruction}
           onRefineInstructionChange={setRefineInstruction}
           onClose={() => setSelectedId(null)}
           onChange={(patch) => updateItem(selectedItem.id, patch)}
           onRefine={() => void handleRefine()}
+          onStrengthen={() => void handleStrengthenCopy()}
           onRegenerate={() => void handleRegenerateItem()}
           onDelete={() => void handleDeleteItem(selectedItem)}
           onCopy={() => void copyText(formatScheduleItemCopy(selectedItem), selectedItem.id)}
@@ -884,11 +987,13 @@ function ScheduleItemEditor({
   item,
   isReadOnly,
   refining,
+  strengthening,
   refineInstruction,
   onRefineInstructionChange,
   onClose,
   onChange,
   onRefine,
+  onStrengthen,
   onRegenerate,
   onDelete,
   onCopy,
@@ -896,17 +1001,25 @@ function ScheduleItemEditor({
   item: ContentScheduleItem;
   isReadOnly?: boolean;
   refining: boolean;
+  strengthening: boolean;
   refineInstruction: string;
   onRefineInstructionChange: (v: string) => void;
   onClose: () => void;
   onChange: (patch: Partial<ContentScheduleItem>) => void;
   onRefine: () => void;
+  onStrengthen: () => void;
   onRegenerate: () => void;
   onDelete: () => void;
   onCopy: () => void;
 }) {
   const fieldClass =
     "w-full rounded-lg border border-ag-border/70 bg-ag-surface-2 px-3 py-2 text-sm text-ag-text focus:outline-none focus:ring-2 focus:ring-ag-accent/40";
+  const isStory = item.section === "stories";
+  const qualityHints = getScheduleItemQualityHints(item);
+  const legendaLabel = isStory ? "Texto de apoio" : "Legenda";
+  const imagePromptPlaceholder = isStory
+    ? "Frame 9:16, texto na tela, safe zones, elementos interativos se enquete..."
+    : "Composição 4:5, hierarquia de texto na arte, paleta da marca...";
 
   return (
     <WorkspaceCard variant="primary" className="relative">
@@ -942,6 +1055,15 @@ function ScheduleItemEditor({
           </div>
         }
       />
+      {qualityHints.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {qualityHints.map((hint) => (
+            <Badge key={hint.issue} tone="warning" className="text-[10px]">
+              {hint.label}
+            </Badge>
+          ))}
+        </div>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-xs text-ag-muted sm:col-span-2">
           Nome
@@ -998,7 +1120,7 @@ function ScheduleItemEditor({
           />
         </label>
         <label className="text-xs text-ag-muted sm:col-span-2">
-          Legenda
+          {legendaLabel}
           <textarea
             className={cn(fieldClass, "mt-1 min-h-[100px] resize-y")}
             value={item.legenda}
@@ -1006,17 +1128,45 @@ function ScheduleItemEditor({
             onChange={(e) => onChange({ legenda: e.target.value })}
           />
         </label>
+        {!isStory && (
+          <label className="text-xs text-ag-muted sm:col-span-2">
+            Hashtags
+            <input
+              className={cn(fieldClass, "mt-1")}
+              value={item.hashtags}
+              disabled={isReadOnly}
+              onChange={(e) => onChange({ hashtags: e.target.value })}
+            />
+          </label>
+        )}
         <label className="text-xs text-ag-muted sm:col-span-2">
-          Hashtags
-          <input
-            className={cn(fieldClass, "mt-1")}
-            value={item.hashtags}
+          Prompt de imagem
+          <textarea
+            className={cn(fieldClass, "mt-1 min-h-[80px] resize-y")}
+            value={item.imagePrompt ?? ""}
             disabled={isReadOnly}
-            onChange={(e) => onChange({ hashtags: e.target.value })}
+            placeholder={imagePromptPlaceholder}
+            onChange={(e) => onChange({ imagePrompt: e.target.value })}
           />
         </label>
-        {item.section === "stories" && (
+        {isStory && (
           <>
+            <label className="text-xs text-ag-muted sm:col-span-2">
+              Texto na tela (on-screen)
+              <input
+                className={cn(fieldClass, "mt-1")}
+                value={item.storyExtras?.onScreenText ?? ""}
+                disabled={isReadOnly}
+                onChange={(e) =>
+                  onChange({
+                    storyExtras: {
+                      ...item.storyExtras,
+                      onScreenText: e.target.value,
+                    },
+                  })
+                }
+              />
+            </label>
             <label className="text-xs text-ag-muted">
               Enquete A
               <input
@@ -1060,6 +1210,21 @@ function ScheduleItemEditor({
       </div>
       {!isReadOnly && (
         <div className="mt-4 flex flex-col gap-3">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="w-fit"
+            onClick={onStrengthen}
+            disabled={refining || strengthening}
+          >
+            {strengthening ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            Reforçar copy com IA
+          </Button>
           <div className="flex flex-col sm:flex-row gap-2">
             <input
               type="text"
@@ -1072,7 +1237,7 @@ function ScheduleItemEditor({
               type="button"
               variant="secondary"
               onClick={onRefine}
-              disabled={refining || !refineInstruction.trim()}
+              disabled={refining || strengthening || !refineInstruction.trim()}
             >
               {refining ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
               Refinar
@@ -1084,7 +1249,7 @@ function ScheduleItemEditor({
             size="sm"
             className="w-fit"
             onClick={onRegenerate}
-            disabled={refining}
+            disabled={refining || strengthening}
           >
             {refining ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
             Recriar este item com IA

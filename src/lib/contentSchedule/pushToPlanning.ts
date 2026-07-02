@@ -91,6 +91,7 @@ export function pushScheduleToPlanning(
       cta: item.cta,
       legenda: item.legenda,
       hashtags: item.hashtags,
+      imagePrompt: item.imagePrompt,
       storyExtras: item.storyExtras,
     };
 

@@ -6,6 +6,7 @@ import {
   generateContentSchedule,
   generateSingleContentScheduleItem,
   refineContentScheduleItem,
+  strengthenContentScheduleItem,
 } from "@/server/ai/contentScheduleGenerator";
 import { assertAiClientAccess, withUserAiFromRequest } from "@/server/http/aiRequest";
 import { errorResponse, HttpError } from "@/server/http/respond";
@@ -50,6 +51,22 @@ export async function POST(req: NextRequest) {
           repeatingText,
           existingItem,
           refineInstruction,
+        });
+        return NextResponse.json(
+          { items: [item], modelUsed },
+          { headers: { "X-AI-Model-Used": modelUsed } }
+        );
+      }
+
+      if (mode === "strengthen_one") {
+        if (!existingItem?.id) {
+          return NextResponse.json({ error: "Item não informado." }, { status: 400 });
+        }
+        const item = await strengthenContentScheduleItem({
+          brandGem,
+          promptContext,
+          repeatingText,
+          existingItem,
         });
         return NextResponse.json(
           { items: [item], modelUsed },

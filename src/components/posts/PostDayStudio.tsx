@@ -391,6 +391,12 @@ export function PostDayStudio({
                   <dt className="text-ag-muted font-mono uppercase tracking-wider text-[10px]">CTA</dt>
                   <dd className="text-ag-text mt-0.5">{post.structuredCopy.cta}</dd>
                 </div>
+                {post.structuredCopy.imagePrompt && (
+                  <div>
+                    <dt className="text-ag-muted font-mono uppercase tracking-wider text-[10px]">Prompt de imagem</dt>
+                    <dd className="text-ag-text mt-0.5 whitespace-pre-wrap">{post.structuredCopy.imagePrompt}</dd>
+                  </div>
+                )}
               </dl>
             </details>
           )}

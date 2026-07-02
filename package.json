@@ -15,6 +15,7 @@
     "test:enrich-status": "tsx server/services/catalogEnrichmentSnapshot.test.ts",
     "test:catalog-sync": "tsx server/services/catalogRevision.test.ts",
     "test:sync-revision": "tsx server/services/syncRevision.test.ts && tsx src/lib/sync/syncTokens.test.ts && tsx src/lib/sync/mutationGuard.test.ts && tsx src/lib/sync/revisionDiff.test.ts && tsx src/lib/sync/periodsRevision.test.ts && tsx server/sync/syncEvents.test.ts && tsx server/sync/syncEventHub.test.ts && tsx src/lib/sync/realtimeCoordinator.test.ts",
+    "test:content-schedule": "tsx src/lib/contentSchedule/format.test.ts",
     "docker:infra": "docker compose -f docker-compose.dev.yml up -d",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down"
@@ -25,6 +26,7 @@
     "@google/genai": "^2.4.0",
     "@tailwindcss/postcss": "^4.3.0",
     "bcryptjs": "^3.0.3",
+    "docx": "^9.7.1",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.45.2",
     "jsonwebtoken": "^9.0.3",

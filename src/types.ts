@@ -108,6 +108,8 @@ export interface StructuredPostCopy {
   cta: string;
   legenda: string;
   hashtags: string;
+  /** Instrução visual para designer/IA — não é copy do post */
+  imagePrompt?: string;
   storyExtras?: ContentScheduleStoryExtras;
 }
 
